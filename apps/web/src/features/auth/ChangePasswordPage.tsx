@@ -2,7 +2,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
-import { changePasswordSchema } from '@ims/shared';
+import { changePasswordSchema, type LoginResponse } from '@ims/shared';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/Field';
@@ -27,7 +27,7 @@ const formSchema = changePasswordSchema
 type FormValues = z.infer<typeof formSchema>;
 
 export function ChangePasswordPage() {
-  const { user, refreshUser } = useAuth();
+  const { user, adoptSession } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
 
@@ -38,13 +38,14 @@ export function ChangePasswordPage() {
 
   async function onSubmit(values: FormValues) {
     try {
-      await api.post('/auth/change-password', {
+      // The server ends every other session and hands back a fresh one, so the caller is not
+      // signed out by their own password change. Adopting it also clears `mustChangePassword`
+      // before the route guard looks again.
+      const session = await api.post<LoginResponse>('/auth/change-password', {
         currentPassword: values.currentPassword,
         newPassword: values.newPassword,
       });
-      // The server revoked every session including this one's refresh token, so re-read the
-      // user to clear `mustChangePassword` before the route guard sees it again.
-      await refreshUser();
+      adoptSession(session);
       toast.success(t.auth.passwordChanged);
       navigate(ROUTES.dashboard, { replace: true });
     } catch (error) {

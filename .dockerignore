@@ -12,9 +12,11 @@ docs
 plan
 infra/backups
 
-.env
-.env.*
-!.env.example
+# Bare `.env` matches only the context root; infra/.env holds the production database
+# password and both JWT secrets and would otherwise ride along in the build context.
+**/.env
+**/.env.*
+!**/.env.example
 
 *.log
 .DS_Store

@@ -78,22 +78,46 @@ async function rawRequest<T>(path: string, options: RequestOptions, accessToken:
   return (await response.json()) as T;
 }
 
-async function refreshTokens(): Promise<AuthTokens | null> {
-  const stored = readStoredTokens();
-  if (!stored) return null;
+/**
+ * Serialises refreshes across every tab on this origin.
+ *
+ * The in-process single-flight below is per browsing context, so two open tabs whose access
+ * tokens expire together — they always do, they were issued together — each fire their own
+ * refresh. The loser presents a token the winner already rotated away, the server correctly
+ * reads that as a replay, and the user is signed out of both tabs for no reason. The server
+ * is right; the client has to stop racing itself.
+ *
+ * `navigator.locks` is the browser's own cross-tab mutex. Where it is unavailable the callback
+ * simply runs unguarded, which is exactly today's behaviour rather than a new failure mode.
+ */
+const REFRESH_LOCK = 'ims.auth.refresh';
 
-  try {
-    const result = await rawRequest<LoginResponse>(
-      '/auth/refresh',
-      { method: 'POST', body: { refreshToken: stored.refreshToken }, anonymous: true },
-      null,
-    );
-    writeStoredTokens(result);
-    return result;
-  } catch {
-    clearStoredTokens();
-    return null;
-  }
+async function withCrossTabLock<T>(run: () => Promise<T>): Promise<T> {
+  if (!('locks' in navigator)) return run();
+  return navigator.locks.request(REFRESH_LOCK, run);
+}
+
+async function refreshTokens(staleAccessToken: string | null): Promise<AuthTokens | null> {
+  return withCrossTabLock(async () => {
+    // Re-read inside the lock. If another tab refreshed while this one waited, the stored
+    // token is already fresh — using it directly avoids a second, pointless rotation.
+    const stored = readStoredTokens();
+    if (!stored) return null;
+    if (staleAccessToken && stored.accessToken !== staleAccessToken) return stored;
+
+    try {
+      const result = await rawRequest<LoginResponse>(
+        '/auth/refresh',
+        { method: 'POST', body: { refreshToken: stored.refreshToken }, anonymous: true },
+        null,
+      );
+      writeStoredTokens(result);
+      return result;
+    } catch {
+      clearStoredTokens();
+      return null;
+    }
+  });
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -110,7 +134,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 
     if (!isExpired) throw error;
 
-    refreshInFlight ??= refreshTokens().finally(() => {
+    refreshInFlight ??= refreshTokens(stored?.accessToken ?? null).finally(() => {
       refreshInFlight = null;
     });
     const refreshed = await refreshInFlight;

@@ -65,6 +65,20 @@ const rawSchema = z.object({
   SEED_ADMIN_DESIGNATION: z.string().min(2).default('System Administrator'),
 });
 
+/**
+ * Identical access and refresh secrets would make a refresh token verify as an access token.
+ * `.env.example` says they must differ; a comment is not enforcement.
+ */
+const validatedSchema = rawSchema.superRefine((env, ctx) => {
+  if (env.JWT_ACCESS_SECRET === env.JWT_REFRESH_SECRET) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['JWT_REFRESH_SECRET'],
+      message: 'must differ from JWT_ACCESS_SECRET',
+    });
+  }
+});
+
 export type RawConfig = z.infer<typeof rawSchema>;
 
 export interface AppConfig {
@@ -112,7 +126,7 @@ export class ConfigValidationError extends Error {
 
 /** Exported for tests so config validation can be exercised without mutating the real env. */
 export function buildConfig(source: Record<string, string | undefined>): AppConfig {
-  const parsed = rawSchema.safeParse(source);
+  const parsed = validatedSchema.safeParse(source);
   if (!parsed.success) throw new ConfigValidationError(parsed.error.issues);
 
   const env = parsed.data;

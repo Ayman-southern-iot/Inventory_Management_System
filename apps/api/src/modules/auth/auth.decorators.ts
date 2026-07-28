@@ -11,9 +11,18 @@ import { RolesGuard } from './roles.guard';
 
 export const IS_PUBLIC_KEY = 'ims:isPublic';
 export const ROLES_KEY = 'ims:roles';
+export const ALLOW_PENDING_PASSWORD_KEY = 'ims:allowPendingPassword';
 
 /** Opts an endpoint out of authentication. Everything is authenticated by default. */
 export const Public = (): MethodDecorator & ClassDecorator => SetMetadata(IS_PUBLIC_KEY, true);
+
+/**
+ * Reachable by a user who still owes a password change. Only the handful of routes needed to
+ * *perform* that change qualify — everything else must stay blocked, or the forced rotation is
+ * decorative.
+ */
+export const AllowPendingPasswordChange = (): MethodDecorator =>
+  SetMetadata(ALLOW_PENDING_PASSWORD_KEY, true);
 
 /**
  * Coarse role gate. Ownership and state checks ("may *this* approver withdraw *now*") belong

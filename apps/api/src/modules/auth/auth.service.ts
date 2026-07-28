@@ -6,6 +6,7 @@ import { CONFIG, type AppConfig } from '../../config';
 import {
   AccountDeactivatedError,
   InvalidCredentialsError,
+  RateLimitedError,
   SessionRevokedError,
   TokenExpiredError,
   TokenReuseDetectedError,
@@ -39,7 +40,9 @@ export class AuthService {
   ) {}
 
   async login(input: LoginInput, context: LoginContext): Promise<LoginResponse> {
-    await this.throttle.assertNotThrottled(input.email, context.ip);
+    // The source address is capped unconditionally — that is what stops brute force.
+    await this.throttle.assertIpNotThrottled(context.ip);
+    const failures = await this.throttle.countRecentFailures(input.email, context.ip);
 
     const user = await this.users.findAuthRecordByEmail(input.email);
 
@@ -51,6 +54,12 @@ export class AuthService {
 
     if (!user || !passwordOk) {
       await this.throttle.record(input.email, context.ip, false);
+      // Only report the per-account lockout to someone who failed. Checking the password first
+      // means a third party spraying wrong passwords at a colleague's address can no longer
+      // lock that colleague out of their own account.
+      if (this.throttle.isEmailThrottled(failures.byEmail)) {
+        throw new RateLimitedError(this.throttle.windowSeconds);
+      }
       throw new InvalidCredentialsError();
     }
 
@@ -84,9 +93,22 @@ export class AuthService {
     if (!stored) throw new TokenExpiredError();
 
     if (stored.revoked_at !== null) {
+      const revokedAgoMs = Date.now() - stored.revoked_at.getTime();
+
+      // No grace window for a recently-rotated token, deliberately. The multi-tab race that
+      // motivates one is a client defect — two independent refresh loops sharing a single
+      // stored token — and it is fixed there, with a cross-tab lock in api/client.ts. Relaxing
+      // reuse detection server-side would trade a real security control for a client bug.
+
+      // Always record the replay: a stolen token presented after an administrator reset the
+      // password is exactly the case where somebody needs to know it happened.
+      this.logger.warn(
+        `Revoked refresh token replayed for user ${stored.user_id} ` +
+          `(reason=${stored.revoked_reason ?? 'unrecorded'}, ${Math.round(revokedAgoMs / 1000)}s ago)`,
+      );
+
       // An administrator ending a session is routine; telling that user they may have been
-      // compromised would be alarming and wrong. Every other revocation reason means a token
-      // that should be dead is being presented, which is the theft signal.
+      // compromised would be alarming and wrong. Every other reason is the theft signal.
       if (stored.revoked_reason === RefreshRevocationReason.ADMIN_REVOKED) {
         throw new SessionRevokedError();
       }
@@ -95,21 +117,33 @@ export class AuthService {
         stored.family_id,
         RefreshRevocationReason.REUSE_DETECTED,
       );
-      this.logger.warn(`Refresh token reuse detected for user ${stored.user_id}; family revoked`);
       throw new TokenReuseDetectedError();
     }
 
     if (stored.expires_at.getTime() <= Date.now()) throw new TokenExpiredError();
 
-    const user = await this.users.findAuthRecordById(payload.sub);
+    const user = await this.requireActiveUser(payload.sub);
+
+    // The successor inherits this token's expiry rather than getting a fresh 14 days. Otherwise
+    // a stolen family can be rotated forever and the absolute session lifetime never applies.
+    const tokens = await this.issueTokens(
+      user,
+      stored.family_id,
+      context.userAgent,
+      stored.id,
+      stored.expires_at,
+    );
+    return { ...tokens, user: toAuthUser(user) };
+  }
+
+  private async requireActiveUser(userId: string): Promise<UserWithRoles> {
+    const user = await this.users.findAuthRecordById(userId);
     if (!user) throw new TokenExpiredError();
     if (!user.is_active) {
       await this.refreshTokens.revokeAllForUser(user.id, RefreshRevocationReason.ADMIN_REVOKED);
       throw new AccountDeactivatedError();
     }
-
-    const tokens = await this.issueTokens(user, stored.family_id, context.userAgent, stored.id);
-    return { ...tokens, user: toAuthUser(user) };
+    return user;
   }
 
   async logout(refreshToken: string | undefined, userId: string): Promise<void> {
@@ -127,6 +161,29 @@ export class AuthService {
     }
   }
 
+  /**
+   * Changing your own password ends every *other* session and starts a fresh one here.
+   *
+   * Revoking the caller's own session too would sign them out the instant they set a new
+   * password, which reads as a failure. Issuing a new family keeps them signed in while still
+   * evicting anyone who was holding a session on the old credential — which is the entire
+   * reason someone changes their password in a hurry.
+   */
+  async changePassword(
+    userId: string,
+    input: { currentPassword: string; newPassword: string },
+    context: LoginContext,
+  ): Promise<LoginResponse> {
+    await this.users.changeOwnPassword(userId, input.currentPassword, input.newPassword);
+
+    const user = await this.users.findAuthRecordById(userId);
+    if (!user) throw new TokenExpiredError();
+
+    const familyId = this.refreshTokens.newFamilyId();
+    const tokens = await this.issueTokens(user, familyId, context.userAgent);
+    return { ...tokens, user: toAuthUser(user) };
+  }
+
   async me(userId: string): Promise<AuthUser> {
     const user = await this.users.findAuthRecordById(userId);
     if (!user) throw new TokenExpiredError();
@@ -139,6 +196,8 @@ export class AuthService {
     familyId: string,
     userAgent: string | null,
     replacesId?: string,
+    /** Inherited on rotation so the family has an absolute lifetime, not a sliding one. */
+    familyExpiresAt?: Date,
   ): Promise<{ accessToken: string; refreshToken: string; expiresIn: number }> {
     const { accessTtlSeconds, refreshTtlSeconds } = this.config.auth;
 
@@ -156,18 +215,23 @@ export class AuthService {
 
     // A random jti makes every refresh token unique even if two are issued in the same second,
     // which matters because the hash is the primary lookup key.
+    const expiresAt = familyExpiresAt ?? new Date(Date.now() + refreshTtlSeconds * 1000);
+    const remainingSeconds = Math.max(1, Math.floor((expiresAt.getTime() - Date.now()) / 1000));
+
     const jti = randomBytes(REFRESH_TOKEN_BYTES).toString('base64url');
     const refreshPayload: RefreshTokenPayload = { sub: user.id, jti, fid: familyId };
     const refreshToken = await this.jwt.signAsync(refreshPayload, {
       secret: this.config.auth.refreshSecret,
-      expiresIn: refreshTtlSeconds,
+      // The JWT's own expiry tracks the family's, so a stolen token cannot outlive it even if
+      // the row is somehow missed.
+      expiresIn: remainingSeconds,
     });
 
     await this.refreshTokens.issue({
       userId: user.id,
       token: refreshToken,
       familyId,
-      expiresAt: new Date(Date.now() + refreshTtlSeconds * 1000),
+      expiresAt,
       userAgent,
       ...(replacesId ? { replacesId } : {}),
     });

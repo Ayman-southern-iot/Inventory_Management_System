@@ -20,6 +20,22 @@ Status: 🔴 blocking · 🟠 needed soon · 🟢 can wait
 | OQ-10 | 🟢 | Is there an SMTP relay available? | No — in-app notifications only for v1 | Phase 03 |
 | OQ-11 | 🟠 | Company letterhead asset and exact print margins | Placeholder template until supplied | Phase 04 |
 
+| OQ-12 | 🟠 | How long may a session live before re-authentication is forced? Currently 14 days absolute from login, not extended by rotation. | 14 days | Phase 00 (built), revisit any time |
+| OQ-13 | 🟢 | Should an admin be able to see and revoke a user's active sessions? There is no UI for it, so a suspected token theft can only be handled by deactivating the account or resetting the password. | Deactivate/reset is enough for v1 | Phase 06 |
+
+## Known gaps carried out of Phase 00
+
+Not questions for the user — engineering work deliberately deferred, recorded so it is not
+rediscovered as a surprise.
+
+| ID | Gap | Why deferred | Land it in |
+|----|-----|--------------|------------|
+| G-01 | `login_attempts` and expired `refresh_tokens` are never pruned. `LoginThrottleService.deleteOlderThan` and `RefreshTokenRepository.deleteExpiredBefore` exist but have no caller. | There is no scheduler yet; `node-cron` arrives with reminder jobs. | Phase 03 |
+| G-02 | Token expiry is untested — both the access and refresh expiry branches are unexecuted, because asserting them honestly needs a clock rather than a `sleep`. | Wants an injectable clock, which is a small refactor better done alongside the deadline logic that needs one anyway. | Phase 03 |
+| G-03 | `LoginThrottleService` counts with an unlocked `SELECT`, so N simultaneous wrong passwords can all pass the check before any row is written. | Real in principle, negligible at 12 users; the per-IP `ThrottlerGuard` still caps the burst. | Phase 06 |
+| G-04 | `Idempotency-Key` (rules/20-backend.md) is not implemented on any mutating endpoint. | No Phase 00 endpoint is expensive to repeat. Stock writes are, so it lands with them. | Phase 01 |
+| G-05 | The departments deactivation guard ("move the N active users out first") has no test. | Written and manually exercised, but below the testing rules' priority line for Phase 00. | Phase 01 |
+
 ## Resolved
 
 _(move rows here with the answer inline when the user decides)_

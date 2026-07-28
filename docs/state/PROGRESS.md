@@ -8,14 +8,17 @@
 - **Phase:** 00 — Foundation (complete)
 - **Next task:** Phase 01 — Inventory core, task 1.1
 - **Working tree:** clean, Phase 00 committed
-- **Blocked by:** nothing for Phase 01. OQ-03 and OQ-08 shape the catalogue schema and should be
-  confirmed with the user before 1.1 is finalised, but both have workable assumptions recorded.
+- **Blocked by:** nothing for Phase 01. OQ-03 and OQ-08 shape the catalogue schema and should
+  be confirmed with the user before 1.1 is finalised, but both have workable assumptions.
+- **Security review:** no CRITICAL, no HIGH — task 0.6's acceptance criterion. Six MEDIUM and
+  five LOW findings were fixed; what was deliberately deferred is G-01..G-05 in
+  `OPEN-QUESTIONS.md`, not lost.
 
 ## Phases
 
 | # | Phase | Status | Notes |
 |---|-------|--------|-------|
-| 00 | Foundation — repo, config, auth, users, admin | ✅ done and verified | 5 migrations, 182 tests |
+| 00 | Foundation — repo, config, auth, users, admin | ✅ done and verified | 5 migrations, 190 tests |
 | 01 | Inventory core — catalogue, locations, placements, ledger | ⬜ not started | |
 | 02 | Borrowing — request, approve, issue, return | ⬜ not started | |
 | 03 | Requisitions — form, approvals, tracker, notifications | ⬜ not started | |
@@ -46,7 +49,7 @@ already occupied on the build machine by unrelated stacks; the compose file refl
 **Schema** — `app_settings`, `departments`, `users`, `user_roles`, `refresh_tokens`,
 `login_attempts`, `approver_slots`, and the `user_role` / `refresh_revocation_reason` enums.
 
-**Tests** — 36 API unit, 130 API integration, 16 web component. All green.
+**Tests** — 36 API unit, 138 API integration, 16 web component. All green.
 
 **Verified by hand** — migrate → rollback → migrate from empty; the full production compose stack
 (`db`, `migrate`, `api`, `web`, `proxy`) coming up on a clean build and serving the SPA and API

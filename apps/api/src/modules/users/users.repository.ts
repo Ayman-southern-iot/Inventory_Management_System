@@ -13,6 +13,13 @@ export interface UserWithRoles extends UserRow {
 }
 
 /**
+ * A listing has no use for the password hash, so it is not selected. Keeping it out of the
+ * projection means a future `return rows` cannot leak it, rather than relying on every
+ * serialiser to remember to strip it.
+ */
+export type UserListRow = Omit<UserWithRoles, 'password_hash'>;
+
+/**
  * Roles come back as an aggregated array in the same query rather than a second round trip —
  * a list of 12 users must not be 13 queries (rules/40-database.md, N+1 is a review blocker).
  */
@@ -56,7 +63,7 @@ export class UsersRepository {
     return this.baseSelect().where('users.email', '=', email.toLowerCase()).executeTakeFirst();
   }
 
-  async list(query: ListUsersQuery): Promise<{ items: UserWithRoles[]; total: number }> {
+  async list(query: ListUsersQuery): Promise<{ items: UserListRow[]; total: number }> {
     const offset = (query.page - 1) * query.limit;
 
     let base = this.db
@@ -94,7 +101,6 @@ export class UsersRepository {
         .select([
           'users.id',
           'users.email',
-          'users.password_hash',
           'users.full_name',
           'users.designation',
           'users.department_id',
@@ -187,6 +193,38 @@ export class UsersRepository {
       .execute();
   }
 
+  /**
+   * Counts active holders of a role while holding a row lock on them, so two concurrent
+   * demotions cannot both observe "there are still two admins" and both succeed. Must be
+   * called inside the same transaction that performs the change.
+   */
+  async countActiveHoldersForUpdate(tx: Tx, role: Role): Promise<number> {
+    // Lock every row granting this role first. No join here on purpose: `FOR UPDATE` with a
+    // join would also lock `users` and deadlock against an ordinary profile edit. Holding
+    // these rows is enough, because any concurrent demotion has to delete one of them.
+    const holders = await tx
+      .selectFrom('user_roles')
+      .where('user_roles.role', '=', role)
+      .select('user_roles.user_id')
+      .forUpdate()
+      .execute();
+
+    if (holders.length === 0) return 0;
+
+    const row = await tx
+      .selectFrom('users')
+      .where(
+        'users.id',
+        'in',
+        holders.map((h) => h.user_id),
+      )
+      .where('users.is_active', '=', true)
+      .select((eb) => eb.fn.countAll<number>().as('count'))
+      .executeTakeFirst();
+
+    return Number(row?.count ?? 0);
+  }
+
   async countByRole(role: Role): Promise<number> {
     const row = await this.db
       .selectFrom('user_roles')
@@ -203,7 +241,7 @@ export class UsersRepository {
   }
 }
 
-export function toUser(row: UserWithRoles): User {
+export function toUser(row: UserListRow): User {
   return {
     id: row.id,
     email: row.email,

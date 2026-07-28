@@ -27,7 +27,9 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       outDir: 'dist',
-      sourcemap: true,
+      // No error-reporting service consumes these yet (Phase 06 adds monitoring), so shipping
+      // 1.5 MB of readable source to every browser buys nothing.
+      sourcemap: false,
     },
   };
 });

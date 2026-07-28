@@ -14,7 +14,7 @@ import {
 import { zodPipe } from '../../common/zod-validation.pipe';
 import { UsersService } from '../users/users.service';
 import { AuthService, type LoginContext } from './auth.service';
-import { CurrentUser, Public } from './auth.decorators';
+import { AllowPendingPasswordChange, CurrentUser, Public } from './auth.decorators';
 import type { RequestUser } from './request-user';
 
 /** Coarse per-IP ceiling in front of the per-account throttle in LoginThrottleService. */
@@ -55,26 +55,34 @@ export class AuthController {
     return this.auth.refresh(body.refreshToken, contextOf(request));
   }
 
+  @AllowPendingPasswordChange()
   @Post('logout')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async logout(@CurrentUser() user: RequestUser, @Req() request: Request): Promise<void> {
-    const body = request.body as Partial<RefreshInput> | undefined;
-    await this.auth.logout(body?.refreshToken, user.id);
+  async logout(
+    @CurrentUser() user: RequestUser,
+    // Optional: a client that has lost its refresh token can still end every session.
+    @Body(zodPipe(refreshSchema.partial())) body: Partial<RefreshInput>,
+  ): Promise<void> {
+    await this.auth.logout(body.refreshToken, user.id);
   }
 
+  @AllowPendingPasswordChange()
   @Get('me')
   async me(@CurrentUser() user: RequestUser): Promise<AuthUser> {
     return this.auth.me(user.id);
   }
 
+  /** Returns a fresh session so the caller is not signed out by their own password change. */
+  @AllowPendingPasswordChange()
   @Post('change-password')
-  @HttpCode(HttpStatus.NO_CONTENT)
+  @HttpCode(HttpStatus.OK)
   async changePassword(
     @CurrentUser() user: RequestUser,
     @Body(zodPipe(changePasswordSchema)) body: ChangePasswordInput,
-  ): Promise<void> {
+    @Req() request: Request,
+  ): Promise<LoginResponse> {
     // The actor is req.user, never a body field — a client-supplied id here would let anyone
     // change anyone's password (rules/20-backend.md).
-    await this.users.changeOwnPassword(user.id, body.currentPassword, body.newPassword);
+    return this.auth.changePassword(user.id, body, contextOf(request));
   }
 }

@@ -11,7 +11,7 @@ import {
 import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors';
 import { RefreshRevocationReason } from '../../database/schema';
 import { PasswordService } from '../../security/password.service';
-import { UsersRepository, toUser, type UserWithRoles } from './users.repository';
+import { UsersRepository, toUser, type Tx, type UserWithRoles } from './users.repository';
 
 /** Postgres unique-violation. Catching it is how a duplicate email stays a single round trip. */
 const PG_UNIQUE_VIOLATION = '23505';
@@ -85,10 +85,13 @@ export class UsersService {
     const existing = await this.repo.findById(id);
     if (!existing) throw new NotFoundError('User');
 
-    if (input.roles) await this.assertAdminRemainsReachable(existing, input.roles, actorId);
-
     try {
       await this.repo.connection.transaction().execute(async (tx) => {
+        // Inside the transaction, and holding a lock, so two concurrent demotions cannot both
+        // read "there are still two admins" and both succeed.
+        if (input.roles) {
+          await this.assertAdminRemainsReachable(tx, existing, input.roles, actorId);
+        }
         await this.repo.update(tx, id, {
           fullName: input.fullName,
           designation: input.designation,
@@ -108,12 +111,12 @@ export class UsersService {
     const existing = await this.repo.findById(id);
     if (!existing) throw new NotFoundError('User');
 
-    if (!isActive) {
-      if (id === actorId) throw new ForbiddenError('You cannot deactivate your own account');
-      await this.assertAdminRemainsReachable(existing, [], actorId);
+    if (!isActive && id === actorId) {
+      throw new ForbiddenError('You cannot deactivate your own account');
     }
 
     await this.repo.connection.transaction().execute(async (tx) => {
+      if (!isActive) await this.assertAdminRemainsReachable(tx, existing, [], actorId);
       await this.repo.update(tx, id, { isActive });
       // Deactivating must end the session immediately, not at the next access-token expiry.
       if (!isActive) {
@@ -168,6 +171,7 @@ export class UsersService {
    * ends in a manual SQL update on production. Refuse instead.
    */
   private async assertAdminRemainsReachable(
+    tx: Tx,
     target: UserWithRoles,
     nextRoles: readonly Role[],
     actorId: string,
@@ -176,8 +180,14 @@ export class UsersService {
     const staysAdmin = nextRoles.includes(Role.ADMIN);
     if (!wasAdmin || staysAdmin) return;
 
-    const activeAdmins = await this.repo.countByRole(Role.ADMIN);
-    if (activeAdmins <= 1) {
+    // Only counts admins who could actually sign in. A deactivated admin cannot rescue anyone.
+    const activeAdmins = await this.repo.countActiveHoldersForUpdate(tx, Role.ADMIN);
+
+    // An inactive target is not one of the reachable admins, so removing their role cannot be
+    // what locks everyone out — without this, demoting a deactivated admin is refused for a
+    // reason that is not true.
+    const reachableWithoutTarget = target.is_active ? activeAdmins - 1 : activeAdmins;
+    if (reachableWithoutTarget < 1) {
       throw new ConflictError('This is the last active administrator and cannot be removed');
     }
     if (target.id === actorId) {

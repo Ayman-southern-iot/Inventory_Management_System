@@ -44,9 +44,8 @@ Format: `YYYY-MM-DD — <decision> — <why, in one clause>`
   token killed by an admin and one killed by the theft response are otherwise identical, and
   the two must tell the user different things. Inferring it from `replaced_by_id` was tried
   first and was wrong; the integration suite caught it.
-- 2026-07-28 — Access tokens carry the role set and are trusted for their 15-minute life — the
-  alternative is a database read on every request for a role change that happens monthly.
-  Deactivation revokes refresh tokens immediately, so the exposure is bounded by that TTL.
+- 2026-07-28 — ~~Access tokens carry the role set and are trusted for their 15-minute life.~~
+  **Superseded the same day by the security review — see below.**
 - 2026-07-28 — Tokens in `localStorage`, not httpOnly cookies — the SPA needs the refresh token
   to rotate proactively, and this is a single-origin internal tool with no third-party embeds.
   Mitigated by the short access TTL and server-side reuse detection. Revisit if it ever becomes
@@ -61,3 +60,36 @@ Format: `YYYY-MM-DD — <decision> — <why, in one clause>`
   `design:paramtypes`, so Nest DI fails to resolve anything under vitest's default transform.
 - 2026-07-28 — Approver slots modelled as `approver_slots` rows with a nullable `department_id`
   (null = company-wide default) — satisfies either answer to OQ-02 without a schema change.
+
+### After the Phase 00 security review
+
+The review found no CRITICAL and no HIGH, which is task 0.6's acceptance criterion. These are
+the MEDIUM and LOW findings that were worth acting on rather than carrying forward.
+
+- 2026-07-28 — `JwtAuthGuard` re-validates the session against the database on every request,
+  **superseding the stateless-JWT decision above** — one indexed lookup closes deactivation,
+  logout, role change and forced password rotation at once, rather than leaving a 15-minute
+  window in which a deactivated admin keeps admin access. At 12 users the query cost is noise.
+- 2026-07-28 — `must_change_password` is enforced by the API, not only by the SPA — otherwise
+  the temporary password an admin sends over chat stays valid forever for anyone willing to
+  skip the UI. Exactly three routes are exempt, via `@AllowPendingPasswordChange()`.
+- 2026-07-28 — A refresh family keeps its original expiry through every rotation — a sliding
+  expiry let a stolen family be rotated indefinitely, so the absolute lifetime never applied.
+- 2026-07-28 — The multi-tab refresh race is fixed in the browser with `navigator.locks`, not
+  with a server-side grace window. A grace window was written first and reverted: it made reuse
+  detection tolerant of exactly the replay it exists to catch, in order to paper over a client
+  defect. The client was the thing that was wrong.
+- 2026-07-28 — Login throttling counts email and IP separately instead of OR-ing them, and the
+  per-account limit is only reported to a caller who already failed the password check — the OR
+  let anyone who knew a colleague's address lock that colleague out of their own account, which
+  is the exact outcome the code's own comment claimed to avoid.
+- 2026-07-28 — Changing your own password ends every *other* session and returns a fresh one —
+  revoking the caller's own session mid-flow signed them out the instant they set a new
+  password, which reads as a failure.
+- 2026-07-28 — CSP is served by nginx on the SPA — the compensating control for holding tokens
+  in localStorage, which `helmet()` on the API does not cover because it never sees the HTML.
+- 2026-07-28 — The last-admin check runs inside its transaction holding a lock on the ADMIN role
+  rows — outside it, two admins demoting each other simultaneously could both pass and leave
+  the system with none.
+- 2026-07-28 — Production source maps are off — nothing consumes them until Phase 06 adds
+  monitoring, so they were 1.5 MB of readable source shipped to every browser for no reader.

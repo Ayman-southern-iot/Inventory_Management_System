@@ -347,7 +347,8 @@ describe('admin user management', () => {
         currentPassword: TEST_PASSWORD,
         newPassword: ROTATED_PASSWORD,
       });
-      expect(attempt.status).toBe(204);
+      // 200 with a fresh session: the change succeeded, but for the ATTACKER's own account.
+      expect(attempt.status).toBe(200);
 
       const victimUnchanged = await victimHttp
         .post('/auth/login')

@@ -24,6 +24,8 @@ interface AuthContextValue {
   signIn: (input: LoginInput) => Promise<AuthUser>;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  /** Adopts a session the server issued outside the login flow, e.g. a password change. */
+  adoptSession: (session: LoginResponse) => void;
   hasRole: (...roles: Role[]) => boolean;
 }
 
@@ -108,14 +110,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(me);
   }, []);
 
+  const adoptSession = useCallback((session: LoginResponse) => {
+    writeStoredTokens(session);
+    setUser(session.user);
+  }, []);
+
   const hasRole = useCallback(
     (...roles: Role[]) => roles.some((role) => user?.roles.includes(role) ?? false),
     [user],
   );
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, isRestoring, signIn, signOut, refreshUser, hasRole }),
-    [user, isRestoring, signIn, signOut, refreshUser, hasRole],
+    () => ({ user, isRestoring, signIn, signOut, refreshUser, adoptSession, hasRole }),
+    [user, isRestoring, signIn, signOut, refreshUser, adoptSession, hasRole],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
