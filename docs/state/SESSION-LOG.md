@@ -49,6 +49,10 @@ breaks the DI container at boot.
   prunes `login_attempts` or expired refresh tokens) is the one that quietly grows forever.
 - The security review's own note: token *expiry* is untested, because doing it honestly needs an
   injectable clock rather than a `sleep`. Both expiry branches are unexecuted.
+- nginx discards every inherited header the moment a `location` declares its own `add_header`.
+  The security headers live in `apps/web/security-headers.conf` and must be `include`d in ANY
+  new location block that adds a header of its own, or they silently vanish from that route.
+  This already bit once: the CSP was added, committed, and served nowhere.
 
 **Next:** `/resume`, then Phase 01 task 1.1 — the product catalogue. Before finalising the
 schema, get OQ-03 (serial-level tracking for laptops?) and OQ-08 (is `consumable` a product flag
