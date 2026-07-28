@@ -63,6 +63,19 @@ export function ChangePasswordPage() {
       />
       <Panel className="p-5">
         <form noValidate onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
+          {/* Password managers need a username field to know which credential is being
+              updated; without one they either ignore the change or save it against the
+              wrong entry. Hidden because the user cannot change who they are here. */}
+          <input
+            type="text"
+            name="username"
+            autoComplete="username"
+            value={user?.email ?? ''}
+            readOnly
+            hidden
+            aria-hidden
+            tabIndex={-1}
+          />
           <TextField
             label={t.auth.currentPassword}
             type="password"

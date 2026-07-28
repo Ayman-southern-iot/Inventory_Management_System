@@ -27,6 +27,7 @@ RUN pnpm --filter @ims/shared build && pnpm --filter @ims/web build
 
 FROM nginx:${NGINX_VERSION} AS runtime
 COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
+COPY apps/web/security-headers.conf /etc/nginx/security-headers.conf
 COPY --from=build /repo/apps/web/dist /usr/share/nginx/html
 
 EXPOSE 80
