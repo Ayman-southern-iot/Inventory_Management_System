@@ -3,9 +3,12 @@ import { NavLink, Outlet } from 'react-router-dom';
 import {
   Boxes,
   ChevronDown,
+  FolderTree,
   LayoutDashboard,
   LogOut,
+  MapPin,
   Menu,
+  Package,
   Settings2,
   ShieldCheck,
   Users,
@@ -37,6 +40,15 @@ const NAV: NavGroup[] = [
   {
     label: null,
     items: [{ label: t.nav.dashboard, to: ROUTES.dashboard, icon: LayoutDashboard }],
+  },
+  {
+    label: t.nav.inventory,
+    roles: [Role.INVENTORY_MANAGER, Role.ADMIN],
+    items: [
+      { label: t.nav.inventoryProducts, to: ROUTES.inventory.products, icon: Package },
+      { label: t.nav.inventoryCategories, to: ROUTES.inventory.categories, icon: FolderTree },
+      { label: t.nav.inventoryLocations, to: ROUTES.inventory.locations, icon: MapPin },
+    ],
   },
   {
     label: t.nav.admin,

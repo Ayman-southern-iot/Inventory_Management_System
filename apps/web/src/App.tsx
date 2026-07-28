@@ -11,6 +11,10 @@ import { ChangePasswordPage } from '@/features/auth/ChangePasswordPage';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { DashboardPage } from '@/features/dashboard/DashboardPage';
 import { DepartmentsPage } from '@/features/admin/DepartmentsPage';
+import { InventoryPage } from '@/features/inventory/InventoryPage';
+import { ProductDetailPage } from '@/features/inventory/ProductDetailPage';
+import { CategoriesPage } from '@/features/inventory/CategoriesPage';
+import { LocationsPage } from '@/features/inventory/LocationsPage';
 import { SettingsPage } from '@/features/admin/SettingsPage';
 import { UsersPage } from '@/features/admin/UsersPage';
 import { t } from '@/i18n/en';
@@ -54,6 +58,22 @@ export function App() {
                   <Route element={<AppShell />}>
                     <Route path={ROUTES.dashboard} element={<DashboardPage />} />
                     <Route path={ROUTES.changePassword} element={<ChangePasswordPage />} />
+
+                    {/* The stock register belongs to the Inventory Manager; an admin gets it
+                        too, since they are the fallback when the IM is away. */}
+                    <Route
+                      element={
+                        <ProtectedRoute roles={[Role.INVENTORY_MANAGER, Role.ADMIN]} />
+                      }
+                    >
+                      <Route path={ROUTES.inventory.products} element={<InventoryPage />} />
+                      <Route
+                        path={ROUTES.inventory.productPattern}
+                        element={<ProductDetailPage />}
+                      />
+                      <Route path={ROUTES.inventory.categories} element={<CategoriesPage />} />
+                      <Route path={ROUTES.inventory.locations} element={<LocationsPage />} />
+                    </Route>
 
                     <Route element={<ProtectedRoute roles={[Role.ADMIN]} />}>
                       <Route path={ROUTES.admin.users} element={<UsersPage />} />

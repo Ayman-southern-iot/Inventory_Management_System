@@ -1,0 +1,43 @@
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
+import {
+  Role,
+  createCategorySchema,
+  updateCategorySchema,
+  type Category,
+  type CategoryNode,
+  type CreateCategoryInput,
+  type UpdateCategoryInput,
+} from '@ims/shared';
+import { zodPipe } from '../../common/zod-validation.pipe';
+import { Roles } from '../auth/auth.decorators';
+import { CategoriesService } from './categories.service';
+
+@Controller('categories')
+export class CategoriesController {
+  constructor(private readonly categories: CategoriesService) {}
+
+  /**
+   * Readable by any authenticated user — "browse inventory" is everyone's (reference §10).
+   * Unpaginated on purpose: the response is the whole tree, and a page of a tree is not a tree.
+   * The table is bounded by how many categories a human will maintain.
+   */
+  @Get()
+  async tree(): Promise<CategoryNode[]> {
+    return this.categories.tree();
+  }
+
+  @Roles(Role.INVENTORY_MANAGER, Role.ADMIN)
+  @Post()
+  async create(@Body(zodPipe(createCategorySchema)) body: CreateCategoryInput): Promise<Category> {
+    return this.categories.create(body);
+  }
+
+  @Roles(Role.INVENTORY_MANAGER, Role.ADMIN)
+  @Patch(':id')
+  async update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(zodPipe(updateCategorySchema)) body: UpdateCategoryInput,
+  ): Promise<Category> {
+    return this.categories.update(id, body);
+  }
+}

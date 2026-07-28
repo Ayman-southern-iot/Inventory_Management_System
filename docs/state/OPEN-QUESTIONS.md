@@ -27,11 +27,8 @@ rediscovered as a surprise.
 
 | ID | Gap | Why deferred | Land it in |
 |----|-----|--------------|------------|
-| G-01 | `login_attempts` and expired `refresh_tokens` are never pruned. `LoginThrottleService.deleteOlderThan` and `RefreshTokenRepository.deleteExpiredBefore` exist but have no caller. | There is no scheduler yet; `node-cron` arrives with reminder jobs. | Phase 03 |
 | G-02 | Token expiry is untested — both the access and refresh expiry branches are unexecuted, because asserting them honestly needs a clock rather than a `sleep`. | Wants an injectable clock, which is a small refactor better done alongside the deadline logic that needs one anyway. | Phase 03 |
 | G-03 | `LoginThrottleService` counts with an unlocked `SELECT`, so N simultaneous wrong passwords can all pass the check before any row is written. | Real in principle, negligible at 12 users; the per-IP `ThrottlerGuard` still caps the burst. | Phase 06 |
-| G-04 | `Idempotency-Key` (rules/20-backend.md) is not implemented on any mutating endpoint. | No Phase 00 endpoint is expensive to repeat. Stock writes are, so it lands with them. | Phase 01 |
-| G-05 | The departments deactivation guard ("move the N active users out first") has no test. | Written and manually exercised, but below the testing rules' priority line for Phase 00. | Phase 01 |
 
 ## Resolved
 

@@ -38,6 +38,26 @@
   --color-info: oklch(58% 0.11 232);
   --color-info-subtle: oklch(95.5% 0.03 232);
 
+  /*
+   * Zone identity palette. Deliberately NOT status colours: a zone is neither good nor bad, so
+   * reusing success/danger here would teach the wrong thing. A slot is picked by hashing the
+   * zone id (features/inventory/zone-colour.ts), which is why the palette is a fixed ring of
+   * six rather than a per-zone value — a new zone must not need a code change.
+   * Hues are spaced away from success (152), pending (78) and danger (27).
+   */
+  --color-zone-1: oklch(52% 0.13 258);
+  --color-zone-1-subtle: oklch(95.5% 0.03 258);
+  --color-zone-2: oklch(52% 0.12 200);
+  --color-zone-2-subtle: oklch(95.5% 0.03 200);
+  --color-zone-3: oklch(52% 0.12 300);
+  --color-zone-3-subtle: oklch(95.5% 0.03 300);
+  --color-zone-4: oklch(52% 0.12 340);
+  --color-zone-4-subtle: oklch(95.5% 0.03 340);
+  --color-zone-5: oklch(50% 0.1 170);
+  --color-zone-5-subtle: oklch(95.5% 0.03 170);
+  --color-zone-6: oklch(50% 0.11 110);
+  --color-zone-6-subtle: oklch(95.5% 0.04 110);
+
   --radius-control: 0.5rem;
   --radius-panel: 0.75rem;
 

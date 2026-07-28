@@ -17,15 +17,7 @@ import type {
 } from '@ims/shared';
 import { api } from '@/api/client';
 import { queryKeys } from '@/api/keys';
-
-function toSearchParams(query: Record<string, unknown>): string {
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(query)) {
-    if (value !== undefined && value !== '' && value !== null) params.set(key, String(value));
-  }
-  const encoded = params.toString();
-  return encoded ? `?${encoded}` : '';
-}
+import { toSearchParams } from '@/api/search-params';
 
 /* ---------------------------------- users ---------------------------------- */
 

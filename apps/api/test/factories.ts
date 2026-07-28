@@ -130,8 +130,41 @@ export async function resetData(db: Db): Promise<void> {
   await db.deleteFrom('refresh_tokens').execute();
   await db.deleteFrom('login_attempts').execute();
   await db.updateTable('app_settings').set({ updated_by: null }).execute();
-  await db.deleteFrom('users').execute();
-  await db.deleteFrom('departments').execute();
+
+  /**
+   * Users who performed a stock movement are deliberately NOT deletable: `stock_ledger` is
+   * append-only and `performed_by` is ON DELETE RESTRICT, so "who moved this" keeps resolving
+   * forever. That is the real product rule — such a user is deactivated, never deleted — and
+   * the reset has to respect it rather than fight it, or every user spec fails as collateral
+   * damage the first time a stock spec runs before it.
+   */
+  await db
+    .deleteFrom('users')
+    .where((eb) =>
+      eb.not(
+        eb.exists(
+          eb
+            .selectFrom('stock_ledger')
+            .select('stock_ledger.id')
+            .whereRef('stock_ledger.performed_by', '=', 'users.id'),
+        ),
+      ),
+    )
+    .execute();
+
+  await db
+    .deleteFrom('departments')
+    .where((eb) =>
+      eb.not(
+        eb.exists(
+          eb
+            .selectFrom('users')
+            .select('users.id')
+            .whereRef('users.department_id', '=', 'departments.id'),
+        ),
+      ),
+    )
+    .execute();
 }
 
 export async function countRefreshTokens(

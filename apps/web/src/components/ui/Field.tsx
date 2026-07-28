@@ -1,4 +1,11 @@
-import { forwardRef, useId, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from 'react';
+import {
+  forwardRef,
+  useId,
+  type InputHTMLAttributes,
+  type ReactNode,
+  type SelectHTMLAttributes,
+  type TextareaHTMLAttributes,
+} from 'react';
 import { cn } from '@/lib/cn';
 
 const CONTROL = cn(
@@ -87,6 +94,31 @@ export const SelectField = forwardRef<HTMLSelectElement, SelectFieldProps>(funct
     </FieldShell>
   );
 });
+
+interface TextAreaFieldProps extends Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, 'id'> {
+  label: string;
+  hint?: string;
+  error?: string;
+}
+
+export const TextAreaField = forwardRef<HTMLTextAreaElement, TextAreaFieldProps>(
+  function TextAreaField({ label, hint, error, className, rows = 3, ...rest }, ref) {
+    const id = useId();
+    return (
+      <FieldShell label={label} htmlFor={id} hint={hint} error={error}>
+        <textarea
+          ref={ref}
+          id={id}
+          rows={rows}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? `${id}-error` : hint ? `${id}-hint` : undefined}
+          className={cn(CONTROL, 'py-2', className)}
+          {...rest}
+        />
+      </FieldShell>
+    );
+  },
+);
 
 interface CheckboxProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'id' | 'type'> {
   label: string;

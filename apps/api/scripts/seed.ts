@@ -181,6 +181,190 @@ async function main(): Promise<void> {
       }
     }
 
+    // --- demo inventory (development only) ------------------------------------
+    // Enough of a catalogue that the inventory screens show something real on a fresh
+    // checkout. Never in production: invented products in a live stock register are worse
+    // than an empty one, because someone will eventually trust them.
+    if (!config.isProduction) {
+      const categories: Array<{ name: string; trackable: boolean }> = [
+        { name: 'Laptops', trackable: true },
+        { name: 'R&D Hardware', trackable: true },
+        { name: 'Cables & Consumables', trackable: true },
+        // requirements §11 — furniture is deliberately out of scope for stock tracking.
+        { name: 'Furniture', trackable: false },
+      ];
+
+      const categoryIds = new Map<string, string>();
+      for (const category of categories) {
+        await db
+          .insertInto('categories')
+          .values({ name: category.name, is_trackable: category.trackable })
+          .onConflict((oc) => oc.doNothing())
+          .execute();
+        const row = await db
+          .selectFrom('categories')
+          .select('id')
+          .where('name', '=', category.name)
+          .executeTakeFirst();
+        if (row) categoryIds.set(category.name, row.id);
+      }
+
+      const zones = [
+        { name: 'Meta', compartments: ['1A', '1B', '2A'] },
+        { name: 'Nvidia', compartments: ['3C', '4D'] },
+      ];
+      const compartmentIds = new Map<string, string>();
+      for (const zone of zones) {
+        await db
+          .insertInto('storage_zones')
+          .values({ name: zone.name })
+          .onConflict((oc) => oc.doNothing())
+          .execute();
+        const zoneRow = await db
+          .selectFrom('storage_zones')
+          .select('id')
+          .where('name', '=', zone.name)
+          .executeTakeFirst();
+        if (!zoneRow) continue;
+
+        for (const code of zone.compartments) {
+          await db
+            .insertInto('storage_compartments')
+            .values({ zone_id: zoneRow.id, code })
+            .onConflict((oc) => oc.doNothing())
+            .execute();
+          const compartment = await db
+            .selectFrom('storage_compartments')
+            .select('id')
+            .where('zone_id', '=', zoneRow.id)
+            .where('code', '=', code)
+            .executeTakeFirst();
+          if (compartment) compartmentIds.set(`${zone.name}/${code}`, compartment.id);
+        }
+      }
+
+      const products: Array<{
+        code: string;
+        name: string;
+        category: string;
+        unit: string;
+        returnable: boolean;
+        stock: Array<{ at: string; qty: number }>;
+      }> = [
+        {
+          code: 'LAP-0001',
+          name: 'Lenovo ThinkPad T14',
+          category: 'Laptops',
+          unit: 'pcs',
+          returnable: true,
+          stock: [
+            { at: 'Meta/1A', qty: 7 },
+            { at: 'Nvidia/3C', qty: 3 },
+          ],
+        },
+        {
+          code: 'GPU-0001',
+          name: 'NVIDIA RTX 4090',
+          category: 'R&D Hardware',
+          unit: 'pcs',
+          returnable: true,
+          stock: [{ at: 'Nvidia/4D', qty: 4 }],
+        },
+        {
+          code: 'CBL-0001',
+          name: 'USB-C to HDMI cable',
+          category: 'Cables & Consumables',
+          unit: 'pcs',
+          // OQ-08: consumable by default, still overridable on the borrow form.
+          returnable: false,
+          stock: [
+            { at: 'Meta/1B', qty: 40 },
+            { at: 'Meta/2A', qty: 15 },
+          ],
+        },
+        {
+          code: 'FRN-0001',
+          name: 'Office chair',
+          category: 'Furniture',
+          unit: 'pcs',
+          returnable: true,
+          stock: [],
+        },
+      ];
+
+      const seedActor = await db
+        .selectFrom('users')
+        .select('id')
+        .where('email', '=', config.seedAdmin.email)
+        .executeTakeFirst();
+
+      for (const product of products) {
+        const categoryId = categoryIds.get(product.category);
+        if (!categoryId) continue;
+
+        await db
+          .insertInto('products')
+          .values({
+            product_code: product.code,
+            name: product.name,
+            category_id: categoryId,
+            unit: product.unit,
+            default_returnable: product.returnable,
+          })
+          .onConflict((oc) => oc.doNothing())
+          .execute();
+
+        const productRow = await db
+          .selectFrom('products')
+          .select('id')
+          .where('product_code', '=', product.code)
+          .executeTakeFirst();
+        if (!productRow) continue;
+
+        for (const placement of product.stock) {
+          const compartmentId = compartmentIds.get(placement.at);
+          if (!compartmentId) continue;
+
+          // Idempotent: only seed opening stock where none has ever been recorded, so re-running
+          // the seed cannot inflate quantities.
+          const existing = await db
+            .selectFrom('stock_placements')
+            .select('id')
+            .where('product_id', '=', productRow.id)
+            .where('compartment_id', '=', compartmentId)
+            .executeTakeFirst();
+          if (existing) continue;
+
+          await db.transaction().execute(async (tx) => {
+            await tx
+              .insertInto('stock_placements')
+              .values({
+                product_id: productRow.id,
+                compartment_id: compartmentId,
+                quantity: placement.qty,
+              })
+              .execute();
+            // Written together with the placement so the reconciliation invariant holds from
+            // the very first row.
+            await tx
+              .insertInto('stock_ledger')
+              .values({
+                product_id: productRow.id,
+                to_compartment_id: compartmentId,
+                quantity: placement.qty,
+                movement_type: 'RECEIPT',
+                ref_type: 'SEED',
+                performed_by: seedActor?.id ?? null,
+                note: 'Opening balance from seed',
+              })
+              .execute();
+          });
+
+          console.log(`  stock    ${product.code} ${placement.qty} @ ${placement.at}`);
+        }
+      }
+    }
+
     console.log('Seed complete.');
   } finally {
     await db.destroy();

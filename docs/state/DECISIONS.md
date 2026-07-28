@@ -61,6 +61,37 @@ Format: `YYYY-MM-DD — <decision> — <why, in one clause>`
 - 2026-07-28 — Approver slots modelled as `approver_slots` rows with a nullable `department_id`
   (null = company-wide default) — satisfies either answer to OQ-02 without a schema change.
 
+## Phase 01 — Inventory core
+
+- 2026-07-29 — Ledger `quantity` is always positive; direction comes from `from_compartment_id`
+  / `to_compartment_id` — a MOVE is then net-zero for the product and net-correct per
+  compartment, so reconciliation is one query instead of a per-movement-type case analysis
+  that someone eventually gets wrong.
+- 2026-07-29 — The ledger is append-only by **trigger**, not only by `REVOKE` — the reference
+  doc specifies revoking UPDATE/DELETE from the app role, but the application connects as the
+  database owner in compose and in dev, and an owner bypasses its own grants. The trigger fails
+  loudly for every role including superuser. UPDATE, DELETE and TRUNCATE are all verified.
+- 2026-07-29 — Reconciliation is checked per (product, compartment), not per product — a
+  per-product check passes while two compartments are individually wrong in opposite
+  directions, which is exactly what a bad MOVE leaves behind.
+- 2026-07-29 — `move()` creates both placement rows first, then locks them one at a time in
+  ascending id order — the mandatory concurrency test proved that locking source-then-
+  destination deadlocks when A→B races B→A. A single `ORDER BY id ... FOR UPDATE` is not
+  sufficient, because the planner may lock in scan order before applying the sort.
+- 2026-07-29 — `reserve` and `release` write no ledger row — a reservation changes availability,
+  not the physical shelf, and the ledger records physical reality. Putting them in the ledger
+  would break reconciliation.
+- 2026-07-29 — Zone chip colour is a pure function of the zone id (FNV-1a into a fixed ring of
+  six tokens) — the IM reads the product card by shape before they read it by text, which only
+  works if a zone keeps its colour across reloads and machines. A collision is cosmetic; an
+  unstable colour is a lie about the data.
+- 2026-07-29 — `@nestjs/schedule` in-process rather than a queue service — the nightly
+  reconciliation and the retention job are one indexed query each. This also closed gap G-01.
+- 2026-07-29 — The test reset deliberately does NOT delete stock rows, and skips users
+  referenced by the ledger — `performed_by` is ON DELETE RESTRICT because "who moved this" must
+  keep resolving forever. Wiping placements while the append-only ledger survives manufactures
+  a discrepancy that cannot occur in production and makes the invariant test lie.
+
 ### After the Phase 00 security review
 
 The review found no CRITICAL and no HIGH, which is task 0.6's acceptance criterion. These are
