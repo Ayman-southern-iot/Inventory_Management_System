@@ -1,0 +1,50 @@
+{
+  "name": "@ims/api",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/src/main.js",
+  "scripts": {
+    "dev": "nest start --watch",
+    "build": "nest build",
+    "start": "node dist/src/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:int": "vitest run --config vitest.integration.config.ts",
+    "db:migrate": "tsx scripts/migrate.ts up",
+    "db:rollback": "tsx scripts/migrate.ts down",
+    "db:make": "tsx scripts/migrate.ts make",
+    "db:seed": "tsx scripts/seed.ts",
+    "migration:run": "node dist/scripts/migrate.js up"
+  },
+  "dependencies": {
+    "@ims/shared": "workspace:*",
+    "@nestjs/common": "10.4.15",
+    "@nestjs/core": "10.4.15",
+    "@nestjs/jwt": "10.2.0",
+    "@nestjs/platform-express": "10.4.15",
+    "@nestjs/throttler": "6.3.0",
+    "@node-rs/argon2": "2.0.2",
+    "dotenv": "16.4.7",
+    "helmet": "8.0.0",
+    "kysely": "0.27.5",
+    "pg": "8.13.1",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "7.8.1",
+    "zod": "3.24.1"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "10.4.9",
+    "@nestjs/schematics": "10.2.3",
+    "@nestjs/testing": "10.4.15",
+    "@types/express": "5.0.0",
+    "@types/node": "22.10.5",
+    "@types/pg": "8.11.10",
+    "@types/supertest": "6.0.2",
+    "supertest": "7.0.0",
+    "tsx": "4.19.2",
+    "typescript": "5.7.3",
+    "vite-tsconfig-paths": "5.1.4",
+    "vitest": "3.0.5"
+  }
+}

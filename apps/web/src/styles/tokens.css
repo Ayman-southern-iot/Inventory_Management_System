@@ -1,0 +1,75 @@
+@import 'tailwindcss';
+
+/**
+ * Design tokens. Every colour, radius and spacing decision in the app resolves here — a hex
+ * code in a component is a bug (rules/30-frontend.md). The tracker's green/ash/red exists
+ * once, as `success` / `pending` / `danger`, so a change to "what approved looks like" is a
+ * one-line edit rather than a grep.
+ */
+@theme {
+  --font-sans:
+    'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
+    sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, monospace;
+
+  /* Neutral ramp — the surface the whole tool sits on. */
+  --color-canvas: oklch(98.4% 0.002 250);
+  --color-surface: oklch(100% 0 0);
+  --color-surface-muted: oklch(96.5% 0.003 250);
+  --color-border: oklch(90.5% 0.005 250);
+  --color-border-strong: oklch(83% 0.008 250);
+  --color-ink: oklch(24% 0.014 258);
+  --color-ink-muted: oklch(52% 0.014 258);
+  --color-ink-subtle: oklch(64% 0.012 258);
+
+  /* Brand. Used for primary actions and focus rings, nothing else. */
+  --color-brand: oklch(52% 0.16 258);
+  --color-brand-hover: oklch(46% 0.16 258);
+  --color-brand-subtle: oklch(95% 0.03 258);
+  --color-on-brand: oklch(100% 0 0);
+
+  /* Status. These are semantic, not decorative: approved / awaiting / rejected. */
+  --color-success: oklch(56% 0.14 152);
+  --color-success-subtle: oklch(95.5% 0.04 152);
+  --color-pending: oklch(64% 0.13 78);
+  --color-pending-subtle: oklch(96% 0.05 85);
+  --color-danger: oklch(55% 0.19 27);
+  --color-danger-subtle: oklch(95.5% 0.04 27);
+  --color-info: oklch(58% 0.11 232);
+  --color-info-subtle: oklch(95.5% 0.03 232);
+
+  --radius-control: 0.5rem;
+  --radius-panel: 0.75rem;
+
+  --shadow-panel: 0 1px 2px oklch(24% 0.014 258 / 0.06), 0 1px 3px oklch(24% 0.014 258 / 0.04);
+  --shadow-overlay: 0 10px 32px oklch(24% 0.014 258 / 0.14);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Accessibility floor (rules/30-frontend.md): focus must always be visible. */
+  :focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+  }
+
+  /* The tool is used every day by keyboard; respect a user who has asked for less motion. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}

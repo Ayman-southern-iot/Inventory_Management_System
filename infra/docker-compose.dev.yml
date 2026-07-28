@@ -1,0 +1,45 @@
+# Development dependencies only. The application itself runs on the host via `pnpm dev`
+# so you get hot reload. Production is infra/docker-compose.yml.
+name: ims-dev
+
+services:
+  db:
+    image: postgres:16.4-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-ims}
+      POSTGRES_USER: ${POSTGRES_USER:-ims}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ims_local_dev_password}
+      TZ: Asia/Dhaka
+    ports:
+      # 5432 and 5430 are already taken by other stacks on the dev machine.
+      - '5433:5432'
+    volumes:
+      - ims_dev_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-ims} -d ${POSTGRES_DB:-ims}']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Throwaway database for integration tests. tmpfs — it is meant to be destroyed.
+  db-test:
+    image: postgres:16.4-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ims_test
+      POSTGRES_USER: ims
+      POSTGRES_PASSWORD: ims_test_password
+      TZ: Asia/Dhaka
+    ports:
+      - '5434:5432'
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ims -d ims_test']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  ims_dev_pgdata:

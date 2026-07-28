@@ -1,0 +1,6 @@
+{
+  "//": "What ships in the image. Tests still typecheck via tsconfig.json, but a broken test must never be able to block a deploy build.",
+  "extends": "./tsconfig.json",
+  "include": ["src/**/*", "scripts/**/*"],
+  "exclude": ["node_modules", "dist", "test", "**/*.spec.ts", "**/*.int-spec.ts"]
+}

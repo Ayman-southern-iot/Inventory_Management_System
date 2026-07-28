@@ -1,0 +1,27 @@
+node_modules/
+dist/
+build/
+.turbo/
+coverage/
+
+.env
+.env.*
+!.env.example
+infra/.env
+infra/backups/
+
+*.log
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+storage/
+*.pdf
+!docs/**/*.pdf
+
+.claude/settings.local.json
+
+# Playwright MCP artefacts from local UI verification
+.playwright-mcp/
+*.png

@@ -1,0 +1,109 @@
+# Inventory Management System — production compose
+# Deploy:  ./deploy.sh          (never run `docker compose down -v`)
+name: ims
+
+# Without a cap, Docker's json-file driver grows until the disk is full and takes the whole
+# host down — a slow, boring, entirely avoidable outage (§3.3 non-negotiable #5). Applied to
+# every service via the `*logging` alias.
+x-logging: &logging
+  logging:
+    driver: json-file
+    options:
+      max-size: '10m'
+      max-file: '5'
+
+services:
+  db:
+    <<: *logging
+    # PIN THE MAJOR VERSION. `postgres:latest` will one day silently become
+    # a new major and refuse to read your data directory.
+    image: postgres:16.4-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # keeps timestamps sane in pg_dump output
+      TZ: Asia/Dhaka
+    volumes:
+      - pgdata:/var/lib/postgresql/data          # NAMED volume — survives everything
+    # deliberately NOT published to the host; only the compose network can reach it
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  # One-shot. Runs to completion, then api starts. If a migration fails the api
+  # never boots, so you can't end up serving traffic against a half-migrated DB.
+  migrate:
+    <<: *logging
+    image: ${REGISTRY:-local}/ims-api:${IMS_TAG:-dev}
+    # Lets a clean machine with no registry access run `docker compose up -d` and get a
+    # working stack. A real deploy still uses `docker compose pull` against the registry.
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    restart: "no"
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["npm", "run", "migration:run"]
+
+  api:
+    <<: *logging
+    image: ${REGISTRY:-local}/ims-api:${IMS_TAG:-dev}
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - files:/app/storage                       # generated BOM PDFs + letterhead
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  web:
+    <<: *logging
+    image: ${REGISTRY:-local}/ims-web:${IMS_TAG:-dev}
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+
+  # TLS + reverse proxy. Caddy gets certificates automatically if IMS_DOMAIN
+  # is a real hostname; use a bare host:port in the Caddyfile for LAN-only.
+  proxy:
+    <<: *logging
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      IMS_DOMAIN: ${IMS_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data                         # holds the TLS certs — keep it
+      - caddy_config:/config
+    depends_on:
+      - web
+      - api
+
+volumes:
+  pgdata:          # ← your database. Losing this is losing everything.
+  files:           # ← generated PDFs
+  caddy_data:
+  caddy_config:
