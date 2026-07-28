@@ -8,6 +8,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { DepartmentsModule } from './modules/departments/departments.module';
 import { SettingsModule } from './modules/settings/settings.module';
+import { StockModule } from './modules/stock/stock.module';
 import { HealthController } from './modules/health/health.controller';
 
 /** Blanket ceiling. Endpoints that need something stricter declare it with `@Throttle`. */
@@ -23,6 +24,7 @@ const GLOBAL_RATE_LIMIT = [{ name: 'default', ttl: 60_000, limit: 300 }];
     UsersModule,
     DepartmentsModule,
     SettingsModule,
+    StockModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

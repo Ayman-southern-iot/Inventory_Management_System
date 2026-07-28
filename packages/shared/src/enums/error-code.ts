@@ -17,6 +17,14 @@ export const ErrorCode = {
   ACCOUNT_DEACTIVATED: 'ACCOUNT_DEACTIVATED',
   RATE_LIMITED: 'RATE_LIMITED',
   UNKNOWN_SETTING: 'UNKNOWN_SETTING',
+
+  // Stock. These are the ones later phases branch on rather than just display.
+  INSUFFICIENT_STOCK: 'INSUFFICIENT_STOCK',
+  /** The caller acted on a placement whose version has since moved (§7.3.2). */
+  STOCK_VERSION_CONFLICT: 'STOCK_VERSION_CONFLICT',
+  CATEGORY_NOT_TRACKABLE: 'CATEGORY_NOT_TRACKABLE',
+  STOCK_RESERVED: 'STOCK_RESERVED',
+
   INTERNAL: 'INTERNAL',
 } as const;
 

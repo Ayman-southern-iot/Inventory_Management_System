@@ -112,8 +112,103 @@ export interface ApproverSlotsTable {
   updated_at: UpdatedAt;
 }
 
+/* ------------------------------------------------------------------ inventory */
+
+export interface CategoriesTable {
+  id: Generated<string>;
+  name: string;
+  parent_id: string | null;
+  /** requirements §11 — untracked categories exist in the catalogue but hold no stock. */
+  is_trackable: Generated<boolean>;
+  is_active: Generated<boolean>;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
+export interface ProductsTable {
+  id: Generated<string>;
+  /** The Storage ID on the shelf label. */
+  product_code: string;
+  name: string;
+  category_id: string;
+  unit: Generated<string>;
+  /** OQ-08 — the borrow form's default, overridable per line. */
+  default_returnable: Generated<boolean>;
+  /** OQ-03 answered "no". Dormant so switching it on stays additive. */
+  is_serialised: Generated<boolean>;
+  description: string | null;
+  is_active: Generated<boolean>;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
+export interface StorageZonesTable {
+  id: Generated<string>;
+  name: string;
+  is_active: Generated<boolean>;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
+export interface StorageCompartmentsTable {
+  id: Generated<string>;
+  zone_id: string;
+  code: string;
+  is_active: Generated<boolean>;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
+/** Product × compartment × quantity. Written only by StockService. */
+export interface StockPlacementsTable {
+  id: Generated<string>;
+  product_id: string;
+  compartment_id: string;
+  quantity: Generated<number>;
+  reserved_qty: Generated<number>;
+  /** Optimistic lock for the IM screen; a stale version is a 409, not a silent overwrite. */
+  version: Generated<number>;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
+export const StockMovementType = {
+  RECEIPT: 'RECEIPT',
+  MOVE: 'MOVE',
+  ISSUE: 'ISSUE',
+  RETURN: 'RETURN',
+  ADJUST: 'ADJUST',
+  DISPOSE: 'DISPOSE',
+} as const;
+
+export type StockMovementType = (typeof StockMovementType)[keyof typeof StockMovementType];
+
+/**
+ * Append-only, enforced by a trigger. `quantity` is always positive; direction comes from the
+ * compartment columns, so a MOVE is net-zero for the product and net-correct per compartment.
+ */
+export interface StockLedgerTable {
+  id: Generated<string>;
+  product_id: string;
+  from_compartment_id: string | null;
+  to_compartment_id: string | null;
+  quantity: number;
+  movement_type: StockMovementType;
+  ref_type: string | null;
+  ref_id: string | null;
+  performed_by: string | null;
+  note: string | null;
+  created_at: CreatedAt;
+}
+
 export interface Database {
   app_settings: AppSettingsTable;
+  categories: CategoriesTable;
+  products: ProductsTable;
+  storage_zones: StorageZonesTable;
+  storage_compartments: StorageCompartmentsTable;
+  stock_placements: StockPlacementsTable;
+  stock_ledger: StockLedgerTable;
   departments: DepartmentsTable;
   users: UsersTable;
   user_roles: UserRolesTable;
