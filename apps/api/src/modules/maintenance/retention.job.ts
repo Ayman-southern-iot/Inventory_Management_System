@@ -3,6 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { CONFIG, type AppConfig } from '../../config';
 import { LoginThrottleService } from '../auth/login-throttle.service';
 import { RefreshTokenRepository } from '../auth/refresh-token.repository';
+import { IdempotencyService } from '../../common/idempotency.service';
 
 /**
  * Closes gap G-01 from the Phase 00 handoff: `login_attempts` and expired `refresh_tokens`
@@ -12,6 +13,9 @@ import { RefreshTokenRepository } from '../auth/refresh-token.repository';
  * hashes and every failed login attempt indefinitely only enlarges the blast radius of a
  * database dump.
  */
+/** A genuinely universal constant, so it is named rather than inline (rules/10 exceptions). */
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
 @Injectable()
 export class RetentionJob {
   private readonly logger = new Logger(RetentionJob.name);
@@ -19,6 +23,7 @@ export class RetentionJob {
   constructor(
     private readonly throttle: LoginThrottleService,
     private readonly refreshTokens: RefreshTokenRepository,
+    private readonly idempotency: IdempotencyService,
     @Inject(CONFIG) private readonly config: AppConfig,
   ) {}
 
@@ -27,7 +32,7 @@ export class RetentionJob {
     await this.prune();
   }
 
-  async prune(): Promise<{ attempts: number; tokens: number }> {
+  async prune(): Promise<{ attempts: number; tokens: number; idempotencyKeys: number }> {
     // Attempts older than the rate-limit window can never influence a decision again.
     const attemptCutoff = new Date(
       Date.now() - this.config.auth.loginRateLimit.windowSeconds * 1000,
@@ -37,9 +42,17 @@ export class RetentionJob {
     // Expired refresh rows are already refused; keeping the hashes buys nothing.
     const tokens = await this.refreshTokens.deleteExpiredBefore(new Date());
 
-    if (attempts > 0 || tokens > 0) {
-      this.logger.log(`Retention: removed ${attempts} login attempt(s), ${tokens} expired token(s)`);
+    // A day is far longer than any client would still be retrying, and keeping the keys that
+    // long means a repeated submit is still recognised across an overnight outage.
+    const idempotencyCutoff = new Date(Date.now() - MS_PER_DAY);
+    const idempotencyKeys = await this.idempotency.deleteOlderThan(idempotencyCutoff);
+
+    if (attempts > 0 || tokens > 0 || idempotencyKeys > 0) {
+      this.logger.log(
+        `Retention: removed ${attempts} login attempt(s), ${tokens} expired token(s), ` +
+          `${idempotencyKeys} idempotency key(s)`,
+      );
     }
-    return { attempts, tokens };
+    return { attempts, tokens, idempotencyKeys };
   }
 }

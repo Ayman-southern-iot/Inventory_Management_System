@@ -5,12 +5,14 @@
 
 ## Current position
 
-- **Phase:** 01 — Inventory core (complete)
-- **Next task:** Phase 02 — Borrowing, task 2.1
-- **Working tree:** clean, Phase 01 committed
-- **Blocked by:** nothing for Phase 02. OQ-04 (what the IM edit does after issue) and OQ-09 (project fields) shape it and should be confirmed, but both have recorded assumptions.
+- **Phase:** 02 — Borrowing (complete)
+- **Next task:** Phase 03 — Requisitions, task 3.1
+- **Working tree:** clean, Phase 02 committed
+- **Blocked by:** OQ-01 and OQ-02 are 🔴 for Phase 03 — how many approvers below the
+  threshold, and whether approver slots are company-wide or per department. Both need the
+  user before the approval chain is built.
 - **Security review:** no CRITICAL, no HIGH — task 0.6's acceptance criterion. Six MEDIUM and
-  five LOW findings were fixed; what was deliberately deferred is G-01..G-05 in
+  five LOW findings were fixed; what was deliberately deferred is recorded as G-02 and G-03 in
   `OPEN-QUESTIONS.md`, not lost.
 
 ## Phases
@@ -19,7 +21,7 @@
 |---|-------|--------|-------|
 | 00 | Foundation — repo, config, auth, users, admin | ✅ done and verified | 5 migrations, 190 tests |
 | 01 | Inventory core — catalogue, locations, placements, ledger | ✅ done and verified | 6 migrations, 213 tests |
-| 02 | Borrowing — request, approve, issue, return | ⬜ not started | |
+| 02 | Borrowing — request, approve, issue, return | ✅ done and verified | 7 migrations, 236 tests |
 | 03 | Requisitions — form, approvals, tracker, notifications | ⬜ not started | |
 | 04 | BOM — generation, snapshot, letterhead PDF | ⬜ not started | |
 | 05 | Funds & purchasing — receipts, purchases, receive-to-stock | ⬜ not started | |
@@ -48,7 +50,7 @@ already occupied on the build machine by unrelated stacks; the compose file refl
 **Schema** — `app_settings`, `departments`, `users`, `user_roles`, `refresh_tokens`,
 `login_attempts`, `approver_slots`, and the `user_role` / `refresh_revocation_reason` enums.
 
-**Tests** — 36 API unit, 161 API integration, 16 web component. All green.
+**Tests** — 36 API unit, 184 API integration, 16 web component. All green.
 
 **Verified by hand** — migrate → rollback → migrate from empty; the full production compose stack
 (`db`, `migrate`, `api`, `web`, `proxy`) coming up on a clean build and serving the SPA and API

@@ -4,6 +4,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ConfigModule } from './config';
 import { DatabaseModule } from './database/database.module';
+import { CommonModule } from './common/common.module';
 import { SecurityModule } from './security/security.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
@@ -13,6 +14,7 @@ import { StockModule } from './modules/stock/stock.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { ProductsModule } from './modules/products/products.module';
 import { LocationsModule } from './modules/locations/locations.module';
+import { BorrowingModule } from './modules/borrowing/borrowing.module';
 import { MaintenanceModule } from './modules/maintenance/maintenance.module';
 import { HealthController } from './modules/health/health.controller';
 
@@ -23,6 +25,7 @@ const GLOBAL_RATE_LIMIT = [{ name: 'default', ttl: 60_000, limit: 300 }];
   imports: [
     ConfigModule,
     DatabaseModule,
+    CommonModule,
     SecurityModule,
     ThrottlerModule.forRoot(GLOBAL_RATE_LIMIT),
     // In-process cron. At ~6 requisitions a day a queue server would be pure overhead
@@ -36,6 +39,7 @@ const GLOBAL_RATE_LIMIT = [{ name: 'default', ttl: 60_000, limit: 300 }];
     CategoriesModule,
     ProductsModule,
     LocationsModule,
+    BorrowingModule,
     MaintenanceModule,
   ],
   controllers: [HealthController],

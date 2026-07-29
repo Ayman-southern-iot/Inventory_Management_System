@@ -125,6 +125,15 @@ export async function createUserAndLogin(
  * `app_settings` is owned by boot-time seeding and is therefore reset by value, not by row.
  */
 export async function resetData(db: Db): Promise<void> {
+  // Borrow rows first: they reference users with ON DELETE RESTRICT. Unlike the ledger these
+  // are ordinary history and may be cleared between tests. The ledger rows they produced stay,
+  // with a `ref_id` pointing at a request that no longer exists — deliberate, because `ref_id`
+  // carries no foreign key precisely so an append-only row can outlive what caused it.
+  await db.deleteFrom('borrow_returns').execute();
+  await db.deleteFrom('borrow_requests').execute();
+  await db.deleteFrom('projects').execute();
+  await db.deleteFrom('idempotency_keys').execute();
+
   await db.deleteFrom('approver_slots').execute();
   await db.deleteFrom('user_roles').execute();
   await db.deleteFrom('refresh_tokens').execute();

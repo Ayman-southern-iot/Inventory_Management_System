@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, ArrowLeftRight, Pencil, PackagePlus, Scale } from 'lucide-react';
+import { ArrowLeft, ArrowLeftRight, HandCoins, Pencil, PackagePlus, Scale } from 'lucide-react';
 import type { ListLedgerQuery, Placement } from '@ims/shared';
 import { Button } from '@/components/ui/Button';
 import { Badge, PageHeader, Panel, Table } from '@/components/ui/primitives';
@@ -8,6 +8,9 @@ import { EmptyState, QueryBoundary, SkeletonRows } from '@/components/ui/states'
 import { cn } from '@/lib/cn';
 import { t } from '@/i18n/en';
 import { ROUTES } from '@/routes/paths';
+import { Role } from '@ims/shared';
+import { useAuth } from '@/features/auth/auth-context';
+import { BorrowDialog } from '@/features/borrowing/components/BorrowDialog';
 import { LEDGER_PAGE_LIMIT } from './constants';
 import { useLedger, useProduct, useZones } from './api';
 import { zoneToneFor } from './zone-colour';
@@ -16,7 +19,7 @@ import { MoveStockDialog } from './components/MoveStockDialog';
 import { ProductFormDialog } from './components/ProductFormDialog';
 import { ReceiveStockDialog } from './components/ReceiveStockDialog';
 
-type OpenDialog = 'receive' | 'move' | 'adjust' | 'edit' | null;
+type OpenDialog = 'receive' | 'move' | 'adjust' | 'edit' | 'borrow' | null;
 
 /** One placement, coloured by zone so the card is readable by shape before it is read by text. */
 function PlacementChip({ placement }: { placement: Placement }) {
@@ -54,6 +57,9 @@ function Figure({ label, value, muted }: { label: string; value: number; muted?:
 export function ProductDetailPage() {
   const { productId = '' } = useParams<{ productId: string }>();
   const [dialog, setDialog] = useState<OpenDialog>(null);
+  const { hasRole } = useAuth();
+  // Managing stock is the IM's; borrowing it is everyone's.
+  const canManageStock = hasRole(Role.INVENTORY_MANAGER, Role.ADMIN);
 
   const product = useProduct(productId);
   const zones = useZones();
@@ -89,6 +95,15 @@ export function ProductDetailPage() {
               subtitle={`${detail.productCode} · ${detail.categoryName} · ${detail.unit}`}
               action={
                 <div className="flex flex-wrap gap-2">
+                  {detail.isTrackable && detail.isActive && detail.totalAvailable > 0 ? (
+                    <Button
+                      icon={<HandCoins aria-hidden className="size-4" />}
+                      onClick={() => setDialog('borrow')}
+                    >
+                      {t.borrowing.borrow}
+                    </Button>
+                  ) : null}
+                  {canManageStock ? (
                   <Button
                     variant="secondary"
                     icon={<Pencil aria-hidden className="size-4" />}
@@ -96,7 +111,8 @@ export function ProductDetailPage() {
                   >
                     {t.common.edit}
                   </Button>
-                  {detail.isTrackable ? (
+                  ) : null}
+                  {canManageStock && detail.isTrackable ? (
                     <>
                       <Button
                         variant="secondary"
@@ -245,6 +261,7 @@ export function ProductDetailPage() {
               placements={detail.placements}
             />
             <ProductFormDialog open={dialog === 'edit'} onClose={close} editing={detail} />
+            <BorrowDialog open={dialog === 'borrow'} onClose={close} product={detail} />
           </>
         )}
       </QueryBoundary>

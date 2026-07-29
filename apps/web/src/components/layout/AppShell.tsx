@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import {
   Boxes,
+  HandCoins,
+  ClipboardList,
   ChevronDown,
   FolderTree,
   LayoutDashboard,
@@ -39,13 +41,18 @@ interface NavGroup {
 const NAV: NavGroup[] = [
   {
     label: null,
-    items: [{ label: t.nav.dashboard, to: ROUTES.dashboard, icon: LayoutDashboard }],
+    items: [
+      { label: t.nav.dashboard, to: ROUTES.dashboard, icon: LayoutDashboard },
+      // Browsing stock and seeing your own borrows are everyone's, so no roles here.
+      { label: t.nav.inventoryProducts, to: ROUTES.inventory.products, icon: Package },
+      { label: t.nav.myBorrowings, to: ROUTES.borrowing.mine, icon: HandCoins },
+    ],
   },
   {
     label: t.nav.inventory,
     roles: [Role.INVENTORY_MANAGER, Role.ADMIN],
     items: [
-      { label: t.nav.inventoryProducts, to: ROUTES.inventory.products, icon: Package },
+      { label: t.nav.borrowing, to: ROUTES.borrowing.all, icon: ClipboardList },
       { label: t.nav.inventoryCategories, to: ROUTES.inventory.categories, icon: FolderTree },
       { label: t.nav.inventoryLocations, to: ROUTES.inventory.locations, icon: MapPin },
     ],

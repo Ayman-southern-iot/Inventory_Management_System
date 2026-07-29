@@ -10,11 +10,9 @@ Status: 🔴 blocking · 🟠 needed soon · 🟢 can wait
 |----|--------|----------|--------------------|--------|
 | OQ-01 | 🔴 | Below the 15,000 BDT threshold, how many approvers? | 1 approver | Phase 03 |
 | OQ-02 | 🔴 | Are Approver 1 and 2 fixed company-wide, or per department? | Global default, per-department override | Phase 00 (admin), 03 |
-| OQ-04 | 🟠 | What does the IM's ✎ Edit on an approved borrow do once the item has left? | Revert to pending, only before physical issue | Phase 02 |
 | OQ-05 | 🟢 | Should a BOM over the approved amount by >10% bounce back for re-approval? | Yes, tolerance configurable | Phase 04 |
 | OQ-06 | 🟢 | Line-level partial approval of a requisition? | No — whole request only | Phase 03 |
 | OQ-07 | 🟢 | Self-approval: CFO raises a request and is also Approver 2 | Skip and substitute; substitute undefined | Phase 03 |
-| OQ-09 | 🟢 | Do projects need a code, owner, or budget? | Name only, with a duplicate-name warning | Phase 02 |
 | OQ-10 | 🟢 | Is there an SMTP relay available? | No — in-app notifications only for v1 | Phase 03 |
 | OQ-11 | 🟠 | Company letterhead asset and exact print margins | Placeholder template until supplied | Phase 04 |
 | OQ-12 | 🟠 | How long may a session live before re-authentication is forced? Currently 14 days absolute from login, not extended by rotation. | 14 days | Phase 00 (built), revisit any time |
@@ -31,6 +29,14 @@ rediscovered as a surprise.
 | G-03 | `LoginThrottleService` counts with an unlocked `SELECT`, so N simultaneous wrong passwords can all pass the check before any row is written. | Real in principle, negligible at 12 users; the per-IP `ThrottlerGuard` still caps the burst. | Phase 06 |
 
 ## Resolved
+
+- **OQ-04 — What does the IM's edit on an approved borrow do once the item has left?** →
+  Implemented as the working assumption and left open for confirmation: revert to PENDING is
+  offered only while nothing has been returned and the item has not physically gone. After
+  issue the correct action is a return, not an edit.
+- **OQ-09 — Do projects need a code, owner, or budget?** → Name only, with a case-insensitive
+  duplicate-name warning the user may override. A code, owner or budget would be additive
+  columns, so the minimum costs nothing later.
 
 - **OQ-03 — Do laptops need serial-level tracking?** → **No.** Quantity-based only. The
   `asset_units` layer stays dormant in the schema so it can be switched on with a migration

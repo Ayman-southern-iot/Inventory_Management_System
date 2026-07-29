@@ -15,6 +15,7 @@ import { InventoryPage } from '@/features/inventory/InventoryPage';
 import { ProductDetailPage } from '@/features/inventory/ProductDetailPage';
 import { CategoriesPage } from '@/features/inventory/CategoriesPage';
 import { LocationsPage } from '@/features/inventory/LocationsPage';
+import { BorrowingPage } from '@/features/borrowing/BorrowingPage';
 import { SettingsPage } from '@/features/admin/SettingsPage';
 import { UsersPage } from '@/features/admin/UsersPage';
 import { t } from '@/i18n/en';
@@ -58,21 +59,27 @@ export function App() {
                   <Route element={<AppShell />}>
                     <Route path={ROUTES.dashboard} element={<DashboardPage />} />
                     <Route path={ROUTES.changePassword} element={<ChangePasswordPage />} />
+                    {/* Anyone may borrow, so My borrowings is not role-gated. */}
+                    <Route path={ROUTES.borrowing.mine} element={<BorrowingPage mine />} />
 
-                    {/* The stock register belongs to the Inventory Manager; an admin gets it
-                        too, since they are the fallback when the IM is away. */}
+                    {/* Browsing the catalogue is everyone's — a general user has to find a
+                        product before they can borrow it (task 2.7). The stock actions on
+                        these pages are gated by role, and by the API regardless. */}
+                    <Route path={ROUTES.inventory.products} element={<InventoryPage />} />
+                    <Route
+                      path={ROUTES.inventory.productPattern}
+                      element={<ProductDetailPage />}
+                    />
+
+                    {/* Managing the register, and seeing everyone's borrows, is the IM's. */}
                     <Route
                       element={
                         <ProtectedRoute roles={[Role.INVENTORY_MANAGER, Role.ADMIN]} />
                       }
                     >
-                      <Route path={ROUTES.inventory.products} element={<InventoryPage />} />
-                      <Route
-                        path={ROUTES.inventory.productPattern}
-                        element={<ProductDetailPage />}
-                      />
                       <Route path={ROUTES.inventory.categories} element={<CategoriesPage />} />
                       <Route path={ROUTES.inventory.locations} element={<LocationsPage />} />
+                      <Route path={ROUTES.borrowing.all} element={<BorrowingPage />} />
                     </Route>
 
                     <Route element={<ProtectedRoute roles={[Role.ADMIN]} />}>

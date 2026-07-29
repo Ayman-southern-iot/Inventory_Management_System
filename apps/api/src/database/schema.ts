@@ -201,8 +201,80 @@ export interface StockLedgerTable {
   created_at: CreatedAt;
 }
 
+/* ------------------------------------------------------------------ borrowing */
+
+export const BorrowStatusValue = {
+  PENDING: 'PENDING',
+  REJECTED: 'REJECTED',
+  ISSUED: 'ISSUED',
+  PARTIALLY_RETURNED: 'PARTIALLY_RETURNED',
+  RETURNED: 'RETURNED',
+  CANCELLED: 'CANCELLED',
+} as const;
+
+export type BorrowStatusValue = (typeof BorrowStatusValue)[keyof typeof BorrowStatusValue];
+
+export interface ProjectsTable {
+  id: Generated<string>;
+  name: string;
+  created_by: string | null;
+  is_active: Generated<boolean>;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
+export interface BorrowRequestsTable {
+  id: Generated<string>;
+  borrow_no: string;
+  requester_id: string;
+  product_id: string;
+  /** The exact placement the reservation is held against. */
+  placement_id: string | null;
+  compartment_id: string;
+  quantity: number;
+  project_id: string | null;
+  /** OQ-08 — defaults from the product, overridable per borrow. */
+  is_returnable: boolean;
+  expected_return_date: ColumnType<Date | string | null, string | null, string | null>;
+  purpose: string | null;
+  status: Generated<BorrowStatusValue>;
+  decided_by: string | null;
+  decision_note: string | null;
+  decided_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
+  issued_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
+  returned_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
+  /** Running total, so "still out" never needs a sum over borrow_returns. */
+  returned_qty: Generated<number>;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
+export interface BorrowReturnsTable {
+  id: Generated<string>;
+  borrow_request_id: string;
+  quantity: number;
+  compartment_id: string;
+  received_by: string | null;
+  condition_note: string | null;
+  returned_at: Generated<Date>;
+}
+
+/** Makes a mutating endpoint safe to repeat (rules/20-backend.md). */
+export interface IdempotencyKeysTable {
+  id: Generated<string>;
+  key: string;
+  user_id: string;
+  scope: string;
+  response: ColumnType<unknown, string | null, string | null>;
+  created_at: CreatedAt;
+}
+
 export interface Database {
   app_settings: AppSettingsTable;
+  projects: ProjectsTable;
+  borrow_requests: BorrowRequestsTable;
+  borrow_returns: BorrowReturnsTable;
+  idempotency_keys: IdempotencyKeysTable;
   categories: CategoriesTable;
   products: ProductsTable;
   storage_zones: StorageZonesTable;

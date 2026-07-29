@@ -1,4 +1,5 @@
 import type {
+  ListBorrowsQuery,
   ListDepartmentsQuery,
   ListLedgerQuery,
   ListProductsQuery,
@@ -47,5 +48,13 @@ export const queryKeys = {
   ledger: {
     all: () => ['ledger'] as const,
     list: (query: ListLedgerQuery) => ['ledger', 'list', query] as const,
+  },
+  borrows: {
+    all: () => ['borrows'] as const,
+    list: (query: ListBorrowsQuery) => ['borrows', 'list', query] as const,
+    pendingCount: () => ['borrows', 'pending-count'] as const,
+  },
+  projects: {
+    all: () => ['projects'] as const,
   },
 } as const;

@@ -11,6 +11,10 @@ export const ROUTES = {
     productPattern: '/inventory/:productId',
     product: (productId: string) => `/inventory/${productId}`,
   },
+  borrowing: {
+    all: '/borrowing',
+    mine: '/my-borrowings',
+  },
   admin: {
     users: '/admin/users',
     departments: '/admin/departments',

@@ -61,6 +61,33 @@ Format: `YYYY-MM-DD — <decision> — <why, in one clause>`
 - 2026-07-28 — Approver slots modelled as `approver_slots` rows with a nullable `department_id`
   (null = company-wide default) — satisfies either answer to OQ-02 without a schema change.
 
+## Phase 02 — Borrowing
+
+- 2026-07-29 — Stock is reserved at **submit**, not at approval — otherwise two people are both
+  promised the last unit while the IM thinks about it. The row lock in `StockService.reserve`
+  is what makes the second submitter fail rather than queue.
+- 2026-07-29 — Reservations are released by the *service* on any failure path (rejection,
+  cancellation, or a failed insert after a successful reserve) — stock left reserved against a
+  request that does not exist is invisible to everyone and impossible to diagnose.
+- 2026-07-29 — Decisions and returns are claimed with a **conditional UPDATE**
+  (`WHERE status = 'PENDING'`, `WHERE returned_qty = <what we read>`) rather than read-then-write
+  — two IMs on a shared screen is the normal case, and zero rows updated is how the loser finds
+  out instead of both issuing stock.
+- 2026-07-29 — `Idempotency-Key` implemented for borrow create/decide/return, closing gap G-04.
+  The unique index is the atomic part; a check-then-act version would let a double-click issue
+  stock twice, which is unrecoverable.
+- 2026-07-29 — `isOverdue` is computed on read, never stored — a persisted flag is wrong from
+  the moment midnight passes.
+- 2026-07-29 — OQ-04 implemented as the recorded assumption: an approved borrow may be reverted
+  to PENDING only while nothing has been returned and it has not left. After issue the item is
+  on someone's desk, and "un-approving" would put units back on the shelf that are not there.
+- 2026-07-29 — OQ-09 implemented as name-only projects with a duplicate-name *warning*, not a
+  unique constraint — two teams may legitimately run a "Falcon", so the user is told and may
+  proceed deliberately.
+- 2026-07-29 — Browsing the catalogue is open to every authenticated user; only stock mutation
+  and the all-borrows log are IM-gated. A general user must find a product before they can
+  borrow it (task 2.7).
+
 ## Phase 01 — Inventory core
 
 - 2026-07-29 — Ledger `quantity` is always positive; direction comes from `from_compartment_id`

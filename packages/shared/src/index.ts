@@ -6,3 +6,4 @@ export * from './contracts/users.js';
 export * from './contracts/departments.js';
 export * from './contracts/settings.js';
 export * from './contracts/inventory.js';
+export * from './contracts/borrowing.js';

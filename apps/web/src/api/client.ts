@@ -20,6 +20,12 @@ interface RequestOptions {
   /** Skips the Authorization header and the refresh dance — login and refresh itself. */
   anonymous?: boolean;
   signal?: AbortSignal;
+  /**
+   * Makes the call safe to repeat. Survives the transparent retry-after-refresh below, which
+   * is exactly the case that would otherwise double-submit: the first attempt can reach the
+   * server, 401 on an expired token, and be replayed after the refresh.
+   */
+  idempotencyKey?: string;
 }
 
 /**
@@ -59,6 +65,7 @@ async function rawRequest<T>(path: string, options: RequestOptions, accessToken:
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (options.body !== undefined) headers['Content-Type'] = 'application/json';
   if (accessToken && !options.anonymous) headers.Authorization = `Bearer ${accessToken}`;
+  if (options.idempotencyKey) headers['Idempotency-Key'] = options.idempotencyKey;
 
   let response: Response;
   try {
@@ -149,7 +156,12 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 
 export const api = {
   get: <T>(path: string, signal?: AbortSignal) => apiRequest<T>(path, { method: 'GET', signal }),
-  post: <T>(path: string, body?: unknown) => apiRequest<T>(path, { method: 'POST', body }),
+  post: <T>(path: string, body?: unknown, options?: { idempotencyKey?: string }) =>
+    apiRequest<T>(path, {
+      method: 'POST',
+      body,
+      ...(options?.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : {}),
+    }),
   put: <T>(path: string, body?: unknown) => apiRequest<T>(path, { method: 'PUT', body }),
   patch: <T>(path: string, body?: unknown) => apiRequest<T>(path, { method: 'PATCH', body }),
   /** Login must not send a stale Authorization header from a previous session. */

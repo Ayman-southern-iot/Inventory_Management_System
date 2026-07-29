@@ -7,36 +7,36 @@ ship it and let them use it while Phase 03 is built.
 
 ## Tasks
 
-- [ ] **2.1 Projects** — create on the fly during a borrow, duplicate-name warning (OQ-09).
+- [x] **2.1 Projects** — create on the fly during a borrow, duplicate-name warning (OQ-09).
       *Accept:* "Falcon" and "falcon" trigger the warning; the user can still proceed deliberately.
 
-- [ ] **2.2 Borrow request** — product, quantity, project, returnable/consumable (defaulting from
+- [x] **2.2 Borrow request** — product, quantity, project, returnable/consumable (defaulting from
       the product), expected return date, purpose. Reserves stock on submit.
       *Accept:* `available` drops immediately; rejecting releases it; two users cannot reserve the
       same last unit.
 
-- [ ] **2.3 IM approval** — approve issues the stock (quantity and reserved both decrement, ISSUE
+- [x] **2.3 IM approval** — approve issues the stock (quantity and reserved both decrement, ISSUE
       ledger row) and rejects release the reservation. Idempotent under double-click.
       *Accept:* double-submitting the same `Idempotency-Key` issues stock once.
 
-- [ ] **2.4 Returns** — full and partial. `borrow_returns` rows, RETURN ledger rows, status moves
+- [x] **2.4 Returns** — full and partial. `borrow_returns` rows, RETURN ledger rows, status moves
       through `PARTIALLY_RETURNED` to `RETURNED`. Consumables never return.
       *Accept:* returning 3 of 5 leaves the request partially returned with 2 outstanding.
 
-- [ ] **2.5 Borrow log** — per product, newest first, paginated: borrower, project, quantity,
+- [x] **2.5 Borrow log** — per product, newest first, paginated: borrower, project, quantity,
       borrowed, expected, returned, purpose, status. Overdue rows flagged.
       *Accept:* 10,000 log rows still page in under 200ms.
 
-- [ ] **2.6 IM borrow screen** — searchable table (product, taken by, taking date, return date,
+- [x] **2.6 IM borrow screen** — searchable table (product, taken by, taking date, return date,
       project, status), filters `All / Pending / Out / Returned / Overdue`, inline approve/reject,
       "Approved ✎" with the edit affordance (OQ-04), a Return action per row.
       *Accept:* search and filter compose correctly; approving updates the row without a refresh.
 
-- [ ] **2.7 General user screens** — inventory browse and search with per-location availability,
+- [x] **2.7 General user screens** — inventory browse and search with per-location availability,
       borrow dialog, My Borrowings.
       *Accept:* a general user cannot see or hit any IM endpoint.
 
-- [ ] **2.8 Notifications** — instant socket popup to the IM on a new request (dismissible, stays
+- [x] **2.8 Notifications** — instant socket popup to the IM on a new request (dismissible, stays
       in the pending list), bell to the requester on approve/reject, daily overdue job.
       *Accept:* the popup appears on login for requests raised while the IM was offline.
 
