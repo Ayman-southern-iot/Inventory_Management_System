@@ -56,6 +56,23 @@ const rawSchema = z.object({
   SETTING_EXPENSE_THRESHOLD_BDT: z.coerce.number().int().nonnegative().default(15_000),
   SETTING_APPROVER_SLOTS_BELOW_THRESHOLD: z.coerce.number().int().min(1).max(2).default(1),
   SETTING_APPROVER_SLOTS_AT_OR_ABOVE_THRESHOLD: z.coerce.number().int().min(1).max(2).default(2),
+  SETTING_BOM_OVER_BUDGET_TOLERANCE_PCT: z.coerce.number().int().min(0).max(100).default(10),
+
+  // --- PDF rendering (OQ-11) ---------------------------------------------------
+  // Every measurement is configuration, because the real company pad has not been supplied
+  // yet and its margins are unknown. Nothing here may become a literal in a template.
+  PDF_STORAGE_DIR: z.string().default('./storage/pdf'),
+  /** Where the letterhead image lives, if one has been supplied. Blank renders a placeholder. */
+  PDF_LETTERHEAD_PATH: z.string().default(''),
+  PDF_PAGE_FORMAT: z.enum(['A4', 'Letter']).default('A4'),
+  PDF_MARGIN_TOP_MM: z.coerce.number().min(0).max(100).default(45),
+  PDF_MARGIN_RIGHT_MM: z.coerce.number().min(0).max(100).default(15),
+  PDF_MARGIN_BOTTOM_MM: z.coerce.number().min(0).max(100).default(30),
+  PDF_MARGIN_LEFT_MM: z.coerce.number().min(0).max(100).default(15),
+  /** Chromium is the memory hog in this stack; a runaway render must not hang the API. */
+  PDF_RENDER_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120_000).default(30_000),
+  /** How long a download link stays valid. Short, because the link is the only auth. */
+  PDF_SIGNED_URL_TTL_SECONDS: z.coerce.number().int().min(30).max(86_400).default(300),
 
   // Seeds the first ADMIN so a fresh install is reachable. Required in every environment,
   // because an install nobody can log into is not an install.
@@ -108,6 +125,19 @@ export interface AppConfig {
   };
   /** Keyed by `SettingDefinition.seedEnvVar`; consumed once, on first boot. */
   readonly settingSeeds: Readonly<Record<string, unknown>>;
+  readonly pdf: {
+    readonly storageDir: string;
+    readonly letterheadPath: string;
+    readonly pageFormat: 'A4' | 'Letter';
+    readonly margins: {
+      readonly top: string;
+      readonly right: string;
+      readonly bottom: string;
+      readonly left: string;
+    };
+    readonly renderTimeoutMs: number;
+    readonly signedUrlTtlSeconds: number;
+  };
   readonly seedAdmin: {
     readonly email: string;
     readonly password: string;
@@ -168,6 +198,21 @@ export function buildConfig(source: Record<string, string | undefined>): AppConf
       SETTING_APPROVER_SLOTS_BELOW_THRESHOLD: env.SETTING_APPROVER_SLOTS_BELOW_THRESHOLD,
       SETTING_APPROVER_SLOTS_AT_OR_ABOVE_THRESHOLD:
         env.SETTING_APPROVER_SLOTS_AT_OR_ABOVE_THRESHOLD,
+      SETTING_BOM_OVER_BUDGET_TOLERANCE_PCT: env.SETTING_BOM_OVER_BUDGET_TOLERANCE_PCT,
+    }),
+    pdf: Object.freeze({
+      storageDir: env.PDF_STORAGE_DIR,
+      letterheadPath: env.PDF_LETTERHEAD_PATH,
+      pageFormat: env.PDF_PAGE_FORMAT,
+      // Millimetres in env, CSS units out — Puppeteer wants the unit attached.
+      margins: Object.freeze({
+        top: `${env.PDF_MARGIN_TOP_MM}mm`,
+        right: `${env.PDF_MARGIN_RIGHT_MM}mm`,
+        bottom: `${env.PDF_MARGIN_BOTTOM_MM}mm`,
+        left: `${env.PDF_MARGIN_LEFT_MM}mm`,
+      }),
+      renderTimeoutMs: env.PDF_RENDER_TIMEOUT_MS,
+      signedUrlTtlSeconds: env.PDF_SIGNED_URL_TTL_SECONDS,
     }),
     seedAdmin: Object.freeze({
       email: env.SEED_ADMIN_EMAIL.toLowerCase(),

@@ -346,8 +346,61 @@ export interface DelegationsTable {
   updated_at: UpdatedAt;
 }
 
+/* ------------------------------------------------------------------------ BOM */
+
+export interface BomsTable {
+  id: Generated<string>;
+  bom_no: string;
+  generated_by: string;
+  subtotal: Generated<Money>;
+  /** Relative path under the files volume; served by signed URL, never listed. */
+  pdf_path: string | null;
+  pdf_generated_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
+  is_void: Generated<boolean>;
+  void_reason: string | null;
+  voided_by: string | null;
+  voided_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
+  over_budget_bounced: Generated<boolean>;
+  generated_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
+export interface BomRequisitionsTable {
+  id: Generated<string>;
+  bom_id: string;
+  requisition_id: string;
+  /**
+   * The frozen footprints block. Never re-derived from `users` — a BOM printed in July must
+   * still show July's names and designations.
+   */
+  approval_snapshot: ColumnType<unknown, string, string>;
+  /** Mirrored from `boms.is_void` by trigger so the one-live-BOM index can be partial. */
+  is_void: Generated<boolean>;
+  created_at: CreatedAt;
+}
+
+export interface BomLinesTable {
+  id: Generated<string>;
+  bom_id: string;
+  requisition_item_id: string;
+  product_id: string | null;
+  item_name: string;
+  quantity: number;
+  unit_cost: Money;
+  /** GENERATED ALWAYS — never written by the application. */
+  total_cost: ColumnType<string, never, never>;
+  vendor: string | null;
+  purpose: string | null;
+  project_id: string | null;
+  sort_order: Generated<number>;
+  created_at: CreatedAt;
+}
+
 export interface Database {
   app_settings: AppSettingsTable;
+  boms: BomsTable;
+  bom_requisitions: BomRequisitionsTable;
+  bom_lines: BomLinesTable;
   requisitions: RequisitionsTable;
   requisition_items: RequisitionItemsTable;
   requisition_approvals: RequisitionApprovalsTable;

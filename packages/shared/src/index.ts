@@ -8,3 +8,4 @@ export * from './contracts/settings.js';
 export * from './contracts/inventory.js';
 export * from './contracts/borrowing.js';
 export * from './contracts/requisitions.js';
+export * from './contracts/boms.js';

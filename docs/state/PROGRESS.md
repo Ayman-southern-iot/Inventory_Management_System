@@ -5,9 +5,9 @@
 
 ## Current position
 
-- **Phase:** 03 — Requisitions (complete)
-- **Next task:** Phase 04 — BOM, task 4.1
-- **Working tree:** clean, Phase 03 committed
+- **Phase:** 04 — BOM (in progress)
+- **Next task:** 4.2 — generation with the immutable approval snapshot. 4.1 is done: migration 0010 applied and rollback-verified, contracts written, the over-budget tolerance added as a setting (OQ-05), and PDF margins/letterhead path added to config (OQ-11).
+- **Working tree:** dirty — 4.1 complete but uncommitted (migration 0010, contracts, config, puppeteer).
 - **Blocked by:** OQ-11 (the company letterhead asset and print margins) shapes Phase 04. A placeholder template is the recorded assumption, so it is not hard-blocking. OQ-05 (BOM over the approved amount) is also Phase 04.
 - **Security review:** no CRITICAL, no HIGH — task 0.6's acceptance criterion. Six MEDIUM and
   five LOW findings were fixed; what was deliberately deferred is recorded as G-02 and G-03 in
@@ -21,7 +21,7 @@
 | 01 | Inventory core — catalogue, locations, placements, ledger | ✅ done and verified | 6 migrations, 213 tests |
 | 02 | Borrowing — request, approve, issue, return | ✅ done and verified | 7 migrations, 236 tests |
 | 03 | Requisitions — form, approvals, tracker, notifications | ✅ done and verified | 9 migrations, 277 tests |
-| 04 | BOM — generation, snapshot, letterhead PDF | ⬜ not started | |
+| 04 | BOM — generation, snapshot, letterhead PDF | 🟡 4.1 done | 10 migrations |
 | 05 | Funds & purchasing — receipts, purchases, receive-to-stock | ⬜ not started | |
 | 06 | Hardening — exports, audit UI, monitoring, backups drill | ⬜ not started | |
 
