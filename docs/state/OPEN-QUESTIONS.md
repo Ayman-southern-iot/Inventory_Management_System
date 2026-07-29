@@ -8,8 +8,6 @@ Status: 🔴 blocking · 🟠 needed soon · 🟢 can wait
 
 | ID | Status | Question | Working assumption | Blocks |
 |----|--------|----------|--------------------|--------|
-| OQ-01 | 🔴 | Below the 15,000 BDT threshold, how many approvers? | 1 approver | Phase 03 |
-| OQ-02 | 🔴 | Are Approver 1 and 2 fixed company-wide, or per department? | Global default, per-department override | Phase 00 (admin), 03 |
 | OQ-05 | 🟢 | Should a BOM over the approved amount by >10% bounce back for re-approval? | Yes, tolerance configurable | Phase 04 |
 | OQ-06 | 🟢 | Line-level partial approval of a requisition? | No — whole request only | Phase 03 |
 | OQ-07 | 🟢 | Self-approval: CFO raises a request and is also Approver 2 | Skip and substitute; substitute undefined | Phase 03 |
@@ -29,6 +27,14 @@ rediscovered as a surprise.
 | G-03 | `LoginThrottleService` counts with an unlocked `SELECT`, so N simultaneous wrong passwords can all pass the check before any row is written. | Real in principle, negligible at 12 users; the per-IP `ThrottlerGuard` still caps the burst. | Phase 06 |
 
 ## Resolved
+
+- **OQ-01 — Below the 15,000 BDT threshold, how many approvers?** → **1.** At or above the
+  threshold it stays 2. Both are `app_settings` values, so the counts change without a
+  redeploy. Answered by the user 2026-07-29.
+- **OQ-02 — Are Approver 1 and 2 fixed company-wide or per department?** → **Per-department
+  override**, on top of a company-wide default. Already modelled that way in `approver_slots`
+  (a null `department_id` is the global default), so no migration was needed. Answered by the
+  user 2026-07-29.
 
 - **OQ-04 — What does the IM's edit on an approved borrow do once the item has left?** →
   Implemented as the working assumption and left open for confirmation: revert to PENDING is

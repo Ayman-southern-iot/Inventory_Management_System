@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ErrorCode, ROLE_VALUES, Role, type User } from '@ims/shared';
 import { createTestApp, httpClient, type HttpClient, type TestApp } from './app';
@@ -365,15 +366,21 @@ describe('admin user management', () => {
   describe('listing', () => {
     it('excludes deactivated users unless asked for them', async () => {
       const admin = await actingAdmin();
-      const active = await createUser(ctx.db, { isActive: true });
-      const inactive = await createUser(ctx.db, { isActive: false });
+      // Scoped by a unique designation rather than reading page one of the whole list: rows
+      // that other specs cannot clean up (a user who approved a requisition is never deleted)
+      // would otherwise push these two off the first page and fail for the wrong reason.
+      const marker = `listing-${randomUUID()}`;
+      const active = await createUser(ctx.db, { isActive: true, designation: marker });
+      const inactive = await createUser(ctx.db, { isActive: false, designation: marker });
 
-      const byDefault = await admin.client.get('/admin/users');
+      const byDefault = await admin.client.get(`/admin/users?search=${marker}`);
       const ids = (byDefault.body.items as User[]).map((u) => u.id);
       expect(ids).toContain(active.id);
       expect(ids).not.toContain(inactive.id);
 
-      const including = await admin.client.get('/admin/users?includeInactive=true');
+      const including = await admin.client.get(
+        `/admin/users?search=${marker}&includeInactive=true`,
+      );
       expect((including.body.items as User[]).map((u) => u.id)).toContain(inactive.id);
     });
 

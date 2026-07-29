@@ -129,6 +129,11 @@ export async function resetData(db: Db): Promise<void> {
   // are ordinary history and may be cleared between tests. The ledger rows they produced stay,
   // with a `ref_id` pointing at a request that no longer exists — deliberate, because `ref_id`
   // carries no foreign key precisely so an append-only row can outlive what caused it.
+  // `requisition_events` is append-only by trigger, exactly like `stock_ledger`, and deleting
+  // a requisition cascades into it — so requisitions are left in place for the same reason
+  // stock is. Every spec builds its own users, so previous requisitions are invisible to them.
+  await db.deleteFrom('delegations').execute();
+
   await db.deleteFrom('borrow_returns').execute();
   await db.deleteFrom('borrow_requests').execute();
   await db.deleteFrom('projects').execute();
@@ -150,28 +155,74 @@ export async function resetData(db: Db): Promise<void> {
   await db
     .deleteFrom('users')
     .where((eb) =>
-      eb.not(
-        eb.exists(
-          eb
-            .selectFrom('stock_ledger')
-            .select('stock_ledger.id')
-            .whereRef('stock_ledger.performed_by', '=', 'users.id'),
+      eb.and([
+        eb.not(
+          eb.exists(
+            eb
+              .selectFrom('stock_ledger')
+              .select('stock_ledger.id')
+              .whereRef('stock_ledger.performed_by', '=', 'users.id'),
+          ),
         ),
-      ),
+        // Same reasoning for requisitions: they cannot be deleted, so neither can the people
+        // who raised or approved them.
+        eb.not(
+          eb.exists(
+            eb
+              .selectFrom('requisitions')
+              .select('requisitions.id')
+              .whereRef('requisitions.requester_id', '=', 'users.id'),
+          ),
+        ),
+        eb.not(
+          eb.exists(
+            eb
+              .selectFrom('requisition_approvals')
+              .select('requisition_approvals.id')
+              .whereRef('requisition_approvals.assigned_user_id', '=', 'users.id'),
+          ),
+        ),
+        eb.not(
+          eb.exists(
+            eb
+              .selectFrom('requisition_approvals')
+              .select('requisition_approvals.id')
+              .whereRef('requisition_approvals.acted_by_user_id', '=', 'users.id'),
+          ),
+        ),
+        eb.not(
+          eb.exists(
+            eb
+              .selectFrom('requisition_events')
+              .select('requisition_events.id')
+              .whereRef('requisition_events.actor_id', '=', 'users.id'),
+          ),
+        ),
+      ]),
     )
     .execute();
 
   await db
     .deleteFrom('departments')
     .where((eb) =>
-      eb.not(
-        eb.exists(
-          eb
-            .selectFrom('users')
-            .select('users.id')
-            .whereRef('users.department_id', '=', 'departments.id'),
+      eb.and([
+        eb.not(
+          eb.exists(
+            eb
+              .selectFrom('users')
+              .select('users.id')
+              .whereRef('users.department_id', '=', 'departments.id'),
+          ),
         ),
-      ),
+        eb.not(
+          eb.exists(
+            eb
+              .selectFrom('requisitions')
+              .select('requisitions.id')
+              .whereRef('requisitions.department_id', '=', 'departments.id'),
+          ),
+        ),
+      ]),
     )
     .execute();
 }

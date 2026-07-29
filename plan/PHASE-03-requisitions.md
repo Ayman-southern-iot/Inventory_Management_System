@@ -10,7 +10,7 @@ and use `/handoff` at each natural break rather than pushing through a degraded 
 
 ## Tasks
 
-- [ ] **3.1 Schema** — `requisitions` (with `requested_amount`, `approved_amount`,
+- [x] **3.1 Schema** — `requisitions` (with `requested_amount`, `approved_amount`,
       `required_approver_count`, `threshold_at_submit`), `requisition_items`,
       `requisition_approvals`, `requisition_events`.
       *Accept:* `UNIQUE (requisition_id, stage, slot)` on approvals; events are append-only.
@@ -20,18 +20,18 @@ and use `/handoff` at each natural break rather than pushing through a degraded 
       (name, quantity, unit amount). Combobox over the catalogue with a free-text escape hatch.
       *Accept:* the green in-stock hint is advisory and never blocks adding an item.
 
-- [ ] **3.3 Submit** — freezes `requested_amount`, reads the threshold, writes
+- [x] **3.3 Submit** — freezes `requested_amount`, reads the threshold, writes
       `required_approver_count`, seeds approval rows, emits `REQUISITION_SUBMITTED`.
       *Accept:* changing the threshold afterwards does not alter an in-flight requisition. Test this
       explicitly — it is the assumption most likely to be broken by a later change.
 
-- [ ] **3.4 Approval engine** — IM first, then approvers in parallel; any single rejection is
+- [x] **3.4 Approval engine** — IM first, then approvers in parallel; any single rejection is
       terminal; approval revises `approved_amount` if `allow_amount_revision` is on; withdraw
       allowed until BOM generation; approvers see who else has not responded yet.
       *Accept:* every transition in `docs/reference/05-user-flows.md` §5.2 has a test, and every
       illegal transition is rejected.
 
-- [ ] **3.5 Delegation** — an approver toggles a delegate for a date range; the item appears in the
+- [x] **3.5 Delegation** — an approver toggles a delegate for a date range; the item appears in the
       delegate's queue; the audit records "approved by X on behalf of Y".
       *Accept:* an expired delegation does not grant access.
 

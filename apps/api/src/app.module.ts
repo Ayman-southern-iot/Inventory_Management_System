@@ -15,6 +15,7 @@ import { CategoriesModule } from './modules/categories/categories.module';
 import { ProductsModule } from './modules/products/products.module';
 import { LocationsModule } from './modules/locations/locations.module';
 import { BorrowingModule } from './modules/borrowing/borrowing.module';
+import { RequisitionsModule } from './modules/requisitions/requisitions.module';
 import { MaintenanceModule } from './modules/maintenance/maintenance.module';
 import { HealthController } from './modules/health/health.controller';
 
@@ -40,6 +41,7 @@ const GLOBAL_RATE_LIMIT = [{ name: 'default', ttl: 60_000, limit: 300 }];
     ProductsModule,
     LocationsModule,
     BorrowingModule,
+    RequisitionsModule,
     MaintenanceModule,
   ],
   controllers: [HealthController],

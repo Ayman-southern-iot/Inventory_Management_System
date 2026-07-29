@@ -14,6 +14,53 @@ Format:
 
 ---
 
+## 2026-07-29 — Phase 03 (Requisitions) — backend slice only
+
+**Did:** the approval engine, end to end on the server. Migration `0008_requisitions` adds
+`requisitions`, `requisition_items`, `requisition_approvals`, `requisition_events` (append-only
+by trigger) and `delegations`. `RequisitionsService` implements submit (task 3.3), the approval
+chain (3.4) and delegation (3.5); `ProjectsService`/`DelegationsService` alongside it.
+28 new integration tests, 212 integration + 36 unit + 16 web all green. Typecheck, lint and the
+no-hardcoding guard clean.
+
+The rules that are now enforced and tested: the IM acts first and gates the approvers; approvers
+act in parallel in any order; **any single rejection is terminal**; an approver may withdraw
+until BOM generation and may then re-approve; `requested_amount`, `threshold_at_submit` and
+`required_approver_count` are frozen at submit so a later settings change cannot reshuffle an
+in-flight request (the test the plan singles out).
+
+**Decisions:** OQ-01 and OQ-02 were answered by the user — one approver below the threshold,
+per-department override on top of a company-wide default. Both matched what was already built,
+so no rework. A withdrawn approval is decidable again (`expectedActions: [PENDING, WITHDRAWN]`),
+because withdrawing exists precisely so the approver can think again; the row carries its latest
+state and the event log carries the history. `requisition_events.actor_id` is `ON DELETE
+RESTRICT`, not `SET NULL` — a SET NULL is an UPDATE, which the append-only trigger refuses, and
+"who did this" must keep resolving anyway.
+
+**Landmines — read this before continuing:**
+- **Phase 03 is half done.** Tasks 3.1, 3.3, 3.4, 3.5 are ticked. **3.2 (requisition form),
+  3.6 (live tracker), 3.7 (approver portal), 3.8 (IM screens) and 3.9 (deadline job +
+  notifications) are NOT built.** There is no requisition UI at all yet — the backend is
+  reachable only by HTTP.
+- The API was **not** re-run against the dev database after the Phase 03 work; only the test
+  database (5434) has exercised it. Rebuild and smoke it before trusting the dev stack.
+- `resetData` in `test/factories.ts` can no longer delete users referenced by requisitions or
+  the stock ledger (both are append-only downstream). Those rows accumulate across the suite.
+  One test already broke on this — `users.int-spec.ts` "excludes deactivated users" now scopes
+  itself by a unique designation instead of reading page one. Any new test that asserts against
+  an unfiltered list will hit the same thing.
+- Docker Desktop stopped itself twice during this session. Check `docker info` before any test
+  or migration run.
+
+**Next:** build task 3.2, the requisition form — two zones per requirements §3 (per-request
+header: department, project, urgency, approval deadline, reason; per-line items: name, quantity,
+unit amount), a combobox over `/products` with a free-text escape hatch, and the green in-stock
+hint that is advisory and never blocks adding a line. The contracts are already written in
+`packages/shared/src/contracts/requisitions.ts` — build to `saveRequisitionSchema`. Endpoints
+that exist: `POST /requisitions`, `PUT /requisitions/:id`, `POST /requisitions/:id/submit`,
+`GET /requisitions`, `GET /requisitions/:id`, `POST /requisitions/approvals/:approvalId/decision`,
+`.../withdraw`, `GET /requisitions/awaiting-count`.
+
 ## 2026-07-28 — Phase 00 (Foundation)
 
 **Did:** Phase 00 end to end, all eight tasks. A working system: `pnpm db:up && pnpm db:migrate

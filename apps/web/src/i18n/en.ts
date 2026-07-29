@@ -354,6 +354,12 @@ export const t = {
     BORROW_INVALID_TRANSITION: 'That is no longer possible for this request. Refresh to see why.',
     BORROW_ALREADY_DECIDED: 'Someone already acted on this. Refresh to see the outcome.',
     DUPLICATE_PROJECT_NAME: 'A project with that name already exists.',
+    REQUISITION_INVALID_TRANSITION:
+      'That is no longer possible for this requisition. Refresh to see its current stage.',
+    APPROVAL_ALREADY_ACTED: 'Someone already acted on this approval. Refresh to see the outcome.',
+    NOT_YOUR_APPROVAL: 'That approval is not assigned to you.',
+    APPROVER_SLOT_UNASSIGNED:
+      'An approver slot has not been assigned yet. An administrator must set it before this can be submitted.',
     UNAUTHENTICATED: 'Please sign in.',
     INVALID_CREDENTIALS: 'Email or password is incorrect.',
     TOKEN_EXPIRED: 'Your session expired. Please sign in again.',

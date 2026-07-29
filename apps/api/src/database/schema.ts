@@ -269,8 +269,88 @@ export interface IdempotencyKeysTable {
   created_at: CreatedAt;
 }
 
+/* --------------------------------------------------------------- requisitions */
+
+/** Money is NUMERIC in Postgres and arrives as a string, so it is never a float in transit. */
+type Money = ColumnType<string, string | number | null, string | number | null>;
+
+export interface RequisitionsTable {
+  id: Generated<string>;
+  requisition_no: string;
+  requester_id: string;
+  department_id: string | null;
+  project_id: string | null;
+  urgency: Generated<string>;
+  approval_deadline: ColumnType<Date | string | null, string | null, string | null>;
+  reason: string | null;
+  /** Frozen at submit. Never recomputed, so a later settings change cannot rewrite history. */
+  requested_amount: Money | null;
+  approved_amount: Money | null;
+  required_approver_count: number | null;
+  threshold_at_submit: Money | null;
+  status: Generated<string>;
+  submitted_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
+  decided_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
+export interface RequisitionItemsTable {
+  id: Generated<string>;
+  requisition_id: string;
+  product_id: string | null;
+  item_name: string;
+  quantity: number;
+  estimated_unit_price: Money;
+  /** GENERATED ALWAYS in the database — never written by the application. */
+  estimated_line_total: ColumnType<string, never, never>;
+  in_stock_qty_at_submit: number | null;
+  note: string | null;
+  created_at: CreatedAt;
+}
+
+export interface RequisitionApprovalsTable {
+  id: Generated<string>;
+  requisition_id: string;
+  stage: string;
+  slot: number;
+  assigned_user_id: string;
+  /** The delegate, when someone acted on the assignee's behalf. */
+  acted_by_user_id: string | null;
+  action: Generated<string>;
+  note: string | null;
+  acted_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
+  created_at: CreatedAt;
+}
+
+/** Append-only, enforced by trigger. The live tracker is driven from this, not from `status`. */
+export interface RequisitionEventsTable {
+  id: Generated<string>;
+  requisition_id: string;
+  event_type: string;
+  actor_id: string | null;
+  payload: ColumnType<unknown, string | undefined, never>;
+  created_at: CreatedAt;
+}
+
+export interface DelegationsTable {
+  id: Generated<string>;
+  approver_user_id: string;
+  delegate_user_id: string;
+  starts_at: ColumnType<Date, Date | string, Date | string>;
+  ends_at: ColumnType<Date, Date | string, Date | string>;
+  is_active: Generated<boolean>;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
 export interface Database {
   app_settings: AppSettingsTable;
+  requisitions: RequisitionsTable;
+  requisition_items: RequisitionItemsTable;
+  requisition_approvals: RequisitionApprovalsTable;
+  requisition_events: RequisitionEventsTable;
+  delegations: DelegationsTable;
   projects: ProjectsTable;
   borrow_requests: BorrowRequestsTable;
   borrow_returns: BorrowReturnsTable;

@@ -61,6 +61,27 @@ Format: `YYYY-MM-DD — <decision> — <why, in one clause>`
 - 2026-07-28 — Approver slots modelled as `approver_slots` rows with a nullable `department_id`
   (null = company-wide default) — satisfies either answer to OQ-02 without a schema change.
 
+## Phase 03 — Requisitions and approvals
+
+- 2026-07-29 — OQ-01 answered: **1 approver below the threshold**, 2 at or above. Both counts
+  are `app_settings` values, so the policy changes without a redeploy.
+- 2026-07-29 — OQ-02 answered: **per-department override** on top of a company-wide default.
+  Already modelled that way in `approver_slots`, so no migration was needed.
+- 2026-07-29 — `requested_amount`, `threshold_at_submit` and `required_approver_count` are
+  written once at submit and never recomputed — an admin raising the threshold next week must
+  not retroactively add an approver to a request already mid-chain (requirements §11).
+- 2026-07-29 — Approval rows are seeded at submit rather than resolved lazily per stage — a
+  staffing change mid-flight would otherwise silently reroute an in-progress requisition.
+- 2026-07-29 — `requisition_events` is append-only by trigger, like `stock_ledger`, because the
+  live tracker is driven from it and must be able to show approved → withdrawn → re-approved.
+  A status column can only hold the latest value.
+- 2026-07-29 — `requisition_events.actor_id` is ON DELETE RESTRICT, not SET NULL — a SET NULL is
+  an UPDATE, which the append-only trigger refuses, and "who did this" must resolve forever.
+- 2026-07-29 — A WITHDRAWN approval is decidable again. Withdrawing exists so an approver can
+  reconsider; the row carries its latest state and the event log carries the history.
+- 2026-07-29 — `estimated_line_total` is a GENERATED column, never written — a line total that
+  disagrees with its own inputs is how a requisition total silently drifts.
+
 ## Phase 02 — Borrowing
 
 - 2026-07-29 — Stock is reserved at **submit**, not at approval — otherwise two people are both
