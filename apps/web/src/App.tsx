@@ -16,6 +16,9 @@ import { ProductDetailPage } from '@/features/inventory/ProductDetailPage';
 import { CategoriesPage } from '@/features/inventory/CategoriesPage';
 import { LocationsPage } from '@/features/inventory/LocationsPage';
 import { BorrowingPage } from '@/features/borrowing/BorrowingPage';
+import { RequisitionsPage } from '@/features/requisitions/RequisitionsPage';
+import { RequisitionFormPage } from '@/features/requisitions/RequisitionFormPage';
+import { RequisitionDetailPage } from '@/features/requisitions/RequisitionDetailPage';
 import { SettingsPage } from '@/features/admin/SettingsPage';
 import { UsersPage } from '@/features/admin/UsersPage';
 import { t } from '@/i18n/en';
@@ -62,6 +65,29 @@ export function App() {
                     {/* Anyone may borrow, so My borrowings is not role-gated. */}
                     <Route path={ROUTES.borrowing.mine} element={<BorrowingPage mine />} />
 
+                    {/* Anyone may raise a requisition and follow their own. The API decides
+                        what each caller sees, so these are not role-gated. New before the
+                        :id pattern is unnecessary — React Router ranks static segments above
+                        dynamic ones — but the edit route must sit alongside the detail one. */}
+                    <Route path={ROUTES.requisitions.mine} element={<RequisitionsPage mode="mine" />} />
+                    <Route path={ROUTES.requisitions.new} element={<RequisitionFormPage />} />
+                    <Route path={ROUTES.requisitions.editPattern} element={<RequisitionFormPage />} />
+                    <Route path={ROUTES.requisitions.detailPattern} element={<RequisitionDetailPage />} />
+
+                    {/* The approver's queue. IM and admin hold approval duties too. */}
+                    <Route
+                      element={
+                        <ProtectedRoute
+                          roles={[Role.APPROVER, Role.INVENTORY_MANAGER, Role.ADMIN]}
+                        />
+                      }
+                    >
+                      <Route
+                        path={ROUTES.requisitions.approvals}
+                        element={<RequisitionsPage mode="approvals" />}
+                      />
+                    </Route>
+
                     {/* Browsing the catalogue is everyone's — a general user has to find a
                         product before they can borrow it (task 2.7). The stock actions on
                         these pages are gated by role, and by the API regardless. */}
@@ -80,6 +106,10 @@ export function App() {
                       <Route path={ROUTES.inventory.categories} element={<CategoriesPage />} />
                       <Route path={ROUTES.inventory.locations} element={<LocationsPage />} />
                       <Route path={ROUTES.borrowing.all} element={<BorrowingPage />} />
+                      <Route
+                        path={ROUTES.requisitions.all}
+                        element={<RequisitionsPage mode="all" />}
+                      />
                     </Route>
 
                     <Route element={<ProtectedRoute roles={[Role.ADMIN]} />}>

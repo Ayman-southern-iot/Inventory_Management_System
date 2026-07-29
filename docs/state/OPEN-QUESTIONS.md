@@ -23,6 +23,8 @@ rediscovered as a surprise.
 
 | ID | Gap | Why deferred | Land it in |
 |----|-----|--------------|------------|
+| G-06 | Task 3.9's reminders, and the approve/reject notices to the requester, exist only as server log lines. There is no `notifications` table, no bell, and no websocket. The deadline job's query, schedule and 24h repeat window are built and tested; only delivery is missing. | OQ-10 says there is no SMTP relay, so in-app is the only channel, and the notification table was never in Phase 03's task list — 3.9 specifies the *job*. Building half a notification system would have been worse than an honest gap. | Phase 06 |
+| G-07 | The requisition form loads 200 products and filters them in the browser. | Correct at this scale and much simpler; it becomes wrong somewhere in the low thousands. Swap to a server-side search on `/products?search=` when the catalogue grows. | When the catalogue exceeds ~1000 products |
 | G-02 | Token expiry is untested — both the access and refresh expiry branches are unexecuted, because asserting them honestly needs a clock rather than a `sleep`. | Wants an injectable clock, which is a small refactor better done alongside the deadline logic that needs one anyway. | Phase 03 |
 | G-03 | `LoginThrottleService` counts with an unlocked `SELECT`, so N simultaneous wrong passwords can all pass the check before any row is written. | Real in principle, negligible at 12 users; the per-IP `ThrottlerGuard` still caps the burst. | Phase 06 |
 

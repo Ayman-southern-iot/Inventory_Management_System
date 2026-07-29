@@ -4,6 +4,8 @@ import {
   Boxes,
   HandCoins,
   ClipboardList,
+  FileText,
+  Stamp,
   ChevronDown,
   FolderTree,
   LayoutDashboard,
@@ -23,6 +25,7 @@ import { useAuth } from '@/features/auth/auth-context';
 import { Badge } from '@/components/ui/primitives';
 import { Button } from '@/components/ui/Button';
 import { ROUTES } from '@/routes/paths';
+import { AwaitingApprovalBadge } from './NavBadge';
 
 interface NavItem {
   label: string;
@@ -30,6 +33,8 @@ interface NavItem {
   icon: typeof LayoutDashboard;
   /** Undefined means every authenticated user sees it. */
   roles?: Role[];
+  /** Rendered at the end of the row — the approver's pending count. */
+  badge?: boolean;
 }
 
 interface NavGroup {
@@ -46,6 +51,14 @@ const NAV: NavGroup[] = [
       // Browsing stock and seeing your own borrows are everyone's, so no roles here.
       { label: t.nav.inventoryProducts, to: ROUTES.inventory.products, icon: Package },
       { label: t.nav.myBorrowings, to: ROUTES.borrowing.mine, icon: HandCoins },
+      { label: t.nav.myRequisitions, to: ROUTES.requisitions.mine, icon: FileText },
+    ],
+  },
+  {
+    label: t.nav.approvals,
+    roles: [Role.APPROVER, Role.INVENTORY_MANAGER, Role.ADMIN],
+    items: [
+      { label: t.nav.approvals, to: ROUTES.requisitions.approvals, icon: Stamp, badge: true },
     ],
   },
   {
@@ -53,6 +66,7 @@ const NAV: NavGroup[] = [
     roles: [Role.INVENTORY_MANAGER, Role.ADMIN],
     items: [
       { label: t.nav.borrowing, to: ROUTES.borrowing.all, icon: ClipboardList },
+      { label: t.nav.allRequisitions, to: ROUTES.requisitions.all, icon: FileText },
       { label: t.nav.inventoryCategories, to: ROUTES.inventory.categories, icon: FolderTree },
       { label: t.nav.inventoryLocations, to: ROUTES.inventory.locations, icon: MapPin },
     ],
@@ -179,6 +193,7 @@ export function AppShell() {
                 >
                   <item.icon aria-hidden className="size-4" />
                   {item.label}
+                  {item.badge ? <AwaitingApprovalBadge /> : null}
                 </NavLink>
               ))}
             </div>

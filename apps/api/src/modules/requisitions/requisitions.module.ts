@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { SettingsModule } from '../settings/settings.module';
+import { ApprovalDeadlineJob } from './approval-deadline.job';
 import { DelegationsService } from './delegations.service';
 import { RequisitionsController } from './requisitions.controller';
 import { RequisitionsRepository } from './requisitions.repository';
@@ -12,7 +13,7 @@ import { RequisitionsService } from './requisitions.service';
 @Module({
   imports: [SettingsModule],
   controllers: [RequisitionsController],
-  providers: [RequisitionsService, RequisitionsRepository, DelegationsService],
+  providers: [RequisitionsService, RequisitionsRepository, DelegationsService, ApprovalDeadlineJob],
   exports: [RequisitionsService, RequisitionsRepository],
 })
 export class RequisitionsModule {}

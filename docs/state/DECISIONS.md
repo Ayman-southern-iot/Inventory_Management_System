@@ -81,6 +81,24 @@ Format: `YYYY-MM-DD — <decision> — <why, in one clause>`
   reconsider; the row carries its latest state and the event log carries the history.
 - 2026-07-29 — `estimated_line_total` is a GENERATED column, never written — a line total that
   disagrees with its own inputs is how a requisition total silently drifts.
+- 2026-07-29 — The requisition form saves before it submits, so the server totals the *stored*
+  lines. What gets frozen is what is on the record, not whatever the browser last calculated.
+- 2026-07-29 — Editing a line's text clears its `productId`. A requisition that claims a
+  catalogue product whose name no longer matches is worse than an honest free-text line.
+- 2026-07-29 — The tracker reads the approval rows *and* the event log. The rows give the
+  current state of each node; only the log can show approved → withdrawn → re-approved, which
+  is the case task 3.6 is specified against.
+- 2026-07-29 — The approver badge polls every 60s rather than blocking on the websocket. The
+  acceptance criterion is that the count updates without a refresh; the transport is an
+  implementation detail that can be swapped later without touching the UI.
+- 2026-07-29 — `requisition_approvals.last_reminded_at` (migration 0009) caps the deadline job
+  at one reminder per approval per 24h. Without it the ten-minute job re-sends every tick,
+  which is how a reminder becomes noise people filter out.
+- 2026-07-29 — The deadline job only chases the stage that is currently actionable — telling an
+  approver to act while the IM still holds the request teaches them the reminder is wrong.
+- 2026-07-29 — One `RequisitionsPage` serves the requester, the approver and the IM, switched
+  by a `mode` prop. The API already decides what each caller may see, so three near-identical
+  screens would only be three places to fix the same bug.
 
 ## Phase 02 — Borrowing
 

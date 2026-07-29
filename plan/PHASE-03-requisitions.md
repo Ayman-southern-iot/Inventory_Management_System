@@ -15,7 +15,7 @@ and use `/handoff` at each natural break rather than pushing through a degraded 
       `requisition_approvals`, `requisition_events`.
       *Accept:* `UNIQUE (requisition_id, stage, slot)` on approvals; events are append-only.
 
-- [ ] **3.2 Requisition form** — two zones exactly as requirements §3 scopes them: per-request
+- [x] **3.2 Requisition form** — two zones exactly as requirements §3 scopes them: per-request
       header (department, project, urgency, approval deadline, reason) and per-line items
       (name, quantity, unit amount). Combobox over the catalogue with a free-text escape hatch.
       *Accept:* the green in-stock hint is advisory and never blocks adding an item.
@@ -35,21 +35,21 @@ and use `/handoff` at each natural break rather than pushing through a degraded 
       delegate's queue; the audit records "approved by X on behalf of Y".
       *Accept:* an expired delegation does not grant access.
 
-- [ ] **3.6 Live tracker** — nine nodes driven off `requisition_events`, not off the status column.
+- [x] **3.6 Live tracker** — nine nodes driven off `requisition_events`, not off the status column.
       Green ✓ / ash ○ / red ✗ / amber ◐ partial / grey ⊘ skipped. "See why" reveals the rejection
       note with the rejector's name and designation.
       *Accept:* the tracker is correct for a requisition that was approved, withdrawn, and
       re-approved.
 
-- [ ] **3.7 Approver portal** — Pending Approvals with a live badge count, Accepted Approvals with
+- [x] **3.7 Approver portal** — Pending Approvals with a live badge count, Accepted Approvals with
       status labels, newest first, tracker on click.
       *Accept:* the badge count updates over the websocket without a refresh.
 
-- [ ] **3.8 IM requisition screens** — Pending Approvals with badge, Accepted Approvals list showing
+- [x] **3.8 IM requisition screens** — Pending Approvals with badge, Accepted Approvals list showing
       the current stage per row.
       *Accept:* the list orders by most recent activity, not creation date.
 
-- [ ] **3.9 Notifications and the deadline job** — cron every 15 minutes finds approvals still
+- [x] **3.9 Notifications and the deadline job** — cron every 15 minutes finds approvals still
       pending past `approval_deadline` and reminds, repeating every 24h until acted on.
       *Accept:* a requisition whose deadline passes while nobody is logged in still generates the
       reminder.

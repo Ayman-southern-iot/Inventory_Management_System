@@ -14,6 +14,44 @@ Format:
 
 ---
 
+## 2026-07-29 — Phase 03 (Requisitions) — complete
+
+**Did:** the remaining five tasks, so Phase 03 is done end to end. The requisition form (3.2)
+with the two zones requirements §3 scopes and a catalogue combobox that never blocks a free-text
+item; the live tracker (3.6) read from the approval rows and the event log; the approver portal
+and IM lists (3.7, 3.8) as one screen with a mode; and the deadline reminder job (3.9) with a
+`last_reminded_at` column added by migration 0009.
+
+277 tests green (36 API unit, 219 API integration, 22 web). Typecheck, lint and the
+no-hardcoding guard clean. The whole chain was then driven against the running dev stack:
+20,000 BDT → two approvers → IM first → approvers in parallel → approved with a revised amount
+→ withdrawn → re-approved; 5,000 BDT → one approver; a single rejection killing a request while
+the other approver is never asked.
+
+**Decisions:** the approver badge polls once a minute rather than waiting for the websocket —
+the transport is not the point of the acceptance criterion, a count that moves without a reload
+is. The deadline job runs every ten minutes and repeats every 24 hours per approval, which is
+what `last_reminded_at` is for; without it the job would re-send on every tick and train people
+to ignore it. It also only chases the stage that can actually act, so an approver is never told
+to do something the IM has not released yet.
+
+**Landmines:**
+- **Notifications are logs, not notifications.** The deadline job writes a warning line. There
+  is no in-app notification table, no bell, and no websocket — OQ-10 says there is no SMTP
+  relay, and the delivery mechanism was never built. Task 3.9's acceptance criterion (a
+  deadline passing while nobody is logged in still produces the reminder) is met and tested,
+  but a human only sees it in the server log. This is the largest gap in the phase.
+- Two dev-environment traps cost time this session and are now written into PROGRESS.md: a
+  smoke script that logs in repeatedly trips the 10/minute login throttle and then fails with a
+  confusing 401, and settings changed by hand in the dev database persist between runs (a stale
+  25,000 threshold made a correct "two approvers" assertion fail).
+- The requisition form holds the catalogue in memory (200 products) and filters client-side.
+  Fine at this scale, wrong at ten thousand — it should become a server-side search first.
+
+**Next:** Phase 04 — BOM generation. Task 4.1. OQ-11 (the letterhead asset and exact print
+margins) and OQ-05 (whether a BOM more than 10% over the approved amount bounces back) both
+land in this phase; both have recorded assumptions, so neither hard-blocks a start.
+
 ## 2026-07-29 — Phase 03 (Requisitions) — backend slice only
 
 **Did:** the approval engine, end to end on the server. Migration `0008_requisitions` adds

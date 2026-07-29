@@ -15,6 +15,17 @@ export const ROUTES = {
     all: '/borrowing',
     mine: '/my-borrowings',
   },
+  requisitions: {
+    mine: '/requisitions',
+    approvals: '/approvals',
+    all: '/all-requisitions',
+    new: '/requisitions/new',
+    /** The router pattern; the helpers below build links. */
+    detailPattern: '/requisitions/:requisitionId',
+    editPattern: '/requisitions/:requisitionId/edit',
+    detail: (id: string) => '/requisitions/' + id,
+    edit: (id: string) => '/requisitions/' + id + '/edit',
+  },
   admin: {
     users: '/admin/users',
     departments: '/admin/departments',

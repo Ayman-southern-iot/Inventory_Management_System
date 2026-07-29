@@ -164,6 +164,7 @@ export const api = {
     }),
   put: <T>(path: string, body?: unknown) => apiRequest<T>(path, { method: 'PUT', body }),
   patch: <T>(path: string, body?: unknown) => apiRequest<T>(path, { method: 'PATCH', body }),
+  del: <T>(path: string) => apiRequest<T>(path, { method: 'DELETE' }),
   /** Login must not send a stale Authorization header from a previous session. */
   loginRequest: <T>(path: string, body: unknown) =>
     apiRequest<T>(path, { method: 'POST', body, anonymous: true }),

@@ -1,4 +1,5 @@
 import type {
+  ListRequisitionsQuery,
   ListBorrowsQuery,
   ListDepartmentsQuery,
   ListLedgerQuery,
@@ -56,5 +57,16 @@ export const queryKeys = {
   },
   projects: {
     all: () => ['projects'] as const,
+  },
+  requisitions: {
+    all: () => ['requisitions'] as const,
+    /** Prefix for every list, whatever its filters. */
+    lists: () => ['requisitions', 'list'] as const,
+    list: (query: ListRequisitionsQuery) => ['requisitions', 'list', query] as const,
+    detail: (id: string) => ['requisitions', 'detail', id] as const,
+    awaitingCount: () => ['requisitions', 'awaiting-count'] as const,
+  },
+  delegations: {
+    mine: () => ['delegations', 'mine'] as const,
   },
 } as const;

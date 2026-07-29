@@ -320,6 +320,8 @@ export interface RequisitionApprovalsTable {
   action: Generated<string>;
   note: string | null;
   acted_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
+  /** When this assignee was last nudged about an overdue approval (task 3.9). */
+  last_reminded_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
   created_at: CreatedAt;
 }
 
