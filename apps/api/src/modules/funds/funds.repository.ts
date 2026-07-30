@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { Transaction } from 'kysely';
-import type { FundReceipt, Purchase, PurchaseLine } from '@ims/shared';
+import type { FundReceipt, FundReturn, Purchase, PurchaseLine } from '@ims/shared';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
 import type { Database } from '../../database/schema';
@@ -165,6 +165,8 @@ export class FundsRepository {
         'purchases.total_amount',
         'purchases.note',
         'users.full_name as recorded_by_name',
+        'purchases.invoice_file_id',
+        'purchases.invoice_uploaded_at',
         'purchases.created_at',
       ])
       .orderBy('purchases.purchased_at')
@@ -226,6 +228,9 @@ export class FundsRepository {
       note: row.note,
       recordedByName: row.recorded_by_name,
       createdAt: row.created_at.toISOString(),
+      // The file id stays server-side; the client only needs to know whether to offer a download.
+      hasInvoice: row.invoice_file_id !== null,
+      invoiceUploadedAt: row.invoice_uploaded_at ? row.invoice_uploaded_at.toISOString() : null,
       lines: linesByPurchase.get(row.id) ?? [],
     }));
   }
@@ -235,6 +240,109 @@ export class FundsRepository {
       .selectFrom('purchases')
       .where('requisition_id', '=', requisitionId)
       .select((eb) => eb.fn.sum<string>('total_amount').as('total'))
+      .executeTakeFirst();
+    return money(row?.total ?? null);
+  }
+
+  /* ---------------------------------------------------------- invoices */
+
+  async attachInvoice(
+    tx: Tx,
+    purchaseId: string,
+    values: { fileId: string; uploadedBy: string; uploadedAt: Date },
+  ): Promise<void> {
+    await tx
+      .updateTable('purchases')
+      .set({
+        invoice_file_id: values.fileId,
+        invoice_uploaded_by: values.uploadedBy,
+        invoice_uploaded_at: values.uploadedAt,
+      })
+      .where('id', '=', purchaseId)
+      .execute();
+  }
+
+  async findPurchase(purchaseId: string, executor: Db | Tx = this.db) {
+    return executor
+      .selectFrom('purchases')
+      .where('id', '=', purchaseId)
+      .selectAll()
+      .executeTakeFirst();
+  }
+
+  /** Does every purchase on this requisition have its invoice on file? */
+  async countPurchasesWithoutInvoice(
+    requisitionId: string,
+    executor: Db | Tx = this.db,
+  ): Promise<number> {
+    const row = await executor
+      .selectFrom('purchases')
+      .where('requisition_id', '=', requisitionId)
+      .where('invoice_file_id', 'is', null)
+      .select((eb) => eb.fn.countAll<string>().as('count'))
+      .executeTakeFirst();
+    return Number(row?.count ?? 0);
+  }
+
+  /* ------------------------------------------------------- fund returns */
+
+  async insertReturn(
+    tx: Tx,
+    values: {
+      requisitionId: string;
+      amount: number;
+      note: string;
+      returnedAt: Date;
+      recordedBy: string;
+    },
+  ): Promise<string> {
+    const row = await tx
+      .insertInto('fund_returns')
+      .values({
+        requisition_id: values.requisitionId,
+        amount: values.amount.toFixed(2),
+        note: values.note,
+        returned_at: values.returnedAt,
+        recorded_by: values.recordedBy,
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    return row.id;
+  }
+
+  async listReturns(requisitionId: string, executor: Db | Tx = this.db): Promise<FundReturn[]> {
+    const rows = await executor
+      .selectFrom('fund_returns')
+      .leftJoin('users', 'users.id', 'fund_returns.recorded_by')
+      .where('fund_returns.requisition_id', '=', requisitionId)
+      .select([
+        'fund_returns.id',
+        'fund_returns.requisition_id',
+        'fund_returns.amount',
+        'fund_returns.note',
+        'fund_returns.returned_at',
+        'users.full_name as recorded_by_name',
+        'fund_returns.created_at',
+      ])
+      .orderBy('fund_returns.returned_at')
+      .execute();
+
+    return rows.map((row) => ({
+      id: row.id,
+      requisitionId: row.requisition_id,
+      amount: money(row.amount),
+      note: row.note,
+      returnedAt: row.returned_at.toISOString(),
+      recordedByName: row.recorded_by_name,
+      createdAt: row.created_at.toISOString(),
+    }));
+  }
+
+  async sumReturns(requisitionId: string, executor: Db | Tx = this.db): Promise<number> {
+    const row = await executor
+      .selectFrom('fund_returns')
+      .where('requisition_id', '=', requisitionId)
+      .select((eb) => eb.fn.sum<string>('amount').as('total'))
       .executeTakeFirst();
     return money(row?.total ?? null);
   }

@@ -297,6 +297,118 @@ describe('funds and purchasing', () => {
     expect(fullTypes).toContain('requisition.funds_received');
   });
 
+  /* --------------------------------------------- invoices and verification */
+
+  it('refuses to verify while a purchase has no invoice', async () => {
+    const req = await purchased(5000, 4000);
+
+    const early = await im.client.post(`/requisitions/${req.id}/verify-purchase`).send({});
+    expect(early.status).toBe(409);
+    expect(early.body.message).toContain('invoice');
+    expect(await statusOf(req.id)).toBe('PURCHASED');
+  });
+
+  it('attaches an invoice and then verifies', async () => {
+    const req = await purchased(5000, 4000);
+    const purchaseId = (await fundingOf(req.id)).purchases[0]!.id;
+
+    const uploaded = await im.client
+      .post(`/requisitions/${req.id}/purchases/${purchaseId}/invoice`)
+      .attach('file', Buffer.from('%PDF-1.4 invoice'), 'invoice.pdf');
+    expect(uploaded.status).toBe(200);
+    expect((uploaded.body as RequisitionFunding).purchases[0]!.hasInvoice).toBe(true);
+
+    const verified = await im.client.post(`/requisitions/${req.id}/verify-purchase`).send({});
+    expect(verified.status).toBe(200);
+    expect(await statusOf(req.id)).toBe('PURCHASE_VERIFIED');
+  });
+
+  it('rejects a file that is not really a document', async () => {
+    const req = await purchased(5000, 4000);
+    const purchaseId = (await fundingOf(req.id)).purchases[0]!.id;
+
+    // Named .pdf, but the magic bytes say otherwise.
+    const disguised = await im.client
+      .post(`/requisitions/${req.id}/purchases/${purchaseId}/invoice`)
+      .attach('file', Buffer.from('<svg onload=alert(1)>'), 'invoice.pdf');
+
+    expect(disguised.status).toBe(400);
+  });
+
+  it('cannot attach an invoice to another requisition’s purchase', async () => {
+    const mine = await purchased(5000, 4000);
+    const theirs = await purchased(5000, 4000);
+    const theirPurchaseId = (await fundingOf(theirs.id)).purchases[0]!.id;
+
+    const crossed = await im.client
+      .post(`/requisitions/${mine.id}/purchases/${theirPurchaseId}/invoice`)
+      .attach('file', Buffer.from('%PDF-1.4 invoice'), 'invoice.pdf');
+
+    expect(crossed.status).toBe(404);
+  });
+
+  /* ------------------------------------------------------- money returned */
+
+  it('returns the unspent balance to Accounts with its note', async () => {
+    // 5000 released, 4000 spent — 1000 can go back.
+    const req = await verifiable(5000, 4000);
+
+    const verified = await im.client.post(`/requisitions/${req.id}/verify-purchase`).send({
+      returnedAmount: 1000,
+      returnNote: 'Vendor discount on the sensors',
+    });
+    expect(verified.status).toBe(200);
+
+    const funding = verified.body as RequisitionFunding;
+    expect(funding.returned).toBe(1000);
+    expect(funding.netFunded).toBe(4000);
+    expect(funding.unspent).toBe(0);
+    expect(funding.returns).toHaveLength(1);
+    expect(funding.returns[0]!.note).toBe('Vendor discount on the sensors');
+    // Receipts are untouched: "released" and "came back" stay separate figures.
+    expect(funding.funded).toBe(5000);
+  });
+
+  it('refuses a return with no stated reason', async () => {
+    const req = await verifiable(5000, 4000);
+
+    const noNote = await im.client
+      .post(`/requisitions/${req.id}/verify-purchase`)
+      .send({ returnedAmount: 1000 });
+
+    expect(noNote.status).toBe(400);
+    expect(await statusOf(req.id)).toBe('PURCHASED');
+  });
+
+  it('refuses to return more than is unspent', async () => {
+    const req = await verifiable(5000, 4000);
+
+    const tooMuch = await im.client
+      .post(`/requisitions/${req.id}/verify-purchase`)
+      .send({ returnedAmount: 1500, returnNote: 'Wishful thinking' });
+
+    expect(tooMuch.status).toBe(409);
+    // Nothing partially applied: no return row, and the status has not moved.
+    expect((await fundingOf(req.id)).returns).toHaveLength(0);
+    expect(await statusOf(req.id)).toBe('PURCHASED');
+  });
+
+  /* --------------------------------------------------- invoice visibility */
+
+  it('lets the requester and the approver read the invoice, but nobody else', async () => {
+    const req = await verifiable(5000, 4000);
+    const purchaseId = (await fundingOf(req.id)).purchases[0]!.id;
+    const path = `/requisitions/${req.id}/purchases/${purchaseId}/invoice`;
+
+    expect((await im.client.get(path)).status).toBe(200);
+    expect((await requester.client.get(path)).status).toBe(200);
+    expect((await approver.client.get(path)).status).toBe(200);
+
+    // An uninvolved colleague sees vendor pricing they have no business with.
+    const bystander = await signIn([Role.GENERAL]);
+    expect((await bystander.client.get(path)).status).toBe(403);
+  });
+
   /* ----------------------------------------------------------- helpers */
 
   async function signIn(roles: Role[]): Promise<{ id: string; client: HttpClient }> {
@@ -367,6 +479,30 @@ describe('funds and purchasing', () => {
     await im.client
       .post(`/requisitions/${req.id}/fund-receipts`)
       .send({ amount, receivedAt: new Date().toISOString() });
+    return req;
+  }
+
+  /** ...and on to PURCHASED, spending `spend` of the `funded` amount. */
+  async function purchased(funded: number, spend: number): Promise<{ id: string; itemId: string }> {
+    const req = await readyToPurchase(funded);
+    const bought = await im.client.post(`/requisitions/${req.id}/purchases`).send({
+      vendor: 'Techshop BD',
+      invoiceNo: 'INV-1',
+      purchasedAt: new Date().toISOString(),
+      lines: [{ requisitionItemId: req.itemId, quantity: 1, unitCost: spend }],
+    });
+    expect(bought.status).toBe(201);
+    return req;
+  }
+
+  /** ...and with the invoice attached, so `verify-purchase` is reachable. */
+  async function verifiable(funded: number, spend: number): Promise<{ id: string; itemId: string }> {
+    const req = await purchased(funded, spend);
+    const purchaseId = (await fundingOf(req.id)).purchases[0]!.id;
+    const uploaded = await im.client
+      .post(`/requisitions/${req.id}/purchases/${purchaseId}/invoice`)
+      .attach('file', Buffer.from('%PDF-1.4 invoice'), 'invoice.pdf');
+    expect(uploaded.status).toBe(200);
     return req;
   }
 });

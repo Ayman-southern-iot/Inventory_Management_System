@@ -282,3 +282,17 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   parsed floats would reintroduce the drift the NUMERIC columns exist to prevent.
 - 2026-07-30 — The requester is notified when funding *completes*, not on each instalment, and the
   IM is never notified of their own recording. Instalment noise is how a badge gets ignored.
+- 2026-07-30 — The invoice hangs off `purchases`, not the requisition. One requisition bought
+  across three vendors has three invoices on three days; a single `requisitions.invoice_file_id`
+  would have forced the IM to choose one to keep.
+- 2026-07-30 — Invoice upload is a separate call from verification, for the same reason: the IM
+  must be able to file the first invoice before the last one arrives.
+- 2026-07-30 — `fund_returns` is its own table rather than a negative `fund_receipts` row.
+  "Accounts released X" and "Y came back" are different questions and the expense report answers
+  both; one signed column would make every future SUM a judgement call about which rows to include.
+- 2026-07-30 — A return is capped at `funded − spent − alreadyReturned` and requires a note, both
+  enforced in the service *and* by database constraints. Money handed back with no stated reason
+  is precisely the gap this step exists to close.
+- 2026-07-30 — Invoices are streamed to authorised callers rather than served by signed URL, unlike
+  the BOM PDF. The BOM leaves the building; an invoice never does, so a shareable link would be
+  capability with no purpose. Permitted: IM, Admin, the requester, and that requisition's approvers.

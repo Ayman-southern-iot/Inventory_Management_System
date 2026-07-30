@@ -23,6 +23,34 @@ export class InvalidFundingTransitionError extends DomainError {
  * unexpected amount is a real event that wants a human decision — silently accepting it would
  * make the approved figure meaningless and the expense report wrong.
  */
+/**
+ * You cannot hand back money you never received, or money already spent. The ceiling is
+ * `funded − spent − alreadyReturned`; anything above it means the figures do not describe a real
+ * transaction, and quietly accepting it would put the expense report permanently out of balance.
+ */
+export class ReturnExceedsUnspentError extends DomainError {
+  constructor(unspent: number, attempted: number) {
+    super(
+      ErrorCode.VALIDATION_FAILED,
+      `Only ${unspent} is unspent, so ${attempted} cannot be returned to Accounts.`,
+      HttpStatus.CONFLICT,
+      { unspent, attempted },
+    );
+  }
+}
+
+/** Verifying without the paperwork defeats the point of the step. */
+export class InvoiceMissingError extends DomainError {
+  constructor(count: number) {
+    super(
+      ErrorCode.VALIDATION_FAILED,
+      `${count} purchase(s) on this requisition still have no invoice attached. Upload them before verifying.`,
+      HttpStatus.CONFLICT,
+      { purchasesWithoutInvoice: count },
+    );
+  }
+}
+
 export class FundingExceedsApprovedError extends DomainError {
   constructor(approved: number, alreadyFunded: number, attempted: number) {
     super(

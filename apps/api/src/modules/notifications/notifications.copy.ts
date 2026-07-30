@@ -86,6 +86,12 @@ export const NOTIFICATION_COPY: Record<NotificationType, NotificationTemplate> =
     title: (ref) => `The items on requisition ${ref} have been purchased`,
     body: (c) => (c.amount ? `Purchase total: ${c.amount}` : null),
   },
+  'requisition.purchase_verified': {
+    severity: 'success',
+    title: (ref) => `The purchase on requisition ${ref} has been verified`,
+    // Only mentioned when something actually went back, so the ordinary case stays quiet.
+    body: (c) => (c.amount ? `${c.amount} was returned to Accounts` : null),
+  },
 
   /* ------------------------------------------------------------- borrowing */
   'borrowing.requested': {

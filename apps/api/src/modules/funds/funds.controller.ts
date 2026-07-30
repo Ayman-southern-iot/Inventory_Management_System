@@ -1,15 +1,33 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Headers, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Headers,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Res,
+  StreamableFile,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
 import {
   IDEMPOTENCY_HEADER,
   Role,
   recordFundReceiptSchema,
   recordPurchaseSchema,
+  verifyPurchaseSchema,
   type RecordFundReceiptInput,
   type RecordPurchaseInput,
   type RequisitionFunding,
+  type VerifyPurchaseInput,
 } from '@ims/shared';
 import { zodPipe } from '../../common/zod-validation.pipe';
-import { ConflictError } from '../../common/errors';
+import { ConflictError, ValidationFailedError } from '../../common/errors';
 import { IdempotencyService } from '../../common/idempotency.service';
 import { CurrentUser, Roles } from '../auth/auth.decorators';
 import type { RequestUser } from '../auth/request-user';
@@ -82,6 +100,66 @@ export class FundsController {
   ): Promise<RequisitionFunding> {
     return this.runOnce(idempotencyKey, actor.id, `funds:purchase:${id}`, async () => {
       await this.funds.recordPurchase(id, body, actor.id, ctx);
+      return this.funds.funding(id);
+    });
+  }
+
+  /**
+   * Attach the scanned invoice to one purchase. Separate from verification because a requisition
+   * bought from three vendors has three invoices arriving on three different days.
+   */
+  @Post('purchases/:purchaseId/invoice')
+  @Roles(Role.INVENTORY_MANAGER, Role.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(FileInterceptor('file'))
+  async attachInvoice(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('purchaseId', ParseUUIDPipe) purchaseId: string,
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @CurrentUser() actor: RequestUser,
+    @CurrentAuditContext() ctx: AuditContext,
+  ): Promise<RequisitionFunding> {
+    if (!file) throw new ValidationFailedError({ path: 'file', message: 'No file was uploaded' });
+    await this.funds.attachInvoice(id, purchaseId, file, actor.id, ctx);
+    return this.funds.funding(id);
+  }
+
+  /**
+   * Stream the invoice back.
+   *
+   * Authorised directly rather than through a signed URL: unlike the BOM PDF this is never handed
+   * to anyone outside the system, so a shareable link would be capability without a purpose. The
+   * permitted set is the people with a legitimate interest in this requisition's paperwork —
+   * enforced in the service, which is where a per-row check belongs.
+   */
+  @Get('purchases/:purchaseId/invoice')
+  async downloadInvoice(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('purchaseId', ParseUUIDPipe) purchaseId: string,
+    @CurrentUser() actor: RequestUser,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<StreamableFile> {
+    await this.funds.assertCanReadInvoice(id, actor);
+    const { contents, mimeType, fileName } = await this.funds.readInvoice(id, purchaseId);
+    response.setHeader('Content-Type', mimeType);
+    response.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`);
+    response.setHeader('Cache-Control', 'private, no-store');
+    return new StreamableFile(contents);
+  }
+
+  /** Verify the purchase, and hand back whatever was not spent. */
+  @Post('verify-purchase')
+  @Roles(Role.INVENTORY_MANAGER, Role.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async verifyPurchase(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(zodPipe(verifyPurchaseSchema)) body: VerifyPurchaseInput,
+    @CurrentUser() actor: RequestUser,
+    @CurrentAuditContext() ctx: AuditContext,
+    @Headers(IDEMPOTENCY_HEADER) idempotencyKey?: string,
+  ): Promise<RequisitionFunding> {
+    return this.runOnce(idempotencyKey, actor.id, `funds:verify:${id}`, async () => {
+      await this.funds.verifyPurchase(id, body, actor.id, ctx);
       return this.funds.funding(id);
     });
   }

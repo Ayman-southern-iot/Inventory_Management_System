@@ -468,8 +468,27 @@ export interface PurchasesTable {
   total_amount: Money;
   note: string | null;
   recorded_by: string;
+  /** Attached at the verify step (5.5). One invoice per purchase, not per requisition. */
+  invoice_file_id: ColumnType<string | null, string | null | undefined, string | null>;
+  invoice_uploaded_by: ColumnType<string | null, string | null | undefined, string | null>;
+  invoice_uploaded_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
+}
+
+/**
+ * Money handed back to Accounts because the purchase came in under what was released. Kept apart
+ * from `fund_receipts` so "released" and "returned" never have to be untangled from a sign.
+ */
+export interface FundReturnsTable {
+  id: Generated<string>;
+  requisition_id: string;
+  amount: Money;
+  /** NOT NULL by constraint — a return with no stated reason is the gap this closes. */
+  note: string;
+  returned_at: Timestamp;
+  recorded_by: string;
+  created_at: CreatedAt;
 }
 
 export interface PurchaseLinesTable {
@@ -544,6 +563,7 @@ export interface Database {
   fund_receipts: FundReceiptsTable;
   purchases: PurchasesTable;
   purchase_lines: PurchaseLinesTable;
+  fund_returns: FundReturnsTable;
   boms: BomsTable;
   bom_requisitions: BomRequisitionsTable;
   bom_lines: BomLinesTable;

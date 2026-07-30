@@ -2,20 +2,28 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   RequisitionEventType,
   RequisitionStatus,
+  Role,
   type RecordFundReceiptInput,
   type RecordPurchaseInput,
+  type VerifyPurchaseInput,
   type RequisitionFunding,
 } from '@ims/shared';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
-import { NotFoundError, ValidationFailedError } from '../../common/errors';
+import { ForbiddenError, NotFoundError, ValidationFailedError } from '../../common/errors';
 import { AuditService } from '../audit/audit.service';
 import type { AuditContext } from '../audit/audit-context';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NOTIFICATION_LINKS } from '../notifications/notifications.links';
 import { RequisitionsRepository } from '../requisitions/requisitions.repository';
+import { FilesService } from '../files/files.service';
 import { FundsRepository, type Tx } from './funds.repository';
-import { FundingExceedsApprovedError, InvalidFundingTransitionError } from './funds.errors';
+import {
+  FundingExceedsApprovedError,
+  InvalidFundingTransitionError,
+  InvoiceMissingError,
+  ReturnExceedsUnspentError,
+} from './funds.errors';
 
 /** Cents-level rounding, so every comparison agrees with the NUMERIC(14,2) columns. */
 function round2(value: number): number {
@@ -52,6 +60,7 @@ export class FundsService {
     private readonly requisitions: RequisitionsRepository,
     private readonly audit: AuditService,
     private readonly notifications: NotificationsService,
+    private readonly files: FilesService,
   ) {}
 
   /* ------------------------------------------------------ sent to accounts */
@@ -291,6 +300,221 @@ export class FundsService {
     });
   }
 
+  /* -------------------------------------------------------------- invoices */
+
+  /**
+   * Attach the scanned invoice to one purchase.
+   *
+   * Separate from `verifyPurchase` on purpose: a requisition bought across three vendors has
+   * three invoices arriving on three different days, and forcing them into the verify call would
+   * mean the IM cannot record the first until the last turns up.
+   */
+  async attachInvoice(
+    requisitionId: string,
+    purchaseId: string,
+    file: { buffer: Buffer; originalname: string; mimetype: string; size: number },
+    actorId: string,
+    context: AuditContext,
+  ) {
+    return this.db.transaction().execute(async (tx) => {
+      const requisition = await this.lock(tx, requisitionId);
+      const purchase = await this.repo.findPurchase(purchaseId, tx);
+      if (!purchase || purchase.requisition_id !== requisitionId) {
+        // Checked against the requisition in the path, so a valid purchase id belonging to
+        // somebody else's requisition is a 404 rather than a silent cross-attach.
+        throw new NotFoundError('Purchase');
+      }
+
+      const stored = await this.files.upload(
+        {
+          kind: 'INVOICE',
+          contents: file.buffer,
+          originalName: file.originalname,
+          uploadedBy: actorId,
+        },
+        tx,
+      );
+
+      // A new upload points the purchase at a new row rather than overwriting the old file, so
+      // replacing an invoice never rewrites what an earlier verification was based on.
+      await this.repo.attachInvoice(tx, purchaseId, {
+        fileId: stored.id,
+        uploadedBy: actorId,
+        uploadedAt: new Date(),
+      });
+
+      await this.audit.record(
+        {
+          action: 'requisition.invoice_attached',
+          entityType: 'requisition',
+          entityId: requisitionId,
+          entityRef: requisition.requisition_no,
+          summary: `Attached an invoice to a purchase on ${requisition.requisition_no}`,
+          metadata: {
+            purchaseId,
+            vendor: purchase.vendor,
+            fileId: stored.id,
+            originalName: file.originalname,
+          },
+        },
+        context,
+        tx,
+      );
+
+      return stored.id;
+    });
+  }
+
+  /**
+   * Who may read a requisition's invoices.
+   *
+   * A per-row check, so it lives here rather than on a guard (rules/20-backend.md): IM and Admin
+   * always; the requester because it is their request; and the approvers on *this* requisition,
+   * because someone who sanctioned the spend has a legitimate interest in what it actually cost.
+   * Nobody else — an invoice carries vendor pricing.
+   */
+  async assertCanReadInvoice(
+    requisitionId: string,
+    actor: { id: string; roles: readonly Role[] },
+  ): Promise<void> {
+    if (actor.roles.includes(Role.INVENTORY_MANAGER) || actor.roles.includes(Role.ADMIN)) return;
+
+    const requisition = await this.requisitions.findById(requisitionId);
+    if (!requisition) throw new NotFoundError('Requisition');
+    if (requisition.requester_id === actor.id) return;
+
+    const approval = await this.db
+      .selectFrom('requisition_approvals')
+      .where('requisition_id', '=', requisitionId)
+      .where('assigned_user_id', '=', actor.id)
+      .select('id')
+      .executeTakeFirst();
+    if (approval) return;
+
+    throw new ForbiddenError('You cannot view the invoices on this requisition');
+  }
+
+  /** The invoice bytes. Call `assertCanReadInvoice` first — this does no authorisation. */
+  async readInvoice(
+    requisitionId: string,
+    purchaseId: string,
+  ): Promise<{ contents: Buffer; mimeType: string; fileName: string }> {
+    const purchase = await this.repo.findPurchase(purchaseId);
+    if (!purchase || purchase.requisition_id !== requisitionId || !purchase.invoice_file_id) {
+      throw new NotFoundError('Invoice');
+    }
+    const { contents, row } = await this.files.readContents(purchase.invoice_file_id);
+    return { contents, mimeType: row.mime_type, fileName: row.original_name };
+  }
+
+  /* -------------------------------------------------------- verification */
+
+  /**
+   * The IM has checked the goods against the invoice, and hands back whatever was not spent.
+   *
+   * Verification and the return are one call because they are one decision: the moment the IM
+   * reconciles the paperwork is the moment they know what is left over.
+   */
+  async verifyPurchase(
+    requisitionId: string,
+    input: VerifyPurchaseInput,
+    actorId: string,
+    context: AuditContext,
+  ) {
+    return this.db.transaction().execute(async (tx) => {
+      const requisition = await this.lock(tx, requisitionId);
+      this.assertStatus(requisition.status, 'verified', [RequisitionStatus.PURCHASED]);
+
+      const missing = await this.repo.countPurchasesWithoutInvoice(requisitionId, tx);
+      if (missing > 0) throw new InvoiceMissingError(missing);
+
+      const returned = round2(input.returnedAmount);
+      if (returned > 0) {
+        // All three sums read under the lock that will write the status, so the ceiling cannot
+        // move underneath a concurrent return.
+        const [funded, spent, alreadyReturned] = await Promise.all([
+          this.repo.sumReceipts(requisitionId, tx),
+          this.repo.sumPurchases(requisitionId, tx),
+          this.repo.sumReturns(requisitionId, tx),
+        ]);
+        const unspent = round2(funded - spent - alreadyReturned);
+        if (returned > unspent) throw new ReturnExceedsUnspentError(unspent, returned);
+
+        await this.repo.insertReturn(tx, {
+          requisitionId,
+          amount: returned,
+          // Non-null by the contract's refine and by a NOT NULL column — belt and braces, because
+          // an unexplained return is the thing this step exists to prevent.
+          note: (input.returnNote ?? '').trim(),
+          returnedAt: new Date(),
+          recordedBy: actorId,
+        });
+
+        await this.requisitions.appendEvent(
+          tx,
+          requisitionId,
+          RequisitionEventType.FUNDS_RETURNED,
+          actorId,
+          { amount: returned, note: input.returnNote },
+        );
+        await this.audit.record(
+          {
+            action: 'requisition.funds_returned',
+            entityType: 'requisition',
+            entityId: requisitionId,
+            entityRef: requisition.requisition_no,
+            summary: `Returned ${returned} to Accounts on ${requisition.requisition_no}`,
+            metadata: { amount: returned, note: input.returnNote },
+          },
+          context,
+          tx,
+        );
+      }
+
+      await this.requisitions.setStatus(
+        tx,
+        requisitionId,
+        RequisitionStatus.PURCHASE_VERIFIED,
+        false,
+      );
+      await this.requisitions.appendEvent(
+        tx,
+        requisitionId,
+        RequisitionEventType.PURCHASE_VERIFIED,
+        actorId,
+        { returnedAmount: returned },
+      );
+      await this.audit.record(
+        {
+          action: 'requisition.purchase_verified',
+          entityType: 'requisition',
+          entityId: requisitionId,
+          entityRef: requisition.requisition_no,
+          summary: `Verified the purchase on ${requisition.requisition_no}`,
+          metadata: { returnedAmount: returned },
+        },
+        context,
+        tx,
+      );
+      await this.notifications.notify(
+        {
+          type: 'requisition.purchase_verified',
+          userIds: [requisition.requester_id],
+          ref: requisition.requisition_no,
+          link: NOTIFICATION_LINKS.requisition(requisitionId),
+          entityType: 'requisition',
+          entityId: requisitionId,
+          actorId,
+          actorName: context.actorName,
+          context: { amount: returned > 0 ? String(returned) : null },
+        },
+        tx,
+      );
+
+      return requisitionId;
+    });
+  }
+
   /* ----------------------------------------------------------- the summary */
 
   /**
@@ -301,11 +525,13 @@ export class FundsService {
     const requisition = await this.requisitions.findById(requisitionId);
     if (!requisition) throw new NotFoundError('Requisition');
 
-    const [receipts, purchases, funded, spent] = await Promise.all([
+    const [receipts, purchases, returns, funded, spent, returned] = await Promise.all([
       this.repo.listReceipts(requisitionId),
       this.repo.listPurchases(requisitionId),
+      this.repo.listReturns(requisitionId),
       this.repo.sumReceipts(requisitionId),
       this.repo.sumPurchases(requisitionId),
+      this.repo.sumReturns(requisitionId),
     ]);
 
     const approved = requisition.approved_amount === null ? null : Number(requisition.approved_amount);
@@ -318,12 +544,18 @@ export class FundsService {
       approvedAmount: approved,
       funded: round2(funded),
       spent: round2(spent),
+      returned: round2(returned),
+      netFunded: round2(funded - returned),
       // Floored at zero: if Accounts released more than was approved, that is an overage to
       // investigate, not a negative amount still owed.
       outstanding: approved === null ? 0 : Math.max(0, round2(approved - funded)),
+      // Also floored: spending past what was released is a real condition worth seeing on the
+      // screen, but it is not "negative money available to hand back".
+      unspent: Math.max(0, round2(funded - spent - returned)),
       isFullyFunded: approved !== null && approved > 0 && round2(funded) >= round2(approved),
       receipts,
       purchases,
+      returns,
     };
   }
 

@@ -78,6 +78,12 @@ export const purchaseSchema = z.object({
   note: z.string().nullable(),
   recordedByName: z.string().nullable(),
   createdAt: z.string(),
+  /**
+   * Whether the scanned invoice is on file. A boolean rather than the file id: the client only
+   * needs to know whether to show a download link, and the id is of no use to it.
+   */
+  hasInvoice: z.boolean(),
+  invoiceUploadedAt: z.string().nullable(),
   lines: z.array(purchaseLineSchema),
 });
 export type Purchase = z.infer<typeof purchaseSchema>;
@@ -109,6 +115,39 @@ export const recordPurchaseSchema = z
   );
 export type RecordPurchaseInput = z.infer<typeof recordPurchaseSchema>;
 
+/* ----------------------------------------------------------- fund returns */
+
+export const fundReturnSchema = z.object({
+  id: uuidSchema,
+  requisitionId: uuidSchema,
+  amount: z.number(),
+  /** Never null: a return with no stated reason is refused by a database constraint. */
+  note: z.string(),
+  returnedAt: z.string(),
+  recordedByName: z.string().nullable(),
+  createdAt: z.string(),
+});
+export type FundReturn = z.infer<typeof fundReturnSchema>;
+
+/**
+ * Verifying the purchase — the IM has checked the goods against the invoice.
+ *
+ * If the buy came in under what Accounts released, the unspent balance goes back, and the note
+ * explaining it is **mandatory**: "money came back and nobody said why" is exactly the gap this
+ * step exists to close.
+ */
+export const verifyPurchaseSchema = z
+  .object({
+    /** Omit or pass 0 when nothing is going back. */
+    returnedAmount: moneyAmountSchema.default(0),
+    returnNote: z.string().trim().max(500).nullable().default(null),
+  })
+  .refine(
+    (input) => input.returnedAmount === 0 || (input.returnNote ?? '').trim().length > 0,
+    { path: ['returnNote'], message: 'Say why the money is going back' },
+  );
+export type VerifyPurchaseInput = z.infer<typeof verifyPurchaseSchema>;
+
 /* ------------------------------------------------------------- the summary */
 
 /**
@@ -125,10 +164,23 @@ export const requisitionFundingSchema = z.object({
   funded: z.number(),
   /** Sum of purchase totals. */
   spent: z.number(),
+  /** Sum of what went back to Accounts. */
+  returned: z.number(),
+  /**
+   * What the requisition actually consumed: `funded − returned`. This is the figure the expense
+   * report totals, and the reason returns are their own table rather than negative receipts.
+   */
+  netFunded: z.number(),
   /** `approved - funded`, floored at zero: Accounts over-releasing is not a negative debt. */
   outstanding: z.number(),
+  /**
+   * Money released but neither spent nor returned. What the IM may still hand back — and the
+   * ceiling the return guard enforces.
+   */
+  unspent: z.number(),
   isFullyFunded: z.boolean(),
   receipts: z.array(fundReceiptSchema),
   purchases: z.array(purchaseSchema),
+  returns: z.array(fundReturnSchema),
 });
 export type RequisitionFunding = z.infer<typeof requisitionFundingSchema>;
