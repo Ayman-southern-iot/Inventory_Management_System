@@ -2,12 +2,14 @@ import { Inject, Injectable } from '@nestjs/common';
 import { sql, type Selectable, type Transaction } from 'kysely';
 import type {
   AuditAction,
+  AuditDecision,
   AuditEntityType,
   AuditEntry,
   AuditOutcome,
   ListAuditQuery,
   Role,
 } from '@ims/shared';
+import { AUDIT_DECISION_ACTIONS } from '@ims/shared';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
 import type { AuditLogTable, Database } from '../../database/schema';
@@ -193,20 +195,26 @@ async insert(tx: Tx | undefined, row: AuditInsert): Promise<void> {
   async list(query: ListAuditQuery): Promise<AuditPage> {
     const offset = (query.page - 1) * query.limit;
 
-    // Three filters, matching the contract: actor, entity, date range. They compose.
+    // Three filters, matching the contract: user, date range, approval decision. They compose.
     const base = this.db
       .selectFrom('audit_log')
       .$if(query.actorId !== undefined, (qb) =>
         qb.where('audit_log.actor_id', '=', query.actorId as string),
-      )
-      .$if(query.entityType !== undefined, (qb) =>
-        qb.where('audit_log.entity_type', '=', query.entityType as AuditEntityType),
       )
       .$if(query.from !== undefined, (qb) =>
         qb.where('audit_log.created_at', '>=', query.from as Date),
       )
       .$if(query.to !== undefined, (qb) =>
         qb.where('audit_log.created_at', '<=', query.to as Date),
+      )
+      // One `action IN (...)` against audit_log_action_idx, rather than reaching into the
+      // metadata blob for a decision field no index can serve.
+      .$if(query.decision !== undefined, (qb) =>
+        qb.where(
+          'audit_log.action',
+          'in',
+          [...AUDIT_DECISION_ACTIONS[query.decision as AuditDecision]],
+        ),
       );
 
     const [rows, counted] = await Promise.all([

@@ -7,6 +7,7 @@ import type {
   ListProductsQuery,
   ListUsersQuery,
   ListAuditQuery,
+  ListNotificationsQuery,
 } from '@ims/shared';
 
 /**
@@ -85,5 +86,11 @@ export const queryKeys = {
     all: () => ['audit-log'] as const,
     list: (query: ListAuditQuery) => ['audit-log', 'list', query] as const,
     detail: (id: string) => ['audit-log', 'detail', id] as const,
+  },
+  notifications: {
+    all: () => ['notifications'] as const,
+    list: (query: ListNotificationsQuery) => ['notifications', 'list', query] as const,
+    /** The badge. Kept out of `list` so marking one read does not refetch the whole feed. */
+    unreadCount: () => ['notifications', 'unread-count'] as const,
   },
 } as const;

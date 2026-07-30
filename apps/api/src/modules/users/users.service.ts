@@ -12,6 +12,7 @@ import { ConflictError, ForbiddenError, NotFoundError } from '../../common/error
 import { RefreshRevocationReason } from '../../database/schema';
 import { PasswordService } from '../../security/password.service';
 import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import type { AuditContext } from '../audit/audit-context';
 import { UsersRepository, toUser, type Tx, type UserWithRoles } from './users.repository';
 
@@ -32,6 +33,7 @@ export class UsersService {
     private readonly repo: UsersRepository,
     private readonly passwords: PasswordService,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async findById(id: string): Promise<User> {
@@ -177,6 +179,24 @@ export class UsersService {
       { ...context, actorName: context.actorName ?? existing.full_name },
       tx,
     );
+
+    // Only a role change is worth interrupting someone for — it changes what they can do and
+    // what appears in their navigation. A corrected designation is not news.
+    if ('roles' in changes) {
+      await this.notifications.notify(
+        {
+          type: 'account.roles_changed',
+          userIds: [id],
+          ref: existing.email,
+          link: '/profile',
+          entityType: 'user',
+          entityId: id,
+          actorId: context.actorId ?? null,
+          actorName: context.actorName ?? null,
+        },
+        tx,
+      );
+    }
   }
 
   async setActive(id: string, isActive: boolean, context: AuditContext): Promise<User> {
@@ -253,6 +273,22 @@ export class UsersService {
           },
         },
         { ...context, actorName: context.actorName ?? existing.full_name },
+        tx,
+      );
+
+      // Someone else changing your password and ending your sessions is exactly the event a
+      // user must not first learn about by being logged out.
+      await this.notifications.notify(
+        {
+          type: 'account.password_reset',
+          userIds: [id],
+          ref: existing.email,
+          link: '/profile',
+          entityType: 'user',
+          entityId: id,
+          actorId: context.actorId ?? null,
+          actorName: context.actorName ?? null,
+        },
         tx,
       );
     });

@@ -4,6 +4,7 @@ import { SettingsModule } from '../settings/settings.module';
 import { CommonModule } from '../../common/common.module';
 import { PdfModule } from '../pdf/pdf.module';
 import { AuditModule } from '../audit/audit.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { BomsController } from './boms.controller';
 import { BomsRepository } from './boms.repository';
 import { BomsService } from './boms.service';
@@ -18,7 +19,14 @@ import { BomsService } from './boms.service';
  * (phase 06) so every BOM mutation writes a row to `audit_log` in the same transaction.
  */
 @Module({
-  imports: [RequisitionsModule, SettingsModule, CommonModule, PdfModule, AuditModule],
+  imports: [
+    RequisitionsModule,
+    SettingsModule,
+    CommonModule,
+    PdfModule,
+    AuditModule,
+    NotificationsModule,
+  ],
   controllers: [BomsController],
   providers: [BomsService, BomsRepository],
   exports: [BomsService, BomsRepository],

@@ -5,6 +5,7 @@ import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
 import { ConflictError, NotFoundError } from '../../common/errors';
 import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 /**
  * An approver handing their authority to someone else for a date range (task 3.5).
@@ -18,6 +19,7 @@ export class DelegationsService {
   constructor(
     @Inject(DB) private readonly db: Db,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async list(approverUserId?: string): Promise<Delegation[]> {
@@ -61,6 +63,14 @@ export class DelegationsService {
       throw new ConflictError('You cannot delegate to yourself');
     }
 
+    // Display copy for the delegate's notification ("Rana delegated their approvals to you").
+    const actorName = await this.db
+      .selectFrom('users')
+      .where('id', '=', approverUserId)
+      .select('full_name')
+      .executeTakeFirst()
+      .then((row) => row?.full_name ?? null);
+
     // Delegating to someone with no approval rights would create a queue item nobody can act
     // on — the request would simply stall with no visible cause.
     const delegate = await this.db
@@ -102,6 +112,22 @@ export class DelegationsService {
         },
       }, { actorId: approverUserId, actorName: null, actorEmail: null, actorRoles: [], requestMethod: null, requestPath: null, requestIp: null, userAgent: null }, tx);
 
+      // The delegate is about to start receiving other people's approvals. Being told is the
+      // difference between a working delegation and a queue nobody knows they own.
+      await this.notifications.notify(
+        {
+          type: 'delegation.granted',
+          userIds: [input.delegateUserId],
+          ref: inserted.id,
+          link: '/requisitions/approvals',
+          entityType: 'delegation',
+          entityId: inserted.id,
+          actorId: approverUserId,
+          actorName: actorName ?? null,
+        },
+        tx,
+      );
+
       return inserted;
     });
 
@@ -111,6 +137,14 @@ export class DelegationsService {
   }
 
   async revoke(id: string, approverUserId: string): Promise<void> {
+    // Read before the update: afterwards `is_active` is false and the delegate is harder to
+    // identify from the row alone.
+    const existing = await this.db
+      .selectFrom('delegations')
+      .where('id', '=', id)
+      .where('approver_user_id', '=', approverUserId)
+      .select('delegate_user_id')
+      .executeTakeFirst();
     await this.db.transaction().execute(async (tx) => {
       const result = await tx
         .updateTable('delegations')
@@ -129,6 +163,24 @@ export class DelegationsService {
         summary: `Revoked delegation ${id}`,
         metadata: {},
       }, { actorId: approverUserId, actorName: null, actorEmail: null, actorRoles: [], requestMethod: null, requestPath: null, requestIp: null, userAgent: null }, tx);
+
+      // The delegate stops receiving approvals from this moment; silence would leave them
+      // believing they still cover for someone.
+      if (existing) {
+        await this.notifications.notify(
+          {
+            type: 'delegation.revoked',
+            userIds: [existing.delegate_user_id],
+            ref: id,
+            link: '/requisitions/approvals',
+            entityType: 'delegation',
+            entityId: id,
+            actorId: approverUserId,
+            actorName: null,
+          },
+          tx,
+        );
+      }
     });
   }
 

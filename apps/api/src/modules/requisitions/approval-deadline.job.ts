@@ -4,6 +4,7 @@ import { sql } from 'kysely';
 import { ApprovalAction, ApprovalStage, RequisitionStatus } from '@ims/shared';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
+import { NotificationsService } from '../notifications/notifications.service';
 
 /**
  * Task 3.9 — the approval deadline reminder.
@@ -16,10 +17,10 @@ import type { Db } from '../../database/create-db';
  * Repeats every 24 hours until acted on: `last_reminded_at` is what stops it becoming noise
  * while still nagging an approver who ignores it.
  *
- * Delivery is a log line for now — OQ-10 says there is no SMTP relay, and the in-app
- * notification table arrives with the rest of Phase 03's notification work. The query, the
- * schedule and the repeat window are the parts worth getting right now; swapping the log for
- * an insert is a one-line change.
+ * Delivery is an in-app notification plus a log line. OQ-10 says there is no SMTP relay, so
+ * in-app is the only channel; the log line stays because an overdue approval is also an
+ * operational signal, not only a user-facing one. This closes G-06, which recorded that the
+ * reminder existed but told nobody.
  */
 const REMIND_EVERY_MS = 24 * 60 * 60 * 1000;
 
@@ -37,7 +38,10 @@ export interface OverdueApproval {
 export class ApprovalDeadlineJob {
   private readonly logger = new Logger(ApprovalDeadlineJob.name);
 
-  constructor(@Inject(DB) private readonly db: Db) {}
+  constructor(
+    @Inject(DB) private readonly db: Db,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   @Cron(CronExpression.EVERY_10_MINUTES, { name: 'approval-deadlines' })
   async run(): Promise<number> {
@@ -54,6 +58,22 @@ export class ApprovalDeadlineJob {
         `Approval overdue: ${row.requisition_no} waiting on ${row.assignee_name} ` +
           `(${row.stage}) since ${new Date(row.approval_deadline).toISOString().slice(0, 10)}`,
       );
+
+      // Best-effort: this is a job with no transaction to join and no caller to fail. One
+      // undeliverable reminder must not stop the other twenty from going out, and
+      // `markReminded` below still runs so a permanently failing row cannot spin every
+      // ten minutes forever.
+      await this.notifications.notifyBestEffort({
+        type: 'requisition.approval_reminder',
+        userIds: [row.assigned_user_id],
+        ref: row.requisition_no,
+        link: `/requisitions/${row.requisition_id}`,
+        entityType: 'requisition',
+        entityId: row.requisition_id,
+        // No actor: nobody did this, a deadline passed.
+        actorId: null,
+        actorName: null,
+      });
     }
 
     await this.markReminded(due.map((row) => row.approval_id));

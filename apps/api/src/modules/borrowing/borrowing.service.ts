@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'kysely';
 import {
   BorrowStatus,
+  Role,
   type CreateBorrowRequestInput,
   type DecideBorrowInput,
   type ReturnBorrowInput,
@@ -12,6 +13,7 @@ import type { Db } from '../../database/create-db';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors';
 import { StockService } from '../stock/stock.service';
 import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import type { AuditContext } from '../audit/audit-context';
 import { BorrowingRepository } from './borrowing.repository';
 import {
@@ -31,6 +33,7 @@ export class BorrowingService {
     private readonly repo: BorrowingRepository,
     private readonly stock: StockService,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /**
@@ -106,6 +109,21 @@ export class BorrowingService {
             },
           },
           context,
+          tx,
+        );
+
+        // The IMs are the only people who can act on a pending borrow.
+        await this.notifications.notify(
+          {
+            type: 'borrowing.requested',
+            userIds: await this.notifications.usersWithRole(Role.INVENTORY_MANAGER, tx),
+            ref: borrowNo,
+            link: `/borrowing/${newId}`,
+            entityType: 'borrowing',
+            entityId: newId,
+            actorId: requesterId,
+            actorName: context.actorName,
+          },
           tx,
         );
         return newId;
@@ -185,6 +203,21 @@ export class BorrowingService {
           },
         },
         context,
+        tx,
+      );
+
+      await this.notifications.notify(
+        {
+          type: input.approve ? 'borrowing.approved' : 'borrowing.rejected',
+          userIds: [request.requester_id],
+          ref: request.borrow_no,
+          link: `/borrowing/${id}`,
+          entityType: 'borrowing',
+          entityId: id,
+          actorId,
+          actorName: context.actorName,
+          context: { note: input.note ?? null },
+        },
         tx,
       );
     });
@@ -289,6 +322,24 @@ export class BorrowingService {
         context,
         tx,
       );
+
+      // The IM usually records the return on the borrower's behalf, so the borrower is the one
+      // who needs telling. `notify` drops the actor, so an IM returning their own borrow gets
+      // nothing — which is correct.
+      await this.notifications.notify(
+        {
+          type: 'borrowing.returned',
+          userIds: [request.requester_id],
+          ref: request.borrow_no,
+          link: `/borrowing/${id}`,
+          entityType: 'borrowing',
+          entityId: id,
+          actorId,
+          actorName: context.actorName,
+          context: { quantity: input.quantity },
+        },
+        tx,
+      );
     });
 
     try {
@@ -380,6 +431,22 @@ export class BorrowingService {
         context,
         tx,
       );
+
+      // The borrower had this issued and now does not. That is theirs to know about.
+      await this.notifications.notify(
+        {
+          type: 'borrowing.reverted',
+          userIds: [request.requester_id],
+          ref: request.borrow_no,
+          link: `/borrowing/${id}`,
+          entityType: 'borrowing',
+          entityId: id,
+          actorId,
+          actorName: context.actorName,
+          context: { note: input.reason },
+        },
+        tx,
+      );
     });
 
     return this.requireView(id);
@@ -423,6 +490,21 @@ export class BorrowingService {
           },
         },
         context,
+        tx,
+      );
+
+      // Clears it out of the IMs' pending queue.
+      await this.notifications.notify(
+        {
+          type: 'borrowing.cancelled',
+          userIds: await this.notifications.usersWithRole(Role.INVENTORY_MANAGER, tx),
+          ref: request.borrow_no,
+          link: `/borrowing/${id}`,
+          entityType: 'borrowing',
+          entityId: id,
+          actorId,
+          actorName: context.actorName,
+        },
         tx,
       );
     });

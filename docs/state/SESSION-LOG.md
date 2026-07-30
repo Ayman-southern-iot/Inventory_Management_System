@@ -12,6 +12,63 @@ Format:
 **Next:** the single next action, specific enough to start without thinking
 ```
 
+## 2026-07-30 (later) — Phase 06: notifications, filter rework, green suite
+
+Continuation of the entry below. Everything the previous entry listed as a landmine is now closed.
+
+**Did:**
+- **Suite is green: 17 files, 286 integration tests**, plus unit and web. `typecheck` and `lint`
+  clean. Migrations 0011, 0012 and 0013 all applied *and* rollback-verified.
+- **Reworked the audit filters to what the user actually wanted** — user, date range, and
+  approved/rejected approvals. The previous cut filtered by entity type, which nobody asked for.
+  To make "approved / rejected" an indexed filter rather than a scan of the metadata blob, the
+  single `requisition.decide` audit action was split into `requisition.approve` and
+  `requisition.reject`, matching the borrowing actions that were already separate. The user
+  filter is a picker over real users (inactive included — they still own historical rows), not a
+  typed name.
+- **Built the notification system** (closes **G-06**, which had recorded that reminders and
+  approve/reject notices existed only as server log lines):
+  - `0013_notifications` — one row per recipient; the rendered title is stored so history keeps
+    saying what the user was told; *not* append-only, unlike `audit_log`, because `read_at` is
+    the point. Two indexes: `(user_id, created_at DESC)` for the list, and a **partial** index on
+    unread for the badge, which every signed-in client polls.
+  - `NotificationsService.notify(input, tx)` writes inside the caller's transaction, so a
+    notification cannot survive a rollback or go missing after a commit. It deduplicates
+    recipients and **drops the actor** — nobody is told about their own action.
+  - Wired into every state change that has an audience: requisition submit / IM-approve /
+    approve / reject / withdraw / cancel, borrow request / approve / reject / revert / cancel /
+    return, BOM generated / bounced / voided, delegation granted / revoked, password reset and
+    role change. The approval deadline job now sends a real notification instead of a log line.
+  - Copy lives in one file, `notifications.copy.ts`, with severity next to each sentence.
+  - Bell in the app header with an unread badge, 30s poll, `refetchIntervalInBackground: false`.
+    The list only fetches when the panel is open, so an idle tab costs one small count query.
+- **10 notification integration tests**, covering the parts that actually break: fan-out to the
+  right role, the actor being excluded, one user never seeing or marking another's notifications,
+  and re-marking not moving the read timestamp.
+- **Added the missing X-Forwarded-For regression test.** The SQLi and BOM-authz regressions were
+  already written in the previous session.
+- **Measured the load** the user asked about — see the numbers in `PROGRESS.md`. 4 virtual users
+  × 7 concurrent operations = 28 in-flight against a pool of 10, 700 requests, zero failures,
+  p95 405ms. Roughly ten times the real peak, comfortably.
+
+**Decisions:** notification copy on the server rather than in `i18n/en.ts`, and why; notifications
+written in-transaction; the actor excluded from their own fan-out; the actor's display name
+resolved centrally in `NotificationsService` because the JWT deliberately carries no name. All in
+`DECISIONS.md`.
+
+**Landmines:**
+- The notification fan-out — *who* gets told about *what* — was inferred from the domain, not
+  specified anywhere. It is recorded as **OQ-16**. If it is wrong, it is wrong in one file
+  (`notifications.copy.ts`) plus the `notify` call sites, not spread through the services.
+- **G-11 through G-15 are still open and untouched** — the sanitiser's redaction gaps, the PDF
+  error leaking its reason discriminator, the unbounded `page`, and the two borrowing
+  status-vs-stock split-transaction bugs. G-14 in particular should be picked up with 6.2, since
+  the invariant job is the thing that would otherwise catch a stranded `reserved_qty` and does not.
+- There is no "see all notifications" page yet — only the bell panel, which shows the most recent
+  page. The i18n key `viewAll` exists and is unused.
+
+**Next:** task 6.2, the nightly invariant job — and extend it to `reserved_qty`, per G-14.
+
 ## 2026-07-30 — Phase 06 (audit hardening) + cross-cutting concurrency fixes
 
 Session brief was not a phase: "find any critical bug, make it stable for 2–3 concurrent users,

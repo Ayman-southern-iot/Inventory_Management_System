@@ -16,6 +16,8 @@ import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors';
 import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { UsersService } from '../users/users.service';
 import { SettingsService } from '../settings/settings.service';
 import { ApproverSlotsService } from '../settings/approver-slots.service';
 import { RequisitionsRepository } from './requisitions.repository';
@@ -38,6 +40,8 @@ export class RequisitionsService {
     private readonly approverSlots: ApproverSlotsService,
     private readonly delegations: DelegationsService,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationsService,
+    private readonly users: UsersService,
   ) {}
 
   async createDraft(input: SaveRequisitionInput, requesterId: string) {
@@ -205,6 +209,23 @@ export class RequisitionsService {
         { actorId: actorId, actorName: null, actorEmail: null, actorRoles: [], requestMethod: null, requestPath: null, requestIp: null, userAgent: null },
         tx,
       );
+
+      // The IM is the only person who can act right now; the approvers wait their turn and are
+      // told when the IM clears it. Telling everyone at submit would train them to ignore this.
+      await this.notifications.notify(
+        {
+          type: 'requisition.awaiting_your_approval',
+          userIds: [inventoryManagerId],
+          ref: existing.requisition_no,
+          link: `/requisitions/${id}`,
+          entityType: 'requisition',
+          entityId: id,
+          actorId,
+          actorName: null,
+          context: { amount: String(requestedAmount) },
+        },
+        tx,
+      );
     });
 
     this.logger.log(
@@ -231,6 +252,9 @@ export class RequisitionsService {
     if (!actingFor) throw new NotYourApprovalError();
 
     const nextAction = input.approve ? ApprovalAction.APPROVED : ApprovalAction.REJECTED;
+    // Read outside the transaction: it is display copy for the notification ("approved by Rana"),
+    // not a value any decision depends on, so it must not extend the lock's lifetime.
+    const actor = await this.users.findAuthRecordById(actorId);
 
     await this.db.transaction().execute(async (tx) => {
       // Lock first, read second. Everything below decides based on the requisition's status,
@@ -267,7 +291,7 @@ export class RequisitionsService {
       const recordDecision = () =>
         this.audit.record(
           {
-            action: 'requisition.decide',
+            action: input.approve ? 'requisition.approve' : 'requisition.reject',
             entityType: 'requisition',
             entityId: approval.requisition_id,
             entityRef: requisition.requisition_no,
@@ -284,6 +308,26 @@ export class RequisitionsService {
           tx,
         );
 
+      // Common shape for every notification this method raises.
+      const notifyOn = (
+        type: Parameters<typeof this.notifications.notify>[0]['type'],
+        userIds: readonly string[],
+      ) =>
+        this.notifications.notify(
+          {
+            type,
+            userIds,
+            ref: requisition.requisition_no,
+            link: `/requisitions/${approval.requisition_id}`,
+            entityType: 'requisition',
+            entityId: approval.requisition_id,
+            actorId,
+            actorName: actor?.full_name ?? null,
+            context: { note: input.note ?? null },
+          },
+          tx,
+        );
+
       if (!input.approve) {
         // Terminal. One rejection kills the whole request, whatever anyone else has said.
         await this.repo.setStatus(tx, approval.requisition_id, RequisitionStatus.REJECTED, true);
@@ -295,6 +339,8 @@ export class RequisitionsService {
           { note: input.note, stage: approval.stage, slot: approval.slot },
         );
         await recordDecision();
+        // The requester is the only one who needs to act on this — it is dead for everyone else.
+        await notifyOn('requisition.rejected', [requisition.requester_id]);
         return;
       }
 
@@ -313,6 +359,12 @@ export class RequisitionsService {
           { note: input.note },
         );
         await recordDecision();
+        await notifyOn('requisition.im_approved', [requisition.requester_id]);
+        // Now, and only now, the money approvers can act — so now is when they are told.
+        await notifyOn(
+          'requisition.awaiting_your_approval',
+          await this.notifications.pendingApproversFor(approval.requisition_id, tx),
+        );
         return;
       }
 
@@ -350,6 +402,21 @@ export class RequisitionsService {
       }
 
       await recordDecision();
+
+      if (outstanding === 0) {
+        // Done. The requester learns it cleared, and the IMs learn there is a BOM to generate.
+        await notifyOn('requisition.approved', [requisition.requester_id]);
+        await notifyOn(
+          'requisition.approved',
+          await this.notifications.usersWithRole(Role.INVENTORY_MANAGER, tx),
+        );
+      } else {
+        // Still waiting on someone. Nudge whoever is left rather than the whole chain.
+        await notifyOn(
+          'requisition.awaiting_your_approval',
+          await this.notifications.pendingApproversFor(approval.requisition_id, tx),
+        );
+      }
     });
 
     return this.requireDetail(approval.requisition_id);
@@ -370,6 +437,8 @@ export class RequisitionsService {
     if (approval.action !== ApprovalAction.APPROVED) {
       throw new ConflictError('Only an approval that was granted can be withdrawn');
     }
+
+    const actor = await this.users.findAuthRecordById(actorId);
 
     await this.db.transaction().execute(async (tx) => {
       // Same lock as `decide`, for the same reason and taken in the same place: a withdrawal
@@ -423,6 +492,30 @@ export class RequisitionsService {
         { actorId: actorId, actorName: null, actorEmail: null, actorRoles: [], requestMethod: null, requestPath: null, requestIp: null, userAgent: null },
         tx,
       );
+
+      // A withdrawal moves the requisition backwards, so two groups care: the requester, whose
+      // approved request is no longer approved, and whoever now has to decide again.
+      const withdrawal = {
+        ref: requisition.requisition_no,
+        link: `/requisitions/${approval.requisition_id}`,
+        entityType: 'requisition',
+        entityId: approval.requisition_id,
+        actorId,
+        actorName: actor?.full_name ?? null,
+        context: { note: input.reason },
+      };
+      await this.notifications.notify(
+        { ...withdrawal, type: 'requisition.withdrawn', userIds: [requisition.requester_id] },
+        tx,
+      );
+      await this.notifications.notify(
+        {
+          ...withdrawal,
+          type: 'requisition.awaiting_your_approval',
+          userIds: await this.notifications.pendingApproversFor(approval.requisition_id, tx),
+        },
+        tx,
+      );
     });
 
     return this.requireDetail(approval.requisition_id);
@@ -453,6 +546,21 @@ export class RequisitionsService {
           metadata: {},
         },
         { actorId: actorId, actorName: null, actorEmail: null, actorRoles: [], requestMethod: null, requestPath: null, requestIp: null, userAgent: null },
+        tx,
+      );
+
+      // Whoever had this sitting in their queue needs it to disappear from their queue.
+      await this.notifications.notify(
+        {
+          type: 'requisition.cancelled',
+          userIds: await this.notifications.pendingApproversFor(id, tx),
+          ref: existing.requisition_no,
+          link: `/requisitions/${id}`,
+          entityType: 'requisition',
+          entityId: id,
+          actorId,
+          actorName: null,
+        },
         tx,
       );
     });

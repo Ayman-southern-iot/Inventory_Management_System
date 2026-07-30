@@ -10,3 +10,4 @@ export * from './contracts/borrowing.js';
 export * from './contracts/requisitions.js';
 export * from './contracts/boms.js';
 export * from './contracts/audit.js';
+export * from './contracts/notifications.js';

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuditModule } from '../audit/audit.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { StockModule } from '../stock/stock.module';
 import { BorrowingController } from './borrowing.controller';
 import { BorrowingRepository } from './borrowing.repository';
@@ -12,7 +13,7 @@ import { ProjectsService } from './projects.service';
  * goes through `StockService` (ADR-0001).
  */
 @Module({
-  imports: [AuditModule, StockModule],
+  imports: [AuditModule, StockModule, NotificationsModule],
   controllers: [BorrowingController],
   providers: [
     BorrowingService,

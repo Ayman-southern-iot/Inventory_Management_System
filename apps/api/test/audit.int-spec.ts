@@ -149,30 +149,61 @@ describe('audit log', () => {
 
   /* --------------------------------- filters -------------------------------- */
 
-  it('filters by action and entity type', async () => {
+  it('filters by user, by date range, and by approval decision — and by nothing else', async () => {
     const admin = await adminClient();
-    const create = await admin
-      .post('/admin/users')
-      .send({
-        email: uniqueEmail('filter'),
-        fullName: 'Filter',
-        designation: 'Filter',
-        roles: [Role.GENERAL],
-        password: TEST_PASSWORD,
-      });
+    const create = await admin.post('/admin/users').send({
+      email: uniqueEmail('filter'),
+      fullName: 'Filter',
+      designation: 'Filter',
+      roles: [Role.GENERAL],
+      password: TEST_PASSWORD,
+    });
     expect(create.status).toBe(201);
 
-    const byAction = await admin.get('/admin/audit-log?action=user.create');
-    expect(byAction.status).toBe(200);
-    const actionItems = (byAction.body as Paginated<AuditEntry>).items;
-    expect(actionItems.length).toBeGreaterThan(0);
-    for (const item of actionItems) expect(item.action).toBe('user.create');
+    // Filter 1 — user. Take the actor from a row we know exists rather than assuming an id.
+    const all = await admin.get('/admin/audit-log');
+    expect(all.status).toBe(200);
+    const seed = (all.body as Paginated<AuditEntry>).items.find((e) => e.action === 'user.create');
+    expect(seed).toBeDefined();
+    expect(seed?.actorId).not.toBeNull();
 
-    const byEntity = await admin.get('/admin/audit-log?entityType=user');
-    expect(byEntity.status).toBe(200);
-    const entityItems = (byEntity.body as Paginated<AuditEntry>).items;
-    expect(entityItems.length).toBeGreaterThan(0);
-    for (const item of entityItems) expect(item.entityType).toBe('user');
+    const byActor = await admin.get(`/admin/audit-log?actorId=${seed!.actorId}`);
+    expect(byActor.status).toBe(200);
+    const actorItems = (byActor.body as Paginated<AuditEntry>).items;
+    expect(actorItems.length).toBeGreaterThan(0);
+    for (const item of actorItems) expect(item.actorId).toBe(seed!.actorId);
+
+    // Filter 2 — date range. A window that closed before this test ran holds nothing.
+    const past = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
+    const alsoPast = new Date(Date.now() - 364 * 24 * 60 * 60 * 1000).toISOString();
+    const byDate = await admin.get(`/admin/audit-log?from=${past}&to=${alsoPast}`);
+    expect(byDate.status).toBe(200);
+    expect((byDate.body as Paginated<AuditEntry>).total).toBe(0);
+
+    // ...and a window that is still open holds the row we just made.
+    const openWindow = await admin.get(`/admin/audit-log?from=${past}`);
+    expect((openWindow.body as Paginated<AuditEntry>).total).toBeGreaterThan(0);
+
+    // Filter 3 — approved / rejected approvals. No approvals happened in this spec, so the
+    // meaningful assertion is that the filter excludes everything that is not a decision.
+    const approved = await admin.get('/admin/audit-log?decision=APPROVED');
+    expect(approved.status).toBe(200);
+    for (const item of (approved.body as Paginated<AuditEntry>).items) {
+      expect(['requisition.approve', 'borrowing.approve']).toContain(item.action);
+    }
+    const rejected = await admin.get('/admin/audit-log?decision=REJECTED');
+    expect(rejected.status).toBe(200);
+    for (const item of (rejected.body as Paginated<AuditEntry>).items) {
+      expect(['requisition.reject', 'borrowing.reject']).toContain(item.action);
+    }
+
+    // The filters that were removed must not quietly come back: an unknown query key is
+    // ignored, so `?action=` returning a filtered set would mean someone re-added it.
+    const removed = await admin.get('/admin/audit-log?action=user.create&entityType=settings');
+    expect(removed.status).toBe(200);
+    expect((removed.body as Paginated<AuditEntry>).total).toBe(
+      (all.body as Paginated<AuditEntry>).total,
+    );
   });
 
   /* --------------------------------- append-only enforcement -------------------------------- */
@@ -256,6 +287,32 @@ describe('audit log', () => {
     expect(entry?.summary).toContain("Rashid's");
   });
 
+  /**
+   * `request_ip` is an `inet` column. Before the fix the context read the raw
+   * `X-Forwarded-For` header and took the leftmost entry, so a caller could send a value pg
+   * would reject, fail the audit insert, and roll back the mutation it belonged to — any
+   * authenticated user could switch off every audited write in the system with one header.
+   */
+  it('survives a junk X-Forwarded-For instead of rolling the mutation back', async () => {
+    const admin = await adminClient();
+
+    const created = await admin
+      .post('/departments')
+      .set('X-Forwarded-For', 'definitely-not-an-ip')
+      .send({ name: `XFF ${Date.now()}`, code: `XF${Date.now() % 100000}` });
+
+    // The mutation must still succeed. That is the whole point.
+    expect(created.status).toBe(201);
+
+    // And the row is still audited, with the unusable address dropped rather than stored.
+    const list = await admin.get('/admin/audit-log');
+    const entry = (list.body as Paginated<AuditEntry>).items.find(
+      (item) => item.action === 'department.create',
+    );
+    expect(entry).toBeDefined();
+    expect(entry?.requestIp).not.toBe('definitely-not-an-ip');
+  });
+
   /** The same break-out, attempted deliberately rather than by accident. */
   it('stores an injection payload in metadata as inert text', async () => {
     const admin = await adminClient();
@@ -330,7 +387,9 @@ describe('audit log', () => {
       .put('/admin/settings')
       .send({ key: SettingKey.AUDIT_ENABLED_ACTIONS, value: ['borrowing.create'] });
 
-    expect(result.status).toBe(422);
+    // ValidationFailedError — the same 400 every other rejected value in this API returns.
+    expect(result.status).toBe(400);
+    expect(JSON.stringify(result.body)).toContain('auth.login.success');
   });
 
   it('stops recording an action the admin has disabled', async () => {
@@ -348,8 +407,13 @@ describe('audit log', () => {
       .send({ name: `Cat ${Date.now()}`, code: `C${Date.now() % 100000}` });
     expect(created.status).toBe(201);
 
-    const list = await admin.get('/admin/audit-log?entityType=category');
-    expect((list.body as Paginated<AuditEntry>).items).toHaveLength(0);
+    // `entityType` is no longer a filter, so this asserts against the whole feed: the category
+    // was really created, and no `category.create` row was written for it.
+    const list = await admin.get('/admin/audit-log');
+    const actions = (list.body as Paginated<AuditEntry>).items.map((entry) => entry.action);
+    expect(actions).not.toContain('category.create');
+    // The settings change that disabled it is itself always-on, so the feed is not simply empty.
+    expect(actions).toContain('settings.update');
   });
 
   /* --------------------------------- helpers -------------------------------- */

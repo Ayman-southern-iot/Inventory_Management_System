@@ -27,6 +27,7 @@ import { Badge } from '@/components/ui/primitives';
 import { Button } from '@/components/ui/Button';
 import { ROUTES } from '@/routes/paths';
 import { AwaitingApprovalBadge } from './NavBadge';
+import { NotificationBell } from '@/features/notifications/NotificationBell';
 
 interface NavItem {
   label: string;
@@ -126,7 +127,11 @@ export function AppShell() {
             {t.app.shortName}
           </span>
 
-          <div className="ml-auto relative">
+          <div className="ml-auto">
+            <NotificationBell />
+          </div>
+
+          <div className="relative">
             <button
               type="button"
               onClick={() => setMenuOpen((open) => !open)}

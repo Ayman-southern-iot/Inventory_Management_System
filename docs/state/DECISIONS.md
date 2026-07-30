@@ -220,3 +220,27 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   `ims.audit_purge` flag — the retention job is the one legitimate deleter, and a session flag
   keeps ordinary application code unable to delete even by accident. The purge writes its own
   `audit.purge` row recording the cutoff and the number of rows removed.
+- 2026-07-30 — Audit filters are user, date range and approval decision (not entity type) — that
+  is what the operator asked for; entity type was an invention of the first cut.
+- 2026-07-30 — `requisition.decide` split into `requisition.approve` / `requisition.reject` —
+  "approved approvals / rejected approvals" has to be an `action IN (...)` against
+  `audit_log_action_idx`; filtering a decision field inside the jsonb metadata cannot use an index.
+  It also makes requisitions consistent with borrowing, which already had two actions.
+- 2026-07-30 — Notification copy lives in `notifications.copy.ts` on the server, not in
+  `apps/web/src/i18n/en.ts` — the title is rendered when the event happens and stored on the row,
+  so history keeps saying what the user was actually told after a rename or a copy change. The
+  rule's real requirement (wording changes are one file) is preserved; it is just a different file.
+- 2026-07-30 — Notifications are written inside the caller's transaction — a notification that
+  survives a rolled-back approval is a lie, and one lost after a commit means the approver is
+  never told, which is the failure the whole feature exists to prevent. Jobs with no transaction
+  use `notifyBestEffort`, which logs and continues so one bad row cannot stop a batch.
+- 2026-07-30 — The actor never receives their own notification — being told about the thing you
+  just did is noise, and noise is how a badge gets ignored.
+- 2026-07-30 — The actor's display name is resolved inside `NotificationsService`, not at each
+  call site — the access token carries id, email and roles but no name, so every controller's
+  `context.actorName` is null. One lookup in one place is what makes the copy say "approved by
+  Rana"; it runs only once there is a recipient.
+- 2026-07-30 — Notifications poll every 30s with `refetchIntervalInBackground: false`, and the
+  list only loads when the bell is open — with no websocket (ruled out at this scale) the interval
+  *is* the system's latency, and the background flag is what stops tabs left open overnight
+  polling until morning.

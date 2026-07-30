@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Eye, RefreshCcw, Radio, X } from 'lucide-react';
 import {
-  AUDIT_ENTITY_TYPES,
   PAGINATION_DEFAULT_LIMIT,
+  PAGINATION_MAX_LIMIT,
   Role,
+  type AuditDecision,
   type AuditEntry,
-  type AuditEntityType,
   type AuditOutcome,
   type ListAuditQuery,
 } from '@ims/shared';
@@ -13,11 +13,18 @@ import { Button } from '@/components/ui/Button';
 import { Badge, Pagination, Panel, PageHeader, Table } from '@/components/ui/primitives';
 import { EmptyState, QueryBoundary, SkeletonRows } from '@/components/ui/states';
 import { t } from '@/i18n/en';
-import { useAuditLog, useAuditLogEntry } from './api';
+import { useAuditLog, useAuditLogEntry, useUsers } from './api';
 
 const ROLE_LABELS: Record<Role, string> = {
   ...t.roles,
 };
+
+/** Populates the user filter. Inactive users included — they still own historical rows. */
+const AUDIT_ACTOR_QUERY = {
+  page: 1,
+  limit: PAGINATION_MAX_LIMIT,
+  includeInactive: true,
+} as const;
 
 /**
  * Admin-only page that shows every state-changing action taken in the system, newest first.
@@ -27,25 +34,28 @@ const ROLE_LABELS: Record<Role, string> = {
  */
 export function AuditLogPage() {
   const [page, setPage] = useState(1);
-  // Three filters, matching the API contract: actor, entity, date range (the range is one
-  // filter with two bounds). `action`, `outcome`, `ip` and free-text search were dropped —
-  // see the note on `listAuditQuerySchema`.
+  // Three filters, matching the API contract: user, date range (one filter, two bounds), and
+  // approved/rejected approvals. See the note on `listAuditQuerySchema` for what was dropped.
   const [actorId, setActorId] = useState('');
-  const [entityType, setEntityType] = useState<AuditEntityType | ''>('');
+  const [decision, setDecision] = useState<AuditDecision | ''>('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [detailsFor, setDetailsFor] = useState<string | null>(null);
+
+  // Inactive users are included: they still appear as the actor on historical rows, and an
+  // audit log that cannot filter by someone who has since left is not much of an audit log.
+  const users = useUsers(AUDIT_ACTOR_QUERY);
 
   const query = useMemo<ListAuditQuery>(
     () => ({
       page,
       limit: PAGINATION_DEFAULT_LIMIT,
-      ...(actorId.trim() ? { actorId: actorId.trim() } : {}),
-      ...(entityType ? { entityType } : {}),
+      ...(actorId ? { actorId } : {}),
+      ...(decision ? { decision } : {}),
       ...(from ? { from: new Date(from) } : {}),
       ...(to ? { to: new Date(to) } : {}),
     }),
-    [page, actorId, entityType, from, to],
+    [page, actorId, decision, from, to],
   );
 
   const audit = useAuditLog(query);
@@ -53,7 +63,7 @@ export function AuditLogPage() {
   // Auto-reset to page 1 whenever a filter changes — but not on page changes themselves.
   useEffect(() => {
     setPage(1);
-  }, [actorId, entityType, from, to]);
+  }, [actorId, decision, from, to]);
 
   // A page-pinned user should not lose their view because new rows arrived. Detect fresh
   // entries only when the user is sitting on page 1.
@@ -62,14 +72,14 @@ export function AuditLogPage() {
 
   function clearFilters() {
     setActorId('');
-    setEntityType('');
+    setDecision('');
     setFrom('');
     setTo('');
   }
 
   const activeFilters =
-    Number(Boolean(actorId.trim())) +
-    Number(Boolean(entityType)) +
+    Number(Boolean(actorId)) +
+    Number(Boolean(decision)) +
     Number(Boolean(from) || Boolean(to));
 
   return (
@@ -97,28 +107,33 @@ export function AuditLogPage() {
           <div className="grid flex-1 grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
             <label className="flex flex-col gap-1">
               <span className="text-xs font-medium text-ink-muted">{t.auditLog.filters.actor}</span>
-              <input
+              {/* A picker, not a free-text name: two people can share a display name, and the
+                  row keeps its own actor_name snapshot for display even after a rename. */}
+              <select
                 value={actorId}
                 onChange={(event) => setActorId(event.target.value)}
-                placeholder="uuid"
                 className="rounded-[--radius-control] border border-border bg-surface px-2.5 py-1.5 text-sm"
-              />
+              >
+                <option value="">{t.auditLog.filters.anyUser}</option>
+                {(users.data?.items ?? []).map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.fullName} ({user.email})
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="flex flex-col gap-1">
               <span className="text-xs font-medium text-ink-muted">
-                {t.auditLog.filters.entityType}
+                {t.auditLog.filters.decision}
               </span>
               <select
-                value={entityType}
-                onChange={(event) => setEntityType(event.target.value as AuditEntityType | '')}
+                value={decision}
+                onChange={(event) => setDecision(event.target.value as AuditDecision | '')}
                 className="rounded-[--radius-control] border border-border bg-surface px-2.5 py-1.5 text-sm"
               >
                 <option value="">{t.auditLog.filters.any}</option>
-                {AUDIT_ENTITY_TYPES.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
+                <option value="APPROVED">{t.auditLog.filters.decisionApproved}</option>
+                <option value="REJECTED">{t.auditLog.filters.decisionRejected}</option>
               </select>
             </label>
             <label className="flex flex-col gap-1">

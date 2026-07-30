@@ -1,5 +1,12 @@
 import type { ColumnType, Generated, Insertable, Selectable, Updateable } from 'kysely';
-import type { AuditAction, AuditEntityType, AuditOutcome, Role } from '@ims/shared';
+import type {
+  AuditAction,
+  AuditEntityType,
+  AuditOutcome,
+  NotificationSeverity,
+  NotificationType,
+  Role,
+} from '@ims/shared';
 
 /**
  * Hand-maintained mirror of the migrated schema. It is not generated, because a generator
@@ -382,6 +389,30 @@ export interface AuditLogTable {
   created_at: CreatedAt;
 }
 
+/* -------------------------------------------------------------- notifications */
+
+/**
+ * One row per recipient per event. Unlike `audit_log` this table is mutable — `read_at` is the
+ * whole point — and a user clearing their own list is a legitimate delete.
+ */
+export interface NotificationsTable {
+  id: Generated<string>;
+  user_id: string;
+  type: NotificationType;
+  severity: NotificationSeverity;
+  /** Rendered at write time so history keeps saying what the user was actually told. */
+  title: string;
+  body: string | null;
+  link: string | null;
+  entity_type: string | null;
+  entity_id: string | null;
+  entity_ref: string | null;
+  actor_id: string | null;
+  actor_name: string | null;
+  read_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
+  created_at: CreatedAt;
+}
+
 /* ------------------------------------------------------------------------ BOM */
 
 export interface BomsTable {
@@ -436,6 +467,7 @@ export interface BomLinesTable {
 export interface Database {
   app_settings: AppSettingsTable;
   audit_log: AuditLogTable;
+  notifications: NotificationsTable;
   boms: BomsTable;
   bom_requisitions: BomRequisitionsTable;
   bom_lines: BomLinesTable;

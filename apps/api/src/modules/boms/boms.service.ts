@@ -26,6 +26,7 @@ import { RequisitionsRepository } from '../requisitions/requisitions.repository'
 import { PdfRendererService } from '../pdf/pdf-renderer.service';
 import { PdfSigningService } from '../pdf/pdf-signing.service';
 import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import type { AuditContext } from '../audit/audit-context';
 import { BomsRepository } from './boms.repository';
 import { renderBomHtml } from './bom-pdf.template';
@@ -92,6 +93,7 @@ export class BomsService {
     private readonly pdfRenderer: PdfRendererService,
     private readonly pdfSigning: PdfSigningService,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /* ------------------------------------------------------------ generation */
@@ -282,6 +284,46 @@ export class BomsService {
           tx,
         );
       }
+
+      // Who cares about a BOM depends entirely on which way it went. A bounce puts the sources
+      // back in front of their approvers and is the requesters' problem again; a clean
+      // generation is news for the requesters and for Admin, who take it to Accounts.
+      const requesterIds = await tx
+        .selectFrom('requisitions')
+        .where(
+          'id',
+          'in',
+          sources.map((source) => source.requisitionId),
+        )
+        .select('requester_id')
+        .execute()
+        .then((rows) => rows.map((row) => row.requester_id));
+
+      const audience = overBudget
+        ? [
+            ...requesterIds,
+            ...(await Promise.all(
+              sources.map((source) =>
+                this.notifications.pendingApproversFor(source.requisitionId, tx),
+              ),
+            ).then((lists) => lists.flat())),
+          ]
+        : [...requesterIds, ...(await this.notifications.usersWithRole(Role.ADMIN, tx))];
+
+      await this.notifications.notify(
+        {
+          type: overBudget ? 'bom.over_budget_bounced' : 'bom.generated',
+          userIds: audience,
+          ref: bomNo,
+          link: `/boms/${bom.id}`,
+          entityType: 'bom',
+          entityId: bom.id,
+          actorId,
+          actorName: context.actorName ?? null,
+          context: { amount: String(subtotal) },
+        },
+        tx,
+      );
 
       return bom.id;
     });
@@ -531,6 +573,37 @@ export class BomsService {
           },
         },
         { ...context, actorId, actorName: context.actorName ?? null },
+        tx,
+      );
+
+      // Voiding frees the source requisitions again, so the IMs (who will regenerate) and the
+      // requesters (whose request just moved backwards) both need to know.
+      await this.notifications.notify(
+        {
+          type: 'bom.voided',
+          userIds: [
+            ...(await this.notifications.usersWithRole(Role.INVENTORY_MANAGER, tx)),
+            ...(sourceIds.length === 0
+              ? []
+              : await tx
+                  .selectFrom('requisitions')
+                  .where(
+                    'id',
+                    'in',
+                    sourceIds.map((source) => source.requisition_id),
+                  )
+                  .select('requester_id')
+                  .execute()
+                  .then((rows) => rows.map((row) => row.requester_id))),
+          ],
+          ref: existing.bom_no,
+          link: `/boms/${id}`,
+          entityType: 'bom',
+          entityId: id,
+          actorId,
+          actorName: context.actorName ?? null,
+          context: { note: input.reason },
+        },
         tx,
       );
     });

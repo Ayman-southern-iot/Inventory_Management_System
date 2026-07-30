@@ -77,7 +77,14 @@ export const AUDIT_ACTIONS = [
   'requisition.create',
   'requisition.update',
   'requisition.submit',
-  'requisition.decide',
+  /**
+   * Approve and reject are separate actions rather than one `requisition.decide` carrying the
+   * outcome in `metadata`. The admin filter is "approved approvals / rejected approvals", and
+   * a filter on `action` uses `audit_log_action_idx`; a filter on a jsonb field inside
+   * `metadata` cannot.
+   */
+  'requisition.approve',
+  'requisition.reject',
   'requisition.withdraw',
   'requisition.cancel',
   // Delegations
@@ -151,6 +158,25 @@ export const auditEntityTypeSchema = z.enum(
   AUDIT_ENTITY_TYPES as readonly [AuditEntityType, ...AuditEntityType[]],
 );
 
+/* -------------------------------------------------------- decision filter */
+
+/**
+ * The admin's third filter: "approved approvals" / "rejected approvals".
+ *
+ * A decision is an approval outcome wherever it happens — a requisition approval and an IM's
+ * borrow approval are the same question to whoever is reading the log. Each option therefore
+ * maps to a *set* of actions rather than one, and the repository turns it into a single
+ * `action IN (...)` predicate against `audit_log_action_idx`.
+ */
+export const AUDIT_DECISIONS = ['APPROVED', 'REJECTED'] as const;
+export type AuditDecision = (typeof AUDIT_DECISIONS)[number];
+export const auditDecisionSchema = z.enum(AUDIT_DECISIONS as readonly [AuditDecision, ...AuditDecision[]]);
+
+export const AUDIT_DECISION_ACTIONS: Record<AuditDecision, readonly AuditAction[]> = {
+  APPROVED: ['requisition.approve', 'borrowing.approve'],
+  REJECTED: ['requisition.reject', 'borrowing.reject'],
+};
+
 export const AUDIT_OUTCOMES = ['success', 'failure', 'denied', 'error'] as const;
 export type AuditOutcome = (typeof AUDIT_OUTCOMES)[number];
 export const auditOutcomeSchema = z.enum(AUDIT_OUTCOMES as readonly [AuditOutcome, ...AuditOutcome[]]);
@@ -194,24 +220,27 @@ export type AuditEntry = z.infer<typeof auditEntrySchema>;
 /**
  * Filter / paginate the audit feed.
  *
- * Deliberately three filters and no more — actor, entity, date — which is exactly what
- * `plan/PHASE-06-hardening.md` task 6.1 specifies. The first cut also shipped `action`,
- * `entityId`, `outcome`, `ip` and a free-text `search`; every one of them cost an index on a
- * table that takes a write on *every* mutation in the system, to serve a filter combination
- * an admin of a twelve-person tool does not reach for. The date range is one filter with two
- * bounds, not two filters.
+ * Deliberately three filters and no more: **user, date range, and approval decision**. The
+ * first cut shipped nine (`action`, `entityId`, `outcome`, `ip`, free-text `search`, ...), and
+ * every one of them cost an index — including a GIN index — on a table written on *every*
+ * mutation in the system, to serve combinations an admin of a twelve-person tool never reaches
+ * for. The date range is one filter with two bounds, not two filters.
  *
  * `page`/`limit` inherit the existing pagination defaults so the admin page matches every
  * other list in the product.
  */
 export const listAuditQuerySchema = paginationQuerySchema.extend({
-  /** Filter 1 — actor. */
+  /**
+   * Filter 1 — the user. A user id rather than a name string: the admin page picks from a real
+   * user list, so the filter stays exact when two people share a first name, survives a rename
+   * (the row keeps its own `actor_name` snapshot for display), and uses `audit_log_actor_idx`.
+   */
   actorId: uuidSchema.optional(),
-  /** Filter 2 — entity. */
-  entityType: auditEntityTypeSchema.optional(),
-  /** Filter 3 — date range. Inclusive of `from`, exclusive of `to`. */
+  /** Filter 2 — date range. Inclusive of `from`, exclusive of `to`. */
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),
+  /** Filter 3 — approved or rejected approvals. See `AUDIT_DECISION_ACTIONS`. */
+  decision: auditDecisionSchema.optional(),
   /** A real-world backend exposes `limit` 1..100; the audit feed inherits the same ceiling. */
   limit: z.coerce.number().int().min(1).max(PAGINATION_MAX_LIMIT).default(PAGINATION_DEFAULT_LIMIT),
 });
