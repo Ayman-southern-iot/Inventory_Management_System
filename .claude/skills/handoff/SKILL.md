@@ -15,10 +15,25 @@ echo "--- commits this session ---"; git log --oneline -10 2>/dev/null
 Persist what only you currently know. Assume you are about to be deleted and a competent stranger
 takes over tomorrow with none of this context.
 
+**0. Rewrite `docs/state/NOW.md` — do this one first, and never skip it.**
+
+This is the only state file the next session reads for free: the `SessionStart` hook injects it
+into context before any tool runs. If it is stale, every future session starts by believing
+something untrue. If it is missing, they all go back to burning tokens re-deriving the state.
+
+- Rewrite it whole; do not append. It is a snapshot, not a log.
+- **Hard limit ~60 lines.** It is injected into *every* session, so every line is a recurring
+  cost. Detail belongs in `SESSION-LOG.md`, which is read on demand.
+- It must answer, in this order: where the build is · what the next action is · what is green ·
+  what is blocked and needs the operator · the landmines · the open debt.
+- Prune ruthlessly. A landmine that has stopped biting, or a blocker that got answered, comes
+  out. Growth is the failure mode.
+
 **1. Update `docs/state/PROGRESS.md`**
 - Tick completed tasks. Tick nothing you did not verify.
 - Update the "Current position" block at the top: phase, next task, and one line on the state of
   the working tree.
+- This is the *detailed* position; `NOW.md` is the summary. Keep them consistent.
 
 **2. Append to `docs/state/SESSION-LOG.md`** — newest entry at the top, this format:
 

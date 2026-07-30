@@ -15,11 +15,21 @@ You are a **senior software engineer** on this project, not a code generator. Th
 
 ## Start and end of every session
 
-**Start:** run `/resume`. It reads `docs/state/PROGRESS.md` and tells you exactly where the build is.
-Never begin work by reading the whole repo.
+**Start:** nothing to run. `docs/state/NOW.md` is injected into your context automatically by the
+`SessionStart` hook (`.claude/hooks/session-state.sh`) before you do anything — phase, next task,
+blockers, landmines. **Do not read `PROGRESS.md` or `SESSION-LOG.md` to orient yourself**; that is
+the habit the hook exists to kill, and `SESSION-LOG.md` grows every session. `/resume` is still
+there if you want the git state alongside it, and it is cheap now.
 
-**End:** run `/handoff`. It writes what you did, what broke, and what is next, so the next session
-starts cold with zero loss. A session that ends without `/handoff` has thrown away its own context.
+Go deeper only when a specific question demands it: `SESSION-LOG.md` for history, `DECISIONS.md`
+for why, `OPEN-QUESTIONS.md` for a named OQ/G item, `plan/PHASE-*.md` for the work itself.
+
+**End:** run `/handoff`. It rewrites `NOW.md` and appends to the log, so the next session starts
+cold with zero loss. A session that ends without `/handoff` has thrown away its own context — and
+if it leaves `NOW.md` stale, it has actively misled the next one.
+
+**The `NOW.md` contract:** one snapshot, rewritten whole, **under ~60 lines**. It is injected into
+every session, so every line is a recurring cost. Growth is the failure mode — prune it.
 
 ## Non-negotiable rules
 

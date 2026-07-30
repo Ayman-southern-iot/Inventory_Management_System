@@ -7,18 +7,17 @@ allowed-tools: Read Glob Grep
 
 ## Current state
 
-```!
-cat docs/state/PROGRESS.md 2>/dev/null || echo "PROGRESS.md missing — this is a fresh repo."
-```
+**`docs/state/NOW.md` has already been injected into your context by the `SessionStart` hook.**
+It carries the phase, the next task, what is blocked, and the landmines. Do **not** cat
+`PROGRESS.md` or `SESSION-LOG.md` to orient yourself — that is the expensive habit this hook
+exists to remove, and `SESSION-LOG.md` grows every session.
 
-```!
-echo "--- last 3 session entries ---"
-tail -n 40 docs/state/SESSION-LOG.md 2>/dev/null || echo "(no session log yet)"
-```
+If the brief is missing (hook not yet reloaded — the user may need to open `/hooks` once), and
+only then, fall back to `cat docs/state/NOW.md`.
 
 ```!
 echo "--- git ---"
-git log --oneline -8 2>/dev/null
+git log --oneline -5 2>/dev/null
 echo "--- working tree ---"
 git status --short 2>/dev/null | head -20
 ```
@@ -28,10 +27,12 @@ git status --short 2>/dev/null | head -20
 You have just been handed a project mid-build. Orient yourself in this order and **do not read
 anything else yet**:
 
-1. From the state above, identify the **current phase** and the **first unchecked task** in it.
-2. Open only that phase file (`plan/PHASE-NN-*.md`) and read the task's acceptance criteria.
+1. The injected brief already names the current phase and the next task. Trust it — it was
+   written by the session that did the work.
+2. Open only that phase file (`plan/PHASE-NN-*.md`) and read that task's acceptance criteria.
 3. If the phase file points at a reference doc, open **that one file** from `docs/reference/`.
-4. Check `docs/state/OPEN-QUESTIONS.md` for anything blocking that specific task.
+4. The brief lists what is blocked. Open `docs/state/OPEN-QUESTIONS.md` only to read the specific
+   OQ/G items it named — do not read the whole file.
 
 Then report back in this shape, in under 15 lines:
 
