@@ -35,6 +35,13 @@ export const ErrorCode = {
   APPROVAL_ALREADY_ACTED: 'APPROVAL_ALREADY_ACTED',
   NOT_YOUR_APPROVAL: 'NOT_YOUR_APPROVAL',
   APPROVER_SLOT_UNASSIGNED: 'APPROVER_SLOT_UNASSIGNED',
+  /**
+   * Distinct from the slot code on purpose. Below the expense threshold the chain does not use
+   * the approver slots at all — it uses the single `SUBTHRESHOLD_APPROVER_USER_ID` setting. The
+   * web app picks its copy from the code, so sharing one code meant the UI told an admin their
+   * approver slots were unassigned while the slots screen showed them correctly filled in.
+   */
+  SUBTHRESHOLD_APPROVER_UNASSIGNED: 'SUBTHRESHOLD_APPROVER_UNASSIGNED',
 
   // BOM
   BOM_REQUISITION_NOT_APPROVED: 'BOM_REQUISITION_NOT_APPROVED',

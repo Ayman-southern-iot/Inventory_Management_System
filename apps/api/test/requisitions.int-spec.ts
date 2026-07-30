@@ -239,7 +239,7 @@ describe('requisitions and approvals', () => {
       const submitted = await requester.client.post(`/requisitions/${created.body.id}/submit`).send();
 
       expect(submitted.status).toBe(409);
-      expect(submitted.body.code).toBe(ErrorCode.APPROVER_SLOT_UNASSIGNED);
+      expect(submitted.body.code).toBe(ErrorCode.SUBTHRESHOLD_APPROVER_UNASSIGNED);
       // Must name the sub-threshold setting, not "Approver 1".
       expect(submitted.body.message).toContain('below the expense threshold');
     });
@@ -263,6 +263,9 @@ describe('requisitions and approvals', () => {
       const submitted = await requester.client.post(`/requisitions/${created.body.id}/submit`).send();
 
       expect(submitted.status).toBe(409);
+      // Its own code, because the web app picks its copy from the code and would otherwise show
+      // the approver-slots wording however specific the server's message was.
+      expect(submitted.body.code).toBe(ErrorCode.SUBTHRESHOLD_APPROVER_UNASSIGNED);
       expect(submitted.body.message).toContain('Sub-threshold approver');
       // It may *mention* the slots to say they do not apply; what it must never do is claim
       // they are unassigned, which is what sent the admin to the wrong screen.

@@ -56,7 +56,9 @@ export class ApproverSlotUnassignedError extends DomainError {
 export class SubthresholdApproverUnassignedError extends DomainError {
   constructor(reason: 'unset' | 'inactive') {
     super(
-      ErrorCode.APPROVER_SLOT_UNASSIGNED,
+      // Its own code, not the slot one: the web app selects copy by code, so sharing a code
+      // means the UI shows the slot wording no matter what message the server sends.
+      ErrorCode.SUBTHRESHOLD_APPROVER_UNASSIGNED,
       reason === 'unset'
         ? 'No approver has been chosen for requests below the expense threshold. An administrator must pick one in Admin → Settings → Sub-threshold approver. (The Approver 1 and 2 slots do not apply below the threshold.)'
         : 'The approver chosen for requests below the expense threshold is deactivated. An administrator must pick another in Admin → Settings → Sub-threshold approver.',

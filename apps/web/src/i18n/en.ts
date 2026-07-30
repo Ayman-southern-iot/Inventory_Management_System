@@ -685,7 +685,11 @@ export const t = {
     APPROVAL_ALREADY_ACTED: 'Someone already acted on this approval. Refresh to see the outcome.',
     NOT_YOUR_APPROVAL: 'That approval is not assigned to you.',
     APPROVER_SLOT_UNASSIGNED:
-      'An approver slot has not been assigned yet. An administrator must set it before this can be submitted.',
+      'An approver slot has not been assigned yet. An administrator must set it in Settings → Approver slots before this can be submitted.',
+    // Names the setting that is actually missing. Requisitions below the expense threshold do
+    // not use the approver slots, so pointing at that screen sent admins somewhere already correct.
+    SUBTHRESHOLD_APPROVER_UNASSIGNED:
+      'No approver is set for requests below the expense threshold. An administrator must choose one in Settings → Sub-threshold approver. (Approver 1 and 2 do not apply below the threshold.)',
     UNAUTHENTICATED: 'Please sign in.',
     INVALID_CREDENTIALS: 'Email or password is incorrect.',
     TOKEN_EXPIRED: 'Your session expired. Please sign in again.',
