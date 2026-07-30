@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { CommonModule } from '../../common/common.module';
 import { FilesModule } from '../files/files.module';
+import { StockModule } from '../stock/stock.module';
+import { ProductsModule } from '../products/products.module';
 import { AuditModule } from '../audit/audit.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { RequisitionsModule } from '../requisitions/requisitions.module';
@@ -16,7 +18,15 @@ import { FundsService } from './funds.service';
  * reimplemented here with subtly different rules.
  */
 @Module({
-  imports: [RequisitionsModule, AuditModule, NotificationsModule, CommonModule, FilesModule],
+  imports: [
+    RequisitionsModule,
+    AuditModule,
+    NotificationsModule,
+    CommonModule,
+    FilesModule,
+    StockModule,
+    ProductsModule,
+  ],
   controllers: [FundsController],
   providers: [FundsService, FundsRepository],
   exports: [FundsService, FundsRepository],

@@ -92,6 +92,10 @@ export const NOTIFICATION_COPY: Record<NotificationType, NotificationTemplate> =
     // Only mentioned when something actually went back, so the ordinary case stays quiet.
     body: (c) => (c.amount ? `${c.amount} was returned to Accounts` : null),
   },
+  'requisition.stocked': {
+    severity: 'success',
+    title: (ref) => `Everything on requisition ${ref} is now in stock`,
+  },
 
   /* ------------------------------------------------------------- borrowing */
   'borrowing.requested': {

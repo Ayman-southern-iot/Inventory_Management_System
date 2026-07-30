@@ -193,10 +193,12 @@ export class FundsRepository {
         'purchase_lines.purchase_id',
         'purchase_lines.requisition_item_id',
         'requisition_items.item_name',
+        'requisition_items.product_id',
         'purchase_lines.quantity',
         'purchase_lines.unit_cost',
         'purchase_lines.over_bom_quantity',
         'purchase_lines.over_bom_note',
+        'purchase_lines.received_quantity',
       ])
       .orderBy('purchase_lines.created_at')
       .execute();
@@ -214,6 +216,9 @@ export class FundsRepository {
         lineTotal: Math.round(unitCost * row.quantity * 100) / 100,
         overBomQuantity: row.over_bom_quantity,
         overBomNote: row.over_bom_note,
+        receivedQuantity: row.received_quantity,
+        outstandingQuantity: row.quantity - row.received_quantity,
+        productId: row.product_id,
       });
       linesByPurchase.set(row.purchase_id, list);
     }
@@ -242,6 +247,85 @@ export class FundsRepository {
       .select((eb) => eb.fn.sum<string>('total_amount').as('total'))
       .executeTakeFirst();
     return money(row?.total ?? null);
+  }
+
+  /* -------------------------------------------------- receiving to stock */
+
+  /**
+   * One purchase line with everything receiving it needs, locked.
+   *
+   * `FOR UPDATE` on the line: two IMs receiving the same delivery at once would otherwise both
+   * read the same `received_quantity`, and the second write would overwrite rather than add —
+   * silently losing a receipt that the stock ledger has already recorded.
+   */
+  async lockPurchaseLine(tx: Tx, purchaseLineId: string) {
+    // Locked on its own, with no joins: `FOR UPDATE` over a join locks every table in it, which
+    // would take row locks on `purchases` and `requisition_items` that nothing here needs and
+    // that widen the deadlock surface. The related columns are read in a second, unlocked query.
+    const line = await tx
+      .selectFrom('purchase_lines')
+      .where('id', '=', purchaseLineId)
+      .select(['id', 'purchase_id', 'requisition_item_id', 'quantity', 'received_quantity'])
+      .forUpdate()
+      .executeTakeFirst();
+    if (!line) return undefined;
+
+    const [purchase, item] = await Promise.all([
+      tx
+        .selectFrom('purchases')
+        .where('id', '=', line.purchase_id)
+        .select('requisition_id')
+        .executeTakeFirst(),
+      tx
+        .selectFrom('requisition_items')
+        .where('id', '=', line.requisition_item_id)
+        .select(['product_id', 'item_name'])
+        .executeTakeFirst(),
+    ]);
+    if (!purchase || !item) return undefined;
+
+    return {
+      id: line.id,
+      quantity: line.quantity,
+      receivedQuantity: line.received_quantity,
+      requisitionItemId: line.requisition_item_id,
+      requisitionId: purchase.requisition_id,
+      productId: item.product_id,
+      itemName: item.item_name,
+    };
+  }
+
+  async addReceivedQuantity(tx: Tx, purchaseLineId: string, quantity: number): Promise<void> {
+    await tx
+      .updateTable('purchase_lines')
+      .set((eb) => ({ received_quantity: eb('received_quantity', '+', quantity) }))
+      .where('id', '=', purchaseLineId)
+      .execute();
+  }
+
+  /** Points a free-text requisition item at the catalogue product created for it. */
+  async linkRequisitionItemProduct(
+    tx: Tx,
+    requisitionItemId: string,
+    productId: string,
+  ): Promise<void> {
+    await tx
+      .updateTable('requisition_items')
+      .set({ product_id: productId })
+      .where('id', '=', requisitionItemId)
+      .execute();
+  }
+
+  /** How many purchase lines on this requisition are not yet fully received. */
+  async countOutstandingLines(requisitionId: string, executor: Db | Tx = this.db): Promise<number> {
+    const row = await executor
+      .selectFrom('purchase_lines')
+      .innerJoin('purchases', 'purchases.id', 'purchase_lines.purchase_id')
+      .where('purchases.requisition_id', '=', requisitionId)
+      .whereRef('purchase_lines.received_quantity', '<', 'purchase_lines.quantity')
+      .select((eb) => eb.fn.countAll<string>().as('count'))
+      .executeTakeFirst();
+    return Number(row?.count ?? 0);
   }
 
   /* ---------------------------------------------------------- invoices */

@@ -296,3 +296,17 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
 - 2026-07-30 — Invoices are streamed to authorised callers rather than served by signed URL, unlike
   the BOM PDF. The BOM leaves the building; an invoice never does, so a shareable link would be
   capability with no purpose. Permitted: IM, Admin, the requester, and that requisition's approvers.
+- 2026-07-30 — `StockService.receive` gained an optional transaction parameter so a caller can
+  make the stock movement and its own status change atomic. StockService remains the only writer
+  (ADR-0001) — callers hand in a transaction, never SQL. This is the shape G-14 should be fixed
+  into; 5.6 was built that way from the start rather than reproducing the bug.
+- 2026-07-30 — Receiving into stock is all-or-nothing across every line in the request, including
+  any catalogue products created for free-text lines. A half-applied delivery would leave stock on
+  the shelf that the requisition does not account for, and the nightly reconciliation cannot see
+  that class of drift because the ledger and the placements would still agree with each other.
+- 2026-07-30 — A free-text requisition line becomes a real catalogue product the first time
+  anything is received against it, and the requisition item is repointed at it. That is what makes
+  an item that entered as typed text indistinguishable afterwards from one the IM catalogued.
+- 2026-07-30 — `received_quantity` is a counter on the purchase line, not a boolean, and is capped
+  at the purchased quantity by a CHECK. Part-deliveries are normal; receiving more than was bought
+  is not a partial state but a mistake, and the database is the right place to refuse it.

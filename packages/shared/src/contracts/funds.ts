@@ -65,6 +65,15 @@ export const purchaseLineSchema = z.object({
   lineTotal: z.number(),
   overBomQuantity: z.boolean(),
   overBomNote: z.string().nullable(),
+  /** How much has reached a shelf (task 5.6). Receiving is legitimately partial. */
+  receivedQuantity: z.number().int(),
+  /** `quantity - receivedQuantity`. Zero means this line is fully in stock. */
+  outstandingQuantity: z.number().int(),
+  /**
+   * The catalogue product this line resolved to, once it has one. Null while the requisition item
+   * is still free text and nothing has been received against it.
+   */
+  productId: uuidSchema.nullable(),
 });
 export type PurchaseLine = z.infer<typeof purchaseLineSchema>;
 
@@ -147,6 +156,39 @@ export const verifyPurchaseSchema = z
     { path: ['returnNote'], message: 'Say why the money is going back' },
   );
 export type VerifyPurchaseInput = z.infer<typeof verifyPurchaseSchema>;
+
+/* -------------------------------------------------------- add to inventory */
+
+/**
+ * Creating the catalogue product for a line that was free text on the requisition.
+ *
+ * Supplied only when the requisition item has no `productId` yet. Everything else about receiving
+ * is the same either way, which is the point: an item that entered the system as "2m USB-C cable"
+ * typed into a form ends up indistinguishable from one the IM catalogued by hand.
+ */
+export const newCatalogueProductSchema = z.object({
+  productCode: z.string().trim().min(1).max(64),
+  name: z.string().trim().min(1).max(200),
+  categoryId: uuidSchema,
+  unit: z.string().trim().min(1).max(32).default('pcs'),
+});
+export type NewCatalogueProduct = z.infer<typeof newCatalogueProductSchema>;
+
+export const receiveIntoStockLineSchema = z.object({
+  purchaseLineId: uuidSchema,
+  compartmentId: uuidSchema,
+  /** May be less than the purchased quantity — a part-shipment is a normal thing to record. */
+  quantity: z.number().int().positive().max(1_000_000),
+  /** Required when the underlying requisition item is still free text; ignored otherwise. */
+  newProduct: newCatalogueProductSchema.optional(),
+});
+export type ReceiveIntoStockLine = z.infer<typeof receiveIntoStockLineSchema>;
+
+export const receiveIntoStockSchema = z.object({
+  lines: z.array(receiveIntoStockLineSchema).min(1).max(200),
+  note: z.string().trim().max(500).nullable().default(null),
+});
+export type ReceiveIntoStockInput = z.infer<typeof receiveIntoStockSchema>;
 
 /* ------------------------------------------------------------- the summary */
 

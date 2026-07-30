@@ -38,6 +38,7 @@ export const NOTIFICATION_TYPES = [
   'requisition.funds_received',
   'requisition.purchased',
   'requisition.purchase_verified',
+  'requisition.stocked',
   // Borrowing
   'borrowing.requested',
   'borrowing.approved',

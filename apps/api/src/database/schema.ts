@@ -501,6 +501,8 @@ export interface PurchaseLinesTable {
   /** Paired with `over_bom_note` by a CHECK constraint — one without the other is rejected. */
   over_bom_quantity: Generated<boolean>;
   over_bom_note: string | null;
+  /** How much of this line has reached a shelf. Capped at `quantity` by a CHECK. */
+  received_quantity: Generated<number>;
   created_at: CreatedAt;
 }
 

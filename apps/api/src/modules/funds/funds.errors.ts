@@ -61,3 +61,18 @@ export class FundingExceedsApprovedError extends DomainError {
     );
   }
 }
+
+/**
+ * Receiving more than was bought is not a partial state, it is a mistake. Named with the item so
+ * an IM working through a delivery of twenty lines knows which one to look at.
+ */
+export class ReceiveExceedsPurchasedError extends DomainError {
+  constructor(itemName: string, outstanding: number, attempted: number) {
+    super(
+      ErrorCode.VALIDATION_FAILED,
+      `Only ${outstanding} of "${itemName}" is still outstanding, so ${attempted} cannot be received.`,
+      HttpStatus.CONFLICT,
+      { itemName, outstanding, attempted },
+    );
+  }
+}

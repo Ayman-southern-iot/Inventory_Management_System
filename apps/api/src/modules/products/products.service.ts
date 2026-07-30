@@ -16,7 +16,7 @@ import type { AuditContext } from '../audit/audit-context';
 import { diffSafeFields } from '../audit/audit-sanitizer';
 import { StockService } from '../stock/stock.service';
 import { toPlacement } from '../stock/stock.mappers';
-import { ProductsRepository } from './products.repository';
+import { ProductsRepository, type Tx } from './products.repository';
 
 @Injectable()
 export class ProductsService {
@@ -41,9 +41,47 @@ export class ProductsService {
     return { ...product, placements: placements.map(toPlacement) };
   }
 
+  /**
+   * Create a product inside a transaction the caller already holds.
+   *
+   * Exists for task 5.6: a requisition line typed as free text ("2m USB-C cable") becomes a real
+   * catalogue product the moment it is received into stock, and that has to commit together with
+   * the stock movement and the requisition's status. Returning the id rather than the detail
+   * keeps it usable mid-transaction, where a read-back would see uncommitted rows.
+   *
+   * Deliberately not a second code path: `create` below is this plus its own transaction and a
+   * read-back, so the audit row and the insert stay identical for both callers.
+   */
+  async createWithin(
+    tx: Tx,
+    input: CreateProductInput,
+    context: AuditContext,
+  ): Promise<string> {
+    try {
+      return await this.insertAndAudit(tx, input, context);
+    } catch (error) {
+      throw translate(error);
+    }
+  }
+
   async create(input: CreateProductInput, context: AuditContext): Promise<ProductDetail> {
     try {
-      const id = await this.db.transaction().execute(async (tx) => {
+      const id = await this.db.transaction().execute(async (tx) =>
+        this.insertAndAudit(tx, input, context),
+      );
+      return await this.findById(id);
+    } catch (error) {
+      throw translate(error);
+    }
+  }
+
+  private async insertAndAudit(
+    tx: Tx,
+    input: CreateProductInput,
+    context: AuditContext,
+  ): Promise<string> {
+    {
+      {
         const newId = await this.repo.insert(
           {
             productCode: input.productCode,
@@ -77,10 +115,7 @@ export class ProductsService {
           tx,
         );
         return newId;
-      });
-      return await this.findById(id);
-    } catch (error) {
-      throw translate(error);
+      }
     }
   }
 

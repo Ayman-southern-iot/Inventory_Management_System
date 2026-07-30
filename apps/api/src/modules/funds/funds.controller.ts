@@ -21,10 +21,12 @@ import {
   recordFundReceiptSchema,
   recordPurchaseSchema,
   verifyPurchaseSchema,
+  receiveIntoStockSchema,
   type RecordFundReceiptInput,
   type RecordPurchaseInput,
   type RequisitionFunding,
   type VerifyPurchaseInput,
+  type ReceiveIntoStockInput,
 } from '@ims/shared';
 import { zodPipe } from '../../common/zod-validation.pipe';
 import { ConflictError, ValidationFailedError } from '../../common/errors';
@@ -160,6 +162,27 @@ export class FundsController {
   ): Promise<RequisitionFunding> {
     return this.runOnce(idempotencyKey, actor.id, `funds:verify:${id}`, async () => {
       await this.funds.verifyPurchase(id, body, actor.id, ctx);
+      return this.funds.funding(id);
+    });
+  }
+
+  /**
+   * Put a verified purchase onto the shelf. Idempotency-keyed for the same reason as the money
+   * endpoints: a double-click here would receive the delivery twice, and the ledger would be
+   * internally consistent while describing stock that does not exist.
+   */
+  @Post('receive-to-stock')
+  @Roles(Role.INVENTORY_MANAGER, Role.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async receiveIntoStock(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(zodPipe(receiveIntoStockSchema)) body: ReceiveIntoStockInput,
+    @CurrentUser() actor: RequestUser,
+    @CurrentAuditContext() ctx: AuditContext,
+    @Headers(IDEMPOTENCY_HEADER) idempotencyKey?: string,
+  ): Promise<RequisitionFunding> {
+    return this.runOnce(idempotencyKey, actor.id, `funds:stock:${id}`, async () => {
+      await this.funds.receiveIntoStock(id, body, actor.id, ctx);
       return this.funds.funding(id);
     });
   }

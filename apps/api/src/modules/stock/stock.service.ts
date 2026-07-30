@@ -88,15 +88,27 @@ export class StockService {
     private readonly audit: AuditService,
   ) {}
 
-  /** New stock arriving: a purchase received, or opening balance. */
+  /**
+   * New stock arriving: a purchase received, or opening balance.
+   *
+   * `existingTx` lets a caller join its own transaction so the receipt and whatever the caller is
+   * doing alongside it commit together — receiving a purchase into stock and marking the
+   * requisition STOCKED, for instance. Without it those are two transactions with a window
+   * between them, which is the shape of the still-open G-14 bug: a crash in the gap leaves stock
+   * moved and the status not, and reconciliation cannot see it.
+   *
+   * `StockService` is still the only writer (ADR-0001). Callers hand in a transaction; they never
+   * touch `stock_placements` or `stock_ledger` themselves.
+   */
   async receive(
     input: ReceiveInput,
     context: StockContext,
     auditContext?: AuditContext,
+    existingTx?: Tx,
   ): Promise<PlacementRow> {
     this.assertPositive(input.quantity);
 
-    return this.db.transaction().execute(async (tx) => {
+    const run = async (tx: Tx): Promise<PlacementRow> => {
       await this.assertProductIsTrackable(tx, input.productId);
       await this.assertCompartmentUsable(tx, input.compartmentId);
 
@@ -143,7 +155,9 @@ export class StockService {
       }
 
       return updated;
-    });
+    };
+
+    return existingTx ? run(existingTx) : this.db.transaction().execute(run);
   }
 
   /**

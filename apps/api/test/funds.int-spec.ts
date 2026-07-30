@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { Role, type RequisitionFunding } from '@ims/shared';
 import { createTestApp, httpClient, type HttpClient, type TestApp } from './app';
 import { createDepartment, createUser, login, resetData, seedSubthresholdApprover } from './factories';
+import { createStockFixture, type StockFixture } from './stock-factories';
 
 /**
  * Phase 05 task 5.4 — the money half of the lifecycle.
@@ -16,6 +17,7 @@ describe('funds and purchasing', () => {
   let requester: { id: string; client: HttpClient };
   let approver: { id: string; client: HttpClient };
   let departmentId: string;
+  let fixture: StockFixture;
 
   beforeAll(async () => {
     ctx = await createTestApp();
@@ -31,6 +33,7 @@ describe('funds and purchasing', () => {
     requester = await signIn([Role.GENERAL]);
     approver = await signIn([Role.GENERAL, Role.APPROVER]);
     departmentId = (await createDepartment(ctx.db)).id;
+    fixture = await createStockFixture(ctx.db);
     await seedSubthresholdApprover(ctx, approver.id);
   });
 
@@ -409,6 +412,187 @@ describe('funds and purchasing', () => {
     expect((await bystander.client.get(path)).status).toBe(403);
   });
 
+  /* --------------------------------------------------- receiving to stock */
+
+  it('receives a verified purchase into stock, creating the catalogue product', async () => {
+    const req = await verified(5000, 4000);
+    const funding = await fundingOf(req.id);
+    const line = funding.purchases[0]!.lines[0]!;
+    // The requisition line was free text, so it has no product yet.
+    expect(line.productId).toBeNull();
+
+    const stocked = await im.client.post(`/requisitions/${req.id}/receive-to-stock`).send({
+      lines: [
+        {
+          purchaseLineId: line.id,
+          compartmentId: fixture.compartmentA,
+          quantity: 1,
+          newProduct: {
+            productCode: `RCV-${Date.now() % 100000}`,
+            name: 'Widget',
+            categoryId: fixture.categoryId,
+            unit: 'pcs',
+          },
+        },
+      ],
+    });
+    expect(stocked.status).toBe(200);
+    expect(await statusOf(req.id)).toBe('STOCKED');
+
+    const after = (stocked.body as RequisitionFunding).purchases[0]!.lines[0]!;
+    expect(after.receivedQuantity).toBe(1);
+    expect(after.outstandingQuantity).toBe(0);
+    // The free-text line is now a real catalogue product, and the item points at it.
+    expect(after.productId).not.toBeNull();
+
+    // The stock actually moved, and the ledger row traces back to the requisition.
+    const ledger = await ctx.db
+      .selectFrom('stock_ledger')
+      .where('ref_type', '=', 'REQUISITION')
+      .where('ref_id', '=', req.id)
+      .selectAll()
+      .execute();
+    expect(ledger).toHaveLength(1);
+    expect(ledger[0]!.movement_type).toBe('RECEIPT');
+    expect(ledger[0]!.quantity).toBe(1);
+
+    const placement = await ctx.db
+      .selectFrom('stock_placements')
+      .where('product_id', '=', after.productId!)
+      .selectAll()
+      .executeTakeFirst();
+    expect(placement?.quantity).toBe(1);
+  });
+
+  it('stays PURCHASE_VERIFIED while any line is only part-received', async () => {
+    const req = await verified(5000, 4000, 3);
+    const line = (await fundingOf(req.id)).purchases[0]!.lines[0]!;
+
+    const partial = await im.client.post(`/requisitions/${req.id}/receive-to-stock`).send({
+      lines: [
+        {
+          purchaseLineId: line.id,
+          compartmentId: fixture.compartmentA,
+          quantity: 2,
+          newProduct: {
+            productCode: `PART-${Date.now() % 100000}`,
+            name: 'Widget',
+            categoryId: fixture.categoryId,
+            unit: 'pcs',
+          },
+        },
+      ],
+    });
+    expect(partial.status).toBe(200);
+
+    const funding = partial.body as RequisitionFunding;
+    expect(funding.purchases[0]!.lines[0]!.receivedQuantity).toBe(2);
+    expect(funding.purchases[0]!.lines[0]!.outstandingQuantity).toBe(1);
+    // A part-delivery must not flip the tracker to complete.
+    expect(await statusOf(req.id)).toBe('PURCHASE_VERIFIED');
+
+    // The rest arrives; now it is stocked. No newProduct needed — the item is catalogued.
+    const rest = await im.client.post(`/requisitions/${req.id}/receive-to-stock`).send({
+      lines: [{ purchaseLineId: line.id, compartmentId: fixture.compartmentA, quantity: 1 }],
+    });
+    expect(rest.status).toBe(200);
+    expect(await statusOf(req.id)).toBe('STOCKED');
+  });
+
+  it('refuses to receive more than was purchased', async () => {
+    const req = await verified(5000, 4000);
+    const line = (await fundingOf(req.id)).purchases[0]!.lines[0]!;
+
+    const tooMany = await im.client.post(`/requisitions/${req.id}/receive-to-stock`).send({
+      lines: [
+        {
+          purchaseLineId: line.id,
+          compartmentId: fixture.compartmentA,
+          quantity: 2,
+          newProduct: {
+            productCode: `OVER-${Date.now() % 100000}`,
+            name: 'Widget',
+            categoryId: fixture.categoryId,
+            unit: 'pcs',
+          },
+        },
+      ],
+    });
+
+    expect(tooMany.status).toBe(409);
+    // Nothing moved: the whole operation is one transaction.
+    const ledger = await ctx.db
+      .selectFrom('stock_ledger')
+      .where('ref_id', '=', req.id)
+      .selectAll()
+      .execute();
+    expect(ledger).toHaveLength(0);
+    expect(await statusOf(req.id)).toBe('PURCHASE_VERIFIED');
+  });
+
+  it('refuses a free-text line with no product details', async () => {
+    const req = await verified(5000, 4000);
+    const line = (await fundingOf(req.id)).purchases[0]!.lines[0]!;
+
+    const noProduct = await im.client.post(`/requisitions/${req.id}/receive-to-stock`).send({
+      lines: [{ purchaseLineId: line.id, compartmentId: fixture.compartmentA, quantity: 1 }],
+    });
+
+    expect(noProduct.status).toBe(400);
+    // The per-field reason lives in `details`; the top-level message is the generic envelope.
+    expect(JSON.stringify(noProduct.body.details)).toContain('catalogue');
+  });
+
+  it('rolls the whole delivery back when one line fails', async () => {
+    // Two lines; the second asks for more than was bought, so neither may land.
+    const req = await verifiedTwoLines();
+    const lines = (await fundingOf(req.id)).purchases[0]!.lines;
+    expect(lines).toHaveLength(2);
+
+    const attempt = await im.client.post(`/requisitions/${req.id}/receive-to-stock`).send({
+      lines: [
+        {
+          purchaseLineId: lines[0]!.id,
+          compartmentId: fixture.compartmentA,
+          quantity: 1,
+          newProduct: {
+            productCode: `TX1-${Date.now() % 100000}`,
+            name: 'First',
+            categoryId: fixture.categoryId,
+            unit: 'pcs',
+          },
+        },
+        {
+          purchaseLineId: lines[1]!.id,
+          compartmentId: fixture.compartmentA,
+          quantity: 99,
+          newProduct: {
+            productCode: `TX2-${Date.now() % 100000}`,
+            name: 'Second',
+            categoryId: fixture.categoryId,
+            unit: 'pcs',
+          },
+        },
+      ],
+    });
+
+    expect(attempt.status).toBe(409);
+    // The first line's stock receipt and its new product must both be gone. This is the whole
+    // reason StockService.receive takes the caller's transaction.
+    const ledger = await ctx.db
+      .selectFrom('stock_ledger')
+      .where('ref_id', '=', req.id)
+      .selectAll()
+      .execute();
+    expect(ledger).toHaveLength(0);
+    const strayProduct = await ctx.db
+      .selectFrom('products')
+      .where('name', '=', 'First')
+      .selectAll()
+      .executeTakeFirst();
+    expect(strayProduct).toBeUndefined();
+  });
+
   /* ----------------------------------------------------------- helpers */
 
   async function signIn(roles: Role[]): Promise<{ id: string; client: HttpClient }> {
@@ -504,5 +688,89 @@ describe('funds and purchasing', () => {
       .attach('file', Buffer.from('%PDF-1.4 invoice'), 'invoice.pdf');
     expect(uploaded.status).toBe(200);
     return req;
+  }
+
+  /** ...and verified, which is where receiving into stock becomes legal. */
+  async function verified(
+    funded: number,
+    spend: number,
+    quantity = 1,
+  ): Promise<{ id: string; itemId: string }> {
+    const req = await requisitionOnBom(funded);
+    await im.client.post(`/requisitions/${req.id}/send-to-accounts`).send();
+    await im.client
+      .post(`/requisitions/${req.id}/fund-receipts`)
+      .send({ amount: funded, receivedAt: new Date().toISOString() });
+    const bought = await im.client.post(`/requisitions/${req.id}/purchases`).send({
+      vendor: 'Techshop BD',
+      purchasedAt: new Date().toISOString(),
+      lines: [
+        { requisitionItemId: req.itemId, quantity, unitCost: round2(spend / quantity) },
+      ],
+    });
+    expect(bought.status).toBe(201);
+
+    const purchaseId = (await fundingOf(req.id)).purchases[0]!.id;
+    await im.client
+      .post(`/requisitions/${req.id}/purchases/${purchaseId}/invoice`)
+      .attach('file', Buffer.from('%PDF-1.4 invoice'), 'invoice.pdf');
+    const ok = await im.client.post(`/requisitions/${req.id}/verify-purchase`).send({});
+    expect(ok.status).toBe(200);
+    return req;
+  }
+
+  /** A verified purchase with two lines, for the all-or-nothing rollback test. */
+  async function verifiedTwoLines(): Promise<{ id: string }> {
+    const created = await requester.client.post('/requisitions').send({
+      departmentId,
+      urgency: 'NORMAL',
+      reason: 'Two-line delivery',
+      items: [
+        { itemName: 'First', quantity: 1, estimatedUnitPrice: 1000, productId: null, note: null },
+        { itemName: 'Second', quantity: 1, estimatedUnitPrice: 1000, productId: null, note: null },
+      ],
+    });
+    const id = created.body.id as string;
+
+    const submitted = (await requester.client.post(`/requisitions/${id}/submit`).send()).body;
+    const imApprovalId = submitted.approvals.find(
+      (a: { stage: string }) => a.stage === 'INVENTORY_MANAGER',
+    ).id;
+    const afterIm = (
+      await im.client.post(`/requisitions/approvals/${imApprovalId}/decision`).send({ approve: true })
+    ).body;
+    const approverApprovalId = afterIm.approvals.find(
+      (a: { stage: string }) => a.stage === 'APPROVER',
+    ).id;
+    await approver.client
+      .post(`/requisitions/approvals/${approverApprovalId}/decision`)
+      .send({ approve: true });
+
+    const detail = (await requester.client.get(`/requisitions/${id}`)).body;
+    const itemIds = detail.items.map((item: { id: string }) => item.id) as string[];
+
+    await im.client.post('/boms').send({
+      requisitionIds: [id],
+      lines: itemIds.map((itemId) => ({ requisitionItemId: itemId, unitCost: 1000, vendor: 'V' })),
+    });
+    await im.client.post(`/requisitions/${id}/send-to-accounts`).send();
+    await im.client
+      .post(`/requisitions/${id}/fund-receipts`)
+      .send({ amount: 2000, receivedAt: new Date().toISOString() });
+    await im.client.post(`/requisitions/${id}/purchases`).send({
+      vendor: 'Techshop BD',
+      purchasedAt: new Date().toISOString(),
+      lines: itemIds.map((itemId) => ({ requisitionItemId: itemId, quantity: 1, unitCost: 1000 })),
+    });
+    const purchaseId = (await fundingOf(id)).purchases[0]!.id;
+    await im.client
+      .post(`/requisitions/${id}/purchases/${purchaseId}/invoice`)
+      .attach('file', Buffer.from('%PDF-1.4 invoice'), 'invoice.pdf');
+    await im.client.post(`/requisitions/${id}/verify-purchase`).send({});
+    return { id };
+  }
+
+  function round2(value: number): number {
+    return Math.round(value * 100) / 100;
   }
 });

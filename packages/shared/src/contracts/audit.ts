@@ -92,6 +92,7 @@ export const AUDIT_ACTIONS = [
   'requisition.invoice_attached',
   'requisition.funds_returned',
   'requisition.purchase_verified',
+  'requisition.stocked',
   'requisition.cancel',
   // Delegations
   'delegation.create',

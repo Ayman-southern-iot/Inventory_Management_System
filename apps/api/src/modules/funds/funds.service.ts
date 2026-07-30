@@ -6,6 +6,7 @@ import {
   type RecordFundReceiptInput,
   type RecordPurchaseInput,
   type VerifyPurchaseInput,
+  type ReceiveIntoStockInput,
   type RequisitionFunding,
 } from '@ims/shared';
 import { DB } from '../../database/database.module';
@@ -17,13 +18,19 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { NOTIFICATION_LINKS } from '../notifications/notifications.links';
 import { RequisitionsRepository } from '../requisitions/requisitions.repository';
 import { FilesService } from '../files/files.service';
+import { StockService } from '../stock/stock.service';
+import { ProductsService } from '../products/products.service';
 import { FundsRepository, type Tx } from './funds.repository';
 import {
   FundingExceedsApprovedError,
   InvalidFundingTransitionError,
   InvoiceMissingError,
+  ReceiveExceedsPurchasedError,
   ReturnExceedsUnspentError,
 } from './funds.errors';
+
+/** Ledger provenance, so a receipt traces back to the requisition that caused it. */
+const REQUISITION_REF_TYPE = 'REQUISITION';
 
 /** Cents-level rounding, so every comparison agrees with the NUMERIC(14,2) columns. */
 function round2(value: number): number {
@@ -61,6 +68,8 @@ export class FundsService {
     private readonly audit: AuditService,
     private readonly notifications: NotificationsService,
     private readonly files: FilesService,
+    private readonly stock: StockService,
+    private readonly products: ProductsService,
   ) {}
 
   /* ------------------------------------------------------ sent to accounts */
@@ -510,6 +519,143 @@ export class FundsService {
         },
         tx,
       );
+
+      return requisitionId;
+    });
+  }
+
+  /* ------------------------------------------------------ add to inventory */
+
+  /**
+   * Put a verified purchase onto the shelf.
+   *
+   * The whole operation — creating any missing catalogue products, every stock receipt, the
+   * received counters, the status change, the events and the audit row — is **one transaction**.
+   * `StockService.receive` takes the transaction rather than opening its own, which is what stops
+   * this becoming the split-transaction shape of G-14: a crash halfway would otherwise leave
+   * stock on the shelf with the requisition still saying PURCHASE_VERIFIED, and the nightly
+   * reconciliation would see nothing wrong because the ledger and the placements would agree.
+   *
+   * Stock is still written only by `StockService` (ADR-0001); this service supplies the
+   * transaction, never the SQL.
+   */
+  async receiveIntoStock(
+    requisitionId: string,
+    input: ReceiveIntoStockInput,
+    actorId: string,
+    context: AuditContext,
+  ) {
+    return this.db.transaction().execute(async (tx) => {
+      const requisition = await this.lock(tx, requisitionId);
+      this.assertStatus(requisition.status, 'received into stock', [
+        RequisitionStatus.PURCHASE_VERIFIED,
+        // Receiving the rest of a part-delivered purchase.
+        RequisitionStatus.STOCKED,
+      ]);
+
+      // Sorted by purchase-line id so two IMs receiving overlapping sets take the row locks in
+      // the same order and queue instead of deadlocking (rules/40-database.md).
+      const lines = [...input.lines].sort((a, b) =>
+        a.purchaseLineId.localeCompare(b.purchaseLineId),
+      );
+
+      const received: Array<{ itemName: string; quantity: number; productId: string }> = [];
+
+      for (const line of lines) {
+        const locked = await this.repo.lockPurchaseLine(tx, line.purchaseLineId);
+        if (!locked || locked.requisitionId !== requisitionId) {
+          throw new NotFoundError('Purchase line');
+        }
+
+        const outstanding = locked.quantity - locked.receivedQuantity;
+        if (line.quantity > outstanding) {
+          throw new ReceiveExceedsPurchasedError(
+            locked.itemName,
+            outstanding,
+            line.quantity,
+          );
+        }
+
+        // A free-text requisition line becomes a real catalogue product the first time anything
+        // is received against it, and the item is repointed so the next receipt reuses it.
+        let productId = locked.productId;
+        if (!productId) {
+          if (!line.newProduct) {
+            throw new ValidationFailedError({
+              path: `lines.${line.purchaseLineId}.newProduct`,
+              message: `"${locked.itemName}" is not in the catalogue yet, so it needs product details`,
+            });
+          }
+          productId = await this.products.createWithin(
+            tx,
+            { ...line.newProduct, defaultReturnable: true, description: null },
+            context,
+          );
+          await this.repo.linkRequisitionItemProduct(tx, locked.requisitionItemId, productId);
+        }
+
+        await this.stock.receive(
+          { productId, compartmentId: line.compartmentId, quantity: line.quantity },
+          {
+            performedBy: actorId,
+            refType: REQUISITION_REF_TYPE,
+            refId: requisitionId,
+            ...(input.note ? { note: input.note } : {}),
+          },
+          // No audit context: the `requisition.stocked` row below describes the whole operation.
+          // Letting StockService write one `stock.receive` row per line would bury it.
+          undefined,
+          tx,
+        );
+
+        await this.repo.addReceivedQuantity(tx, line.purchaseLineId, line.quantity);
+        received.push({ itemName: locked.itemName, quantity: line.quantity, productId });
+      }
+
+      // Fully stocked only when nothing is outstanding anywhere on the requisition — counted from
+      // the rows, so a part-delivery cannot flip the tracker to complete.
+      const outstandingLines = await this.repo.countOutstandingLines(requisitionId, tx);
+      const fullyStocked = outstandingLines === 0;
+
+      if (fullyStocked) {
+        await this.requisitions.setStatus(tx, requisitionId, RequisitionStatus.STOCKED, false);
+      }
+
+      await this.requisitions.appendEvent(
+        tx,
+        requisitionId,
+        RequisitionEventType.STOCKED,
+        actorId,
+        { lines: received.length, fullyStocked, outstandingLines },
+      );
+      await this.audit.record(
+        {
+          action: 'requisition.stocked',
+          entityType: 'requisition',
+          entityId: requisitionId,
+          entityRef: requisition.requisition_no,
+          summary: `Received ${received.length} line(s) of ${requisition.requisition_no} into stock`,
+          metadata: { received, fullyStocked, outstandingLines },
+        },
+        context,
+        tx,
+      );
+
+      if (fullyStocked) {
+        await this.notifications.notify(
+          {
+            type: 'requisition.stocked',
+            userIds: [requisition.requester_id],
+            ref: requisition.requisition_no,
+            link: NOTIFICATION_LINKS.requisition(requisitionId),
+            entityType: 'requisition',
+            entityId: requisitionId,
+            actorId,
+            actorName: context.actorName,
+          },
+          tx,
+        );
+      }
 
       return requisitionId;
     });
