@@ -5,10 +5,13 @@ import {
   HttpCode,
   HttpStatus,
   Post,
+  Res,
+  StreamableFile,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
 import { Role, type StoredFile } from '@ims/shared';
 import { CurrentUser, Roles } from '../auth/auth.decorators';
 import type { RequestUser } from '../auth/request-user';
@@ -33,6 +36,26 @@ export class ProfileController {
   @Roles(Role.APPROVER, Role.INVENTORY_MANAGER, Role.ADMIN)
   async current(@CurrentUser() actor: RequestUser): Promise<{ signature: StoredFile | null }> {
     return { signature: await this.signatures.currentFor(actor.id) };
+  }
+
+  /**
+   * The image itself, for the preview on the profile screen.
+   *
+   * Needs no signed URL because it needs no sharing: it serves the caller their own signature and
+   * nothing else, so the bearer token is the whole authorization. The client fetches it as a blob
+   * rather than pointing an `<img src>` at it, since an img tag cannot carry the token.
+   */
+  @Get('signature/content')
+  @Roles(Role.APPROVER, Role.INVENTORY_MANAGER, Role.ADMIN)
+  async content(
+    @CurrentUser() actor: RequestUser,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<StreamableFile> {
+    const { contents, mimeType } = await this.signatures.readOwn(actor.id);
+    response.setHeader('Content-Type', mimeType);
+    // A signature is not something to leave in a shared cache.
+    response.setHeader('Cache-Control', 'private, no-store');
+    return new StreamableFile(contents);
   }
 
   /**

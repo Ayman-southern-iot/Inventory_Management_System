@@ -36,6 +36,22 @@ export class SignatureService {
     return this.files.describe(user.signature_file_id);
   }
 
+  /**
+   * The caller's own signature bytes. Takes a user id and reads only that user's pointer, so
+   * there is no path by which one approver reaches another's image.
+   */
+  async readOwn(userId: string): Promise<{ contents: Buffer; mimeType: string }> {
+    const user = await this.db
+      .selectFrom('users')
+      .where('id', '=', userId)
+      .select('signature_file_id')
+      .executeTakeFirst();
+    if (!user?.signature_file_id) throw new NotFoundError('Signature');
+
+    const { contents, row } = await this.files.readContents(user.signature_file_id);
+    return { contents, mimeType: row.mime_type };
+  }
+
   async upload(
     userId: string,
     file: { buffer: Buffer; originalname?: string },

@@ -268,6 +268,20 @@ export const t = {
     },
   },
 
+  signature: {
+    title: 'Signature',
+    subtitle:
+      'Used on BOMs when you approve with your signature. Approvals you have already signed keep the signature they were signed with, even if you replace it here.',
+    none: 'No signature uploaded yet.',
+    upload: 'Upload signature',
+    replace: 'Replace signature',
+    remove: 'Remove',
+    uploadedOn: (when: string) => `Uploaded ${when}`,
+    accepted: 'PNG or JPEG, up to 2 MB.',
+    uploaded: 'Signature saved',
+    removed: 'Signature removed',
+    preview: 'Your signature',
+  },
   notifications: {
     title: 'Notifications',
     open: 'Open notifications',
@@ -503,6 +517,9 @@ export const t = {
     submitHint: 'Once submitted the amounts and the approver list are fixed.',
     cancelRequest: 'Cancel request',
     approve: 'Approve',
+    approveWithSignature: 'Approve with signature',
+    approveWithoutSignature: 'Approve without signature',
+    noSignatureHint: 'Upload a signature on your account page to sign approvals.',
     reject: 'Reject',
     withdraw: 'Withdraw approval',
     withdrawReason: 'Why are you withdrawing?',

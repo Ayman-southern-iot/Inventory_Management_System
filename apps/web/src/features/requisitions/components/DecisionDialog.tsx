@@ -8,6 +8,7 @@ import {
   type DecideRequisitionInput,
 } from '@ims/shared';
 import { Button } from '@/components/ui/Button';
+import { useMySignature } from '@/features/profile/api';
 import { Dialog } from '@/components/ui/Dialog';
 import { TextAreaField, TextField } from '@/components/ui/Field';
 import { useToast } from '@/components/ui/Toast';
@@ -27,12 +28,23 @@ export function DecisionDialog({ deciding, requestedAmount, onClose }: Props) {
 
   const form = useForm<DecideRequisitionInput>({
     resolver: zodResolver(decideRequisitionSchema),
-    defaultValues: { approve: true, note: null, approvedAmount: null },
+    defaultValues: { approve: true, note: null, approvedAmount: null, withSignature: false },
   });
+
+  // Only fetched while the dialog is open and we are approving — an approver's signature is
+  // irrelevant to a rejection, and the query would 403 for a role that cannot sign.
+  const signature = useMySignature(deciding?.approve === true);
+  const hasSignature = Boolean(signature.data?.signature);
 
   useEffect(() => {
     if (deciding) {
-      form.reset({ approve: deciding.approve, note: null, approvedAmount: null });
+      form.reset({
+        approve: deciding.approve,
+        note: null,
+        approvedAmount: null,
+        // Never carried over between dialogs: signing must be chosen each time.
+        withSignature: false,
+      });
     }
   }, [deciding, form]);
 
@@ -62,14 +74,43 @@ export function DecisionDialog({ deciding, requestedAmount, onClose }: Props) {
           <Button variant="secondary" onClick={onClose} disabled={form.formState.isSubmitting}>
             {t.common.cancel}
           </Button>
-          <Button
-            form="decision-form"
-            type="submit"
-            variant={isRejecting ? 'danger' : 'primary'}
-            isLoading={form.formState.isSubmitting}
-          >
-            {isRejecting ? t.requisitions.reject : t.requisitions.approve}
-          </Button>
+          {/* Approving offers both options as separate buttons rather than a checkbox: signing is
+              a distinct act, and the approver should be choosing it explicitly at the moment they
+              commit, not toggling a control they might not have noticed. A rejection is never
+              signed, so it keeps one button. */}
+          {isRejecting ? (
+            <Button
+              form="decision-form"
+              type="submit"
+              variant="danger"
+              isLoading={form.formState.isSubmitting}
+            >
+              {t.requisitions.reject}
+            </Button>
+          ) : (
+            <>
+              <Button
+                form="decision-form"
+                type="submit"
+                variant="secondary"
+                isLoading={form.formState.isSubmitting && !form.getValues('withSignature')}
+                onClick={() => form.setValue('withSignature', false)}
+              >
+                {t.requisitions.approveWithoutSignature}
+              </Button>
+              <Button
+                form="decision-form"
+                type="submit"
+                variant="primary"
+                disabled={!hasSignature}
+                title={hasSignature ? undefined : t.requisitions.noSignatureHint}
+                isLoading={form.formState.isSubmitting && form.getValues('withSignature')}
+                onClick={() => form.setValue('withSignature', true)}
+              >
+                {t.requisitions.approveWithSignature}
+              </Button>
+            </>
+          )}
         </>
       }
     >

@@ -20,6 +20,8 @@ interface RequestOptions {
   /** Skips the Authorization header and the refresh dance — login and refresh itself. */
   anonymous?: boolean;
   signal?: AbortSignal;
+  /** `blob` for binary endpoints; anything else is parsed as JSON. */
+  responseType?: 'json' | 'blob';
   /**
    * Makes the call safe to repeat. Survives the transparent retry-after-refresh below, which
    * is exactly the case that would otherwise double-submit: the first attempt can reach the
@@ -62,8 +64,12 @@ async function toApiError(response: Response): Promise<ApiError> {
 }
 
 async function rawRequest<T>(path: string, options: RequestOptions, accessToken: string | null) {
+  // FormData goes to the server untouched. Setting Content-Type ourselves would omit the
+  // multipart boundary the browser generates, and the server would reject the body as malformed.
+  const isMultipart = options.body instanceof FormData;
+
   const headers: Record<string, string> = { Accept: 'application/json' };
-  if (options.body !== undefined) headers['Content-Type'] = 'application/json';
+  if (options.body !== undefined && !isMultipart) headers['Content-Type'] = 'application/json';
   if (accessToken && !options.anonymous) headers.Authorization = `Bearer ${accessToken}`;
   if (options.idempotencyKey) headers['Idempotency-Key'] = options.idempotencyKey;
 
@@ -72,7 +78,12 @@ async function rawRequest<T>(path: string, options: RequestOptions, accessToken:
     response = await fetch(url(path), {
       method: options.method ?? 'GET',
       headers,
-      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      body:
+        options.body === undefined
+          ? undefined
+          : isMultipart
+            ? (options.body as FormData)
+            : JSON.stringify(options.body),
       signal: options.signal,
     });
   } catch (cause) {
@@ -82,6 +93,8 @@ async function rawRequest<T>(path: string, options: RequestOptions, accessToken:
 
   if (response.status === 204) return undefined as T;
   if (!response.ok) throw await toApiError(response);
+  // Binary responses (the signature preview) come back as a Blob; everything else is JSON.
+  if (options.responseType === 'blob') return (await response.blob()) as T;
   return (await response.json()) as T;
 }
 
@@ -165,6 +178,14 @@ export const api = {
   put: <T>(path: string, body?: unknown) => apiRequest<T>(path, { method: 'PUT', body }),
   patch: <T>(path: string, body?: unknown) => apiRequest<T>(path, { method: 'PATCH', body }),
   del: <T>(path: string) => apiRequest<T>(path, { method: 'DELETE' }),
+  /**
+   * Multipart upload. Takes an already-built `FormData` so the caller decides the field name the
+   * server's `FileInterceptor` expects, rather than this layer guessing it.
+   */
+  upload: <T>(path: string, form: FormData) => apiRequest<T>(path, { method: 'POST', body: form }),
+  /** Binary GET, for endpoints an `<img src>` cannot reach because it carries no bearer token. */
+  blob: (path: string, signal?: AbortSignal) =>
+    apiRequest<Blob>(path, { method: 'GET', responseType: 'blob', signal }),
   /** Login must not send a stale Authorization header from a previous session. */
   loginRequest: <T>(path: string, body: unknown) =>
     apiRequest<T>(path, { method: 'POST', body, anonymous: true }),

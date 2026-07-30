@@ -2,7 +2,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
-import { changePasswordSchema, type LoginResponse } from '@ims/shared';
+import { Role, changePasswordSchema, type LoginResponse } from '@ims/shared';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/Field';
@@ -11,6 +11,7 @@ import { useToast } from '@/components/ui/Toast';
 import { t } from '@/i18n/en';
 import { messageForError } from '@/lib/error-message';
 import { useAuth } from './auth-context';
+import { SignaturePanel } from '@/features/profile/SignaturePanel';
 import { ROUTES } from '@/routes/paths';
 
 /**
@@ -27,7 +28,8 @@ const formSchema = changePasswordSchema
 type FormValues = z.infer<typeof formSchema>;
 
 export function ChangePasswordPage() {
-  const { user, adoptSession } = useAuth();
+  const { user, adoptSession, hasRole } = useAuth();
+  const canSign = hasRole(Role.APPROVER, Role.INVENTORY_MANAGER, Role.ADMIN);
   const toast = useToast();
   const navigate = useNavigate();
 
@@ -103,6 +105,14 @@ export function ChangePasswordPage() {
           </Button>
         </form>
       </Panel>
+
+      {/* Only people who actually sign things get the panel — the API refuses everyone else
+          anyway, and showing a control that 403s is worse than not showing it. */}
+      {canSign && (
+        <div className="mt-8">
+          <SignaturePanel />
+        </div>
+      )}
     </div>
   );
 }

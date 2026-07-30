@@ -87,6 +87,10 @@ export const queryKeys = {
     list: (query: ListAuditQuery) => ['audit-log', 'list', query] as const,
     detail: (id: string) => ['audit-log', 'detail', id] as const,
   },
+  profile: {
+    all: () => ['profile'] as const,
+    signature: () => ['profile', 'signature'] as const,
+  },
   notifications: {
     all: () => ['notifications'] as const,
     list: (query: ListNotificationsQuery) => ['notifications', 'list', query] as const,
