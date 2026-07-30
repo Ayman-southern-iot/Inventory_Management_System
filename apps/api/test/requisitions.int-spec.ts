@@ -74,6 +74,19 @@ describe('requisitions and approvals', () => {
         { department_id: null, slot_no: 2, user_id: approver2.id },
       ])
       .execute();
+
+    // Phase 05: a single admin-designated approver handles every sub-threshold requisition.
+    // Tests for the "not configured" path override this to null.
+    await settings.set(SettingKey.SUBTHRESHOLD_APPROVER_USER_ID, approver1.id, {
+      actorId: im.id,
+      actorName: null,
+      actorEmail: null,
+      actorRoles: [],
+      requestMethod: 'TEST',
+      requestPath: 'test://requisitions.int-spec/beforeEach',
+      requestIp: null,
+      userAgent: 'requisitions.int-spec.ts',
+    });
   });
 
   /** Creates a draft whose total is exactly `amount`. */
@@ -116,9 +129,12 @@ describe('requisitions and approvals', () => {
       const submitted = await requester.client.post(`/requisitions/${created.body.id}/submit`).send();
 
       expect(submitted.body.requiredApproverCount).toBe(1);
-      expect(
-        submitted.body.approvals.filter((a: { stage: string }) => a.stage === ApprovalStage.APPROVER),
-      ).toHaveLength(1);
+      const approverRows = submitted.body.approvals.filter(
+        (a: { stage: string }) => a.stage === ApprovalStage.APPROVER,
+      );
+      expect(approverRows).toHaveLength(1);
+      // Phase 05: the sub-threshold approver is the admin-designated user, not slot 1.
+      expect(approverRows[0].assignedUserId).toBe(approver1.id);
     });
 
     /**
@@ -131,7 +147,16 @@ describe('requisitions and approvals', () => {
       expect(submitted.body.requiredApproverCount).toBe(2);
 
       // An admin raises the threshold well above this request's amount.
-      await settings.set(SettingKey.EXPENSE_THRESHOLD_BDT, 100_000, im.id);
+      await settings.set(SettingKey.EXPENSE_THRESHOLD_BDT, 100_000, {
+        actorId: im.id,
+        actorName: null,
+        actorEmail: null,
+        actorRoles: [],
+        requestMethod: 'TEST',
+        requestPath: 'test://requisitions.int-spec/threshold-up',
+        requestIp: null,
+        userAgent: 'requisitions.int-spec.ts',
+      });
       settings.clearCache();
 
       const reread = await requester.client.get(`/requisitions/${created.body.id}`);
@@ -149,7 +174,16 @@ describe('requisitions and approvals', () => {
       expect(laterSubmitted.body.requiredApproverCount).toBe(1);
       expect(laterSubmitted.body.thresholdAtSubmit).toBe(100_000);
 
-      await settings.set(SettingKey.EXPENSE_THRESHOLD_BDT, 15_000, im.id);
+      await settings.set(SettingKey.EXPENSE_THRESHOLD_BDT, 15_000, {
+        actorId: im.id,
+        actorName: null,
+        actorEmail: null,
+        actorRoles: [],
+        requestMethod: 'TEST',
+        requestPath: 'test://requisitions.int-spec/threshold-down',
+        requestIp: null,
+        userAgent: 'requisitions.int-spec.ts',
+      });
       settings.clearCache();
     });
 
@@ -173,6 +207,37 @@ describe('requisitions and approvals', () => {
       const created = await draft(20_000);
 
       const submitted = await requester.client.post(`/requisitions/${created.body.id}/submit`).send();
+      expect(submitted.status).toBe(409);
+      expect(submitted.body.code).toBe(ErrorCode.APPROVER_SLOT_UNASSIGNED);
+    });
+
+    it('ignores slots pointing at deactivated approvers', async () => {
+      // This is the live Phase 05 regression: an admin deactivated a seed approver without
+      // re-saving the slot. The old row must never freeze that user into a new requisition.
+      await ctx.db
+        .updateTable('users')
+        .set({ is_active: false })
+        .where('id', '=', approver1.id)
+        .execute();
+
+      const created = await draft(20_000);
+      const submitted = await requester.client.post(`/requisitions/${created.body.id}/submit`).send();
+
+      expect(submitted.status).toBe(409);
+      expect(submitted.body.code).toBe(ErrorCode.APPROVER_SLOT_UNASSIGNED);
+      expect(submitted.body.message).toContain('Approver 2');
+    });
+
+    it('refuses sub-threshold submission when its designated approver is inactive', async () => {
+      await ctx.db
+        .updateTable('users')
+        .set({ is_active: false })
+        .where('id', '=', approver1.id)
+        .execute();
+
+      const created = await draft(5_000);
+      const submitted = await requester.client.post(`/requisitions/${created.body.id}/submit`).send();
+
       expect(submitted.status).toBe(409);
       expect(submitted.body.code).toBe(ErrorCode.APPROVER_SLOT_UNASSIGNED);
     });
@@ -599,6 +664,56 @@ describe('requisitions and approvals', () => {
 
       const cancelled = await other.client.post(`/requisitions/${created.body.id}/cancel`).send();
       expect(cancelled.status).toBe(403);
+    });
+  });
+
+  /**
+   * Query-string parsing. The SPA's `toSearchParams` always sends its booleans
+   * as strings; an Express query parser delivers them as strings too. The IM
+   * portal bug fix (July 2026) caught the case where `?mine=false` was being
+   * coerced to `true` and the IM's "All requisitions" list silently returned
+   * zero rows because the filter matched only requisitions the IM raised.
+   */
+  describe('list query boolean coercion', () => {
+    it('treats mine=false as "all requisitions", not "my requisitions"', async () => {
+      // The IM is not the requester, so a mis-coerced true would return zero rows.
+      // The suite is append-only on `requisitions` (see resetData in factories.ts),
+      // so we assert the *direction* of the bug: a coerced `mine=true` would return
+      // exactly zero for the IM, whereas the correct `mine=false` returns the rows
+      // the requester created in this test plus everything carried over.
+      const before = await im.client
+        .get('/requisitions')
+        .query({ page: 1, limit: 25, mine: 'true', awaitingMe: 'false' })
+        .send();
+      expect(before.body.total).toBe(0);
+
+      await draft(5_000);
+      await draft(7_500);
+
+      const after = await im.client
+        .get('/requisitions')
+        .query({ page: 1, limit: 25, mine: 'false', awaitingMe: 'false' })
+        .send();
+
+      expect(after.status).toBe(200);
+      // The two drafts we just created are now visible to the IM.
+      expect(after.body.total).toBeGreaterThanOrEqual(2);
+    });
+
+    it('still scopes to the actor when mine=true is explicit', async () => {
+      await draft(5_000);
+
+      const own = await im.client
+        .get('/requisitions')
+        .query({ page: 1, limit: 25, mine: 'true' })
+        .send();
+      expect(own.body.total).toBe(0);
+
+      const actor = await requester.client
+        .get('/requisitions')
+        .query({ page: 1, limit: 25, mine: 'true' })
+        .send();
+      expect(actor.body.total).toBeGreaterThanOrEqual(1);
     });
   });
 });

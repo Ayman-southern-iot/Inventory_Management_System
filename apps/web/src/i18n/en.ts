@@ -4,8 +4,11 @@
  */
 export const t = {
   app: {
-    name: 'Inventory Management System',
-    shortName: 'IMS',
+    name: 'Southern IoT',
+    shortName: 'Southern IoT',
+    /** Login-page-only blurb clarifying the acronym. */
+    acronym: 'IOT — Innovation of Technology',
+    tagLine: 'Inventory & Procurement',
   },
 
   common: {
@@ -74,6 +77,12 @@ export const t = {
     passwordMismatch: 'The two passwords do not match.',
     passwordChanged: 'Password changed.',
     passwordRules: 'At least 12 characters, with an upper case letter, a lower case letter and a digit.',
+    // Dev-only block under the sign-in form (Phase 05). Never ships to production.
+    testAccountsTitle: 'Test accounts (development only)',
+    testAccountsHint: 'Demo credentials for local testing. Not present in production builds.',
+    testAccountsRole: 'Role',
+    testAccountsEmail: 'Email',
+    testAccountsPassword: 'Password',
   },
 
   nav: {
@@ -90,10 +99,12 @@ export const t = {
     adminUsers: 'Users',
     adminDepartments: 'Departments',
     adminSettings: 'Settings',
+    adminAuditLog: 'Audit log',
     account: 'My account',
     inventoryProducts: 'Products',
     inventoryCategories: 'Categories',
     inventoryLocations: 'Locations',
+    boms: 'Bills of Materials',
   },
 
   roles: {
@@ -177,6 +188,19 @@ export const t = {
     unassigned: 'Not assigned',
     slotSaved: 'Approver slot saved.',
     onlyApprovers: 'Only users with the Approver role can be assigned.',
+    /**
+     * Phase 05: a single admin-designated approver handles all sub-threshold requisitions
+     * (those below the expense threshold). Previously the count + slot 1 was used, but slot 1
+     * is also part of the at-or-above chain — reassigning slot 1 would silently change who
+     * approves the sub-threshold case.
+     */
+    subthresholdApprover: 'Sub-threshold approver',
+    subthresholdApproverHint:
+      'Approves every requisition below the threshold. Required before sub-threshold requisitions can be submitted.',
+    slotHeldByInactive:
+      'This slot points at a deactivated user. New requisitions will refuse until it is reassigned or the user is reactivated.',
+    slotHeldByInactiveWarning:
+      'Slot is held by an inactive user — submissions will be refused.',
   },
 
   inventory: {
@@ -241,6 +265,73 @@ export const t = {
       RETURN: 'Returned',
       ADJUST: 'Adjusted',
       DISPOSE: 'Disposed',
+    },
+  },
+
+  auditLog: {
+    title: 'Audit log',
+    subtitle: 'Every state-changing action, who did it, and from where.',
+    live: 'Live',
+    refresh: 'Refresh',
+    columns: {
+      timestamp: 'When',
+      actor: 'Actor',
+      action: 'Action',
+      entity: 'Entity',
+      summary: 'Summary',
+      outcome: 'Outcome',
+      ip: 'IP',
+      details: '',
+    },
+    filters: {
+      title: 'Filters',
+      from: 'From',
+      to: 'To',
+      actor: 'Actor',
+      action: 'Action',
+      entityType: 'Entity type',
+      outcome: 'Outcome',
+      ip: 'IP address',
+      search: 'Search',
+      searchPlaceholder: 'Search actor, reference, summary',
+      any: 'Any',
+      clear: 'Clear filters',
+      activeFilters: (count: number) => `${count} filter${count === 1 ? '' : 's'} active`,
+    },
+    outcomes: {
+      success: 'Success',
+      failure: 'Failure',
+      denied: 'Denied',
+      error: 'Error',
+    },
+    actors: {
+      system: 'System',
+      unknown: 'Unknown actor',
+      unknownEmail: 'Unknown email',
+    },
+    newActivity: 'New activity available',
+    returnToLatest: 'Return to latest',
+    emptyTitle: 'No audit entries yet',
+    emptyBody: 'As admins perform actions, they will appear here within seven seconds.',
+    details: {
+      title: 'Audit entry',
+      actor: 'Actor',
+      roles: 'Roles',
+      request: 'Request',
+      method: 'Method',
+      path: 'Path',
+      ip: 'IP',
+      userAgent: 'User agent',
+      errorCode: 'Error code',
+      metadata: 'Metadata',
+      changes: 'Changes',
+      value: 'Value',
+      noMetadata: 'No additional metadata recorded.',
+      closedAt: 'Logged at',
+    },
+    pagination: {
+      page: (page: number) => `Page ${page}`,
+      of: 'of',
     },
   },
 
@@ -479,6 +570,80 @@ export const t = {
     },
   },
 
+  boms: {
+    title: 'Bills of Materials',
+    subtitle: 'Group approved requisitions into a payable document for Accounts.',
+    newBom: 'New BOM',
+
+    // list
+    bomNo: 'BOM number',
+    sources: 'Sources',
+    noSources: '—',
+    generatedAt: 'Generated',
+    generatedBy: 'By',
+    pdfStatus: 'PDF',
+    pdfReady: 'PDF on file',
+    pdfPending: 'PDF pending',
+    voidedLabel: 'Voided',
+
+    // detail
+    approvedTotal: 'Approved total',
+    bomSubtotal: 'BOM subtotal',
+    variance: 'Variance',
+    ceiling: 'Ceiling (+{pct}%)',
+    voidBanner: 'Voided',
+    voidedAt: 'Voided at',
+    voidedBy: 'By',
+    bouncedBanner: 'Bounced — over the tolerance',
+
+    // generate
+    pickRequisitions: 'Pick approved requisitions',
+    pickRequisitionsHint:
+      'Tick the requisitions to batch. Their lines appear below; you only fill unit cost and vendor.',
+    emptyCandidatesTitle: 'Nothing is ready to batch',
+    emptyCandidatesBody:
+      'Approved requisitions appear here as soon as approvers sign off.',
+    lineEditorHeading: 'Lines',
+    lineEditorHint:
+      'The numbers you type here become the BOM total and the PDF Accounts files.',
+    unitCost: 'Unit cost (BDT)',
+    vendor: 'Vendor',
+    lineTotal: 'Line total',
+    bounceWarning:
+      'This BOM will bounce — its sources will return to the approver queue.',
+    generate: 'Generate BOM',
+    generatedToast: 'BOM created.',
+    approved: 'Approved',
+
+    // render
+    render: 'Render PDF',
+    reRender: 'Re-render PDF',
+    renderToast: 'PDF cached.',
+    downloadPdf: 'Download PDF',
+
+    // void
+    void: 'Void BOM',
+    voidTitle: 'Void this BOM?',
+    voidHint:
+      'Voiding frees its source requisitions so they can be re-batched. The cached PDF is removed.',
+    voidReason: 'Reason',
+    voidReasonHint: 'Recorded in the audit trail. Aim for one short sentence.',
+    voidConfirm: 'Void',
+    voidedToast: 'BOM voided.',
+
+    // filters
+    filterAll: 'All',
+    filterLive: 'Live',
+    filterVoided: 'Voided',
+    searchPlaceholder: 'Search by BOM number',
+    emptyTitle: 'No BOMs match this filter',
+    emptyBody: 'Pick approved requisitions to create the first BOM.',
+
+    // history / approvals
+    historyHeading: 'History',
+    approvalChainHeading: 'Approval chain (frozen at generation)',
+  },
+
   errors: {
     VALIDATION_FAILED: 'Please correct the highlighted fields.',
     BORROW_INVALID_TRANSITION: 'That is no longer possible for this request. Refresh to see why.',
@@ -506,6 +671,17 @@ export const t = {
       'This stock changed while the screen was open. The figures have been refreshed — check them and try again.',
     CATEGORY_NOT_TRACKABLE: 'That category does not track stock, so it cannot hold quantities.',
     STOCK_RESERVED: 'Those units are reserved for a pending borrow and cannot be moved or removed.',
+    BOM_OVER_BUDGET:
+      'This BOM was over budget and bounced. Adjust the unit costs and try again.',
+    BOM_REQUISITION_NOT_APPROVED:
+      'One of the selected requisitions is no longer approved. Refresh and try again.',
+    BOM_REQUISITION_ALREADY_ON_LIVE_BOM:
+      'One of the selected requisitions is already on a live BOM.',
+    BOM_ALREADY_ON_LIVE_BOM:
+      'One of the selected requisitions is already on a live BOM.',
+    BOM_ALREADY_VOID: 'This BOM has already been voided.',
+    PDF_RENDER_FAILED: 'The PDF could not be rendered. Try again.',
+    PDF_DOWNLOAD_TOKEN_INVALID: 'This download link has expired.',
     INTERNAL: 'Something went wrong on the server.',
     NETWORK: 'Cannot reach the server.',
   },

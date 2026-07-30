@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { paginationQuerySchema } from './common.js';
+import { paginationQuerySchema, queryBoolean } from './common.js';
 
 /* ---------------------------------------------------------------- statuses */
 
@@ -68,6 +68,13 @@ export const RequisitionEventType = {
   APPROVER_WITHDREW: 'APPROVER_WITHDREW',
   FULLY_APPROVED: 'FULLY_APPROVED',
   AMOUNT_REVISED: 'AMOUNT_REVISED',
+  BOM_GENERATED: 'BOM_GENERATED',
+  /** The BOM was too far over the approved amount and bounced back for re-approval (OQ-05). */
+  BOM_BOUNCED: 'BOM_BOUNCED',
+  /** The BOM was voided; the source requisition is back on the BOM-eligible list. */
+  BOM_VOIDED: 'BOM_VOIDED',
+  /** The IM rendered the PDF for this BOM. Task 4.3 — the moment Accounts has the file on disk. */
+  BOM_RENDERED: 'BOM_RENDERED',
   CANCELLED: 'CANCELLED',
 } as const;
 export type RequisitionEventType =
@@ -134,9 +141,9 @@ export const listRequisitionsQuerySchema = paginationQuerySchema.extend({
   status: requisitionStatusSchema.optional(),
   search: z.string().trim().max(160).optional(),
   /** The requester's own list. Forced on for callers with no approval role. */
-  mine: z.coerce.boolean().default(false),
+  mine: queryBoolean(false),
   /** The approver/IM queue: things waiting on *me* right now. */
-  awaitingMe: z.coerce.boolean().default(false),
+  awaitingMe: queryBoolean(false),
 });
 export type ListRequisitionsQuery = z.infer<typeof listRequisitionsQuerySchema>;
 

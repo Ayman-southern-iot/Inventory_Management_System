@@ -9,8 +9,9 @@ import {
   type UpdateSettingInput,
 } from '@ims/shared';
 import { zodPipe } from '../../common/zod-validation.pipe';
-import { CurrentUser, Roles } from '../auth/auth.decorators';
-import type { RequestUser } from '../auth/request-user';
+import { Roles } from '../auth/auth.decorators';
+import { CurrentAuditContext } from '../audit/audit.decorators';
+import type { AuditContext } from '../audit/audit-context';
 import { ApproverSlotsService } from './approver-slots.service';
 import { SettingsService } from './settings.service';
 
@@ -30,9 +31,9 @@ export class SettingsController {
   @Put()
   async update(
     @Body(zodPipe(updateSettingSchema)) body: UpdateSettingInput,
-    @CurrentUser() actor: RequestUser,
+    @CurrentAuditContext() ctx: AuditContext,
   ): Promise<Setting> {
-    return this.settings.set(body.key, body.value, actor.id);
+    return this.settings.set(body.key, body.value, ctx);
   }
 
   @Get('approver-slots')
@@ -43,8 +44,8 @@ export class SettingsController {
   @Put('approver-slots')
   async setSlot(
     @Body(zodPipe(setApproverSlotSchema)) body: SetApproverSlotInput,
-    @CurrentUser() actor: RequestUser,
+    @CurrentAuditContext() ctx: AuditContext,
   ): Promise<ApproverSlot[]> {
-    return this.approverSlots.set(body, actor.id);
+    return this.approverSlots.set(body, ctx);
   }
 }

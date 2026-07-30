@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react';
 import {
   APPROVER_SLOT_NUMBERS,
   Role,
+  SettingKey,
   getSettingDefinition,
   isSettingKey,
   type ApproverSlot,
   type Setting,
-  type SettingKey,
 } from '@ims/shared';
 import { Button } from '@/components/ui/Button';
 import { SelectField, TextField } from '@/components/ui/Field';
@@ -84,6 +84,79 @@ function SettingRow({ setting }: { setting: Setting }) {
   );
 }
 
+/**
+ * The single admin-designated approver for sub-threshold requisitions. Distinct from the
+ * `approver_slots` chain above because sub-threshold only ever needs one approver, and
+ * letting it share slot 1 with the at-or-above chain was confusing when an admin
+ * reassigned slot 1 (Phase 05).
+ */
+function SubthresholdApproverSetting({
+  setting,
+  approvers,
+}: {
+  setting: Setting;
+  approvers: { id: string; fullName: string }[];
+}) {
+  const toast = useToast();
+  const updateSetting = useUpdateSetting();
+
+  const initial = (setting.value as string | null) ?? '';
+  const [draft, setDraft] = useState(initial);
+
+  useEffect(() => setDraft(initial), [initial]);
+
+  const isDirty = draft !== initial;
+
+  async function save() {
+    if (!isSettingKey(setting.key)) return;
+    // Send null when cleared; the API's zod schema coerces "" → null too, but null is the
+    // canonical "not configured" representation on the wire.
+    const value: string | null = draft === '' ? null : draft;
+    try {
+      await updateSetting.mutateAsync({ key: setting.key, value });
+      toast.success(t.settings.saved);
+    } catch (error) {
+      toast.error(messageForError(error));
+    }
+  }
+
+  return (
+    <div className="flex flex-wrap items-end gap-3 border-b border-border px-4 py-4 last:border-b-0">
+      <div className="min-w-56 flex-1">
+        <SelectField
+          label={t.settings.subthresholdApprover}
+          hint={t.settings.subthresholdApproverHint}
+          value={draft}
+          disabled={updateSetting.isPending}
+          onChange={(event) => setDraft(event.target.value)}
+        >
+          <option value="">{t.settings.unassigned}</option>
+          {approvers.map((approver) => (
+            <option key={approver.id} value={approver.id}>
+              {approver.fullName}
+            </option>
+          ))}
+        </SelectField>
+      </div>
+      <div className="flex items-center gap-3 pb-2.5">
+        <Button
+          size="sm"
+          disabled={!isDirty}
+          isLoading={updateSetting.isPending}
+          onClick={() => void save()}
+        >
+          {t.common.save}
+        </Button>
+        <p className="text-xs text-ink-subtle">
+          {setting.updatedByName
+            ? `${t.settings.lastChanged} ${t.settings.by} ${setting.updatedByName}`
+            : t.settings.never}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function ApproverSlotRow({
   slotNo,
   slots,
@@ -91,13 +164,17 @@ function ApproverSlotRow({
 }: {
   slotNo: 1 | 2;
   slots: ApproverSlot[];
-  approvers: { id: string; fullName: string }[];
+  approvers: { id: string; fullName: string; isActive?: boolean | null }[];
 }) {
   const toast = useToast();
   const setSlot = useSetApproverSlot();
   // OPEN QUESTION: OQ-02 — only the company-wide default is editable here for now. Once OQ-02
   // is answered this either stays as-is or grows a per-department row.
   const current = slots.find((slot) => slot.slotNo === slotNo && slot.departmentId === null);
+  // The slot has a row pointing at a user, but that user is deactivated — submit will be
+  // refused until either the user is re-activated or the slot is re-assigned. Surface this
+  // so the admin doesn't have to discover it by submitting a test requisition (Phase 05).
+  const heldByInactive = current?.userId !== null && current?.userId !== undefined && current?.isActive === false;
 
   async function onChange(userId: string) {
     try {
@@ -116,15 +193,21 @@ function ApproverSlotRow({
     <div className="border-b border-border px-4 py-4 last:border-b-0">
       <SelectField
         label={`${t.settings.slot} ${slotNo} — ${t.settings.companyDefault}`}
-        hint={t.settings.onlyApprovers}
+        hint={
+          heldByInactive
+            ? t.settings.slotHeldByInactive
+            : t.settings.onlyApprovers
+        }
         value={current?.userId ?? ''}
         disabled={setSlot.isPending}
         onChange={(event) => void onChange(event.target.value)}
+        error={heldByInactive ? t.settings.slotHeldByInactiveWarning : undefined}
       >
         <option value="">{t.settings.unassigned}</option>
         {approvers.map((approver) => (
           <option key={approver.id} value={approver.id}>
             {approver.fullName}
+            {approver.isActive === false ? ` (${t.common.inactive})` : ''}
           </option>
         ))}
       </SelectField>
@@ -150,7 +233,24 @@ export function SettingsPage() {
             onRetry={() => void settings.refetch()}
           >
             {(data) =>
-              data.map((setting) => <SettingRow key={setting.key} setting={setting} />)
+              data
+                // Phase 05: the explicit sub-threshold approver replaces the historical
+                // "approver count below threshold" input. Keep the old setting in storage for
+                // backward compatibility, but do not present two controls for the same policy.
+                .filter(
+                  (setting) => setting.key !== SettingKey.APPROVER_SLOTS_BELOW_THRESHOLD,
+                )
+                .map((setting) =>
+                  setting.key === SettingKey.SUBTHRESHOLD_APPROVER_USER_ID ? (
+                    <SubthresholdApproverSetting
+                      key={setting.key}
+                      setting={setting}
+                      approvers={approvers.data?.items ?? []}
+                    />
+                  ) : (
+                    <SettingRow key={setting.key} setting={setting} />
+                  ),
+                )
             }
           </QueryBoundary>
         </Panel>

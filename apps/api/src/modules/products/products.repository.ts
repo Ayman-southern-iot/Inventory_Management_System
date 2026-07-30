@@ -3,6 +3,11 @@ import { sql } from 'kysely';
 import type { ListProductsQuery, Product } from '@ims/shared';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
+import type { Database } from '../../database/schema';
+import type { Transaction } from 'kysely';
+
+/** Kysely transaction handle. Pass to repository writes so audit rows commit together. */
+export type Tx = Transaction<Database>;
 
 @Injectable()
 export class ProductsRepository {
@@ -96,15 +101,19 @@ export class ProductsRepository {
     return row ? toProduct(row) : undefined;
   }
 
-  async insert(values: {
-    productCode: string;
-    name: string;
-    categoryId: string;
-    unit: string;
-    defaultReturnable: boolean;
-    description: string | null;
-  }): Promise<string> {
-    const row = await this.db
+  async insert(
+    values: {
+      productCode: string;
+      name: string;
+      categoryId: string;
+      unit: string;
+      defaultReturnable: boolean;
+      description: string | null;
+    },
+    tx?: Tx,
+  ): Promise<string> {
+    const conn = tx ?? this.db;
+    const row = await conn
       .insertInto('products')
       .values({
         product_code: values.productCode,
@@ -130,6 +139,7 @@ export class ProductsRepository {
       description?: string | null;
       isActive?: boolean;
     },
+    tx?: Tx,
   ): Promise<void> {
     const patch = {
       ...(values.productCode === undefined ? {} : { product_code: values.productCode }),
@@ -144,7 +154,8 @@ export class ProductsRepository {
     };
     if (Object.keys(patch).length === 0) return;
 
-    await this.db.updateTable('products').set(patch).where('id', '=', id).execute();
+    const conn = tx ?? this.db;
+    await conn.updateTable('products').set(patch).where('id', '=', id).execute();
   }
 }
 

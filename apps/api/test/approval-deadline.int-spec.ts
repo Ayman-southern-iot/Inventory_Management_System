@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ApprovalStage, RequisitionStatus, Role } from '@ims/shared';
 import { createTestApp, httpClient, type HttpClient, type TestApp } from './app';
-import { createUser, login, resetData } from './factories';
+import { createUser, login, resetData, seedSubthresholdApprover } from './factories';
 import { ApprovalDeadlineJob } from '../src/modules/requisitions/approval-deadline.job';
 
 /**
@@ -42,6 +42,8 @@ describe('approval deadline reminders', () => {
       .insertInto('approver_slots')
       .values({ department_id: null, slot_no: 1, user_id: approver.id })
       .execute();
+
+    await seedSubthresholdApprover(ctx, approver.id);
 
     // Requisitions cannot be deleted between tests — requisition_events is append-only — so
     // earlier overdue ones would keep answering the job and inflate every count. Stamping the

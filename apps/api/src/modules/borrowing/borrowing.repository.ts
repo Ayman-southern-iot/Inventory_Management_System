@@ -10,6 +10,10 @@ import {
 } from '@ims/shared';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
+import type { Tx } from '../audit/audit.repository';
+
+/** A writer that is either the pool-backed db or a kysely transaction handle. */
+type Writer = Db | Tx;
 
 @Injectable()
 export class BorrowingRepository {
@@ -37,19 +41,23 @@ export class BorrowingRepository {
       .executeTakeFirst();
   }
 
-  async insert(values: {
-    borrowNo: string;
-    requesterId: string;
-    productId: string;
-    placementId: string;
-    compartmentId: string;
-    quantity: number;
-    projectId: string | null;
-    isReturnable: boolean;
-    expectedReturnDate: string | null;
-    purpose: string | null;
-  }): Promise<string> {
-    const row = await this.db
+  async insert(
+    values: {
+      borrowNo: string;
+      requesterId: string;
+      productId: string;
+      placementId: string;
+      compartmentId: string;
+      quantity: number;
+      projectId: string | null;
+      isReturnable: boolean;
+      expectedReturnDate: string | null;
+      purpose: string | null;
+    },
+    tx?: Tx,
+  ): Promise<string> {
+    const writer: Writer = tx ?? this.db;
+    const row = await writer
       .insertInto('borrow_requests')
       .values({
         borrow_no: values.borrowNo,
@@ -83,8 +91,10 @@ export class BorrowingRepository {
       decisionNote: string | null;
       markIssued: boolean;
     },
+    tx?: Tx,
   ): Promise<boolean> {
-    const result = await this.db
+    const writer: Writer = tx ?? this.db;
+    const result = await writer
       .updateTable('borrow_requests')
       .set({
         status: values.status,
@@ -113,8 +123,10 @@ export class BorrowingRepository {
       status: BorrowStatus;
       markReturnedAt: boolean;
     },
+    tx?: Tx,
   ): Promise<boolean> {
-    const result = await this.db
+    const writer: Writer = tx ?? this.db;
+    const result = await writer
       .updateTable('borrow_requests')
       .set((eb) => ({
         returned_qty: eb('returned_qty', '+', values.quantity),
@@ -131,8 +143,10 @@ export class BorrowingRepository {
   async rollbackReturn(
     id: string,
     values: { quantity: number; status: BorrowStatus },
+    tx?: Tx,
   ): Promise<void> {
-    await this.db
+    const writer: Writer = tx ?? this.db;
+    await writer
       .updateTable('borrow_requests')
       .set((eb) => ({
         returned_qty: eb('returned_qty', '-', values.quantity),
@@ -143,8 +157,9 @@ export class BorrowingRepository {
       .execute();
   }
 
-  async revertToPending(id: string): Promise<void> {
-    await this.db
+  async revertToPending(id: string, tx?: Tx): Promise<void> {
+    const writer: Writer = tx ?? this.db;
+    await writer
       .updateTable('borrow_requests')
       .set({
         status: BorrowStatus.PENDING,
@@ -157,14 +172,18 @@ export class BorrowingRepository {
       .execute();
   }
 
-  async insertReturn(values: {
-    borrowRequestId: string;
-    quantity: number;
-    compartmentId: string;
-    receivedBy: string;
-    conditionNote: string | null;
-  }): Promise<void> {
-    await this.db
+  async insertReturn(
+    values: {
+      borrowRequestId: string;
+      quantity: number;
+      compartmentId: string;
+      receivedBy: string;
+      conditionNote: string | null;
+    },
+    tx?: Tx,
+  ): Promise<void> {
+    const writer: Writer = tx ?? this.db;
+    await writer
       .insertInto('borrow_returns')
       .values({
         borrow_request_id: values.borrowRequestId,

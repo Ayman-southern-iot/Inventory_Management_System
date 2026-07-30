@@ -24,6 +24,7 @@ export interface TestApp {
 export async function createTestApp(): Promise<TestApp> {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
 
+  // Silenced: a passing suite must not flood the runner with Nest's stdout.
   const app = moduleRef.createNestApplication<NestExpressApplication>({ logger: false });
   app.setGlobalPrefix(config.http.globalPrefix, { exclude: ['health'] });
   app.useGlobalFilters(new AllExceptionsFilter());

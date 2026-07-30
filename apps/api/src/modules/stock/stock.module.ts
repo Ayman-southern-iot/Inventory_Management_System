@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AuditModule } from '../audit/audit.module';
 import { StockController } from './stock.controller';
 import { StockLedgerRepository } from './stock-ledger.repository';
 import { StockReconciliationJob } from './stock-reconciliation.job';
@@ -10,6 +11,7 @@ import { StockService } from './stock.service';
  * the row locking and the ledger append live inside it (ADR-0001).
  */
 @Module({
+  imports: [AuditModule],
   controllers: [StockController],
   providers: [StockService, StockLedgerRepository, StockReconciliationJob],
   exports: [StockService, StockReconciliationJob],

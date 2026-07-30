@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { SettingKey } from '@ims/shared';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
+import type { Tx } from '../audit/audit.repository';
 
 export interface SettingRow {
   key: SettingKey;
@@ -49,8 +50,17 @@ export class SettingsRepository {
     return (result.numInsertedOrUpdatedRows ?? 0n) > 0n;
   }
 
-  async upsert(key: SettingKey, value: unknown, updatedBy: string | null): Promise<void> {
-    await this.db
+  /**
+   * `executor` lets the caller hand in an open transaction so the write and its audit row
+   * commit together. Defaults to the pool when there is nothing to join.
+   */
+  async upsert(
+    key: SettingKey,
+    value: unknown,
+    updatedBy: string | null,
+    executor: Db | Tx = this.db,
+  ): Promise<void> {
+    await executor
       .insertInto('app_settings')
       .values({ key, value: JSON.stringify(value), updated_by: updatedBy })
       .onConflict((oc) =>
@@ -60,5 +70,9 @@ export class SettingsRepository {
         }),
       )
       .execute();
+  }
+
+  get connection(): Db {
+    return this.db;
   }
 }

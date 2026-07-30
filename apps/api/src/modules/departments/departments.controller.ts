@@ -12,6 +12,8 @@ import {
 } from '@ims/shared';
 import { zodPipe } from '../../common/zod-validation.pipe';
 import { Roles } from '../auth/auth.decorators';
+import { CurrentAuditContext } from '../audit/audit.decorators';
+import type { AuditContext } from '../audit/audit-context';
 import { DepartmentsService } from './departments.service';
 
 @Controller('departments')
@@ -30,8 +32,9 @@ export class DepartmentsController {
   @Post()
   async create(
     @Body(zodPipe(createDepartmentSchema)) body: CreateDepartmentInput,
+    @CurrentAuditContext() ctx: AuditContext,
   ): Promise<Department> {
-    return this.departments.create(body);
+    return this.departments.create(body, ctx);
   }
 
   @Roles(Role.ADMIN)
@@ -39,7 +42,8 @@ export class DepartmentsController {
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body(zodPipe(updateDepartmentSchema)) body: UpdateDepartmentInput,
+    @CurrentAuditContext() ctx: AuditContext,
   ): Promise<Department> {
-    return this.departments.update(id, body);
+    return this.departments.update(id, body, ctx);
   }
 }

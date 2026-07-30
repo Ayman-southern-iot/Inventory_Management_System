@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { paginationQuerySchema } from './common.js';
+import { paginationQuerySchema, queryBoolean } from './common.js';
 
 /* ------------------------------------------------------------------ snapshot */
 
@@ -94,8 +94,14 @@ export interface BomDetail extends Bom {
   sources: RequisitionFootprints[];
 }
 
+/** Mirror of the `BomDetail` interface as a Zod schema — the body validators in 4.3 reuse it. */
+export const bomDetailSchema = bomSchema.extend({
+  lines: z.array(bomLineSchema),
+  sources: z.array(requisitionFootprintsSchema),
+});
+
 export const listBomsQuerySchema = paginationQuerySchema.extend({
-  includeVoid: z.coerce.boolean().default(false),
+  includeVoid: queryBoolean(false),
   search: z.string().trim().max(160).optional(),
 });
 export type ListBomsQuery = z.infer<typeof listBomsQuerySchema>;
@@ -138,6 +144,37 @@ export type InventoryExportOrientation =
 export const inventoryExportQuerySchema = z.object({
   categoryId: z.string().uuid().optional(),
   zoneId: z.string().uuid().optional(),
-  includeEmpty: z.coerce.boolean().default(false),
+  includeEmpty: queryBoolean(false),
 });
 export type InventoryExportQuery = z.infer<typeof inventoryExportQuerySchema>;
+
+/* ----------------------------------------------------- PDF template + download */
+
+/**
+ * `POST /boms/:id/render` returns the BOM detail so the IM screen can refresh its `hasPdf`
+ * flag in one round-trip.
+ */
+export const bomPdfRenderResponseSchema = z.object({
+  bom: bomDetailSchema,
+});
+export type BomPdfRenderResponse = z.infer<typeof bomPdfRenderResponseSchema>;
+
+/**
+ * The signed download URL the web app uses to fetch the cached PDF. The URL is bound to
+ * the BOM and to a TTL; a leaked URL becomes useless once the TTL passes.
+ */
+export const bomSignedUrlResponseSchema = z.object({
+  url: z.string(),
+  expiresAt: z.string(),
+  ttlSeconds: z.number().int().positive(),
+});
+export type BomSignedUrlResponse = z.infer<typeof bomSignedUrlResponseSchema>;
+
+/**
+ * The query string for `GET /boms/:id/pdf` — the download endpoint is `@Public()` and the
+ * token is the entire authentication.
+ */
+export const bomDownloadQuerySchema = z.object({
+  token: z.string().min(1),
+});
+export type BomDownloadQuery = z.infer<typeof bomDownloadQuerySchema>;

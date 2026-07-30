@@ -1,10 +1,12 @@
 import type {
   ListRequisitionsQuery,
   ListBorrowsQuery,
+  ListBomsQuery,
   ListDepartmentsQuery,
   ListLedgerQuery,
   ListProductsQuery,
   ListUsersQuery,
+  ListAuditQuery,
 } from '@ims/shared';
 
 /**
@@ -68,5 +70,20 @@ export const queryKeys = {
   },
   delegations: {
     mine: () => ['delegations', 'mine'] as const,
+  },
+  boms: {
+    all: () => ['boms'] as const,
+    /** Prefix for every list, whatever its filters. */
+    lists: () => ['boms', 'list'] as const,
+    list: (query: ListBomsQuery) => ['boms', 'list', query] as const,
+    detail: (id: string) => ['boms', 'detail', id] as const,
+    /** The picker that drives the generate page — short cache so the IM does not wait on a
+     *  full list refetch while they tick candidates. */
+    candidates: () => ['boms', 'candidates'] as const,
+  },
+  auditLog: {
+    all: () => ['audit-log'] as const,
+    list: (query: ListAuditQuery) => ['audit-log', 'list', query] as const,
+    detail: (id: string) => ['audit-log', 'detail', id] as const,
   },
 } as const;

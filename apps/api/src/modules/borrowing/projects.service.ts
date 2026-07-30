@@ -4,6 +4,8 @@ import type { CreateProjectInput, Project } from '@ims/shared';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
 import { NotFoundError } from '../../common/errors';
+import { AuditService } from '../audit/audit.service';
+import type { AuditContext } from '../audit/audit-context';
 import { DuplicateProjectNameError } from './borrowing.errors';
 
 /**
@@ -14,7 +16,10 @@ import { DuplicateProjectNameError } from './borrowing.errors';
  */
 @Injectable()
 export class ProjectsService {
-  constructor(@Inject(DB) private readonly db: Db) {}
+  constructor(
+    @Inject(DB) private readonly db: Db,
+    private readonly audit: AuditService,
+  ) {}
 
   async list(includeInactive = false): Promise<Project[]> {
     const rows = await this.db
@@ -38,17 +43,38 @@ export class ProjectsService {
    * case-insensitive and trimmed, because "Falcon" and "falcon " are the same project to a
    * human and only differ to a database.
    */
-  async create(input: CreateProjectInput, createdBy: string): Promise<Project> {
+  async create(
+    input: CreateProjectInput,
+    createdBy: string,
+    context: AuditContext,
+  ): Promise<Project> {
     if (!input.allowDuplicateName) {
       const existing = await this.findByNameInsensitive(input.name);
       if (existing) throw new DuplicateProjectNameError(existing.name);
     }
 
-    const row = await this.db
-      .insertInto('projects')
-      .values({ name: input.name, created_by: createdBy })
-      .returning(['id', 'name', 'is_active', 'created_at'])
-      .executeTakeFirstOrThrow();
+    // Audit row commits atomically with the insert: a project row cannot exist without its
+    // audit entry, and vice versa.
+    const row = await this.db.transaction().execute(async (tx) => {
+      const inserted = await tx
+        .insertInto('projects')
+        .values({ name: input.name, created_by: createdBy })
+        .returning(['id', 'name', 'is_active', 'created_at'])
+        .executeTakeFirstOrThrow();
+      await this.audit.record(
+        {
+          action: 'project.create',
+          entityType: 'project',
+          entityId: inserted.id,
+          entityRef: input.name,
+          summary: `Created project ${input.name}`,
+          metadata: { name: input.name, allowDuplicateName: input.allowDuplicateName },
+        },
+        context,
+        tx,
+      );
+      return inserted;
+    });
 
     return {
       id: row.id,
@@ -58,15 +84,50 @@ export class ProjectsService {
     };
   }
 
-  async setActive(id: string, isActive: boolean): Promise<Project> {
-    const result = await this.db
-      .updateTable('projects')
-      .set({ is_active: isActive })
+  async setActive(
+    id: string,
+    isActive: boolean,
+    context: AuditContext,
+  ): Promise<Project> {
+    const existing = await this.db
+      .selectFrom('projects')
+      .select(['id', 'name', 'is_active'])
       .where('id', '=', id)
-      .returning(['id', 'name', 'is_active', 'created_at'])
       .executeTakeFirst();
+    if (!existing) throw new NotFoundError('Project');
 
-    if (!result) throw new NotFoundError('Project');
+    // If status did not change, skip the mutation and the audit row — there's nothing to
+    // record. This matches the diffSafeFields guard in departments/products updates.
+    const result = await this.db.transaction().execute(async (tx) => {
+      const updated = await tx
+        .updateTable('projects')
+        .set({ is_active: isActive })
+        .where('id', '=', id)
+        .returning(['id', 'name', 'is_active', 'created_at'])
+        .executeTakeFirst();
+      if (!updated) throw new NotFoundError('Project');
+      // Only the columns the domain owns.
+      if (existing.is_active !== isActive) {
+        await this.audit.record(
+          {
+            action: 'project.update',
+            entityType: 'project',
+            entityId: id,
+            entityRef: existing.name,
+            summary: `${isActive ? 'Activated' : 'Deactivated'} project ${existing.name}`,
+            metadata: {
+              changes: {
+                isActive: { before: existing.is_active, after: isActive },
+              },
+            },
+          },
+          context,
+          tx,
+        );
+      }
+      return updated;
+    });
+
     return {
       id: result.id,
       name: result.name,

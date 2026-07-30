@@ -10,6 +10,8 @@ import {
 } from '@ims/shared';
 import { zodPipe } from '../../common/zod-validation.pipe';
 import { Roles } from '../auth/auth.decorators';
+import { CurrentAuditContext } from '../audit/audit.decorators';
+import type { AuditContext } from '../audit/audit-context';
 import { CategoriesService } from './categories.service';
 
 @Controller('categories')
@@ -28,8 +30,11 @@ export class CategoriesController {
 
   @Roles(Role.INVENTORY_MANAGER, Role.ADMIN)
   @Post()
-  async create(@Body(zodPipe(createCategorySchema)) body: CreateCategoryInput): Promise<Category> {
-    return this.categories.create(body);
+  async create(
+    @Body(zodPipe(createCategorySchema)) body: CreateCategoryInput,
+    @CurrentAuditContext() ctx: AuditContext,
+  ): Promise<Category> {
+    return this.categories.create(body, ctx);
   }
 
   @Roles(Role.INVENTORY_MANAGER, Role.ADMIN)
@@ -37,7 +42,8 @@ export class CategoriesController {
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body(zodPipe(updateCategorySchema)) body: UpdateCategoryInput,
+    @CurrentAuditContext() ctx: AuditContext,
   ): Promise<Category> {
-    return this.categories.update(id, body);
+    return this.categories.update(id, body, ctx);
   }
 }

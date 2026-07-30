@@ -9,6 +9,7 @@ const VALID_ENV: Record<string, string> = {
   POSTGRES_PASSWORD: 'ims',
   JWT_ACCESS_SECRET: 'a'.repeat(48),
   JWT_REFRESH_SECRET: 'b'.repeat(48),
+  PDF_SIGNING_SECRET: 'c'.repeat(48),
   SEED_ADMIN_EMAIL: 'admin@example.com',
   SEED_ADMIN_PASSWORD: 'AdminPassw0rd!',
 };
@@ -30,6 +31,7 @@ describe('buildConfig', () => {
     'POSTGRES_PASSWORD',
     'JWT_ACCESS_SECRET',
     'JWT_REFRESH_SECRET',
+    'PDF_SIGNING_SECRET',
     'SEED_ADMIN_EMAIL',
     'SEED_ADMIN_PASSWORD',
   ])('fails naming %s when it is missing', (variable) => {
@@ -50,6 +52,18 @@ describe('buildConfig', () => {
     expect(() => buildConfig({ ...VALID_ENV, JWT_REFRESH_SECRET: 'change-me' })).toThrow(
       /JWT_REFRESH_SECRET/,
     );
+  });
+
+  it('forces PDF_SIGNING_SECRET to differ from JWT_ACCESS_SECRET so a leaked URL cannot impersonate a user', () => {
+    expect(() =>
+      buildConfig({ ...VALID_ENV, PDF_SIGNING_SECRET: VALID_ENV.JWT_ACCESS_SECRET }),
+    ).toThrow(/PDF_SIGNING_SECRET/);
+  });
+
+  it('forces PDF_SIGNING_SECRET to differ from JWT_REFRESH_SECRET', () => {
+    expect(() =>
+      buildConfig({ ...VALID_ENV, PDF_SIGNING_SECRET: VALID_ENV.JWT_REFRESH_SECRET }),
+    ).toThrow(/PDF_SIGNING_SECRET/);
   });
 
   it('rejects a malformed port rather than coercing it to NaN', () => {

@@ -1,7 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { Category } from '@ims/shared';
+import type { Transaction } from 'kysely';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
+import type { Database } from '../../database/schema';
+
+/** Kysely transaction handle. Pass to repository writes so audit rows commit together. */
+export type Tx = Transaction<Database>;
 
 @Injectable()
 export class CategoriesRepository {
@@ -39,12 +44,16 @@ export class CategoriesRepository {
     return row ? toCategory(row) : undefined;
   }
 
-  async insert(values: {
-    name: string;
-    parentId: string | null;
-    isTrackable: boolean;
-  }): Promise<string> {
-    const row = await this.db
+  async insert(
+    values: {
+      name: string;
+      parentId: string | null;
+      isTrackable: boolean;
+    },
+    tx?: Tx,
+  ): Promise<string> {
+    const conn = tx ?? this.db;
+    const row = await conn
       .insertInto('categories')
       .values({
         name: values.name,
@@ -59,6 +68,7 @@ export class CategoriesRepository {
   async update(
     id: string,
     values: { name?: string; isTrackable?: boolean; isActive?: boolean },
+    tx?: Tx,
   ): Promise<void> {
     const patch = {
       ...(values.name === undefined ? {} : { name: values.name }),
@@ -67,7 +77,8 @@ export class CategoriesRepository {
     };
     if (Object.keys(patch).length === 0) return;
 
-    await this.db.updateTable('categories').set(patch).where('id', '=', id).execute();
+    const conn = tx ?? this.db;
+    await conn.updateTable('categories').set(patch).where('id', '=', id).execute();
   }
 
   async countActiveProducts(categoryId: string): Promise<number> {

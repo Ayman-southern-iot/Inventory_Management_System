@@ -42,6 +42,7 @@ export const TEST_ENV: Record<string, string> = {
 
   JWT_ACCESS_SECRET: 'integration-access-secret-not-a-placeholder-0123456789',
   JWT_REFRESH_SECRET: 'integration-refresh-secret-not-a-placeholder-0123456789',
+  PDF_SIGNING_SECRET: 'integration-pdf-signing-secret-not-a-placeholder-01234',
   JWT_ACCESS_TTL_SECONDS: '900',
   JWT_REFRESH_TTL_SECONDS: '1209600',
   LOGIN_RATE_LIMIT_MAX_ATTEMPTS: String(LOGIN_MAX_ATTEMPTS),

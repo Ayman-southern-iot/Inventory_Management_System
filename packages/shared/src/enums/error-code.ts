@@ -42,6 +42,8 @@ export const ErrorCode = {
   BOM_ALREADY_VOID: 'BOM_ALREADY_VOID',
   BOM_OVER_BUDGET: 'BOM_OVER_BUDGET',
   PDF_RENDER_FAILED: 'PDF_RENDER_FAILED',
+  /** Download URL token failed to verify — wrong BOM, expired, malformed, or wrong secret. */
+  PDF_DOWNLOAD_TOKEN_INVALID: 'PDF_DOWNLOAD_TOKEN_INVALID',
 
   INTERNAL: 'INTERNAL',
 } as const;

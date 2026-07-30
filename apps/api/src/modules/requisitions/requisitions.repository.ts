@@ -32,6 +32,23 @@ export class RequisitionsRepository {
     return this.db.selectFrom('requisitions').selectAll().where('id', '=', id).executeTakeFirst();
   }
 
+  /**
+   * Serialises everyone acting on one requisition. `decide` and `withdraw` both read the
+   * requisition's status, then write it — two approvers acting in the same second would
+   * otherwise each read the other's "before" and the second commit would erase the first
+   * (a withdrawal silently reinstated as APPROVED, §7.3.4).
+   *
+   * Must be the first statement in the transaction, so the lock is held for the whole decision.
+   */
+  async lockRequisition(tx: Tx, id: string) {
+    return tx
+      .selectFrom('requisitions')
+      .selectAll()
+      .where('id', '=', id)
+      .forUpdate()
+      .executeTakeFirst();
+  }
+
   async findItems(id: string) {
     return this.db
       .selectFrom('requisition_items')
@@ -59,6 +76,16 @@ export class RequisitionsRepository {
       .orderBy('users.created_at')
       .executeTakeFirst();
     return row?.id;
+  }
+
+  /** Cheap guard for the sub-threshold approver path (Phase 05). */
+  async isUserActive(userId: string): Promise<boolean> {
+    const row = await this.db
+      .selectFrom('users')
+      .where('id', '=', userId)
+      .select('is_active')
+      .executeTakeFirst();
+    return row?.is_active ?? false;
   }
 
   async insertDraft(
@@ -186,8 +213,15 @@ export class RequisitionsRepository {
       /** Prior actions this claim may transition from. Defaults to just PENDING. */
       expectedActions?: string[];
     },
+    /**
+     * The caller's transaction. Not optional in practice: claiming on the pool auto-commits
+     * the claim, so a later failure inside the caller's transaction leaves an approval marked
+     * decided against a requisition whose status, event log and audit row never happened —
+     * and `expectedActions` no longer matches, so nobody can decide it again.
+     */
+    executor: Tx = this.db,
   ): Promise<boolean> {
-    const result = await this.db
+    const result = await executor
       .updateTable('requisition_approvals')
       .set({
         action: values.action,

@@ -16,7 +16,9 @@ import { ProductsModule } from './modules/products/products.module';
 import { LocationsModule } from './modules/locations/locations.module';
 import { BorrowingModule } from './modules/borrowing/borrowing.module';
 import { RequisitionsModule } from './modules/requisitions/requisitions.module';
+import { BomsModule } from './modules/boms/boms.module';
 import { MaintenanceModule } from './modules/maintenance/maintenance.module';
+import { AuditModule } from './modules/audit/audit.module';
 import { HealthController } from './modules/health/health.controller';
 
 /** Blanket ceiling. Endpoints that need something stricter declare it with `@Throttle`. */
@@ -42,7 +44,9 @@ const GLOBAL_RATE_LIMIT = [{ name: 'default', ttl: 60_000, limit: 300 }];
     LocationsModule,
     BorrowingModule,
     RequisitionsModule,
+    BomsModule,
     MaintenanceModule,
+    AuditModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

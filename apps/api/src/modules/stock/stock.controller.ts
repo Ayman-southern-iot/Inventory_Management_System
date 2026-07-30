@@ -1,5 +1,6 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Headers, HttpCode, HttpStatus, Post, Query } from '@nestjs/common';
 import {
+  IDEMPOTENCY_HEADER,
   Role,
   adjustStockSchema,
   listLedgerQuerySchema,
@@ -16,9 +17,13 @@ import {
 import { zodPipe } from '../../common/zod-validation.pipe';
 import { CurrentUser, Roles } from '../auth/auth.decorators';
 import type { RequestUser } from '../auth/request-user';
+import { CurrentAuditContext } from '../audit/audit.decorators';
+import type { AuditContext } from '../audit/audit-context';
 import { StockLedgerRepository } from './stock-ledger.repository';
 import { toPlacement } from './stock.mappers';
 import { StockService } from './stock.service';
+import { IdempotencyService } from '../../common/idempotency.service';
+import { ConflictError } from '../../common/errors';
 
 /**
  * Only the movements a human performs are exposed.
@@ -32,24 +37,37 @@ export class StockController {
   constructor(
     private readonly stock: StockService,
     private readonly ledger: StockLedgerRepository,
+    private readonly idempotency: IdempotencyService,
   ) {}
 
+  /**
+   * `receive` and `adjust` are the two endpoints with no natural guard against being applied
+   * twice. `move` has `expectedVersion`; a borrow decision is conditional on the request's
+   * status. A double-clicked "Receive 50" simply receives 100, and nothing detects it —
+   * reconciliation compares the ledger against placements and both agree. Hence the
+   * Idempotency-Key, which `idempotency_keys` has existed for since Phase 02.
+   */
   @Roles(Role.INVENTORY_MANAGER, Role.ADMIN)
   @Post('receive')
   @HttpCode(HttpStatus.OK)
   async receive(
     @Body(zodPipe(receiveStockSchema)) body: ReceiveStockInput,
     @CurrentUser() actor: RequestUser,
+    @CurrentAuditContext() audit: AuditContext,
+    @Headers(IDEMPOTENCY_HEADER) idempotencyKey?: string,
   ): Promise<Placement[]> {
-    await this.stock.receive(
-      {
-        productId: body.productId,
-        compartmentId: body.compartmentId,
-        quantity: body.quantity,
-      },
-      { performedBy: actor.id, refType: 'MANUAL', ...(body.note ? { note: body.note } : {}) },
-    );
-    return this.placementsOf(body.productId);
+    return this.runOnce(idempotencyKey, actor.id, `stock:receive:${body.productId}`, async () => {
+      await this.stock.receive(
+        {
+          productId: body.productId,
+          compartmentId: body.compartmentId,
+          quantity: body.quantity,
+        },
+        { performedBy: actor.id, refType: 'MANUAL', ...(body.note ? { note: body.note } : {}) },
+        audit,
+      );
+      return this.placementsOf(body.productId);
+    });
   }
 
   @Roles(Role.INVENTORY_MANAGER, Role.ADMIN)
@@ -58,6 +76,7 @@ export class StockController {
   async move(
     @Body(zodPipe(moveStockSchema)) body: MoveStockInput,
     @CurrentUser() actor: RequestUser,
+    @CurrentAuditContext() audit: AuditContext,
   ): Promise<Placement[]> {
     await this.stock.move(
       {
@@ -68,6 +87,7 @@ export class StockController {
         ...(body.expectedVersion === undefined ? {} : { expectedVersion: body.expectedVersion }),
       },
       { performedBy: actor.id, refType: 'MANUAL', ...(body.note ? { note: body.note } : {}) },
+      audit,
     );
     // Both chips changed, so the whole placement set comes back rather than just the two rows —
     // the client redraws the card from one response instead of stitching a partial update.
@@ -80,17 +100,37 @@ export class StockController {
   async adjust(
     @Body(zodPipe(adjustStockSchema)) body: AdjustStockInput,
     @CurrentUser() actor: RequestUser,
+    @CurrentAuditContext() audit: AuditContext,
+    @Headers(IDEMPOTENCY_HEADER) idempotencyKey?: string,
   ): Promise<Placement[]> {
-    await this.stock.adjust(
-      {
-        productId: body.productId,
-        compartmentId: body.compartmentId,
-        delta: body.delta,
-        reason: body.reason,
-      },
-      { performedBy: actor.id, refType: 'ADJUSTMENT' },
-    );
-    return this.placementsOf(body.productId);
+    return this.runOnce(idempotencyKey, actor.id, `stock:adjust:${body.productId}`, async () => {
+      await this.stock.adjust(
+        {
+          productId: body.productId,
+          compartmentId: body.compartmentId,
+          delta: body.delta,
+          reason: body.reason,
+        },
+        { performedBy: actor.id, refType: 'ADJUSTMENT' },
+        audit,
+      );
+      return this.placementsOf(body.productId);
+    });
+  }
+
+  private async runOnce<T>(
+    key: string | undefined,
+    userId: string,
+    scope: string,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    const outcome = await this.idempotency.run({ key, userId, scope }, operation);
+    if ('inFlight' in outcome) {
+      // Inventing a response here would be a guess about stock. Telling the caller to retry
+      // is honest — same choice as the borrowing controller.
+      throw new ConflictError('That request is already being processed. Try again in a moment.');
+    }
+    return outcome.result;
   }
 
   /** Readable by any authenticated user; the ledger is the audit trail, not a secret. */

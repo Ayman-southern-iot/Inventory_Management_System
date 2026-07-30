@@ -26,8 +26,9 @@ import {
   type User,
 } from '@ims/shared';
 import { zodPipe } from '../../common/zod-validation.pipe';
-import { CurrentUser, Roles } from '../auth/auth.decorators';
-import type { RequestUser } from '../auth/request-user';
+import { Roles } from '../auth/auth.decorators';
+import { CurrentAuditContext } from '../audit/audit.decorators';
+import type { AuditContext } from '../audit/audit-context';
 import { UsersService } from './users.service';
 
 /** Every route here is admin-only; a non-admin gets 403 before reaching the handler (plan 0.7). */
@@ -37,7 +38,9 @@ export class UsersController {
   constructor(private readonly users: UsersService) {}
 
   @Get()
-  async list(@Query(zodPipe(listUsersQuerySchema)) query: ListUsersQuery): Promise<Paginated<User>> {
+  async list(
+    @Query(zodPipe(listUsersQuerySchema)) query: ListUsersQuery,
+  ): Promise<Paginated<User>> {
     return this.users.list(query);
   }
 
@@ -47,17 +50,20 @@ export class UsersController {
   }
 
   @Post()
-  async create(@Body(zodPipe(createUserSchema)) body: CreateUserInput): Promise<User> {
-    return this.users.create(body);
+  async create(
+    @Body(zodPipe(createUserSchema)) body: CreateUserInput,
+    @CurrentAuditContext() ctx: AuditContext,
+  ): Promise<User> {
+    return this.users.create(body, ctx);
   }
 
   @Patch(':id')
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body(zodPipe(updateUserSchema)) body: UpdateUserInput,
-    @CurrentUser() actor: RequestUser,
+    @CurrentAuditContext() ctx: AuditContext,
   ): Promise<User> {
-    return this.users.update(id, body, actor.id);
+    return this.users.update(id, body, ctx);
   }
 
   /**
@@ -68,9 +74,9 @@ export class UsersController {
   async setActive(
     @Param('id', ParseUUIDPipe) id: string,
     @Body(zodPipe(setUserActiveSchema)) body: SetUserActiveInput,
-    @CurrentUser() actor: RequestUser,
+    @CurrentAuditContext() ctx: AuditContext,
   ): Promise<User> {
-    return this.users.setActive(id, body.isActive, actor.id);
+    return this.users.setActive(id, body.isActive, ctx);
   }
 
   @Post(':id/password')
@@ -78,7 +84,8 @@ export class UsersController {
   async resetPassword(
     @Param('id', ParseUUIDPipe) id: string,
     @Body(zodPipe(resetPasswordSchema)) body: ResetPasswordInput,
+    @CurrentAuditContext() ctx: AuditContext,
   ): Promise<void> {
-    await this.users.resetPassword(id, body);
+    await this.users.resetPassword(id, body, ctx);
   }
 }

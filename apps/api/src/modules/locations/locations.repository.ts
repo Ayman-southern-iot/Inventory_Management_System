@@ -1,7 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { Compartment, Zone } from '@ims/shared';
+import type { Transaction } from 'kysely';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
+import type { Database } from '../../database/schema';
+
+/** Kysely transaction handle. Pass to repository writes so audit rows commit together. */
+export type Tx = Transaction<Database>;
 
 @Injectable()
 export class LocationsRepository {
@@ -69,8 +74,9 @@ export class LocationsRepository {
     }));
   }
 
-  async insertZone(name: string): Promise<string> {
-    const row = await this.db
+  async insertZone(name: string, tx?: Tx): Promise<string> {
+    const conn = tx ?? this.db;
+    const row = await conn
       .insertInto('storage_zones')
       .values({ name })
       .returning('id')
@@ -78,14 +84,19 @@ export class LocationsRepository {
     return row.id;
   }
 
-  async updateZone(id: string, values: { name?: string; isActive?: boolean }): Promise<number> {
+  async updateZone(
+    id: string,
+    values: { name?: string; isActive?: boolean },
+    tx?: Tx,
+  ): Promise<number> {
     const patch = {
       ...(values.name === undefined ? {} : { name: values.name }),
       ...(values.isActive === undefined ? {} : { is_active: values.isActive }),
     };
     if (Object.keys(patch).length === 0) return 1;
 
-    const result = await this.db
+    const conn = tx ?? this.db;
+    const result = await conn
       .updateTable('storage_zones')
       .set(patch)
       .where('id', '=', id)
@@ -101,8 +112,9 @@ export class LocationsRepository {
       .executeTakeFirst();
   }
 
-  async insertCompartment(zoneId: string, code: string): Promise<string> {
-    const row = await this.db
+  async insertCompartment(zoneId: string, code: string, tx?: Tx): Promise<string> {
+    const conn = tx ?? this.db;
+    const row = await conn
       .insertInto('storage_compartments')
       .values({ zone_id: zoneId, code })
       .returning('id')
@@ -113,6 +125,7 @@ export class LocationsRepository {
   async updateCompartment(
     id: string,
     values: { code?: string; isActive?: boolean },
+    tx?: Tx,
   ): Promise<number> {
     const patch = {
       ...(values.code === undefined ? {} : { code: values.code }),
@@ -120,7 +133,8 @@ export class LocationsRepository {
     };
     if (Object.keys(patch).length === 0) return 1;
 
-    const result = await this.db
+    const conn = tx ?? this.db;
+    const result = await conn
       .updateTable('storage_compartments')
       .set(patch)
       .where('id', '=', id)
@@ -128,10 +142,12 @@ export class LocationsRepository {
     return Number(result.numUpdatedRows ?? 0n);
   }
 
-  async findCompartment(id: string): Promise<{ id: string; zone_id: string } | undefined> {
+  async findCompartment(
+    id: string,
+  ): Promise<{ id: string; zone_id: string; code: string; is_active: boolean } | undefined> {
     return this.db
       .selectFrom('storage_compartments')
-      .select(['id', 'zone_id'])
+      .select(['id', 'zone_id', 'code', 'is_active'])
       .where('id', '=', id)
       .executeTakeFirst();
   }

@@ -19,8 +19,12 @@ import { BorrowingPage } from '@/features/borrowing/BorrowingPage';
 import { RequisitionsPage } from '@/features/requisitions/RequisitionsPage';
 import { RequisitionFormPage } from '@/features/requisitions/RequisitionFormPage';
 import { RequisitionDetailPage } from '@/features/requisitions/RequisitionDetailPage';
+import { BomsPage } from '@/features/boms/BomsPage';
+import { BomGeneratePage } from '@/features/boms/BomGeneratePage';
+import { BomDetailPage } from '@/features/boms/BomDetailPage';
 import { SettingsPage } from '@/features/admin/SettingsPage';
 import { UsersPage } from '@/features/admin/UsersPage';
+import { AuditLogPage } from '@/features/admin/AuditLogPage';
 import { t } from '@/i18n/en';
 import { ProtectedRoute } from '@/routes/ProtectedRoute';
 import { ROUTES } from '@/routes/paths';
@@ -110,12 +114,16 @@ export function App() {
                         path={ROUTES.requisitions.all}
                         element={<RequisitionsPage mode="all" />}
                       />
+                      <Route path={ROUTES.boms.all} element={<BomsPage />} />
+                      <Route path={ROUTES.boms.new} element={<BomGeneratePage />} />
+                      <Route path={ROUTES.boms.detailPattern} element={<BomDetailPage />} />
                     </Route>
 
                     <Route element={<ProtectedRoute roles={[Role.ADMIN]} />}>
                       <Route path={ROUTES.admin.users} element={<UsersPage />} />
                       <Route path={ROUTES.admin.departments} element={<DepartmentsPage />} />
                       <Route path={ROUTES.admin.settings} element={<SettingsPage />} />
+                      <Route path={ROUTES.admin.auditLog} element={<AuditLogPage />} />
                     </Route>
 
                     <Route

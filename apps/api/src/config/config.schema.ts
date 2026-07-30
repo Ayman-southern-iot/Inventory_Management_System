@@ -57,6 +57,23 @@ const rawSchema = z.object({
   SETTING_APPROVER_SLOTS_BELOW_THRESHOLD: z.coerce.number().int().min(1).max(2).default(1),
   SETTING_APPROVER_SLOTS_AT_OR_ABOVE_THRESHOLD: z.coerce.number().int().min(1).max(2).default(2),
   SETTING_BOM_OVER_BUDGET_TOLERANCE_PCT: z.coerce.number().int().min(0).max(100).default(10),
+  /**
+   * Phase 05 — single admin-designated approver for sub-threshold requisitions. Empty
+   * string on first boot means "not configured"; submitting a sub-threshold requisition
+   * then refuses with 409. The SettingsService coerces the empty string to null.
+   */
+  SETTING_SUBTHRESHOLD_APPROVER_USER_ID: z.string().default(''),
+
+  /**
+   * Phase 06 — audit recording and retention seeds. Both are first-boot values only; once the
+   * `app_settings` rows exist the admin panel owns them.
+   *
+   * Empty `SETTING_AUDIT_ENABLED_ACTIONS` means "record everything", which is the right
+   * default for a fresh install. `SETTING_AUDIT_RETENTION_DAYS=0` means keep forever — a purge
+   * only ever runs because someone deliberately configured one.
+   */
+  SETTING_AUDIT_ENABLED_ACTIONS: z.string().default(''),
+  SETTING_AUDIT_RETENTION_DAYS: z.coerce.number().int().min(0).default(0),
 
   // --- PDF rendering (OQ-11) ---------------------------------------------------
   // Every measurement is configuration, because the real company pad has not been supplied
@@ -73,6 +90,13 @@ const rawSchema = z.object({
   PDF_RENDER_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120_000).default(30_000),
   /** How long a download link stays valid. Short, because the link is the only auth. */
   PDF_SIGNED_URL_TTL_SECONDS: z.coerce.number().int().min(30).max(86_400).default(300),
+  /**
+   * Signs short-lived download URLs. A leaked link must not impersonate a user, so this is
+   * deliberately a separate secret from `JWT_ACCESS_SECRET`. Same length policy as the JWT
+   * secrets; the cross-secret uniqueness check below catches the "copy-paste from .env"
+   * mistake.
+   */
+  PDF_SIGNING_SECRET: secretSchema,
 
   // Seeds the first ADMIN so a fresh install is reachable. Required in every environment,
   // because an install nobody can log into is not an install.
@@ -92,6 +116,22 @@ const validatedSchema = rawSchema.superRefine((env, ctx) => {
       code: z.ZodIssueCode.custom,
       path: ['JWT_REFRESH_SECRET'],
       message: 'must differ from JWT_ACCESS_SECRET',
+    });
+  }
+  // A leaked download URL must not verify as a session token. The PDF signing secret is the
+  // third key in this trio; force it to differ from both.
+  if (env.PDF_SIGNING_SECRET === env.JWT_ACCESS_SECRET) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['PDF_SIGNING_SECRET'],
+      message: 'must differ from JWT_ACCESS_SECRET',
+    });
+  }
+  if (env.PDF_SIGNING_SECRET === env.JWT_REFRESH_SECRET) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['PDF_SIGNING_SECRET'],
+      message: 'must differ from JWT_REFRESH_SECRET',
     });
   }
 });
@@ -137,6 +177,8 @@ export interface AppConfig {
     };
     readonly renderTimeoutMs: number;
     readonly signedUrlTtlSeconds: number;
+    /** HMAC key for download URLs — kept off `JWT_ACCESS_SECRET` so a leak stays bounded. */
+    readonly signedUrlKey: string;
   };
   readonly seedAdmin: {
     readonly email: string;
@@ -199,6 +241,15 @@ export function buildConfig(source: Record<string, string | undefined>): AppConf
       SETTING_APPROVER_SLOTS_AT_OR_ABOVE_THRESHOLD:
         env.SETTING_APPROVER_SLOTS_AT_OR_ABOVE_THRESHOLD,
       SETTING_BOM_OVER_BUDGET_TOLERANCE_PCT: env.SETTING_BOM_OVER_BUDGET_TOLERANCE_PCT,
+      SETTING_SUBTHRESHOLD_APPROVER_USER_ID: env.SETTING_SUBTHRESHOLD_APPROVER_USER_ID,
+      // Comma-separated on the wire, an array in the setting. Empty stays empty so the
+      // registry's transform turns it into "every action".
+      SETTING_AUDIT_ENABLED_ACTIONS: env.SETTING_AUDIT_ENABLED_ACTIONS.trim()
+        ? env.SETTING_AUDIT_ENABLED_ACTIONS.split(',')
+            .map((action) => action.trim())
+            .filter(Boolean)
+        : '',
+      SETTING_AUDIT_RETENTION_DAYS: env.SETTING_AUDIT_RETENTION_DAYS,
     }),
     pdf: Object.freeze({
       storageDir: env.PDF_STORAGE_DIR,
@@ -213,6 +264,7 @@ export function buildConfig(source: Record<string, string | undefined>): AppConf
       }),
       renderTimeoutMs: env.PDF_RENDER_TIMEOUT_MS,
       signedUrlTtlSeconds: env.PDF_SIGNED_URL_TTL_SECONDS,
+      signedUrlKey: env.PDF_SIGNING_SECRET,
     }),
     seedAdmin: Object.freeze({
       email: env.SEED_ADMIN_EMAIL.toLowerCase(),

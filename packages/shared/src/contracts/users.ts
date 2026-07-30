@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { roleSchema, type Role, BASE_ROLE } from '../enums/role.js';
 import { emailSchema, passwordSchema } from './auth.js';
-import { paginationQuerySchema } from './common.js';
+import { paginationQuerySchema, queryBoolean } from './common.js';
 
 /** Prints on the BOM footprint block, so it is required and must be meaningful. */
 export const designationSchema = z.string().trim().min(2).max(120);
@@ -52,7 +52,7 @@ export const listUsersQuerySchema = paginationQuerySchema.extend({
   search: z.string().trim().max(160).optional(),
   role: roleSchema.optional(),
   departmentId: z.string().uuid().optional(),
-  includeInactive: z.coerce.boolean().default(false),
+  includeInactive: queryBoolean(false),
 });
 export type ListUsersQuery = z.infer<typeof listUsersQuerySchema>;
 

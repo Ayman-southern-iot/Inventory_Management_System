@@ -13,6 +13,8 @@ import {
 } from '../../common/errors';
 import { PasswordService } from '../../security/password.service';
 import { RefreshRevocationReason } from '../../database/schema';
+import { AuditService } from '../audit/audit.service';
+import type { AuditContext } from '../audit/audit-context';
 import { UsersService } from '../users/users.service';
 import type { UserWithRoles } from '../users/users.repository';
 import { LoginThrottleService } from './login-throttle.service';
@@ -36,6 +38,7 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly refreshTokens: RefreshTokenRepository,
     private readonly throttle: LoginThrottleService,
+    private readonly audit: AuditService,
     @Inject(CONFIG) private readonly config: AppConfig,
   ) {}
 
@@ -60,11 +63,35 @@ export class AuthService {
       if (this.throttle.isEmailThrottled(failures.byEmail)) {
         throw new RateLimitedError(this.throttle.windowSeconds);
       }
+      await this.audit.recordFailure(
+        {
+          action: 'auth.login.failure',
+          entityType: 'auth',
+          entityRef: input.email,
+          summary: `Failed login attempt for ${input.email}`,
+          outcome: 'failure',
+          errorCode: 'INVALID_CREDENTIALS',
+          metadata: { attemptedEmail: input.email },
+        },
+        this.auditContextForLogin(context, input.email),
+      );
       throw new InvalidCredentialsError();
     }
 
     if (!user.is_active) {
       await this.throttle.record(input.email, context.ip, false);
+      await this.audit.recordFailure(
+        {
+          action: 'auth.login.failure',
+          entityType: 'auth',
+          entityRef: input.email,
+          summary: `Deactivated account login attempt for ${input.email}`,
+          outcome: 'denied',
+          errorCode: 'ACCOUNT_DEACTIVATED',
+          metadata: { attemptedEmail: input.email },
+        },
+        this.auditContextForLogin(context, input.email),
+      );
       throw new AccountDeactivatedError();
     }
 
@@ -74,6 +101,29 @@ export class AuthService {
 
     const familyId = this.refreshTokens.newFamilyId();
     const tokens = await this.issueTokens(user, familyId, context.userAgent);
+
+    // Post-commit: the session already exists and last_login is already stamped. See
+    // `AuditService.recordCommitted` for why this must not fail the request.
+    await this.audit.recordCommitted(
+      {
+        action: 'auth.login.success',
+        entityType: 'auth',
+        entityId: user.id,
+        entityRef: user.email,
+        summary: `Signed in as ${user.email}`,
+        metadata: { method: 'password' },
+      },
+      {
+        actorId: user.id,
+        actorName: user.full_name,
+        actorEmail: user.email,
+        actorRoles: user.roles,
+        requestMethod: 'POST',
+        requestPath: '/auth/login',
+        requestIp: context.ip,
+        userAgent: context.userAgent,
+      },
+    );
 
     this.logger.log(`Login ${user.email} from ${context.ip}`);
     return { ...tokens, user: toAuthUser(user) };
@@ -172,15 +222,50 @@ export class AuthService {
   async changePassword(
     userId: string,
     input: { currentPassword: string; newPassword: string },
-    context: LoginContext,
+    context: LoginContext & { requestMethod?: string; requestPath?: string },
   ): Promise<LoginResponse> {
-    await this.users.changeOwnPassword(userId, input.currentPassword, input.newPassword);
+    const before = await this.users.findAuthRecordById(userId);
+    if (!before) throw new TokenExpiredError();
+
+    await this.users.changeOwnPassword(userId, input.currentPassword, input.newPassword, {
+      actorId: userId,
+      actorName: before.full_name,
+      actorEmail: before.email,
+      actorRoles: before.roles,
+      requestMethod: context.requestMethod ?? 'POST',
+      requestPath: context.requestPath ?? '/auth/change-password',
+      requestIp: context.ip,
+      userAgent: context.userAgent,
+    });
 
     const user = await this.users.findAuthRecordById(userId);
     if (!user) throw new TokenExpiredError();
 
     const familyId = this.refreshTokens.newFamilyId();
     const tokens = await this.issueTokens(user, familyId, context.userAgent);
+
+    // Post-commit: the password is already replaced and every other session already evicted.
+    // A 500 here would tell the user their change failed while their old password no longer works.
+    await this.audit.recordCommitted(
+      {
+        action: 'auth.password.change',
+        entityType: 'auth',
+        entityId: userId,
+        entityRef: user.email,
+        summary: `Changed own password for ${user.email}`,
+        metadata: { sessionsEvicted: true },
+      },
+      {
+        actorId: userId,
+        actorName: user.full_name,
+        actorEmail: user.email,
+        actorRoles: user.roles,
+        requestMethod: context.requestMethod ?? 'POST',
+        requestPath: context.requestPath ?? '/auth/change-password',
+        requestIp: context.ip,
+        userAgent: context.userAgent,
+      },
+    );
     return { ...tokens, user: toAuthUser(user) };
   }
 
@@ -189,6 +274,24 @@ export class AuthService {
     if (!user) throw new TokenExpiredError();
     if (!user.is_active) throw new AccountDeactivatedError();
     return toAuthUser(user);
+  }
+
+  /**
+   * Build a best-effort `AuditContext` for a login attempt where the only signal we have is
+   * IP, user-agent, and the email the caller typed. Used only for failure rows that record
+   * the attempt — the audit row for a successful login is built from the loaded user row.
+   */
+  private auditContextForLogin(context: LoginContext, attemptedEmail: string): AuditContext {
+    return {
+      actorId: null,
+      actorName: null,
+      actorEmail: attemptedEmail,
+      actorRoles: [],
+      requestMethod: 'POST',
+      requestPath: '/auth/login',
+      requestIp: context.ip,
+      userAgent: context.userAgent,
+    };
   }
 
   private async issueTokens(

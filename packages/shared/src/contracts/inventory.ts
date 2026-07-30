@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { paginationQuerySchema } from './common.js';
+import { paginationQuerySchema, queryBoolean } from './common.js';
 
 /* ------------------------------------------------------------------ shared bits */
 
@@ -71,9 +71,9 @@ export type UpdateProductInput = z.infer<typeof updateProductSchema>;
 export const listProductsQuerySchema = paginationQuerySchema.extend({
   search: z.string().trim().max(160).optional(),
   categoryId: z.string().uuid().optional(),
-  includeInactive: z.coerce.boolean().default(false),
+  includeInactive: queryBoolean(false),
   /** Only products that currently have stock somewhere. */
-  inStockOnly: z.coerce.boolean().default(false),
+  inStockOnly: queryBoolean(false),
 });
 export type ListProductsQuery = z.infer<typeof listProductsQuerySchema>;
 

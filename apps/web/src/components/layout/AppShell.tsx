@@ -4,7 +4,9 @@ import {
   Boxes,
   HandCoins,
   ClipboardList,
+  FileSpreadsheet,
   FileText,
+  History,
   Stamp,
   ChevronDown,
   FolderTree,
@@ -14,7 +16,6 @@ import {
   Menu,
   Package,
   Settings2,
-  ShieldCheck,
   Users,
   X,
 } from 'lucide-react';
@@ -69,6 +70,7 @@ const NAV: NavGroup[] = [
       { label: t.nav.allRequisitions, to: ROUTES.requisitions.all, icon: FileText },
       { label: t.nav.inventoryCategories, to: ROUTES.inventory.categories, icon: FolderTree },
       { label: t.nav.inventoryLocations, to: ROUTES.inventory.locations, icon: MapPin },
+      { label: t.nav.boms, to: ROUTES.boms.all, icon: FileSpreadsheet },
     ],
   },
   {
@@ -78,6 +80,7 @@ const NAV: NavGroup[] = [
       { label: t.nav.adminUsers, to: ROUTES.admin.users, icon: Users },
       { label: t.nav.adminDepartments, to: ROUTES.admin.departments, icon: Boxes },
       { label: t.nav.adminSettings, to: ROUTES.admin.settings, icon: Settings2 },
+      { label: t.nav.adminAuditLog, to: ROUTES.admin.auditLog, icon: History },
     ],
   },
 ];
@@ -115,7 +118,11 @@ export function AppShell() {
           </button>
 
           <span className="flex items-center gap-2 font-semibold tracking-tight text-ink">
-            <ShieldCheck aria-hidden className="size-5 text-brand" />
+            <img
+              src="/southern-iot-logo.png"
+              alt={t.app.name}
+              className="h-6 w-auto"
+            />
             {t.app.shortName}
           </span>
 

@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger, type OnApplicationShutdown } from '@nestjs/common';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { dirname, extname, join, resolve } from 'node:path';
 import puppeteer, { type Browser } from 'puppeteer';
 import { HttpStatus } from '@nestjs/common';
@@ -75,11 +76,27 @@ export class PdfRendererService implements OnApplicationShutdown {
     }
   }
 
-  /** Writes a rendered document under the files volume and returns its relative path. */
+  /**
+   * Writes a rendered document under the files volume and returns its relative path.
+   *
+   * Write-then-rename, not write-in-place. The path is derived from the BOM number, so a
+   * re-render targets the same file a concurrent `GET /boms/:id/pdf` may be streaming —
+   * and idempotency keys are scoped per user, so an IM and an Admin clicking Render on the
+   * same BOM genuinely do run two renders at once. `rename` within one filesystem is atomic:
+   * a reader sees either the old complete PDF or the new one, never a truncated file.
+   */
   async store(relativePath: string, contents: Buffer): Promise<string> {
     const absolute = this.absolutePathFor(relativePath);
     await mkdir(dirname(absolute), { recursive: true });
-    await writeFile(absolute, contents);
+    // The pid/random suffix keeps two concurrent renders from sharing a temp file.
+    const temp = `${absolute}.${process.pid}.${randomUUID()}.tmp`;
+    try {
+      await writeFile(temp, contents);
+      await rename(temp, absolute);
+    } catch (error) {
+      await unlink(temp).catch(() => undefined);
+      throw error;
+    }
     return relativePath;
   }
 
@@ -89,6 +106,16 @@ export class PdfRendererService implements OnApplicationShutdown {
 
   exists(relativePath: string): boolean {
     return existsSync(this.absolutePathFor(relativePath));
+  }
+
+  /** Resolves a relative storage path to its absolute form (used by callers that need to unlink). */
+  absolutePathFor(relativePath: string): string {
+    const base = resolve(this.config.pdf.storageDir);
+    const absolute = resolve(join(base, relativePath));
+    if (!absolute.startsWith(base)) {
+      throw new PdfRenderFailedError(`Refusing a path outside the storage directory`);
+    }
+    return absolute;
   }
 
   /**
@@ -116,16 +143,6 @@ export class PdfRendererService implements OnApplicationShutdown {
 
     const bytes = await readFile(absolute);
     return `data:${mime};base64,${bytes.toString('base64')}`;
-  }
-
-  private absolutePathFor(relativePath: string): string {
-    // Anything that escapes the storage directory is a path-traversal attempt, not a filename.
-    const base = resolve(this.config.pdf.storageDir);
-    const absolute = resolve(join(base, relativePath));
-    if (!absolute.startsWith(base)) {
-      throw new PdfRenderFailedError(`Refusing a path outside the storage directory`);
-    }
-    return absolute;
   }
 
   private async getBrowser(): Promise<Browser> {

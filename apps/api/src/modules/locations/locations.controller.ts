@@ -15,6 +15,8 @@ import {
 } from '@ims/shared';
 import { zodPipe } from '../../common/zod-validation.pipe';
 import { Roles } from '../auth/auth.decorators';
+import { CurrentAuditContext } from '../audit/audit.decorators';
+import type { AuditContext } from '../audit/audit-context';
 import { LocationsService } from './locations.service';
 
 const listQuerySchema = z.object({
@@ -35,8 +37,11 @@ export class LocationsController {
 
   @Roles(Role.INVENTORY_MANAGER, Role.ADMIN)
   @Post('zones')
-  async createZone(@Body(zodPipe(createZoneSchema)) body: CreateZoneInput): Promise<Zone> {
-    return this.locations.createZone(body);
+  async createZone(
+    @Body(zodPipe(createZoneSchema)) body: CreateZoneInput,
+    @CurrentAuditContext() ctx: AuditContext,
+  ): Promise<Zone> {
+    return this.locations.createZone(body, ctx);
   }
 
   @Roles(Role.INVENTORY_MANAGER, Role.ADMIN)
@@ -44,16 +49,18 @@ export class LocationsController {
   async updateZone(
     @Param('id', ParseUUIDPipe) id: string,
     @Body(zodPipe(updateZoneSchema)) body: UpdateZoneInput,
+    @CurrentAuditContext() ctx: AuditContext,
   ): Promise<Zone> {
-    return this.locations.updateZone(id, body);
+    return this.locations.updateZone(id, body, ctx);
   }
 
   @Roles(Role.INVENTORY_MANAGER, Role.ADMIN)
   @Post('compartments')
   async createCompartment(
     @Body(zodPipe(createCompartmentSchema)) body: CreateCompartmentInput,
+    @CurrentAuditContext() ctx: AuditContext,
   ): Promise<Compartment> {
-    return this.locations.createCompartment(body);
+    return this.locations.createCompartment(body, ctx);
   }
 
   @Roles(Role.INVENTORY_MANAGER, Role.ADMIN)
@@ -61,7 +68,8 @@ export class LocationsController {
   async updateCompartment(
     @Param('id', ParseUUIDPipe) id: string,
     @Body(zodPipe(updateCompartmentSchema)) body: UpdateCompartmentInput,
+    @CurrentAuditContext() ctx: AuditContext,
   ): Promise<Compartment> {
-    return this.locations.updateCompartment(id, body);
+    return this.locations.updateCompartment(id, body, ctx);
   }
 }

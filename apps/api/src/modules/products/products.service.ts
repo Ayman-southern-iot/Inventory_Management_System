@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import type {
   CreateProductInput,
   ListProductsQuery,
@@ -8,7 +8,12 @@ import type {
   UpdateProductInput,
 } from '@ims/shared';
 import { ConflictError, NotFoundError } from '../../common/errors';
+import { DB } from '../../database/database.module';
+import type { Db } from '../../database/create-db';
 import { isForeignKeyViolation, isUniqueViolation } from '../../common/pg-errors';
+import { AuditService } from '../audit/audit.service';
+import type { AuditContext } from '../audit/audit-context';
+import { diffSafeFields } from '../audit/audit-sanitizer';
 import { StockService } from '../stock/stock.service';
 import { toPlacement } from '../stock/stock.mappers';
 import { ProductsRepository } from './products.repository';
@@ -19,6 +24,8 @@ export class ProductsService {
     private readonly repo: ProductsRepository,
     /** Placements are read through the service; no module outside it touches those tables. */
     private readonly stock: StockService,
+    @Inject(DB) private readonly db: Db,
+    private readonly audit: AuditService,
   ) {}
 
   async list(query: ListProductsQuery): Promise<Paginated<Product>> {
@@ -34,15 +41,42 @@ export class ProductsService {
     return { ...product, placements: placements.map(toPlacement) };
   }
 
-  async create(input: CreateProductInput): Promise<ProductDetail> {
+  async create(input: CreateProductInput, context: AuditContext): Promise<ProductDetail> {
     try {
-      const id = await this.repo.insert({
-        productCode: input.productCode,
-        name: input.name,
-        categoryId: input.categoryId,
-        unit: input.unit,
-        defaultReturnable: input.defaultReturnable,
-        description: input.description,
+      const id = await this.db.transaction().execute(async (tx) => {
+        const newId = await this.repo.insert(
+          {
+            productCode: input.productCode,
+            name: input.name,
+            categoryId: input.categoryId,
+            unit: input.unit,
+            defaultReturnable: input.defaultReturnable,
+            description: input.description,
+          },
+          tx,
+        );
+        // Audit inside the transaction: a successful product create cannot lack its audit
+        // row, and the redactor guarantees no sensitive field sneaks into the metadata column.
+        await this.audit.record(
+          {
+            action: 'product.create',
+            entityType: 'product',
+            entityId: newId,
+            entityRef: input.productCode,
+            summary: `Created product ${input.productCode}`,
+            metadata: {
+              productCode: input.productCode,
+              name: input.name,
+              categoryId: input.categoryId,
+              unit: input.unit,
+              defaultReturnable: input.defaultReturnable,
+              description: input.description,
+            },
+          },
+          { ...context, actorName: context.actorName ?? input.name },
+          tx,
+        );
+        return newId;
       });
       return await this.findById(id);
     } catch (error) {
@@ -55,19 +89,77 @@ export class ProductsService {
    * product with ledger rows or placements must keep resolving, or every historical movement
    * loses its name. Deactivation only removes it from the default listing.
    */
-  async update(id: string, input: UpdateProductInput): Promise<ProductDetail> {
+  async update(
+    id: string,
+    input: UpdateProductInput,
+    context: AuditContext,
+  ): Promise<ProductDetail> {
     const existing = await this.repo.findById(id);
     if (!existing) throw new NotFoundError('Product');
 
     try {
-      await this.repo.update(id, {
-        productCode: input.productCode,
-        name: input.name,
-        categoryId: input.categoryId,
-        unit: input.unit,
-        defaultReturnable: input.defaultReturnable,
-        description: input.description,
-        isActive: input.isActive,
+      await this.db.transaction().execute(async (tx) => {
+        await this.repo.update(
+          id,
+          {
+            productCode: input.productCode,
+            name: input.name,
+            categoryId: input.categoryId,
+            unit: input.unit,
+            defaultReturnable: input.defaultReturnable,
+            description: input.description,
+            isActive: input.isActive,
+          },
+          tx,
+        );
+        // Only the columns the domain owns. A category move is a structural event, but it is
+        // still an attribute of the product row, and surfacing the diff in the audit log is
+        // what lets an admin reconstruct "why does this product sit in furniture now?".
+        const changes = diffSafeFields(
+          {
+            productCode: existing.productCode,
+            name: existing.name,
+            categoryId: existing.categoryId,
+            unit: existing.unit,
+            defaultReturnable: existing.defaultReturnable,
+            description: existing.description,
+            isActive: existing.isActive,
+          },
+          {
+            ...(input.productCode !== undefined ? { productCode: input.productCode } : {}),
+            ...(input.name !== undefined ? { name: input.name } : {}),
+            ...(input.categoryId !== undefined ? { categoryId: input.categoryId } : {}),
+            ...(input.unit !== undefined ? { unit: input.unit } : {}),
+            ...(input.defaultReturnable !== undefined
+              ? { defaultReturnable: input.defaultReturnable }
+              : {}),
+            ...(input.description !== undefined ? { description: input.description } : {}),
+            ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+          },
+          [
+            'productCode',
+            'name',
+            'categoryId',
+            'unit',
+            'defaultReturnable',
+            'description',
+            'isActive',
+          ],
+        );
+        if (Object.keys(changes).length > 0) {
+          await this.audit.record(
+            {
+              action: 'product.update',
+              entityType: 'product',
+              entityId: id,
+              entityRef: existing.productCode,
+              summary: `Updated product ${existing.productCode}`,
+              metadata: { changes },
+            },
+            { ...context, actorName: context.actorName ?? existing.name },
+            tx,
+          );
+        }
       });
     } catch (error) {
       throw translate(error);

@@ -15,6 +15,13 @@ export const ROUTES = {
     all: '/borrowing',
     mine: '/my-borrowings',
   },
+  boms: {
+    all: '/boms',
+    new: '/boms/new',
+    /** The router pattern; the helper below builds links. */
+    detailPattern: '/boms/:bomId',
+    detail: (id: string) => '/boms/' + id,
+  },
   requisitions: {
     mine: '/requisitions',
     approvals: '/approvals',
@@ -30,5 +37,6 @@ export const ROUTES = {
     users: '/admin/users',
     departments: '/admin/departments',
     settings: '/admin/settings',
+    auditLog: '/admin/audit-log',
   },
 } as const;

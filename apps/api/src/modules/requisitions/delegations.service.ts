@@ -4,6 +4,7 @@ import { Role, type CreateDelegationInput, type Delegation } from '@ims/shared';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
 import { ConflictError, NotFoundError } from '../../common/errors';
+import { AuditService } from '../audit/audit.service';
 
 /**
  * An approver handing their authority to someone else for a date range (task 3.5).
@@ -14,7 +15,10 @@ import { ConflictError, NotFoundError } from '../../common/errors';
  */
 @Injectable()
 export class DelegationsService {
-  constructor(@Inject(DB) private readonly db: Db) {}
+  constructor(
+    @Inject(DB) private readonly db: Db,
+    private readonly audit: AuditService,
+  ) {}
 
   async list(approverUserId?: string): Promise<Delegation[]> {
     const rows = await this.db
@@ -69,16 +73,37 @@ export class DelegationsService {
       .executeTakeFirst();
     if (!delegate) throw new ConflictError('The delegate must be an active approver');
 
-    const row = await this.db
-      .insertInto('delegations')
-      .values({
-        approver_user_id: approverUserId,
-        delegate_user_id: input.delegateUserId,
-        starts_at: new Date(input.startsAt),
-        ends_at: new Date(input.endsAt),
-      })
-      .returning('id')
-      .executeTakeFirstOrThrow();
+    // A delegation hands someone else the right to approve. It and its audit row commit
+    // together or not at all — otherwise a failed audit write returns 500 on a delegation that
+    // is already live, and the retry creates a second one.
+    const row = await this.db.transaction().execute(async (tx) => {
+      const inserted = await tx
+        .insertInto('delegations')
+        .values({
+          approver_user_id: approverUserId,
+          delegate_user_id: input.delegateUserId,
+          starts_at: new Date(input.startsAt),
+          ends_at: new Date(input.endsAt),
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+
+      await this.audit.record({
+        action: 'delegation.create',
+        entityType: 'delegation',
+        entityId: inserted.id,
+        entityRef: `${approverUserId} → ${input.delegateUserId}`,
+        summary: `Created delegation from ${approverUserId} to ${input.delegateUserId}`,
+        metadata: {
+          approverUserId,
+          delegateUserId: input.delegateUserId,
+          startsAt: input.startsAt,
+          endsAt: input.endsAt,
+        },
+      }, { actorId: approverUserId, actorName: null, actorEmail: null, actorRoles: [], requestMethod: null, requestPath: null, requestIp: null, userAgent: null }, tx);
+
+      return inserted;
+    });
 
     const created = (await this.list(approverUserId)).find((d) => d.id === row.id);
     if (!created) throw new NotFoundError('Delegation');
@@ -86,14 +111,25 @@ export class DelegationsService {
   }
 
   async revoke(id: string, approverUserId: string): Promise<void> {
-    const result = await this.db
-      .updateTable('delegations')
-      .set({ is_active: false })
-      .where('id', '=', id)
-      .where('approver_user_id', '=', approverUserId)
-      .executeTakeFirst();
+    await this.db.transaction().execute(async (tx) => {
+      const result = await tx
+        .updateTable('delegations')
+        .set({ is_active: false })
+        .where('id', '=', id)
+        .where('approver_user_id', '=', approverUserId)
+        .executeTakeFirst();
 
-    if (Number(result.numUpdatedRows ?? 0n) === 0) throw new NotFoundError('Delegation');
+      if (Number(result.numUpdatedRows ?? 0n) === 0) throw new NotFoundError('Delegation');
+
+      await this.audit.record({
+        action: 'delegation.revoke',
+        entityType: 'delegation',
+        entityId: id,
+        entityRef: id,
+        summary: `Revoked delegation ${id}`,
+        metadata: {},
+      }, { actorId: approverUserId, actorName: null, actorEmail: null, actorRoles: [], requestMethod: null, requestPath: null, requestIp: null, userAgent: null }, tx);
+    });
   }
 
   /**

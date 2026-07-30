@@ -10,6 +10,8 @@ import {
 } from '../../database/schema';
 import type { Selectable, Transaction } from 'kysely';
 import { ConflictError, NotFoundError } from '../../common/errors';
+import { AuditService } from '../audit/audit.service';
+import type { AuditContext } from '../audit/audit-context';
 import {
   InsufficientStockError,
   ReservedStockError,
@@ -81,10 +83,17 @@ export interface AdjustInput {
 export class StockService {
   private readonly logger = new Logger(StockService.name);
 
-  constructor(@Inject(DB) private readonly db: Db) {}
+  constructor(
+    @Inject(DB) private readonly db: Db,
+    private readonly audit: AuditService,
+  ) {}
 
   /** New stock arriving: a purchase received, or opening balance. */
-  async receive(input: ReceiveInput, context: StockContext): Promise<PlacementRow> {
+  async receive(
+    input: ReceiveInput,
+    context: StockContext,
+    auditContext?: AuditContext,
+  ): Promise<PlacementRow> {
     this.assertPositive(input.quantity);
 
     return this.db.transaction().execute(async (tx) => {
@@ -98,7 +107,7 @@ export class StockService {
       );
       const updated = await this.applyDelta(tx, placement.id, input.quantity, 0);
 
-      await this.appendLedger(tx, {
+      const ledgerId = await this.appendLedger(tx, {
         product_id: input.productId,
         to_compartment_id: input.compartmentId,
         from_compartment_id: null,
@@ -106,6 +115,32 @@ export class StockService {
         movement_type: StockMovementType.RECEIPT,
         ...this.provenance(context),
       });
+
+      // Audit joins the same transaction as the ledger insert: a successful receive always
+      // has both rows and a failed receive has neither. The product code is the human
+      // reference so the admin feed can be read without joining back to the products table.
+      // When called from the borrow lifecycle (no audit context) the borrowing service records
+      // its own `borrowing.*` row; writing one here too would be a duplicate.
+      if (auditContext) {
+        const productRef = await this.lookupProductRef(tx, input.productId);
+        await this.audit.record(
+          {
+            action: 'stock.receive',
+            entityType: 'stock',
+            entityId: ledgerId,
+            entityRef: productRef,
+            summary: `Received ${input.quantity} of ${productRef}`,
+            metadata: {
+              product_id: input.productId,
+              compartment_id: input.compartmentId,
+              quantity: input.quantity,
+              ...(context.note ? { note: context.note } : {}),
+            },
+          },
+          auditContext,
+          tx,
+        );
+      }
 
       return updated;
     });
@@ -116,7 +151,11 @@ export class StockService {
    * product card does not accumulate empty chips, and reserved units cannot be moved out from
    * under a pending borrow.
    */
-  async move(input: MoveInput, context: StockContext): Promise<{ from: PlacementRow | null; to: PlacementRow }> {
+  async move(
+    input: MoveInput,
+    context: StockContext,
+    auditContext?: AuditContext,
+  ): Promise<{ from: PlacementRow | null; to: PlacementRow }> {
     this.assertPositive(input.quantity);
     if (input.fromCompartmentId === input.toCompartmentId) {
       throw new ConflictError('Source and destination compartments are the same');
@@ -163,7 +202,7 @@ export class StockService {
 
       const to = await this.applyDelta(tx, destination.id, input.quantity, 0);
 
-      await this.appendLedger(tx, {
+      const ledgerId = await this.appendLedger(tx, {
         product_id: input.productId,
         from_compartment_id: input.fromCompartmentId,
         to_compartment_id: input.toCompartmentId,
@@ -172,7 +211,72 @@ export class StockService {
         ...this.provenance(context),
       });
 
+      // One audit row per move, joined to the same transaction as the ledger insert. Skipped
+      // when called from a borrow-driven path: the borrowing service records its own
+      // `borrowing.*` row for that flow.
+      if (auditContext) {
+        const productRef = await this.lookupProductRef(tx, input.productId);
+        await this.audit.record(
+          {
+            action: 'stock.move',
+            entityType: 'stock',
+            entityId: ledgerId,
+            entityRef: productRef,
+            summary: `Moved ${input.quantity} of ${productRef}`,
+            metadata: {
+              product_id: input.productId,
+              from_compartment_id: input.fromCompartmentId,
+              to_compartment_id: input.toCompartmentId,
+              quantity: input.quantity,
+              ...(input.expectedVersion !== undefined ? { expectedVersion: input.expectedVersion } : {}),
+              ...(context.note ? { note: context.note } : {}),
+            },
+          },
+          auditContext,
+          tx,
+        );
+      }
+
       return { from, to };
+    });
+  }
+
+  /**
+   * Units coming back onto the shelf that must stay held for the same borrow — the undo of an
+   * issue, used when an IM reverts an issued borrow to pending.
+   *
+   * This exists because doing it as `receive()` then `reserve()` is two transactions with a gap
+   * between them. In that gap the units are free: another user's borrow can reserve them, the
+   * `reserve()` half then fails with InsufficientStock, and the `receive()` half is already
+   * committed. The borrow stays ISSUED while the ledger says the units are back on the shelf —
+   * permanent phantom stock that reconciliation cannot see, because SUM(ledger) and quantity
+   * still agree.
+   *
+   * One transaction, one lock, one RECEIPT ledger row (the reservation is a column, not a
+   * movement — see `reserve`), so it either all happens or none of it does.
+   */
+  async receiveAndHold(input: ReceiveInput, context: StockContext): Promise<PlacementRow> {
+    this.assertPositive(input.quantity);
+
+    return this.db.transaction().execute(async (tx) => {
+      await this.assertProductIsTrackable(tx, input.productId);
+      await this.assertCompartmentUsable(tx, input.compartmentId);
+
+      const placement = await this.lockOrCreatePlacement(tx, input.productId, input.compartmentId);
+      // quantity and reserved_qty move together by the same amount, so availability is
+      // unchanged throughout and no other borrower can ever see these units as free.
+      const updated = await this.applyDelta(tx, placement.id, input.quantity, input.quantity);
+
+      await this.appendLedger(tx, {
+        product_id: input.productId,
+        to_compartment_id: input.compartmentId,
+        from_compartment_id: null,
+        quantity: input.quantity,
+        movement_type: StockMovementType.RECEIPT,
+        ...this.provenance(context),
+      });
+
+      return updated;
     });
   }
 
@@ -285,7 +389,11 @@ export class StockService {
    * A stock take correction. Requires a reason: an unexplained adjustment is indistinguishable
    * from theft when someone reads the ledger back in six months.
    */
-  async adjust(input: AdjustInput, context: StockContext): Promise<PlacementRow | null> {
+  async adjust(
+    input: AdjustInput,
+    context: StockContext,
+    auditContext?: AuditContext,
+  ): Promise<PlacementRow | null> {
     if (input.delta === 0) throw new ConflictError('An adjustment of zero changes nothing');
     if (!input.reason.trim()) throw new ConflictError('An adjustment requires a reason');
 
@@ -306,7 +414,7 @@ export class StockService {
         }
       }
 
-      await this.appendLedger(tx, {
+      const ledgerId = await this.appendLedger(tx, {
         product_id: input.productId,
         from_compartment_id: input.delta < 0 ? input.compartmentId : null,
         to_compartment_id: input.delta > 0 ? input.compartmentId : null,
@@ -314,6 +422,30 @@ export class StockService {
         movement_type: StockMovementType.ADJUST,
         ...this.provenance({ ...context, note: input.reason }),
       });
+
+      // The reason is the entire point of the audit row — without it, a "stock.adjust" entry
+      // is indistinguishable from the next one's. Join the same transaction so an adjust with
+      // no reason never makes it to disk.
+      if (auditContext) {
+        const productRef = await this.lookupProductRef(tx, input.productId);
+        await this.audit.record(
+          {
+            action: 'stock.adjust',
+            entityType: 'stock',
+            entityId: ledgerId,
+            entityRef: productRef,
+            summary: `Adjusted ${productRef} by ${input.delta}`,
+            metadata: {
+              product_id: input.productId,
+              compartment_id: input.compartmentId,
+              delta: input.delta,
+              reason: input.reason,
+            },
+          },
+          auditContext,
+          tx,
+        );
+      }
 
       const remaining = placement.quantity + input.delta;
       if (remaining === 0 && placement.reserved_qty === 0) {
@@ -440,7 +572,12 @@ export class StockService {
     productId: string,
     compartmentIds: readonly string[],
   ): Promise<Map<string, PlacementRow>> {
-    const unique = [...new Set(compartmentIds)];
+    // Sorted, because the insert loop below locks too. `ON CONFLICT DO NOTHING` against a row
+    // another transaction has already touched waits on that transaction, so iterating in
+    // caller-supplied order reintroduces exactly the cycle the sorted FOR UPDATE phase exists
+    // to prevent: `move` passes [from, to], and two opposite moves A→B and B→A would take the
+    // same two keys in opposite orders and deadlock.
+    const unique = [...new Set(compartmentIds)].sort();
 
     for (const compartmentId of unique) {
       await tx
@@ -536,8 +673,29 @@ export class StockService {
       performed_by: string;
       note: string | null;
     },
-  ): Promise<void> {
-    await tx.insertInto('stock_ledger').values(row).execute();
+  ): Promise<string> {
+    // Returning the ledger id so the audit row can reference it as `entityId` — the admin
+    // detail drawer looks the ledger row up to show the full movement context.
+    const inserted = await tx
+      .insertInto('stock_ledger')
+      .values(row)
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    return inserted.id;
+  }
+
+  /**
+   * The product's human reference: the on-shelf product_code and, in parentheses, the name so
+   * the audit row reads naturally without a join. Falls back to the bare id when the product
+   * has been deleted — the audit row must remain readable even after the row is gone.
+   */
+  private async lookupProductRef(tx: Tx, productId: string): Promise<string> {
+    const row = await tx
+      .selectFrom('products')
+      .select(['product_code', 'name'])
+      .where('id', '=', productId)
+      .executeTakeFirst();
+    return row ? `${row.product_code} (${row.name})` : productId;
   }
 
   private provenance(context: StockContext) {

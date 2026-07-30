@@ -1,0 +1,26 @@
+import { Module } from '@nestjs/common';
+import { RequisitionsModule } from '../requisitions/requisitions.module';
+import { SettingsModule } from '../settings/settings.module';
+import { CommonModule } from '../../common/common.module';
+import { PdfModule } from '../pdf/pdf.module';
+import { AuditModule } from '../audit/audit.module';
+import { BomsController } from './boms.controller';
+import { BomsRepository } from './boms.repository';
+import { BomsService } from './boms.service';
+
+/**
+ * The BOM module.
+ *
+ * Imports `RequisitionsModule` for the approval snapshot (freezing the chain into
+ * `bom_requisitions.approval_snapshot`), `SettingsModule` for the over-budget tolerance
+ * (OQ-05), `CommonModule` for the idempotency service on `POST /boms` and the render
+ * endpoint, `PdfModule` (task 4.3) for the renderer + signed-URL signer, and `AuditModule`
+ * (phase 06) so every BOM mutation writes a row to `audit_log` in the same transaction.
+ */
+@Module({
+  imports: [RequisitionsModule, SettingsModule, CommonModule, PdfModule, AuditModule],
+  controllers: [BomsController],
+  providers: [BomsService, BomsRepository],
+  exports: [BomsService, BomsRepository],
+})
+export class BomsModule {}

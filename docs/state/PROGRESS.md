@@ -5,13 +5,25 @@
 
 ## Current position
 
-- **Phase:** 04 — BOM (in progress)
-- **Next task:** 4.2 — generation with the immutable approval snapshot. 4.1 is done: migration 0010 applied and rollback-verified, contracts written, the over-budget tolerance added as a setting (OQ-05), and PDF margins/letterhead path added to config (OQ-11).
-- **Working tree:** dirty — 4.1 complete but uncommitted (migration 0010, contracts, config, puppeteer).
-- **Blocked by:** OQ-11 (the company letterhead asset and print margins) shapes Phase 04. A placeholder template is the recorded assumption, so it is not hard-blocking. OQ-05 (BOM over the approved amount) is also Phase 04.
-- **Security review:** no CRITICAL, no HIGH — task 0.6's acceptance criterion. Six MEDIUM and
-  five LOW findings were fixed; what was deliberately deferred is recorded as G-02 and G-03 in
-  `OPEN-QUESTIONS.md`, not lost.
+- **Phase:** 06 — Hardening (in progress). Phase 04's BOM module and Phase 06's audit module both
+  exist in the working tree; neither has been committed, and neither has passed a green test run.
+- **Next task:** get the tree back to green, in this order — (1) start Docker Desktop,
+  (2) `pnpm db:migrate` to apply `0012_audit_retention`, then `pnpm db:rollback && pnpm db:migrate`
+  to rollback-verify it, (3) `pnpm --filter @ims/api test:int > /tmp/int.log 2>&1` and work the
+  **5 known failures**. Only then commit.
+- **Working tree:** ⚠️ **dirty and uncommitted — roughly 84 files.** It carries the BOM module, the
+  audit module, migrations 0011 and 0012, and a large cross-cutting concurrency/security fix pass
+  from 2026-07-30. `pnpm typecheck` passes. `pnpm --filter @ims/api test:int` does **not**.
+  Delete the untracked scratch file `apps/api/test_audit5.mjs` (hardcoded test-DB password) before
+  any `git add .`.
+- **Blocked by:** nothing external. OQ-14 and OQ-15 (always-on audit actions; whether the purge
+  should default to a retention period) are recorded assumptions, not hard blocks.
+- **Security review:** the 2026-07-30 pass found **one CRITICAL, three HIGH** in code written
+  since the Phase 00 review — a SQL injection through `sql.lit` in the audit insert, a
+  client-controlled `X-Forwarded-For` that could roll back every audited mutation, unguarded BOM
+  read endpoints, and authentication coupled to the audit table. **All four are fixed**, but the
+  fixes have **no regression tests yet** and have not been exercised by a green suite. Five further
+  gaps are carried as G-11..G-15 in `OPEN-QUESTIONS.md`.
 
 ## Phases
 
@@ -21,9 +33,9 @@
 | 01 | Inventory core — catalogue, locations, placements, ledger | ✅ done and verified | 6 migrations, 213 tests |
 | 02 | Borrowing — request, approve, issue, return | ✅ done and verified | 7 migrations, 236 tests |
 | 03 | Requisitions — form, approvals, tracker, notifications | ✅ done and verified | 9 migrations, 277 tests |
-| 04 | BOM — generation, snapshot, letterhead PDF | 🟡 4.1 done | 10 migrations |
+| 04 | BOM — generation, snapshot, letterhead PDF | 🟡 built, not verified, not committed | 10 migrations |
 | 05 | Funds & purchasing — receipts, purchases, receive-to-stock | ⬜ not started | |
-| 06 | Hardening — exports, audit UI, monitoring, backups drill | ⬜ not started | |
+| 06 | Hardening — exports, audit UI, monitoring, backups drill | 🟡 audit log built; 6.1 filters/config/purge done, unverified | 12 migrations (0012 unapplied) |
 
 Legend: ⬜ not started · 🟡 in progress · ✅ done and verified
 

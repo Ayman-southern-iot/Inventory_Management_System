@@ -1,5 +1,5 @@
 import type { ColumnType, Generated, Insertable, Selectable, Updateable } from 'kysely';
-import type { Role } from '@ims/shared';
+import type { AuditAction, AuditEntityType, AuditOutcome, Role } from '@ims/shared';
 
 /**
  * Hand-maintained mirror of the migrated schema. It is not generated, because a generator
@@ -346,13 +346,50 @@ export interface DelegationsTable {
   updated_at: UpdatedAt;
 }
 
+/* --------------------------------------------------------------------- audit */
+
+/**
+ * Phase 06 — global audit feed. Append-only by trigger, so the application never has the
+ * authority to UPDATE or DELETE a row. The actor snapshot columns exist so an admin can still
+ * read who did what after a user is renamed, deactivated, or removed.
+ *
+ * `metadata` is typed as `unknown` at the row layer because each domain supplies its own
+ * documented shape; the admin page renders a generic JSON viewer.
+ */
+export interface AuditLogTable {
+  id: Generated<string>;
+  actor_id: string | null;
+  actor_name: string | null;
+  actor_email: string | null;
+  actor_roles: ColumnType<Role[], Role[], Role[]>;
+  action: AuditAction;
+  entity_type: AuditEntityType;
+  entity_id: string | null;
+  entity_ref: string | null;
+  summary: string;
+  /**
+   * Insert/update is `string` (caller must `JSON.stringify`) so Kysely treats it as a jsonb
+   * literal and casts appropriately — passing an `unknown` would let a raw string slip through
+   * to the database and trigger "invalid input syntax for type json".
+   */
+  metadata: ColumnType<unknown, string, never>;
+  request_method: string | null;
+  request_path: string | null;
+  request_ip: string | null;
+  user_agent: string | null;
+  outcome: AuditOutcome;
+  error_code: string | null;
+  created_at: CreatedAt;
+}
+
 /* ------------------------------------------------------------------------ BOM */
 
 export interface BomsTable {
   id: Generated<string>;
   bom_no: string;
   generated_by: string;
-  subtotal: Generated<Money>;
+  /** Money is NUMERIC in Postgres and arrives as a string, so it is never a float in transit. */
+  subtotal: Money;
   /** Relative path under the files volume; served by signed URL, never listed. */
   pdf_path: string | null;
   pdf_generated_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
@@ -398,6 +435,7 @@ export interface BomLinesTable {
 
 export interface Database {
   app_settings: AppSettingsTable;
+  audit_log: AuditLogTable;
   boms: BomsTable;
   bom_requisitions: BomRequisitionsTable;
   bom_lines: BomLinesTable;

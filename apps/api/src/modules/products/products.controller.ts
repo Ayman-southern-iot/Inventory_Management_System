@@ -13,6 +13,8 @@ import {
 } from '@ims/shared';
 import { zodPipe } from '../../common/zod-validation.pipe';
 import { Roles } from '../auth/auth.decorators';
+import { CurrentAuditContext } from '../audit/audit.decorators';
+import type { AuditContext } from '../audit/audit-context';
 import { ProductsService } from './products.service';
 
 @Controller('products')
@@ -36,8 +38,9 @@ export class ProductsController {
   @Post()
   async create(
     @Body(zodPipe(createProductSchema)) body: CreateProductInput,
+    @CurrentAuditContext() ctx: AuditContext,
   ): Promise<ProductDetail> {
-    return this.products.create(body);
+    return this.products.create(body, ctx);
   }
 
   @Roles(Role.INVENTORY_MANAGER, Role.ADMIN)
@@ -45,7 +48,8 @@ export class ProductsController {
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body(zodPipe(updateProductSchema)) body: UpdateProductInput,
+    @CurrentAuditContext() ctx: AuditContext,
   ): Promise<ProductDetail> {
-    return this.products.update(id, body);
+    return this.products.update(id, body, ctx);
   }
 }

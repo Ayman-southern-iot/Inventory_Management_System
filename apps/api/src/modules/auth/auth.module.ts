@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
+import { AuditModule } from '../audit/audit.module';
 import { UsersModule } from '../users/users.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -12,7 +13,7 @@ import { RolesGuard } from './roles.guard';
 @Module({
   // Secrets are passed per-call in AuthService because access and refresh use different keys;
   // registering one here would make it too easy to sign a refresh token with the access key.
-  imports: [JwtModule.register({}), UsersModule],
+  imports: [JwtModule.register({}), UsersModule, AuditModule],
   controllers: [AuthController],
   providers: [
     AuthService,

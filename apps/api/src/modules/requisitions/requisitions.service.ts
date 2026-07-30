@@ -15,6 +15,7 @@ import {
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors';
+import { AuditService } from '../audit/audit.service';
 import { SettingsService } from '../settings/settings.service';
 import { ApproverSlotsService } from '../settings/approver-slots.service';
 import { RequisitionsRepository } from './requisitions.repository';
@@ -36,6 +37,7 @@ export class RequisitionsService {
     private readonly settings: SettingsService,
     private readonly approverSlots: ApproverSlotsService,
     private readonly delegations: DelegationsService,
+    private readonly audit: AuditService,
   ) {}
 
   async createDraft(input: SaveRequisitionInput, requesterId: string) {
@@ -44,6 +46,18 @@ export class RequisitionsService {
       const created = await this.repo.insertDraft(tx, requisitionNo, input, requesterId);
       await this.repo.replaceItems(tx, created, input.items);
       await this.repo.appendEvent(tx, created, RequisitionEventType.CREATED, requesterId, {});
+      await this.audit.record(
+        {
+          action: 'requisition.create',
+          entityType: 'requisition',
+          entityId: created,
+          entityRef: requisitionNo,
+          summary: `Drafted requisition ${requisitionNo}`,
+          metadata: { urgency: input.urgency, itemCount: input.items.length },
+        },
+        { actorId: requesterId, actorName: null, actorEmail: null, actorRoles: [], requestMethod: null, requestPath: null, requestIp: null, userAgent: null },
+        tx,
+      );
       return created;
     });
 
@@ -64,6 +78,18 @@ export class RequisitionsService {
     await this.db.transaction().execute(async (tx) => {
       await this.repo.updateDraft(tx, id, input);
       await this.repo.replaceItems(tx, id, input.items);
+      await this.audit.record(
+        {
+          action: 'requisition.update',
+          entityType: 'requisition',
+          entityId: id,
+          entityRef: existing.requisition_no,
+          summary: `Updated draft requisition ${existing.requisition_no}`,
+          metadata: { urgency: input.urgency, itemCount: input.items.length },
+        },
+        { actorId: actorId, actorName: null, actorEmail: null, actorRoles: [], requestMethod: null, requestPath: null, requestIp: null, userAgent: null },
+        tx,
+      );
     });
 
     return this.requireDetail(id);
@@ -97,19 +123,32 @@ export class RequisitionsService {
     const requestedAmount = items.reduce((sum, item) => sum + Number(item.estimated_line_total), 0);
 
     const threshold = await this.settings.get(SettingKey.EXPENSE_THRESHOLD_BDT);
-    // OQ-01: one approver below the threshold, two at or above it. Both counts are settings,
-    // so the policy changes without a redeploy.
-    const approverCount =
-      requestedAmount >= threshold
-        ? await this.settings.get(SettingKey.APPROVER_SLOTS_AT_OR_ABOVE_THRESHOLD)
-        : await this.settings.get(SettingKey.APPROVER_SLOTS_BELOW_THRESHOLD);
 
-    // OQ-02: the department's slots win over the company-wide default.
-    const approverIds = await this.approverSlots
-      .resolveForDepartment(existing.department_id, approverCount)
-      .catch(() => {
-        throw new ApproverSlotUnassignedError(approverCount);
-      });
+    // OQ-01: above the threshold we still pick from the configured approver-slot chain
+    // (one or two, depending on the settings).
+    //
+    // Phase 05 — below the threshold we now read a single admin-designated approver
+    // (SUBTHRESHOLD_APPROVER_USER_ID) instead of the historical "count + slot 1" setup.
+    // That setup shared slot 1 with the at-or-above case, which made "below" brittle when
+    // an admin reassigned the company default for slot 1.
+    const isSubThreshold = requestedAmount < threshold;
+    const approverIds: string[] = isSubThreshold
+      ? [await this.subthresholdApproverId()]
+      : await (async () => {
+          const approverCount = await this.settings.get(
+            SettingKey.APPROVER_SLOTS_AT_OR_ABOVE_THRESHOLD,
+          );
+          try {
+            return await this.approverSlots.resolveForDepartment(existing.department_id, approverCount);
+          } catch {
+            throw new ApproverSlotUnassignedError(approverCount);
+          }
+        })();
+
+    // For the at-or-above branch, `approverCount` is what we ask of the slot chain. We
+    // expose it back to the caller for the audit log + the SUBMITTED event payload, which
+    // has been downstream of this name for several releases.
+    const approverCount = isSubThreshold ? 1 : approverIds.length;
 
     const inventoryManagerId = await this.repo.findAnyActiveUserWithRole(Role.INVENTORY_MANAGER);
     if (!inventoryManagerId) {
@@ -150,6 +189,22 @@ export class RequisitionsService {
         thresholdAtSubmit: threshold,
         requiredApproverCount: approverCount,
       });
+      await this.audit.record(
+        {
+          action: 'requisition.submit',
+          entityType: 'requisition',
+          entityId: id,
+          entityRef: existing.requisition_no,
+          summary: `Submitted requisition ${existing.requisition_no}`,
+          metadata: {
+            requestedAmount,
+            thresholdAtSubmit: threshold,
+            requiredApproverCount: approverCount,
+          },
+        },
+        { actorId: actorId, actorName: null, actorEmail: null, actorRoles: [], requestMethod: null, requestPath: null, requestIp: null, userAgent: null },
+        tx,
+      );
     });
 
     this.logger.log(
@@ -175,27 +230,59 @@ export class RequisitionsService {
     const actingFor = await this.resolveActingFor(approval.assigned_user_id, actorId);
     if (!actingFor) throw new NotYourApprovalError();
 
-    const requisition = await this.repo.findById(approval.requisition_id);
-    if (!requisition) throw new NotFoundError('Requisition');
-
-    this.assertStageIsActionable(approval.stage, requisition.status as RequisitionStatus);
-
     const nextAction = input.approve ? ApprovalAction.APPROVED : ApprovalAction.REJECTED;
 
-    // Conditional on the row still being PENDING — two approvers clicking at once must not
-    // both proceed, and zero rows updated is how the loser finds out (§7.3.4).
-    const claimed = await this.repo.claimApproval(approvalId, {
-      action: nextAction,
-      actedBy: actorId,
-      note: input.note,
-      // WITHDRAWN is decidable again: withdrawing exists precisely so the approver can think
-      // again and then act. The row carries its latest state; the event log carries the history.
-      expectedActions: [ApprovalAction.PENDING, ApprovalAction.WITHDRAWN],
-    });
-    if (!claimed) throw new ApprovalAlreadyActedError();
-
     await this.db.transaction().execute(async (tx) => {
+      // Lock first, read second. Everything below decides based on the requisition's status,
+      // so the status must not be able to change underneath us — the other approver's
+      // decision, or a withdrawal, waits here until we commit.
+      const requisition = await this.repo.lockRequisition(tx, approval.requisition_id);
+      if (!requisition) throw new NotFoundError('Requisition');
+
+      this.assertStageIsActionable(approval.stage, requisition.status as RequisitionStatus);
+
+      // Conditional on the row still being PENDING — two approvers clicking at once must not
+      // both proceed, and zero rows updated is how the loser finds out (§7.3.4). Inside the
+      // transaction so the claim rolls back with everything else if any step below fails.
+      const claimed = await this.repo.claimApproval(
+        approvalId,
+        {
+          action: nextAction,
+          actedBy: actorId,
+          note: input.note,
+          // WITHDRAWN is decidable again: withdrawing exists precisely so the approver can
+          // think again and then act. The row carries its latest state; the event log carries
+          // the history.
+          expectedActions: [ApprovalAction.PENDING, ApprovalAction.WITHDRAWN],
+        },
+        tx,
+      );
+      if (!claimed) throw new ApprovalAlreadyActedError();
+
       const isIm = approval.stage === ApprovalStage.INVENTORY_MANAGER;
+
+      // Every branch below records this same audit row before it returns. Recording it once
+      // here rather than at the end means the early-returning reject and IM branches cannot
+      // silently skip it — which is exactly what they used to do.
+      const recordDecision = () =>
+        this.audit.record(
+          {
+            action: 'requisition.decide',
+            entityType: 'requisition',
+            entityId: approval.requisition_id,
+            entityRef: requisition.requisition_no,
+            summary: `${input.approve ? 'Approved' : 'Rejected'} requisition ${requisition.requisition_no} (${approval.stage})`,
+            metadata: {
+              stage: approval.stage,
+              slot: approval.slot,
+              decision: input.approve ? 'approve' : 'reject',
+              note: input.note ?? null,
+              approvedAmount: input.approvedAmount ?? null,
+            },
+          },
+          { actorId: actorId, actorName: null, actorEmail: null, actorRoles: [], requestMethod: null, requestPath: null, requestIp: null, userAgent: null },
+          tx,
+        );
 
       if (!input.approve) {
         // Terminal. One rejection kills the whole request, whatever anyone else has said.
@@ -207,6 +294,7 @@ export class RequisitionsService {
           actorId,
           { note: input.note, stage: approval.stage, slot: approval.slot },
         );
+        await recordDecision();
         return;
       }
 
@@ -224,6 +312,7 @@ export class RequisitionsService {
           actorId,
           { note: input.note },
         );
+        await recordDecision();
         return;
       }
 
@@ -259,6 +348,8 @@ export class RequisitionsService {
           {},
         );
       }
+
+      await recordDecision();
     });
 
     return this.requireDetail(approval.requisition_id);
@@ -280,24 +371,32 @@ export class RequisitionsService {
       throw new ConflictError('Only an approval that was granted can be withdrawn');
     }
 
-    const requisition = await this.repo.findById(approval.requisition_id);
-    if (!requisition) throw new NotFoundError('Requisition');
-    if (!WITHDRAWABLE_STATUSES.includes(requisition.status as RequisitionStatus)) {
-      throw new InvalidRequisitionTransitionError(
-        requisition.status as RequisitionStatus,
-        'withdrawn from',
-      );
-    }
-
-    const claimed = await this.repo.claimApproval(approvalId, {
-      action: ApprovalAction.WITHDRAWN,
-      actedBy: actorId,
-      note: input.reason,
-      expectedActions: [ApprovalAction.APPROVED],
-    });
-    if (!claimed) throw new ApprovalAlreadyActedError();
-
     await this.db.transaction().execute(async (tx) => {
+      // Same lock as `decide`, for the same reason and taken in the same place: a withdrawal
+      // and a concurrent final approval must not each read the other's "before". Crucially
+      // this is also what stops a withdrawal landing on a requisition whose BOM was generated
+      // a millisecond ago — the status re-read below happens under the lock.
+      const requisition = await this.repo.lockRequisition(tx, approval.requisition_id);
+      if (!requisition) throw new NotFoundError('Requisition');
+      if (!WITHDRAWABLE_STATUSES.includes(requisition.status as RequisitionStatus)) {
+        throw new InvalidRequisitionTransitionError(
+          requisition.status as RequisitionStatus,
+          'withdrawn from',
+        );
+      }
+
+      const claimed = await this.repo.claimApproval(
+        approvalId,
+        {
+          action: ApprovalAction.WITHDRAWN,
+          actedBy: actorId,
+          note: input.reason,
+          expectedActions: [ApprovalAction.APPROVED],
+        },
+        tx,
+      );
+      if (!claimed) throw new ApprovalAlreadyActedError();
+
       // Back to awaiting approval: the chain is incomplete again, whatever it was before.
       await this.repo.setStatus(
         tx,
@@ -311,6 +410,18 @@ export class RequisitionsService {
         RequisitionEventType.APPROVER_WITHDREW,
         actorId,
         { reason: input.reason, slot: approval.slot },
+      );
+      await this.audit.record(
+        {
+          action: 'requisition.withdraw',
+          entityType: 'requisition',
+          entityId: approval.requisition_id,
+          entityRef: requisition.requisition_no,
+          summary: `Withdrew approval on ${requisition.requisition_no}`,
+          metadata: { stage: approval.stage, slot: approval.slot, reason: input.reason },
+        },
+        { actorId: actorId, actorName: null, actorEmail: null, actorRoles: [], requestMethod: null, requestPath: null, requestIp: null, userAgent: null },
+        tx,
       );
     });
 
@@ -332,6 +443,18 @@ export class RequisitionsService {
     await this.db.transaction().execute(async (tx) => {
       await this.repo.setStatus(tx, id, RequisitionStatus.CANCELLED, true);
       await this.repo.appendEvent(tx, id, RequisitionEventType.CANCELLED, actorId, {});
+      await this.audit.record(
+        {
+          action: 'requisition.cancel',
+          entityType: 'requisition',
+          entityId: id,
+          entityRef: existing.requisition_no,
+          summary: `Cancelled requisition ${existing.requisition_no}`,
+          metadata: {},
+        },
+        { actorId: actorId, actorName: null, actorEmail: null, actorRoles: [], requestMethod: null, requestPath: null, requestIp: null, userAgent: null },
+        tx,
+      );
     });
 
     return this.requireDetail(id);
@@ -341,6 +464,25 @@ export class RequisitionsService {
     const detail = await this.repo.findDetail(id);
     if (!detail) throw new NotFoundError('Requisition');
     return detail;
+  }
+
+  /**
+   * The admin-designated approver for sub-threshold requisitions. The setting is `null`
+   * if nobody has been picked yet — we surface that as `ApproverSlotUnassignedError` so the
+   * requester sees the same error as the at-or-above branch and the admin panel can guide
+   * the fix. The user is also checked for `is_active` so a freshly-deactivated approver
+   * does not silently win the assignment (Phase 05 inactive-slot guard).
+   */
+  private async subthresholdApproverId(): Promise<string> {
+    const userId = await this.settings.get(SettingKey.SUBTHRESHOLD_APPROVER_USER_ID);
+    if (userId === null) {
+      throw new ApproverSlotUnassignedError(1);
+    }
+    const active = await this.repo.isUserActive(userId);
+    if (!active) {
+      throw new ApproverSlotUnassignedError(1);
+    }
+    return userId;
   }
 
   /**

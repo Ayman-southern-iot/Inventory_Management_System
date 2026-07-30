@@ -12,6 +12,123 @@ Format:
 **Next:** the single next action, specific enough to start without thinking
 ```
 
+## 2026-07-30 — Phase 06 (audit hardening) + cross-cutting concurrency fixes
+
+Session brief was not a phase: "find any critical bug, make it stable for 2–3 concurrent users,
+no data loss ever", plus the four open audit-log tasks. So this entry spans phases.
+
+**Did:**
+- **Fixed the reported `Cannot GET /api/v1/admin/audit-log`.** Two causes, neither in the routing
+  code: migration `0011_audit_log` had never been applied to the dev database, and the API process
+  serving :3000 had been started at 21:07 from a build that predated the audit module entirely.
+  Applied 0011, rebuilt, restarted; the route now returns 200 with rows, verified with a real
+  admin login. The "Something went wrong" the user also saw was a *different* bug — login itself
+  was returning 500 (see below).
+- **Fixed a CRITICAL SQL injection in `audit.repository.ts`.** The insert used
+  `sql.lit(JSON.stringify(metadata))`. Kysely's `sql.lit` does not escape — it emits
+  `'` + value + `'` verbatim, and `JSON.stringify` escapes `"` and `\` but never `'`. Verified by
+  compiling the real statement: `VALUES ($1, '{"note":"it's fine"}'::jsonb)`. Every authenticated
+  user could reach it through any audited free-text field (an approval `note`, a borrow
+  `conditionNote`, a void `reason`), and because an audit failure inside a transaction rolls the
+  mutation back, it was *also* a guaranteed 500 the first time anyone typed an apostrophe.
+  Replaced with bound parameters + `::jsonb` cast.
+- **Fixed client-controlled `X-Forwarded-For` reaching an `inet` column** (`audit-context.ts`).
+  The code read the raw header and took the *leftmost* entry, defeating Express's `trust proxy: 1`,
+  and Caddy appends — so the leftmost value was always attacker-supplied. `X-Forwarded-For: x`
+  produced pg 22P02 and rolled back every audited mutation in the system. Now uses `req.ip` and
+  validates before writing; anything unrecognised is stored as NULL, never handed to pg.
+- **Closed an authorization hole on the BOM read endpoints.** `GET /boms`, `GET /boms/:id` and
+  `GET /boms/:id/pdf-url` had no `@Roles` and no service-side check (`signDownloadUrl` even named
+  the parameter `_actorId`), so any General user could read every BOM — vendor names, unit costs,
+  approver footprints across all departments — and mint a signed PDF URL. Added
+  `@Roles(INVENTORY_MANAGER, ADMIN)` to all three.
+- **Decoupled authentication from the audit table.** `auth.login.success` used the fail-closed
+  `audit.record`, *after* the session had been issued and `last_login` stamped — so an audit-write
+  problem returned 500 on a login that had already succeeded, and nobody could sign in at all.
+  Added `AuditService.recordCommitted` for audits whose mutation is already committed and cannot
+  be rolled back; login and self-service password change now use it.
+- **Made the three genuinely-non-transactional audit sites atomic instead of fail-open.**
+  `settings.update` and `delegations.create`/`revoke` now wrap the write and its audit row in one
+  transaction (settings cache is invalidated *after* commit). Everywhere else in the codebase
+  already passed `tx` correctly — this was not a systemic problem, only these five call sites.
+- **Fixed the requisition approval races.** `claimApproval` ran on the pool and auto-committed
+  *before* the caller's transaction opened, so a later failure left an approval marked decided
+  against a requisition whose status, event log and audit row never happened — unrecoverable,
+  because `expectedActions` no longer matched. Added `lockRequisition` (`SELECT … FOR UPDATE`) as
+  the first statement of both `decide` and `withdraw`, moved the claim inside the transaction.
+  This also closes the two-approvers-at-once double-`FULLY_APPROVED` and the
+  withdrawal-silently-reinstated-as-APPROVED interleavings.
+- **Found and fixed a bug the audit missed: rejections and IM approvals were never audited.**
+  Both branches of `decide` returned early, before the audit call at the end of the method. Task
+  6.1's acceptance criterion is "every state-changing action appears". Hoisted the audit row into
+  a `recordDecision()` closure that every branch calls before returning.
+- **Fixed the CRITICAL BOM/withdrawal race.** `loadAndValidateSources` checked `status = APPROVED`
+  on a pooled connection outside the transaction, and the write was an unconditional
+  `UPDATE requisitions SET status = 'BOM_GENERATED'`. An approver withdrawing in that window was
+  erased, and the frozen snapshot carried a retracted signature onto a PDF bound for Accounts.
+  Now locks all source requisitions `FOR UPDATE ORDER BY id` inside the transaction, re-asserts
+  APPROVED, and predicates the UPDATE on it. Also passed `tx` into `freezeFootprints` (it was
+  reading the snapshot on a second pooled connection, outside the transaction's own snapshot) and
+  into `setPdfPath`, and added `.forUpdate()` to the `is_void` guard in `void`.
+- **Fixed permanent phantom stock on borrow revert.** `revertToPending` called
+  `stock.receive()` then `stock.reserve()` — two transactions. In the gap the units were free; a
+  competing borrow could take them, `reserve` then failed, and the committed receipt left units on
+  the shelf in the ledger that were still on someone's desk. Reconciliation cannot see this because
+  `SUM(ledger)` and `quantity` still agree. Added `StockService.receiveAndHold` — one transaction,
+  one lock, one RECEIPT row, quantity and reserved_qty moving together so availability never
+  changes.
+- **Added idempotency to `POST /stock/receive` and `/stock/adjust`.** They were the only two
+  mutating endpoints with no natural double-apply guard (`move` has `expectedVersion`, borrow
+  decisions are conditional on status). A double-clicked "Receive 50" received 100, invisibly.
+- **Atomic PDF writes** — `pdf-renderer.store` now writes to a temp file and `rename`s, so a
+  concurrent `GET /boms/:id/pdf` cannot read a truncated document. Idempotency keys are scoped per
+  user, so an IM and an Admin really can render the same BOM simultaneously.
+- **Task: audit filters restricted to three fields** — actor, entity, date range — which is what
+  `plan/PHASE-06-hardening.md` 6.1 actually specifies. Dropped `action`, `entityId`, `outcome`,
+  `ip` and free-text `search` from the contract, repository and admin page.
+- **Task: admin-configurable audit actions** — new `AUDIT_ENABLED_ACTIONS` setting; `AuditService`
+  skips actions not in the set, with an always-on core that cannot be switched off.
+- **Task: time-based audit purge** — new `AUDIT_RETENTION_DAYS` setting wired into `RetentionJob`,
+  plus migration `0012_audit_retention` to give the purge a controlled path through the
+  append-only trigger.
+
+**Decisions:** all added to `DECISIONS.md` — the post-commit audit rule, the always-on audit
+actions, purge defaulting to disabled, and the purge escape hatch in the append-only trigger.
+
+**Landmines — read these before you touch anything:**
+- **The test suite is NOT green and I did not get it green.** Last `test:int` run had **5
+  failures**. At least two are understood: (a) my new "metadata containing a single quote" test
+  posted to `/admin/departments`, but the real route is `/departments` (the test client adds the
+  `/api/v1` prefix itself) — **this one is now fixed, but the fix has not been run**; (b) an
+  existing audit test filters
+  by `action`, which no longer exists now that filters are restricted to three fields — that test
+  needs rewriting, not the code reverting. **The other three failures I never diagnosed.** Do not
+  assume they are all my edits; diagnose each.
+- **Migration `0012_audit_retention` is written but NEVER APPLIED and NEVER ROLLBACK-VERIFIED.**
+  Docker Desktop stopped itself mid-session (the usual landmine) and I did not restart it. Nothing
+  that depends on 0012 — the whole purge path — has been executed even once.
+- **Nothing is committed.** The working tree carries this entire session plus the previously
+  uncommitted Phase 04.2+ BOM module and Phase 06 audit module. `git status` is ~84 files.
+- `apps/api/test_audit5.mjs` was an untracked scratch file with a hardcoded test-DB password.
+  Already deleted — noted only so nobody goes looking for it.
+- The security review also raised, and I did **not** fix: the audit sanitiser's redaction is an
+  exact-name key allowlist plus whole-string-anchored JWT regexes, so a token embedded in prose or
+  a key named `tempPassword`/`tokenHash` passes through unredacted; `PdfDownloadTokenInvalidError`
+  leaks its `reason` discriminator to the caller; and `page` has no upper bound so the offset is
+  unbounded. Written up in `OPEN-QUESTIONS.md` as G-11, G-12, G-13.
+- The concurrency audit also flagged, and I did **not** fix: `borrowing.decide`/`cancel` flip
+  status in one transaction and move stock in another (a crash between them strands a reservation
+  that reconciliation cannot see, because it only checks `SUM(ledger) = quantity` and never
+  `reserved_qty`); and `rollbackReturn` is an unconditional subtraction against a stale read.
+  G-14 and G-15.
+- I never got to the **load calculation** the user asked for. Pool max is 10
+  (`POSTGRES_POOL_MAX`), `statement_timeout` 60s. BOM generation used to hold two pool connections
+  at once — that is fixed — but no measurement was taken.
+
+**Next:** start Docker Desktop, `pnpm db:migrate`, then `pnpm db:rollback && pnpm db:migrate` to
+rollback-verify 0012. Then run `pnpm --filter @ims/api test:int > /tmp/int.log 2>&1` and work the
+5 failures one at a time.
+
 ---
 
 ## 2026-07-29 — Phase 03 (Requisitions) — complete

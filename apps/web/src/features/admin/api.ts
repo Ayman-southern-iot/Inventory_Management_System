@@ -1,9 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   ApproverSlot,
+  AuditEntry,
   CreateDepartmentInput,
   CreateUserInput,
   Department,
+  ListAuditQuery,
   ListDepartmentsQuery,
   ListUsersQuery,
   Paginated,
@@ -126,5 +128,31 @@ export function useSetApproverSlot() {
     mutationFn: (input: SetApproverSlotInput) =>
       api.put<ApproverSlot[]>('/admin/settings/approver-slots', input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.settings.approverSlots() }),
+  });
+}
+
+/* -------------------------------- audit log -------------------------------- */
+
+/**
+ * Admin-only live feed of every audited action. Polls every seven seconds while the page
+ * is visible so an open admin tab updates without manual refresh, but pauses in background
+ * tabs so a battery-idle laptop does not hammer the API.
+ */
+export function useAuditLog(query: ListAuditQuery) {
+  return useQuery({
+    queryKey: queryKeys.auditLog.list(query),
+    queryFn: ({ signal }) =>
+      api.get<Paginated<AuditEntry>>(`/admin/audit-log${toSearchParams(query)}`, signal),
+    placeholderData: (previous) => previous,
+    refetchInterval: 7_000,
+    refetchIntervalInBackground: false,
+  });
+}
+
+export function useAuditLogEntry(id: string) {
+  return useQuery({
+    queryKey: queryKeys.auditLog.detail(id),
+    queryFn: ({ signal }) => api.get<AuditEntry>(`/admin/audit-log/${id}`, signal),
+    enabled: Boolean(id),
   });
 }

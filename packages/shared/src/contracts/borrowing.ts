@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { paginationQuerySchema } from './common.js';
+import { paginationQuerySchema, queryBoolean } from './common.js';
 
 /* --------------------------------------------------------------------- projects */
 
@@ -116,7 +116,7 @@ export const listBorrowsQuerySchema = paginationQuerySchema.extend({
   productId: z.string().uuid().optional(),
   projectId: z.string().uuid().optional(),
   /** Set by the "My borrowings" screen; the API also forces it for non-IM callers. */
-  mine: z.coerce.boolean().default(false),
+  mine: queryBoolean(false),
 });
 export type ListBorrowsQuery = z.infer<typeof listBorrowsQuerySchema>;
 

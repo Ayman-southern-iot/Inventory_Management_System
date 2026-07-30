@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import type {
   CreateDepartmentInput,
   Department,
@@ -7,6 +7,10 @@ import type {
   UpdateDepartmentInput,
 } from '@ims/shared';
 import { ConflictError, NotFoundError } from '../../common/errors';
+import { DB } from '../../database/database.module';
+import type { Db } from '../../database/create-db';
+import { AuditService } from '../audit/audit.service';
+import type { AuditContext } from '../audit/audit-context';
 import { DepartmentsRepository } from './departments.repository';
 
 const PG_UNIQUE_VIOLATION = '23505';
@@ -21,16 +25,35 @@ function isUniqueViolation(error: unknown): boolean {
 
 @Injectable()
 export class DepartmentsService {
-  constructor(private readonly repo: DepartmentsRepository) {}
+  constructor(
+    private readonly repo: DepartmentsRepository,
+    @Inject(DB) private readonly db: Db,
+    private readonly audit: AuditService,
+  ) {}
 
   async list(query: ListDepartmentsQuery): Promise<Paginated<Department>> {
     const { items, total } = await this.repo.list(query);
     return { items, page: query.page, limit: query.limit, total };
   }
 
-  async create(input: CreateDepartmentInput): Promise<Department> {
+  async create(input: CreateDepartmentInput, context: AuditContext): Promise<Department> {
     try {
-      const id = await this.repo.insert(input.name);
+      const id = await this.db.transaction().execute(async (tx) => {
+        const newId = await this.repo.insert(input.name, tx);
+        await this.audit.record(
+          {
+            action: 'department.create',
+            entityType: 'department',
+            entityId: newId,
+            entityRef: input.name,
+            summary: `Created department ${input.name}`,
+            metadata: { name: input.name },
+          },
+          context,
+          tx,
+        );
+        return newId;
+      });
       const created = await this.repo.findById(id);
       if (!created) throw new NotFoundError('Department');
       return created;
@@ -40,7 +63,11 @@ export class DepartmentsService {
     }
   }
 
-  async update(id: string, input: UpdateDepartmentInput): Promise<Department> {
+  async update(
+    id: string,
+    input: UpdateDepartmentInput,
+    context: AuditContext,
+  ): Promise<Department> {
     const existing = await this.repo.findById(id);
     if (!existing) throw new NotFoundError('Department');
 
@@ -56,7 +83,35 @@ export class DepartmentsService {
     }
 
     try {
-      await this.repo.update(id, { name: input.name, isActive: input.isActive });
+      await this.db.transaction().execute(async (tx) => {
+        await this.repo.update(id, { name: input.name, isActive: input.isActive }, tx);
+        const { diffSafeFields } = await import('../audit/audit-sanitizer');
+        const changes = diffSafeFields(
+          {
+            name: existing.name,
+            isActive: existing.isActive,
+          } as Record<string, unknown>,
+          {
+            ...(input.name !== undefined ? { name: input.name } : {}),
+            ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+          } as Record<string, unknown>,
+          ['name', 'isActive'],
+        );
+        if (Object.keys(changes).length > 0) {
+          await this.audit.record(
+            {
+              action: 'department.update',
+              entityType: 'department',
+              entityId: id,
+              entityRef: existing.name,
+              summary: `Updated department ${existing.name}`,
+              metadata: { changes },
+            },
+            context,
+            tx,
+          );
+        }
+      });
     } catch (error) {
       if (isUniqueViolation(error)) throw new ConflictError('A department with that name exists');
       throw error;

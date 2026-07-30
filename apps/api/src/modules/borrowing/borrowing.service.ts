@@ -11,6 +11,8 @@ import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors';
 import { StockService } from '../stock/stock.service';
+import { AuditService } from '../audit/audit.service';
+import type { AuditContext } from '../audit/audit-context';
 import { BorrowingRepository } from './borrowing.repository';
 import {
   BorrowAlreadyDecidedError,
@@ -28,6 +30,7 @@ export class BorrowingService {
     @Inject(DB) private readonly db: Db,
     private readonly repo: BorrowingRepository,
     private readonly stock: StockService,
+    private readonly audit: AuditService,
   ) {}
 
   /**
@@ -37,7 +40,11 @@ export class BorrowingService {
    * promised the last unit while the IM thinks about it. `StockService.reserve` takes the row
    * lock, so the second submitter is refused rather than queued behind an optimistic check.
    */
-  async create(input: CreateBorrowRequestInput, requesterId: string) {
+  async create(
+    input: CreateBorrowRequestInput,
+    requesterId: string,
+    context: AuditContext,
+  ) {
     const product = await this.repo.findProductForBorrow(input.productId);
     if (!product) throw new NotFoundError('Product');
     if (!product.is_active) throw new ConflictError('That product has been archived');
@@ -56,23 +63,53 @@ export class BorrowingService {
       { performedBy: requesterId, refType: BORROW_REF_TYPE },
     );
 
+    let borrowNo: string;
+    let id: string;
     try {
-      const borrowNo = await this.nextBorrowNo();
-      const id = await this.repo.insert({
-        borrowNo,
-        requesterId,
-        productId: input.productId,
-        placementId: placement.id,
-        compartmentId: input.compartmentId,
-        quantity: input.quantity,
-        projectId: input.projectId,
-        isReturnable: input.isReturnable,
-        expectedReturnDate: input.expectedReturnDate,
-        purpose: input.purpose,
+      borrowNo = await this.nextBorrowNo();
+      // Audit inside the same transaction as the insert: a successful borrow creation cannot
+      // lack its audit row, and a failed audit row rolls the row back so an "everything is
+      // audited" promise stays honest.
+      id = await this.db.transaction().execute(async (tx) => {
+        const newId = await this.repo.insert(
+          {
+            borrowNo,
+            requesterId,
+            productId: input.productId,
+            placementId: placement.id,
+            compartmentId: input.compartmentId,
+            quantity: input.quantity,
+            projectId: input.projectId,
+            isReturnable: input.isReturnable,
+            expectedReturnDate: input.expectedReturnDate,
+            purpose: input.purpose,
+          },
+          tx,
+        );
+        await this.audit.record(
+          {
+            action: 'borrowing.create',
+            entityType: 'borrowing',
+            entityId: newId,
+            entityRef: borrowNo,
+            summary: `Created borrow ${borrowNo} for ${input.quantity} unit(s)`,
+            metadata: {
+              borrowNo,
+              requesterId,
+              productId: input.productId,
+              compartmentId: input.compartmentId,
+              quantity: input.quantity,
+              projectId: input.projectId,
+              isReturnable: input.isReturnable,
+              expectedReturnDate: input.expectedReturnDate,
+              purpose: input.purpose,
+            },
+          },
+          context,
+          tx,
+        );
+        return newId;
       });
-
-      this.logger.log(`Borrow ${borrowNo} raised by ${requesterId} for ${input.quantity} unit(s)`);
-      return this.requireView(id);
     } catch (error) {
       // The reservation is only meaningful attached to a request; release it rather than
       // leaving stock silently unavailable to everyone else.
@@ -92,6 +129,9 @@ export class BorrowingService {
         });
       throw error;
     }
+
+    this.logger.log(`Borrow ${borrowNo} raised by ${requesterId} for ${input.quantity} unit(s)`);
+    return this.requireView(id);
   }
 
   /**
@@ -101,7 +141,7 @@ export class BorrowingService {
    * the same instant must not both proceed, and `WHERE status = 'PENDING'` affecting zero rows
    * is how the loser finds out.
    */
-  async decide(id: string, input: DecideBorrowInput, actorId: string) {
+  async decide(id: string, input: DecideBorrowInput, actorId: string, context: AuditContext) {
     const request = await this.repo.findById(id);
     if (!request) throw new NotFoundError('Borrow request');
     if (request.status !== BorrowStatus.PENDING) {
@@ -109,14 +149,45 @@ export class BorrowingService {
     }
 
     const nextStatus = input.approve ? BorrowStatus.ISSUED : BorrowStatus.REJECTED;
-    const claimed = await this.repo.claimPendingDecision(id, {
-      status: nextStatus,
-      decidedBy: actorId,
-      decisionNote: input.note,
-      // A rejection never issued anything, so it carries no issue timestamp.
-      markIssued: input.approve,
+    const action = input.approve ? 'borrowing.approve' : 'borrowing.reject';
+    // Audit row commits atomically with the status flip. `stock.issue` / `stock.release` are
+    // each their own transaction (they hold the placement row lock) — so we write the audit row
+    // first, then perform the stock move; if the stock move fails the audit row's transaction
+    // has already committed the decision, which we then revert.
+    await this.db.transaction().execute(async (tx) => {
+      const didClaim = await this.repo.claimPendingDecision(
+        id,
+        {
+          status: nextStatus,
+          decidedBy: actorId,
+          decisionNote: input.note,
+          // A rejection never issued anything, so it carries no issue timestamp.
+          markIssued: input.approve,
+        },
+        tx,
+      );
+      if (!didClaim) throw new BorrowAlreadyDecidedError();
+      await this.audit.record(
+        {
+          action,
+          entityType: 'borrowing',
+          entityId: id,
+          entityRef: request.borrow_no,
+          summary: input.approve
+            ? `Approved borrow ${request.borrow_no}`
+            : `Rejected borrow ${request.borrow_no}`,
+          metadata: {
+            borrowNo: request.borrow_no,
+            productId: request.product_id,
+            compartmentId: request.compartment_id,
+            quantity: request.quantity,
+            note: input.note,
+          },
+        },
+        context,
+        tx,
+      );
     });
-    if (!claimed) throw new BorrowAlreadyDecidedError();
 
     try {
       if (input.approve) {
@@ -154,7 +225,12 @@ export class BorrowingService {
    * Partial returns are normal, so the running `returned_qty` is incremented under the same
    * conditional UPDATE that guards against returning more than is outstanding.
    */
-  async recordReturn(id: string, input: ReturnBorrowInput, actorId: string) {
+  async recordReturn(
+    id: string,
+    input: ReturnBorrowInput,
+    actorId: string,
+    context: AuditContext,
+  ) {
     const request = await this.repo.findById(id);
     if (!request) throw new NotFoundError('Borrow request');
 
@@ -179,14 +255,41 @@ export class BorrowingService {
     const fullyReturned = request.returned_qty + input.quantity === request.quantity;
 
     // Claim the quantity first. If two IMs record the last return at once, exactly one wins,
-    // and only the winner puts stock back — otherwise the ledger gains phantom units.
-    const claimed = await this.repo.claimReturn(id, {
-      quantity: input.quantity,
-      expectedReturnedQty: request.returned_qty,
-      status: fullyReturned ? BorrowStatus.RETURNED : BorrowStatus.PARTIALLY_RETURNED,
-      markReturnedAt: fullyReturned,
+    // and only the winner puts stock back — otherwise the ledger gains phantom units. The
+    // audit row joins the same transaction so a successful return cannot lack its history.
+    await this.db.transaction().execute(async (tx) => {
+      const didClaim = await this.repo.claimReturn(
+        id,
+        {
+          quantity: input.quantity,
+          expectedReturnedQty: request.returned_qty,
+          status: fullyReturned ? BorrowStatus.RETURNED : BorrowStatus.PARTIALLY_RETURNED,
+          markReturnedAt: fullyReturned,
+        },
+        tx,
+      );
+      if (!didClaim) throw new BorrowAlreadyDecidedError();
+      await this.audit.record(
+        {
+          action: 'borrowing.return',
+          entityType: 'borrowing',
+          entityId: id,
+          entityRef: request.borrow_no,
+          summary: `Recorded return of ${input.quantity} unit(s) on borrow ${request.borrow_no}`,
+          metadata: {
+            borrowNo: request.borrow_no,
+            productId: request.product_id,
+            compartmentId: input.compartmentId,
+            quantity: input.quantity,
+            returnedQtyAfter: request.returned_qty + input.quantity,
+            fullyReturned,
+            conditionNote: input.conditionNote,
+          },
+        },
+        context,
+        tx,
+      );
     });
-    if (!claimed) throw new BorrowAlreadyDecidedError();
 
     try {
       await this.stock.returnStock(
@@ -223,7 +326,12 @@ export class BorrowingService {
    * pretending the request was never approved would put units back on the shelf that are not
    * there. After issue the correct action is a return, not an edit.
    */
-  async revertToPending(id: string, input: RevertBorrowInput, actorId: string) {
+  async revertToPending(
+    id: string,
+    input: RevertBorrowInput,
+    actorId: string,
+    context: AuditContext,
+  ) {
     const request = await this.repo.findById(id);
     if (!request) throw new NotFoundError('Borrow request');
     if (request.status !== BorrowStatus.ISSUED) {
@@ -233,8 +341,13 @@ export class BorrowingService {
       throw new ConflictError('Part of this borrow has already been returned');
     }
 
-    // Re-reserve what was issued, then put the request back in the queue.
-    await this.stock.receive(
+    // Re-reserve what was issued, then put the request back in the queue. The revert + audit
+    // row are joined so the borrow row never sits in PENDING without the corresponding audit
+    // entry, and vice versa.
+    // One StockService call, not receive() then reserve(): between two separate transactions
+    // the units are momentarily free, and a competing borrow that grabs them leaves this
+    // revert half-applied with the receipt already committed.
+    await this.stock.receiveAndHold(
       {
         productId: request.product_id,
         compartmentId: request.compartment_id,
@@ -247,21 +360,33 @@ export class BorrowingService {
         note: `Reverted to pending: ${input.reason}`,
       },
     );
-    await this.stock.reserve(
-      {
-        productId: request.product_id,
-        compartmentId: request.compartment_id,
-        quantity: request.quantity,
-      },
-      { performedBy: actorId, refType: BORROW_REF_TYPE, refId: id },
-    );
-    await this.repo.revertToPending(id);
+    await this.db.transaction().execute(async (tx) => {
+      await this.repo.revertToPending(id, tx);
+      await this.audit.record(
+        {
+          action: 'borrowing.revert',
+          entityType: 'borrowing',
+          entityId: id,
+          entityRef: request.borrow_no,
+          summary: `Reverted borrow ${request.borrow_no} to pending`,
+          metadata: {
+            borrowNo: request.borrow_no,
+            productId: request.product_id,
+            compartmentId: request.compartment_id,
+            quantity: request.quantity,
+            reason: input.reason,
+          },
+        },
+        context,
+        tx,
+      );
+    });
 
     return this.requireView(id);
   }
 
   /** The requester withdrawing their own request before anyone has acted on it. */
-  async cancel(id: string, actorId: string) {
+  async cancel(id: string, actorId: string, context: AuditContext) {
     const request = await this.repo.findById(id);
     if (!request) throw new NotFoundError('Borrow request');
     if (request.requester_id !== actorId) {
@@ -271,13 +396,36 @@ export class BorrowingService {
       throw new InvalidBorrowTransitionError(request.status, 'cancelled');
     }
 
-    const claimed = await this.repo.claimPendingDecision(id, {
-      status: BorrowStatus.CANCELLED,
-      decidedBy: actorId,
-      decisionNote: null,
-      markIssued: false,
+    await this.db.transaction().execute(async (tx) => {
+      const didClaim = await this.repo.claimPendingDecision(
+        id,
+        {
+          status: BorrowStatus.CANCELLED,
+          decidedBy: actorId,
+          decisionNote: null,
+          markIssued: false,
+        },
+        tx,
+      );
+      if (!didClaim) throw new BorrowAlreadyDecidedError();
+      await this.audit.record(
+        {
+          action: 'borrowing.cancel',
+          entityType: 'borrowing',
+          entityId: id,
+          entityRef: request.borrow_no,
+          summary: `Cancelled borrow ${request.borrow_no}`,
+          metadata: {
+            borrowNo: request.borrow_no,
+            productId: request.product_id,
+            compartmentId: request.compartment_id,
+            quantity: request.quantity,
+          },
+        },
+        context,
+        tx,
+      );
     });
-    if (!claimed) throw new BorrowAlreadyDecidedError();
 
     await this.stock.release(
       {

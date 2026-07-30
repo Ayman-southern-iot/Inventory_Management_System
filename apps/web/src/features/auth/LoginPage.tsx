@@ -11,6 +11,23 @@ import { messageForError } from '@/lib/error-message';
 import { useAuth } from './auth-context';
 import { ROUTES } from '@/routes/paths';
 
+/**
+ * Hard-coded demo credentials displayed under the sign-in card. Strictly a developer
+ * convenience — the block is wrapped in `import.meta.env.DEV` so the production bundle
+ * never ships it (rules/30-frontend.md; verified by the production-safety grep in the
+ * Phase 05 plan).
+ */
+const TEST_ACCOUNTS: ReadonlyArray<{
+  label: string;
+  email: string;
+  password: string;
+}> = [
+  { label: 'General user', email: 'saad@southerniot.net', password: 'demo' },
+  { label: 'Inventory Manager', email: 'sarjia@southerniot.net', password: 'demo' },
+  { label: 'Approver 1', email: 'pritu@southerniot.net', password: 'demo' },
+  { label: 'Approver 2', email: 'raqueeb@southerniot.net', password: 'demo' },
+];
+
 export function LoginPage() {
   const { user, isRestoring, signIn } = useAuth();
   const navigate = useNavigate();
@@ -46,11 +63,23 @@ export function LoginPage() {
     }
   }
 
+  // `import.meta.env.DEV` is statically replaced by Vite at build time, so the whole
+  // test-accounts block is dead-code-eliminated from the production bundle.
+  const isDev = import.meta.env.DEV;
+
   return (
-    <main className="flex min-h-dvh items-center justify-center bg-canvas px-4">
+    <main className="flex min-h-dvh items-center justify-center bg-canvas px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="mb-6 text-center">
-          <h1 className="text-lg font-semibold tracking-tight text-ink">{t.app.name}</h1>
+          <img
+            src="/southern-iot-logo.png"
+            alt={t.app.name}
+            className="mx-auto h-16 w-auto"
+          />
+          <h1 className="mt-3 text-lg font-semibold tracking-tight text-ink">
+            {t.app.name}
+          </h1>
+          <p className="mt-1 text-xs text-ink-subtle">{t.app.acronym}</p>
         </div>
 
         <form
@@ -92,6 +121,38 @@ export function LoginPage() {
             {isSubmitting ? t.auth.signingIn : t.auth.signIn}
           </Button>
         </form>
+
+        {isDev ? (
+          <section
+            aria-label={t.auth.testAccountsTitle}
+            className="mt-4 rounded-[--radius-panel] border border-border bg-surface-2 p-4 text-xs text-ink-muted"
+          >
+            <h3 className="text-sm font-semibold text-ink">{t.auth.testAccountsTitle}</h3>
+            <p className="mt-1">{t.auth.testAccountsHint}</p>
+            <table className="mt-3 w-full text-left">
+              <thead className="text-[0.7rem] uppercase tracking-wide text-ink-subtle">
+                <tr>
+                  <th className="pb-1 pr-2 font-medium">{t.auth.testAccountsRole}</th>
+                  <th className="pb-1 pr-2 font-medium">{t.auth.testAccountsEmail}</th>
+                  <th className="pb-1 font-medium">{t.auth.testAccountsPassword}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {TEST_ACCOUNTS.map((account) => (
+                  <tr key={account.email}>
+                    <td className="py-1.5 pr-2 text-ink">{account.label}</td>
+                    <td className="py-1.5 pr-2 font-mono text-[0.7rem] text-ink">
+                      {account.email}
+                    </td>
+                    <td className="py-1.5 font-mono text-[0.7rem] text-ink">
+                      {account.password}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        ) : null}
       </div>
     </main>
   );

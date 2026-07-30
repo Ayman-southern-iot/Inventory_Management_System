@@ -11,6 +11,8 @@ import {
 import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors';
 import { RefreshRevocationReason } from '../../database/schema';
 import { PasswordService } from '../../security/password.service';
+import { AuditService } from '../audit/audit.service';
+import type { AuditContext } from '../audit/audit-context';
 import { UsersRepository, toUser, type Tx, type UserWithRoles } from './users.repository';
 
 /** Postgres unique-violation. Catching it is how a duplicate email stays a single round trip. */
@@ -29,6 +31,7 @@ export class UsersService {
   constructor(
     private readonly repo: UsersRepository,
     private readonly passwords: PasswordService,
+    private readonly audit: AuditService,
   ) {}
 
   async findById(id: string): Promise<User> {
@@ -51,7 +54,7 @@ export class UsersService {
     return { items: items.map(toUser), page: query.page, limit: query.limit, total };
   }
 
-  async create(input: CreateUserInput): Promise<User> {
+  async create(input: CreateUserInput, context: AuditContext): Promise<User> {
     const passwordHash = await this.passwords.hash(input.password);
 
     try {
@@ -65,6 +68,27 @@ export class UsersService {
           mustChangePassword: input.mustChangePassword,
         });
         await this.repo.replaceRoles(tx, userId, input.roles);
+        // Audit inside the transaction: a successful user creation cannot lack its audit row,
+        // and the redactor guarantees the password hash never reaches the metadata column.
+        await this.audit.record(
+          {
+            action: 'user.create',
+            entityType: 'user',
+            entityId: userId,
+            entityRef: input.email,
+            summary: `Created user ${input.email}`,
+            metadata: {
+              email: input.email,
+              fullName: input.fullName,
+              designation: input.designation,
+              departmentId: input.departmentId,
+              roles: input.roles,
+              mustChangePassword: input.mustChangePassword,
+            },
+          },
+          { ...context, actorName: context.actorName ?? input.email.split('@')[0] ?? null },
+          tx,
+        );
         return userId;
       });
 
@@ -81,7 +105,7 @@ export class UsersService {
     }
   }
 
-  async update(id: string, input: UpdateUserInput, actorId: string): Promise<User> {
+  async update(id: string, input: UpdateUserInput, context: AuditContext): Promise<User> {
     const existing = await this.repo.findById(id);
     if (!existing) throw new NotFoundError('User');
 
@@ -90,7 +114,7 @@ export class UsersService {
         // Inside the transaction, and holding a lock, so two concurrent demotions cannot both
         // read "there are still two admins" and both succeed.
         if (input.roles) {
-          await this.assertAdminRemainsReachable(tx, existing, input.roles, actorId);
+          await this.assertAdminRemainsReachable(tx, existing, input.roles, context.actorId);
         }
         await this.repo.update(tx, id, {
           fullName: input.fullName,
@@ -98,6 +122,7 @@ export class UsersService {
           departmentId: input.departmentId,
         });
         if (input.roles) await this.repo.replaceRoles(tx, id, input.roles);
+        await this.writeUpdateAudit(tx, existing, input, id, context);
       });
     } catch (error) {
       if (isPgError(error, PG_FOREIGN_KEY_VIOLATION)) throw new NotFoundError('Department');
@@ -107,16 +132,63 @@ export class UsersService {
     return this.findById(id);
   }
 
-  async setActive(id: string, isActive: boolean, actorId: string): Promise<User> {
+  /**
+   * Records the safe before/after diff for a user update. Lives next to `update` because the
+   * diff is the audit row's whole reason for existing — a "user updated" without a "what
+   * changed" is decoration, not history. Passwords and password hashes are NEVER included.
+   */
+  private async writeUpdateAudit(
+    tx: Tx,
+    existing: UserWithRoles,
+    input: UpdateUserInput,
+    id: string,
+    context: AuditContext,
+  ): Promise<void> {
+    const before = {
+      fullName: existing.full_name,
+      designation: existing.designation,
+      departmentId: existing.department_id,
+      isActive: existing.is_active,
+      roles: existing.roles,
+    };
+    const after = {
+      ...(input.fullName !== undefined ? { fullName: input.fullName } : {}),
+      ...(input.designation !== undefined ? { designation: input.designation } : {}),
+      ...(input.departmentId !== undefined ? { departmentId: input.departmentId } : {}),
+      ...(input.roles !== undefined ? { roles: input.roles } : {}),
+    };
+    const { diffSafeFields } = await import('../audit/audit-sanitizer');
+    const changes = diffSafeFields(
+      before as Record<string, unknown>,
+      after as Record<string, unknown>,
+      ['fullName', 'designation', 'departmentId', 'roles'],
+    );
+    if (Object.keys(changes).length === 0) return;
+
+    await this.audit.record(
+      {
+        action: 'user.update',
+        entityType: 'user',
+        entityId: id,
+        entityRef: existing.email,
+        summary: `Updated user ${existing.email}`,
+        metadata: { changes },
+      },
+      { ...context, actorName: context.actorName ?? existing.full_name },
+      tx,
+    );
+  }
+
+  async setActive(id: string, isActive: boolean, context: AuditContext): Promise<User> {
     const existing = await this.repo.findById(id);
     if (!existing) throw new NotFoundError('User');
 
-    if (!isActive && id === actorId) {
+    if (!isActive && id === context.actorId) {
       throw new ForbiddenError('You cannot deactivate your own account');
     }
 
     await this.repo.connection.transaction().execute(async (tx) => {
-      if (!isActive) await this.assertAdminRemainsReachable(tx, existing, [], actorId);
+      if (!isActive) await this.assertAdminRemainsReachable(tx, existing, [], context.actorId);
       await this.repo.update(tx, id, { isActive });
       // Deactivating must end the session immediately, not at the next access-token expiry.
       if (!isActive) {
@@ -127,12 +199,31 @@ export class UsersService {
           .where('revoked_at', 'is', null)
           .execute();
       }
+      await this.audit.record(
+        {
+          action: 'user.set_active',
+          entityType: 'user',
+          entityId: id,
+          entityRef: existing.email,
+          summary: `${isActive ? 'Activated' : 'Deactivated'} user ${existing.email}`,
+          metadata: {
+            isActive: { before: existing.is_active, after: isActive },
+            sessionsRevoked: !isActive,
+          },
+        },
+        { ...context, actorName: context.actorName ?? existing.full_name },
+        tx,
+      );
     });
 
     return this.findById(id);
   }
 
-  async resetPassword(id: string, input: ResetPasswordInput): Promise<void> {
+  async resetPassword(
+    id: string,
+    input: ResetPasswordInput,
+    context: AuditContext,
+  ): Promise<void> {
     const existing = await this.repo.findById(id);
     if (!existing) throw new NotFoundError('User');
 
@@ -149,17 +240,41 @@ export class UsersService {
         .where('user_id', '=', id)
         .where('revoked_at', 'is', null)
         .execute();
+      await this.audit.record(
+        {
+          action: 'user.reset_password',
+          entityType: 'user',
+          entityId: id,
+          entityRef: existing.email,
+          summary: `Reset password for ${existing.email}`,
+          metadata: {
+            mustChangePassword: { before: existing.must_change_password, after: input.mustChangePassword },
+            sessionsRevoked: true,
+          },
+        },
+        { ...context, actorName: context.actorName ?? existing.full_name },
+        tx,
+      );
     });
   }
 
-  async changeOwnPassword(id: string, currentPassword: string, newPassword: string): Promise<void> {
+  async changeOwnPassword(
+    id: string,
+    currentPassword: string,
+    newPassword: string,
+    context: AuditContext,
+  ): Promise<void> {
     const existing = await this.repo.findById(id);
     if (!existing) throw new NotFoundError('User');
 
     const ok = await this.passwords.verify(existing.password_hash, currentPassword);
     if (!ok) throw new ForbiddenError('Current password is incorrect');
 
-    await this.resetPassword(id, { newPassword, mustChangePassword: false });
+    await this.resetPassword(
+      id,
+      { newPassword, mustChangePassword: false },
+      { ...context, actorName: context.actorName ?? existing.full_name },
+    );
   }
 
   async touchLastLogin(id: string): Promise<void> {
@@ -174,7 +289,7 @@ export class UsersService {
     tx: Tx,
     target: UserWithRoles,
     nextRoles: readonly Role[],
-    actorId: string,
+    actorId: string | null,
   ): Promise<void> {
     const wasAdmin = target.roles.includes(Role.ADMIN);
     const staysAdmin = nextRoles.includes(Role.ADMIN);
@@ -190,7 +305,7 @@ export class UsersService {
     if (reachableWithoutTarget < 1) {
       throw new ConflictError('This is the last active administrator and cannot be removed');
     }
-    if (target.id === actorId) {
+    if (actorId !== null && target.id === actorId) {
       throw new ForbiddenError('You cannot remove your own administrator role');
     }
   }

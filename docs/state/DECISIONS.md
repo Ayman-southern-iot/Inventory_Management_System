@@ -190,3 +190,33 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   the system with none.
 - 2026-07-28 — Production source maps are off — nothing consumes them until Phase 06 adds
   monitoring, so they were 1.5 MB of readable source shipped to every browser for no reader.
+- 2026-07-30 — Audit writes whose mutation is already committed are best-effort
+  (`AuditService.recordCommitted`), not fail-closed — `record` rethrows so the caller's open
+  transaction rolls back, but past the commit there is nothing to roll back, so rethrowing only
+  reports a completed action as a 500 and invites a retry of something that already happened.
+  On the login path it made authentication unavailable whenever `audit_log` was. Applies to
+  exactly two call sites (`auth.login.success`, `auth.password.change`); everything else either
+  passes `tx` or was rewritten to.
+- 2026-07-30 — `settings.update` and `delegations.create`/`revoke` were wrapped in a transaction
+  rather than switched to best-effort — they are single-row writes with nothing external in the
+  way, so atomicity was available for free and keeps the fail-closed guarantee.
+- 2026-07-30 — Never `sql.lit()` in this codebase. It performs no escaping whatsoever (it emits
+  `'` + value + `'`); use a bound parameter with an explicit `::jsonb` cast when a jsonb column
+  needs one. Noted here because the original code carried a comment justifying `sql.lit`, and the
+  next person will otherwise reintroduce it for the same stated reason.
+- 2026-07-30 — Audit filters are actor, entity and date range only, matching PHASE-06 6.1. The
+  dropped filters (`action`, `entityId`, `outcome`, `ip`, free-text `search`) each cost an index —
+  including a GIN index — on a table written on *every* mutation, to serve combinations a
+  twelve-person tool does not reach for. Reversible: re-add the filter and its index together.
+- 2026-07-30 — Some audit actions are always-on and cannot be disabled by an admin
+  (`AUDIT_ALWAYS_ON_ACTIONS`, enforced in `SettingsService`, not in the registry schema) — an
+  admin able to switch off `auth.*` or `user.*` recording could erase their own tracks, which
+  defeats the point of the feature. OQ-14 records that this list was chosen, not specified.
+- 2026-07-30 — The audit purge ships **disabled by default** (`AUDIT_RETENTION_DAYS` = keep
+  forever) and must be opted into by an admin — the standing requirement is that no data is lost
+  in any case, so deleting history is never the default behaviour of an upgrade.
+- 2026-07-30 — The `audit_log` append-only trigger keeps rejecting UPDATE and TRUNCATE for every
+  role including the owner, but permits DELETE only inside a transaction that has set the
+  `ims.audit_purge` flag — the retention job is the one legitimate deleter, and a session flag
+  keeps ordinary application code unable to delete even by accident. The purge writes its own
+  `audit.purge` row recording the cutoff and the number of rows removed.

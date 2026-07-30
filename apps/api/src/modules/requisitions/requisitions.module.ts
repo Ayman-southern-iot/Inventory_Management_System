@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AuditModule } from '../audit/audit.module';
 import { SettingsModule } from '../settings/settings.module';
 import { ApprovalDeadlineJob } from './approval-deadline.job';
 import { DelegationsService } from './delegations.service';
@@ -11,7 +12,7 @@ import { RequisitionsService } from './requisitions.service';
  * and then frozen onto the requisition, never consulted again for that request.
  */
 @Module({
-  imports: [SettingsModule],
+  imports: [SettingsModule, AuditModule],
   controllers: [RequisitionsController],
   providers: [RequisitionsService, RequisitionsRepository, DelegationsService, ApprovalDeadlineJob],
   exports: [RequisitionsService, RequisitionsRepository],

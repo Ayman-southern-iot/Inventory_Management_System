@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { paginationQuerySchema } from './common.js';
+import { paginationQuerySchema, queryBoolean } from './common.js';
 
 export const departmentNameSchema = z.string().trim().min(1).max(120);
 
@@ -15,7 +15,7 @@ export const updateDepartmentSchema = z.object({
 export type UpdateDepartmentInput = z.infer<typeof updateDepartmentSchema>;
 
 export const listDepartmentsQuerySchema = paginationQuerySchema.extend({
-  includeInactive: z.coerce.boolean().default(false),
+  includeInactive: queryBoolean(false),
 });
 export type ListDepartmentsQuery = z.infer<typeof listDepartmentsQuerySchema>;
 

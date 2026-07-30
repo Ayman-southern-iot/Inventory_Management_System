@@ -1,9 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { Role, type LoginResponse } from '@ims/shared';
+import { sql } from 'kysely';
+import { Role, SettingKey, type LoginResponse } from '@ims/shared';
 import type { Db } from '../src/database/create-db';
 import { PasswordService } from '../src/security/password.service';
+import { SettingsService } from '../src/modules/settings/settings.service';
 import { TEST_PASSWORD } from './config/test-env';
-import type { HttpClient } from './app';
+import type { HttpClient, TestApp } from './app';
 
 const passwords = new PasswordService();
 
@@ -125,7 +127,13 @@ export async function createUserAndLogin(
  * `app_settings` is owned by boot-time seeding and is therefore reset by value, not by row.
  */
 export async function resetData(db: Db): Promise<void> {
-  // Borrow rows first: they reference users with ON DELETE RESTRICT. Unlike the ledger these
+  // Phase 06: the append-only trigger on audit_log blocks UPDATE, which means a SET NULL
+  // ON DELETE foreign-key cascade would fail. The reset path temporarily disables the
+  // trigger in the isolated test database only — production code never touches the trigger.
+  // This is the documented escape hatch in the Phase 06 plan.
+  await sql`ALTER TABLE audit_log DISABLE TRIGGER audit_log_no_update`.execute(db);
+  try {
+    // Borrow rows first: they reference users with ON DELETE RESTRICT. Unlike the ledger these
   // are ordinary history and may be cleared between tests. The ledger rows they produced stay,
   // with a `ref_id` pointing at a request that no longer exists — deliberate, because `ref_id`
   // carries no foreign key precisely so an append-only row can outlive what caused it.
@@ -138,6 +146,10 @@ export async function resetData(db: Db): Promise<void> {
   await db.deleteFrom('borrow_requests').execute();
   await db.deleteFrom('projects').execute();
   await db.deleteFrom('idempotency_keys').execute();
+  // Phase 06: `audit_log.actor_id` is ON DELETE RESTRICT and the trigger is currently disabled
+  // for the duration of this reset, so we can clean every audit row the previous test wrote.
+  // Production code never sees the trigger disabled — only this reset path.
+  await db.deleteFrom('audit_log').execute();
 
   await db.deleteFrom('approver_slots').execute();
   await db.deleteFrom('user_roles').execute();
@@ -225,6 +237,10 @@ export async function resetData(db: Db): Promise<void> {
       ]),
     )
     .execute();
+  } finally {
+    // Re-enable the trigger so the rest of the suite still proves the append-only guarantee.
+    await sql`ALTER TABLE audit_log ENABLE TRIGGER audit_log_no_update`.execute(db);
+  }
 }
 
 export async function countRefreshTokens(
@@ -239,4 +255,24 @@ export async function countRefreshTokens(
     .select((eb) => eb.fn.countAll<number>().as('count'))
     .executeTakeFirst();
   return row?.count ?? 0;
+}
+
+/**
+ * Phase 05: seeds the admin-designated sub-threshold approver setting through the live
+ * `SettingsService`, so the cache matches the row. Every test that exercises sub-threshold
+ * submission calls this in `beforeEach`; tests that specifically want the "unassigned" path
+ * should reset it back to `null` themselves.
+ */
+export async function seedSubthresholdApprover(ctx: TestApp, approverId: string): Promise<void> {
+  const settings = ctx.app.get(SettingsService);
+  await settings.set(SettingKey.SUBTHRESHOLD_APPROVER_USER_ID, approverId, {
+    actorId: approverId,
+    actorName: null,
+    actorEmail: null,
+    actorRoles: [],
+    requestMethod: 'TEST',
+    requestPath: 'test://factories/seedSubthresholdApprover',
+    requestIp: null,
+    userAgent: 'factories.test.ts',
+  });
 }

@@ -1,15 +1,19 @@
 import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import {
+  AUDIT_ALWAYS_ON_ACTIONS,
   SETTING_DEFINITIONS,
   SETTING_KEYS,
   SettingKey,
   getSettingDefinition,
   isSettingKey,
+  type AuditAction,
   type Setting,
   type SettingValue,
 } from '@ims/shared';
 import { CONFIG, type AppConfig } from '../../config';
 import { UnknownSettingError, ConflictError, ValidationFailedError } from '../../common/errors';
+import { AuditService } from '../audit/audit.service';
+import type { AuditContext } from '../audit/audit-context';
 import { SettingsRepository } from './settings.repository';
 
 /**
@@ -32,6 +36,7 @@ export class SettingsService implements OnModuleInit {
   constructor(
     private readonly repo: SettingsRepository,
     @Inject(CONFIG) private readonly config: AppConfig,
+    private readonly audit: AuditService,
   ) {}
 
   /**
@@ -111,7 +116,7 @@ export class SettingsService implements OnModuleInit {
     });
   }
 
-  async set(key: string, value: unknown, actorId: string): Promise<Setting> {
+  async set(key: string, value: unknown, context: AuditContext): Promise<Setting> {
     if (!isSettingKey(key)) throw new UnknownSettingError(key);
 
     const definition = getSettingDefinition(key);
@@ -122,9 +127,51 @@ export class SettingsService implements OnModuleInit {
       );
     }
 
-    await this.repo.upsert(key, parsed.data, actorId);
-    // Invalidate rather than write through: the row's updated_at comes from the database.
+    // An audit log whose subject can stop it recording them is not an audit log. The set of
+    // actions is configurable to cut noise, not to let an admin quietly stop recording logins
+    // or their own settings changes before doing something they would rather nobody saw.
+    if (key === SettingKey.AUDIT_ENABLED_ACTIONS) {
+      const enabled = new Set(parsed.data as AuditAction[]);
+      const missing = AUDIT_ALWAYS_ON_ACTIONS.filter((action) => !enabled.has(action));
+      if (missing.length > 0) {
+        throw new ValidationFailedError([
+          {
+            path: 'value',
+            message: `These actions are always recorded and cannot be disabled: ${missing.join(', ')}`,
+          },
+        ]);
+      }
+    }
+
+    // Capture the previous value *before* the upsert so the audit row carries a real diff
+    // rather than just "someone set X". Without this the admin's only signal is the timestamp.
+    let previousValue: unknown = null;
+    try {
+      previousValue = await this.get(key);
+    } catch {
+      previousValue = null;
+    }
+
+    // One transaction so a setting can never change without the audit row that says who changed
+    // it and from what — this is the table that moves the expense threshold.
+    await this.repo.connection.transaction().execute(async (tx) => {
+      await this.repo.upsert(key, parsed.data, context.actorId ?? null, tx);
+      await this.audit.record({
+        action: 'settings.update',
+        entityType: 'settings',
+        entityId: key,
+        entityRef: key,
+        summary: `Updated setting ${key}`,
+        metadata: { before: previousValue, after: parsed.data },
+      }, context, tx);
+    });
+
+    // Invalidate after the commit, not before: dropping the cache entry while the transaction
+    // was still open would let a concurrent reader repopulate it from the pre-update row.
     this.cache.delete(key);
+    // AuditService keeps its own copy of this one (it reads app_settings directly to avoid a
+    // circular module dependency), so it has to be told.
+    if (key === SettingKey.AUDIT_ENABLED_ACTIONS) this.audit.clearEnabledActionsCache();
 
     const updated = (await this.list()).find((s) => s.key === key);
     if (!updated) throw new ConflictError(`Setting ${key} disappeared during update`);

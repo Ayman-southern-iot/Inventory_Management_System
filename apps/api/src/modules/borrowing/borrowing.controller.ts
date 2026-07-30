@@ -34,6 +34,8 @@ import { IdempotencyService } from '../../common/idempotency.service';
 import { zodPipe } from '../../common/zod-validation.pipe';
 import { CurrentUser, Roles } from '../auth/auth.decorators';
 import type { RequestUser } from '../auth/request-user';
+import { CurrentAuditContext } from '../audit/audit.decorators';
+import type { AuditContext } from '../audit/audit-context';
 import { BorrowingRepository } from './borrowing.repository';
 import { BorrowingService } from './borrowing.service';
 import { ProjectsService } from './projects.service';
@@ -62,8 +64,9 @@ export class BorrowingController {
   async createProject(
     @Body(zodPipe(createProjectSchema)) body: CreateProjectInput,
     @CurrentUser() actor: RequestUser,
+    @CurrentAuditContext() ctx: AuditContext,
   ): Promise<Project> {
-    return this.projects.create(body, actor.id);
+    return this.projects.create(body, actor.id, ctx);
   }
 
   /* --------------------------------------------------------------- borrows */
@@ -92,10 +95,11 @@ export class BorrowingController {
   async create(
     @Body(zodPipe(createBorrowRequestSchema)) body: CreateBorrowRequestInput,
     @CurrentUser() actor: RequestUser,
+    @CurrentAuditContext() ctx: AuditContext,
     @Headers(IDEMPOTENCY_HEADER) idempotencyKey?: string,
   ): Promise<BorrowRequest> {
     return this.runOnce(idempotencyKey, actor.id, 'borrow:create', () =>
-      this.borrowing.create(body, actor.id),
+      this.borrowing.create(body, actor.id, ctx),
     );
   }
 
@@ -110,10 +114,11 @@ export class BorrowingController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body(zodPipe(decideBorrowSchema)) body: DecideBorrowInput,
     @CurrentUser() actor: RequestUser,
+    @CurrentAuditContext() ctx: AuditContext,
     @Headers(IDEMPOTENCY_HEADER) idempotencyKey?: string,
   ): Promise<BorrowRequest> {
     return this.runOnce(idempotencyKey, actor.id, `borrow:decide:${id}`, () =>
-      this.borrowing.decide(id, body, actor.id),
+      this.borrowing.decide(id, body, actor.id, ctx),
     );
   }
 
@@ -124,10 +129,11 @@ export class BorrowingController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body(zodPipe(returnBorrowSchema)) body: ReturnBorrowInput,
     @CurrentUser() actor: RequestUser,
+    @CurrentAuditContext() ctx: AuditContext,
     @Headers(IDEMPOTENCY_HEADER) idempotencyKey?: string,
   ): Promise<BorrowRequest> {
     return this.runOnce(idempotencyKey, actor.id, `borrow:return:${id}`, () =>
-      this.borrowing.recordReturn(id, body, actor.id),
+      this.borrowing.recordReturn(id, body, actor.id, ctx),
     );
   }
 
@@ -139,8 +145,9 @@ export class BorrowingController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body(zodPipe(revertBorrowSchema)) body: RevertBorrowInput,
     @CurrentUser() actor: RequestUser,
+    @CurrentAuditContext() ctx: AuditContext,
   ): Promise<BorrowRequest> {
-    return this.borrowing.revertToPending(id, body, actor.id);
+    return this.borrowing.revertToPending(id, body, actor.id, ctx);
   }
 
   /** The requester withdrawing their own request. Ownership is checked in the service. */
@@ -149,8 +156,9 @@ export class BorrowingController {
   async cancel(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() actor: RequestUser,
+    @CurrentAuditContext() ctx: AuditContext,
   ): Promise<BorrowRequest> {
-    return this.borrowing.cancel(id, actor.id);
+    return this.borrowing.cancel(id, actor.id, ctx);
   }
 
   private async runOnce<T>(

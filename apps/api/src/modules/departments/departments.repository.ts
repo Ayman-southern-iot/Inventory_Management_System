@@ -1,7 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
+import type { Transaction } from 'kysely';
 import type { Department, ListDepartmentsQuery } from '@ims/shared';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
+import type { Database } from '../../database/schema';
+
+export type Tx = Transaction<Database>;
 
 @Injectable()
 export class DepartmentsRepository {
@@ -63,8 +67,8 @@ export class DepartmentsRepository {
     };
   }
 
-  async insert(name: string): Promise<string> {
-    const row = await this.db
+  async insert(name: string, tx: Tx): Promise<string> {
+    const row = await tx
       .insertInto('departments')
       .values({ name })
       .returning('id')
@@ -72,14 +76,18 @@ export class DepartmentsRepository {
     return row.id;
   }
 
-  async update(id: string, values: { name?: string; isActive?: boolean }): Promise<number> {
+  async update(
+    id: string,
+    values: { name?: string; isActive?: boolean },
+    tx: Tx,
+  ): Promise<number> {
     const patch = {
       ...(values.name === undefined ? {} : { name: values.name }),
       ...(values.isActive === undefined ? {} : { is_active: values.isActive }),
     };
     if (Object.keys(patch).length === 0) return 1;
 
-    const result = await this.db
+    const result = await tx
       .updateTable('departments')
       .set(patch)
       .where('id', '=', id)
