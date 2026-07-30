@@ -33,6 +33,10 @@ export const NOTIFICATION_TYPES = [
   // Requisitions — the approver's side
   'requisition.awaiting_your_approval',
   'requisition.approval_reminder',
+  // Requisitions — the money half (task 5.4), all addressed to the requester
+  'requisition.sent_to_accounts',
+  'requisition.funds_received',
+  'requisition.purchased',
   // Borrowing
   'borrowing.requested',
   'borrowing.approved',

@@ -15,6 +15,8 @@ export const RequisitionStatus = {
   FUNDS_PARTIAL: 'FUNDS_PARTIAL',
   FUNDS_RECEIVED: 'FUNDS_RECEIVED',
   PURCHASED: 'PURCHASED',
+  /** The IM has checked the goods against the invoice. Task 5.5 attaches the invoice here. */
+  PURCHASE_VERIFIED: 'PURCHASE_VERIFIED',
   STOCKED: 'STOCKED',
   CLOSED: 'CLOSED',
   CANCELLED: 'CANCELLED',
@@ -75,6 +77,19 @@ export const RequisitionEventType = {
   BOM_VOIDED: 'BOM_VOIDED',
   /** The IM rendered the PDF for this BOM. Task 4.3 — the moment Accounts has the file on disk. */
   BOM_RENDERED: 'BOM_RENDERED',
+  /* --- Phase 05: the money half of the lifecycle (task 5.4) --- */
+  /** The IM handed the BOM to Accounts. See OQ-19: purely a status, nothing leaves the system. */
+  SENT_TO_ACCOUNTS: 'SENT_TO_ACCOUNTS',
+  /** One receipt landed. Partial or full is decided by the sum, not by which event fired. */
+  FUNDS_RECEIVED: 'FUNDS_RECEIVED',
+  /** Money went back to Accounts because the purchase came in under budget (task 5.5). */
+  FUNDS_RETURNED: 'FUNDS_RETURNED',
+  PURCHASED: 'PURCHASED',
+  PURCHASE_VERIFIED: 'PURCHASE_VERIFIED',
+  STOCKED: 'STOCKED',
+  /** Goods went straight out to a person instead of onto a shelf (task 5.7). */
+  BORROWED_OUT: 'BORROWED_OUT',
+  CLOSED: 'CLOSED',
   CANCELLED: 'CANCELLED',
 } as const;
 export type RequisitionEventType =

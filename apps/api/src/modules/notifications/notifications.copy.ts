@@ -71,6 +71,22 @@ export const NOTIFICATION_COPY: Record<NotificationType, NotificationTemplate> =
     title: (ref) => `Reminder: requisition ${ref} is still waiting on you`,
   },
 
+  /* --------------------------------------------- requisitions: the money half */
+  'requisition.sent_to_accounts': {
+    severity: 'info',
+    title: (ref) => `Requisition ${ref} has gone to Accounts`,
+  },
+  'requisition.funds_received': {
+    severity: 'success',
+    title: (ref) => `Funds for requisition ${ref} have been received in full`,
+    body: (c) => (c.amount ? `Total received: ${c.amount}` : null),
+  },
+  'requisition.purchased': {
+    severity: 'success',
+    title: (ref) => `The items on requisition ${ref} have been purchased`,
+    body: (c) => (c.amount ? `Purchase total: ${c.amount}` : null),
+  },
+
   /* ------------------------------------------------------------- borrowing */
   'borrowing.requested': {
     severity: 'action_required',

@@ -584,6 +584,7 @@ export const t = {
       FUNDS_PARTIAL: 'Partly funded',
       FUNDS_RECEIVED: 'Funded',
       PURCHASED: 'Purchased',
+      PURCHASE_VERIFIED: 'Purchase verified',
       STOCKED: 'Stocked',
       CLOSED: 'Closed',
       CANCELLED: 'Cancelled',

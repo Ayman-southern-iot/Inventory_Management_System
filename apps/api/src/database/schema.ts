@@ -442,6 +442,49 @@ export interface NotificationsTable {
   created_at: CreatedAt;
 }
 
+/* ------------------------------------------------------- funds & purchasing */
+
+/**
+ * Money released by Accounts against one requisition. Several per requisition — funding arrives
+ * in instalments. The partial/full distinction is derived from `SUM(amount)`, never stored.
+ */
+export interface FundReceiptsTable {
+  id: Generated<string>;
+  requisition_id: string;
+  amount: Money;
+  received_at: Timestamp;
+  reference: string | null;
+  note: string | null;
+  recorded_by: string;
+  created_at: CreatedAt;
+}
+
+export interface PurchasesTable {
+  id: Generated<string>;
+  requisition_id: string;
+  vendor: string;
+  invoice_no: string | null;
+  purchased_at: Timestamp;
+  total_amount: Money;
+  note: string | null;
+  recorded_by: string;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
+export interface PurchaseLinesTable {
+  id: Generated<string>;
+  purchase_id: string;
+  requisition_item_id: string;
+  bom_line_id: string | null;
+  quantity: number;
+  unit_cost: Money;
+  /** Paired with `over_bom_note` by a CHECK constraint — one without the other is rejected. */
+  over_bom_quantity: Generated<boolean>;
+  over_bom_note: string | null;
+  created_at: CreatedAt;
+}
+
 /* ------------------------------------------------------------------------ BOM */
 
 export interface BomsTable {
@@ -498,6 +541,9 @@ export interface Database {
   audit_log: AuditLogTable;
   notifications: NotificationsTable;
   stored_files: StoredFilesTable;
+  fund_receipts: FundReceiptsTable;
+  purchases: PurchasesTable;
+  purchase_lines: PurchaseLinesTable;
   boms: BomsTable;
   bom_requisitions: BomRequisitionsTable;
   bom_lines: BomLinesTable;

@@ -268,3 +268,17 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
 - 2026-07-30 — Image MIME type is sniffed from magic bytes, not the file extension. The supplied
   logo was named `.png` and was a JPEG; trusting the extension would have emitted a data URI that
   some renderers accept and others silently drop.
+- 2026-07-30 — Funding is derived from `SUM(fund_receipts)` on every read, never stored as a
+  running total. A cached balance is a number that can silently disagree with the rows that
+  justify it, and money that contradicts its own audit trail is worse than money that is slow to
+  add up. The partial/full status follows from the sum, not from which endpoint was called.
+- 2026-07-30 — Recording funding beyond the approved amount is refused (409), not clamped.
+  Accounts releasing an unexpected amount is a real event wanting a human decision; accepting it
+  quietly would make the approved figure meaningless and the expense report wrong.
+- 2026-07-30 — Money inputs are rejected past two decimal places rather than rounded. The columns
+  are `numeric(14,2)`, so a third decimal would be silently rounded by Postgres — exactly the
+  class of bug nobody notices until reconciliation.
+- 2026-07-30 — Sums are computed in Postgres, not JavaScript. `numeric` addition is exact; adding
+  parsed floats would reintroduce the drift the NUMERIC columns exist to prevent.
+- 2026-07-30 — The requester is notified when funding *completes*, not on each instalment, and the
+  IM is never notified of their own recording. Instalment noise is how a badge gets ignored.

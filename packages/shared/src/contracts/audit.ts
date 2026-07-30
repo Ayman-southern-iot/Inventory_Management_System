@@ -86,6 +86,9 @@ export const AUDIT_ACTIONS = [
   'requisition.approve',
   'requisition.reject',
   'requisition.withdraw',
+  'requisition.sent_to_accounts',
+  'requisition.funds_received',
+  'requisition.purchased',
   'requisition.cancel',
   // Delegations
   'delegation.create',
