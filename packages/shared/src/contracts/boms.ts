@@ -18,6 +18,18 @@ export const approvalFootprintSchema = z.object({
   actedAt: z.string().nullable(),
   /** Set when a delegate acted for the assignee, so the signature block can say so. */
   onBehalfOf: z.string().nullable(),
+  /**
+   * Whether this approver applied their signature (task 5.2). The document prints their name and
+   * "Approved" either way; this decides whether the signature line carries an image or stays
+   * blank for a wet signature.
+   */
+  signedWithSignature: z.boolean(),
+  /**
+   * The signature snapshotted at approval. Deliberately an id and not the image: the PDF renderer
+   * resolves it to bytes server-side, so a signature image never travels to the browser as part
+   * of an ordinary BOM detail response.
+   */
+  signatureFileId: z.string().uuid().nullable(),
 });
 export type ApprovalFootprint = z.infer<typeof approvalFootprintSchema>;
 
@@ -26,7 +38,18 @@ export const requisitionFootprintsSchema = z.object({
   requisitionNo: z.string(),
   requesterName: z.string(),
   departmentName: z.string().nullable(),
+  /** The project the spend belongs to, printed in the BOM header. */
+  projectName: z.string().nullable(),
+  /** The requester's own words from the submit form — `requisitions.reason`. */
+  description: z.string().nullable(),
+  requestedAmount: z.number().nullable(),
   approvedAmount: z.number().nullable(),
+  /**
+   * What the approvers did not sanction: `requestedAmount − approvedAmount` (OQ-18, answered by
+   * the operator — requested 15,000 approved 10,000 leaves 5,000). A property of the approval
+   * decision alone, so it is fixed once the chain completes and never moves with spending.
+   */
+  remainingAmount: z.number().nullable(),
   footprints: z.array(approvalFootprintSchema),
 });
 export type RequisitionFootprints = z.infer<typeof requisitionFootprintsSchema>;

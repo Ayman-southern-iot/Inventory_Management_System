@@ -30,6 +30,13 @@ import { httpClient, nextClientIp, type HttpClient, type TestApp } from './app';
 import { createUser, login, resetData, seedSubthresholdApprover } from './factories';
 
 /**
+ * A stand-in signature file id. The template is a pure function of the detail plus the resolved
+ * image map, so these tests drive it directly rather than uploading a real signature — that path
+ * is covered end to end in `signatures.int-spec.ts`.
+ */
+const FAKE_FILE_ID = '11111111-2222-3333-4444-555555555555';
+
+/**
  * Phase 04 task 4.3 — BOM PDF template + signed download URL.
  *
  * The renderer is replaced by an in-memory stub at the testing-module level (see
@@ -54,6 +61,7 @@ describe('BOMs PDF', () => {
     private readonly files = new Map<string, Buffer>();
     readonly renderCalls: Array<{ html: string; orientation: 'portrait' | 'landscape' }> = [];
     readonly letterheadDataUriCalls: number[] = [];
+    readonly companyLogoDataUriCalls: number[] = [];
 
     absolutePathFor(relativePath: string): string {
       const base = TEST_STORAGE;
@@ -87,6 +95,16 @@ describe('BOMs PDF', () => {
 
     async letterheadDataUri(): Promise<string | null> {
       this.letterheadDataUriCalls.push(1);
+      return null;
+    }
+
+    /**
+     * The stub must implement everything `BomsService` calls on the renderer. Omitting this is
+     * what turned the render endpoint into a 500 while the real service was fine — a stub that
+     * silently lacks a method is indistinguishable from a broken service.
+     */
+    async companyLogoDataUri(): Promise<string | null> {
+      this.companyLogoDataUriCalls.push(1);
       return null;
     }
   }
@@ -169,7 +187,15 @@ describe('BOMs PDF', () => {
     await seedSubthresholdApprover(ctx, approver1.id);
   });
 
-  const approveRequisition = async (amount: number, lineName = 'Widget') => {
+  /**
+   * `approvedAmount` lets a test revise the sanctioned figure down at the approver stage, which
+   * is what makes a non-zero "Remaining" (requested − approved) reachable.
+   */
+  const approveRequisition = async (
+    amount: number,
+    lineName = 'Widget',
+    approvedAmount: number | null = null,
+  ) => {
     const created = await requester.client.post('/requisitions').send({
       departmentId,
       urgency: 'NORMAL',
@@ -203,7 +229,7 @@ describe('BOMs PDF', () => {
       )?.id;
       await approver1.client
         .post(`/requisitions/approvals/${approvalId}/decision`)
-        .send({ approve: true });
+        .send({ approve: true, ...(approvedAmount === null ? {} : { approvedAmount }) });
     }
 
     return (
@@ -324,25 +350,178 @@ describe('BOMs PDF', () => {
   /* --------------------------------------------------------- HTML contract */
 
   describe('HTML template', () => {
-    it('embeds the BOM number, source requisitions, subtotal, and lines', async () => {
+    /** Minimal render context; individual tests override what they are asserting on. */
+    const CONTEXT = {
+      company: {
+        name: 'Southern IoT',
+        addressLines: ['House 26, Road 13, Sector 14', 'Uttara, Dhaka - 1230', 'Bangladesh'],
+        logoUri: null,
+      },
+      signatureUris: {},
+    };
+
+    it('prints the letterhead: company name and every address line', async () => {
       const req = await approveRequisition(5000, 'Widget');
       const bom = (
         await im.client.post('/boms').send(generatePayload(req.id, req.items))
       ).body as BomDetail;
 
-      const html = renderBomHtml(bom, null);
+      const html = renderBomHtml(bom, CONTEXT);
+
+      expect(html).toContain('Southern IoT');
+      expect(html).toContain('House 26, Road 13, Sector 14');
+      expect(html).toContain('Uttara, Dhaka - 1230');
+      expect(html).toContain('Bangladesh');
+    });
+
+    it('embeds the logo as a data URI when one is configured', async () => {
+      const req = await approveRequisition(5000);
+      const bom = (
+        await im.client.post('/boms').send(generatePayload(req.id, req.items))
+      ).body as BomDetail;
+
+      const html = renderBomHtml(bom, {
+        ...CONTEXT,
+        company: { ...CONTEXT.company, logoUri: 'data:image/jpeg;base64,AAAA' },
+      });
+
+      expect(html).toContain('src="data:image/jpeg;base64,AAAA"');
+    });
+
+    it('prints the nine specified header fields, the item table and a subtotal', async () => {
+      const req = await approveRequisition(5000, 'Widget');
+      const bom = (
+        await im.client.post('/boms').send(generatePayload(req.id, req.items))
+      ).body as BomDetail;
+
+      const html = renderBomHtml(bom, CONTEXT);
+
+      for (const label of [
+        'BOM Number',
+        'Requisition From',
+        'Date',
+        'Department',
+        'Project',
+        'Description',
+        'Total Money Requested',
+        'Approved Money',
+        'Remaining',
+      ]) {
+        expect(html, `header is missing "${label}"`).toContain(label);
+      }
 
       expect(html).toContain(bom.bomNo);
-      // The template surfaces the human-readable requisition number, not the source UUID.
-      expect(html).toContain(req.requisitionNo);
       expect(html).toContain('Widget');
-      expect(html).toContain('5,000.00'); // line total formatted by Intl.NumberFormat('en-BD')
-      // The currency is identified by either `BDT` (the literal ICU symbol in this Node
-      // build) or `৳` (the alternative glyph). Either is honest about "this is Bangladeshi
-      // Taka"; the assertion is that the renderer said *something* BDT-shaped.
+      expect(html).toContain('5,000.00');
+      // Either the ICU literal `BDT` or the `৳` glyph, depending on the Node build's locale data.
       expect(html).toMatch(/BDT|৳/);
-      expect(html).toMatch(/<table class="lines">/);
-      expect(html).toMatch(/<table class="footprints">/);
+      expect(html).toMatch(/<table class="items">/);
+      expect(html).toContain('Subtotal');
+
+      // The congested first draft is gone: no per-line vendor/purpose/project, no footprints
+      // table. This is what "clean and standard" means, so it is asserted rather than assumed.
+      expect(html).not.toMatch(/<table class="lines">/);
+      expect(html).not.toMatch(/<table class="footprints">/);
+    });
+
+    /**
+     * OQ-18, answered by the operator: Remaining is requested minus approved (their example was
+     * 15,000 requested against 10,000 approved leaving 5,000).
+     *
+     * The figures here stay **below** SETTING_EXPENSE_THRESHOLD_BDT (15,000) on purpose: at or
+     * above it the chain needs two approvers in two different slots, and `approveRequisition`
+     * drives only approver1. 12,000 requested revised to 8,000 exercises exactly the same
+     * subtraction with a one-approver chain.
+     */
+    it('prints Remaining as requested minus approved', async () => {
+      const req = await approveRequisition(12_000, 'Widget', 8_000);
+      const bom = (
+        await im.client.post('/boms').send(generatePayload(req.id, req.items))
+      ).body as BomDetail;
+
+      expect(bom.sources[0]!.requestedAmount).toBe(12_000);
+      expect(bom.sources[0]!.approvedAmount).toBe(8_000);
+      expect(bom.sources[0]!.remainingAmount).toBe(4_000);
+
+      const html = renderBomHtml(bom, CONTEXT);
+      expect(html).toMatch(/Remaining[\s\S]{0,80}4,000\.00/);
+    });
+
+    it('prints the name and "Approved" for every approver, signed or not', async () => {
+      const req = await approveRequisition(5000);
+      const bom = (
+        await im.client.post('/boms').send(generatePayload(req.id, req.items))
+      ).body as BomDetail;
+
+      const html = renderBomHtml(bom, CONTEXT);
+
+      expect(html).toMatch(/<section class="signatures">/);
+      // Nobody signed in this fixture, so no image — but the block still says Approved.
+      expect(html).toContain('Approved');
+      // Matches the tag, not the bare class name: the `<style>` block declares
+      // `.signature-image`, so a substring check would always find it.
+      expect(html).not.toMatch(/<img class="signature-image"/);
+      for (const footprint of bom.sources[0]!.footprints) {
+        expect(html).toContain(footprint.name);
+      }
+    });
+
+    it('places the signature image only where the approval was actually signed', async () => {
+      const req = await approveRequisition(5000);
+      const bom = (
+        await im.client.post('/boms').send(generatePayload(req.id, req.items))
+      ).body as BomDetail;
+
+      // Simulate one signed footprint against a supplied image.
+      const signed: BomDetail = {
+        ...bom,
+        sources: bom.sources.map((source, index) =>
+          index === 0
+            ? {
+                ...source,
+                footprints: source.footprints.map((footprint, i) =>
+                  i === 0
+                    ? { ...footprint, signedWithSignature: true, signatureFileId: FAKE_FILE_ID }
+                    : footprint,
+                ),
+              }
+            : source,
+        ),
+      };
+
+      const html = renderBomHtml(signed, {
+        ...CONTEXT,
+        signatureUris: { [FAKE_FILE_ID]: 'data:image/png;base64,BBBB' },
+      });
+
+      expect(html).toContain('data:image/png;base64,BBBB');
+      // Exactly one image tag, not one per approver. Counts tags, not the CSS declaration.
+      expect(html.match(/<img class="signature-image"/g)).toHaveLength(1);
+    });
+
+    it('falls back to a blank signature line when the image cannot be resolved', async () => {
+      const req = await approveRequisition(5000);
+      const bom = (
+        await im.client.post('/boms').send(generatePayload(req.id, req.items))
+      ).body as BomDetail;
+
+      const claimsSigned: BomDetail = {
+        ...bom,
+        sources: bom.sources.map((source) => ({
+          ...source,
+          footprints: source.footprints.map((footprint) => ({
+            ...footprint,
+            signedWithSignature: true,
+            signatureFileId: FAKE_FILE_ID,
+          })),
+        })),
+      };
+
+      // Empty signatureUris — the file was unreadable. A document with a blank line is still
+      // usable; a broken image tag is not.
+      const html = renderBomHtml(claimsSigned, CONTEXT);
+      expect(html).not.toMatch(/<img class="signature-image"/);
+      expect(html).toContain('Approved');
     });
 
     it('reads footprints from the snapshot, not live users', async () => {
@@ -358,12 +537,9 @@ describe('BOMs PDF', () => {
         .where('id', '=', im.id)
         .execute();
 
-      // The detail's frozen snapshot is unchanged, so the rendered HTML still has the
-      // pre-rename values.
-      const html = renderBomHtml(generated, null);
-      const footprintText = html.match(/<h3>[\s\S]*?approval chain<\/h3>/)?.[0] ?? '';
-      expect(footprintText).toContain('Test'); // factory-name prefix
-      expect(footprintText).not.toContain('Renamed');
+      const html = renderBomHtml(generated, CONTEXT);
+      expect(html).toContain('Test'); // factory-name prefix
+      expect(html).not.toContain('Renamed');
     });
   });
 

@@ -8,29 +8,33 @@
 > `docs/state/SESSION-LOG.md` (history) · `docs/state/DECISIONS.md` (why) ·
 > `docs/state/OPEN-QUESTIONS.md` (OQ/G items) · `plan/PHASE-*.md` (the work)
 
-**Updated:** 2026-07-30
+**Updated:** 2026-07-30 (late)
 
 ## Where the build is
 
 - Phases 00–04 done and verified. Phase 06 partly done (audit log + notifications).
-- **Next up: Phase 05** — `plan/PHASE-05-funds-purchasing.md`, rewritten 2026-07-30 to the
-  operator's real spec. Nine tasks, ordered, with dependencies.
-- **Start at 5.0** (password → min 4 chars, ~20 min), then **5.1** (file-upload foundation —
-  everything else with an image or invoice depends on it).
-- Working tree clean. Last commit `1f952a7`.
+- **Phase 05 in progress** — `plan/PHASE-05-funds-purchasing.md` is the plan.
+  **Done: 5.0** password min 4 · **5.1** file uploads · **5.2** digital signatures (backend + UI)
+  · **5.3** BOM document redesign.
+- **Next task: 5.4** — the lifecycle past BOM_GENERATED (Sent to Accounts → Money Received →
+  Purchased → Purchase Verified). Then 5.5 invoice + money saved, 5.6 add to inventory,
+  5.7 borrow to user, 5.8 expense reporting.
+- 5.4 groundwork already checked: `requisition_status` is a Postgres enum already holding
+  SENT_TO_ACCOUNTS / FUNDS_PARTIAL / FUNDS_RECEIVED / PURCHASED / STOCKED / CLOSED — only
+  `PURCHASE_VERIFIED` needs adding. `requisition_events.event_type` is **text**, not an enum, so
+  new event types need no migration.
 
 ## Green as of last run
 
 `pnpm typecheck` · `pnpm lint` · `pnpm test` · `pnpm --filter @ims/api test:int`
-→ **17 files, 288 integration tests, all passing.** Migrations 0001–0013 applied and each
-rollback-verified.
+→ **18 files, 305 integration tests, all passing.** Migrations 0001–0015 applied.
 
 ## Blocked / needs the operator
 
-- **OQ-18 blocks task 5.3.** The BOM PDF must print "Remaining" and nobody has said which
-  subtraction it is. Do not guess on a document that goes to Accounts.
-- OQ-19..OQ-22 are softer: what "Sent to Accounts" means outside the system, whether partial
-  funding stays, how one payment splits across a batched BOM, who "borrow to user" may target.
+- Nothing blocking. **OQ-18 answered:** BOM "Remaining" = Total Requested − Approved.
+- OQ-19..OQ-22 still open but not blocking 5.4: what "Sent to Accounts" means outside the system,
+  whether partial funding stays, how one payment splits across a batched BOM, who "borrow to
+  user" may target. Assumptions are recorded; revisit if the operator contradicts them.
 
 ## Landmines (each has cost a session before)
 
@@ -43,6 +47,13 @@ rollback-verified.
 - `stock_ledger`, `requisition_events` and `audit_log` are **append-only by trigger** — an
   UPDATE/DELETE fails loudly, including via cascade.
 - Redirect the integration run to a file and grep it; streaming it has blown the shell timeout.
+- **`boms-pdf.int-spec.ts` overrides `PdfRendererService` with a local `StubRenderer`.** Add any
+  new renderer method to that stub too, or the render endpoint 500s in tests while the real
+  service is fine. `test/app.ts` also sets `logger: false`, so those 500s arrive with no stack —
+  flip it to `['error']` while debugging, and put it back.
+- The supplied `SIOT_logo_black (1).png` is **actually a JPEG**. It lives in the repo as
+  `apps/api/assets/letterhead/siot-logo.jpg`, and the renderer sniffs magic bytes rather than
+  trusting the extension.
 
 ## Open engineering debt
 

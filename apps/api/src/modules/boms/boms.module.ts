@@ -5,6 +5,7 @@ import { CommonModule } from '../../common/common.module';
 import { PdfModule } from '../pdf/pdf.module';
 import { AuditModule } from '../audit/audit.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { FilesModule } from '../files/files.module';
 import { BomsController } from './boms.controller';
 import { BomsRepository } from './boms.repository';
 import { BomsService } from './boms.service';
@@ -26,6 +27,7 @@ import { BomsService } from './boms.service';
     PdfModule,
     AuditModule,
     NotificationsModule,
+    FilesModule,
   ],
   controllers: [BomsController],
   providers: [BomsService, BomsRepository],

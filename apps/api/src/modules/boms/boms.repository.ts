@@ -342,26 +342,45 @@ export class BomsRepository {
         .innerJoin('requisitions', 'requisitions.id', 'bom_requisitions.requisition_id')
         .innerJoin('users as requester', 'requester.id', 'requisitions.requester_id')
         .leftJoin('departments', 'departments.id', 'requisitions.department_id')
+        .leftJoin('projects', 'projects.id', 'requisitions.project_id')
         .where('bom_requisitions.bom_id', '=', id)
         .select([
           'bom_requisitions.requisition_id',
           'requisitions.requisition_no',
           'requester.full_name as requester_name',
           'departments.name as department_name',
+          // Task 5.3: the BOM header prints the project and the requester's own description.
+          'projects.name as project_name',
+          'requisitions.reason',
+          'requisitions.requested_amount',
           'requisitions.approved_amount',
           'bom_requisitions.approval_snapshot',
         ])
         .execute(),
     ]);
 
-    const sources: RequisitionFootprints[] = sourceRows.map((sourceRow) => ({
-      requisitionId: sourceRow.requisition_id,
-      requisitionNo: sourceRow.requisition_no,
-      requesterName: sourceRow.requester_name,
-      departmentName: sourceRow.department_name,
-      approvedAmount: money(sourceRow.approved_amount),
-      footprints: parseSnapshot(sourceRow.approval_snapshot),
-    }));
+    const sources: RequisitionFootprints[] = sourceRows.map((sourceRow) => {
+      const requestedAmount = money(sourceRow.requested_amount);
+      const approvedAmount = money(sourceRow.approved_amount);
+      return {
+        requisitionId: sourceRow.requisition_id,
+        requisitionNo: sourceRow.requisition_no,
+        requesterName: sourceRow.requester_name,
+        departmentName: sourceRow.department_name,
+        projectName: sourceRow.project_name,
+        description: sourceRow.reason,
+        requestedAmount,
+        approvedAmount,
+        // OQ-18: what the approvers did not sanction. Null unless both figures are known —
+        // printing a "Remaining" of 0 when one side is unknown would be a lie on a payable
+        // document. Rounded to the cent so it agrees with the NUMERIC(14,2) columns.
+        remainingAmount:
+          requestedAmount === null || approvedAmount === null
+            ? null
+            : Math.round((requestedAmount - approvedAmount) * 100) / 100,
+        footprints: parseSnapshot(sourceRow.approval_snapshot),
+      };
+    });
 
     const lines: BomLine[] = lineRows.map((lineRow) => ({
       id: lineRow.id,

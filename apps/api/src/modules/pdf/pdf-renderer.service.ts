@@ -126,22 +126,37 @@ export class PdfRendererService implements OnApplicationShutdown {
    * the template then draws its placeholder, which is honest about OQ-11 being unanswered.
    */
   async letterheadDataUri(): Promise<string | null> {
-    const path = this.config.pdf.letterheadPath;
+    return this.imageDataUri(this.config.pdf.letterheadPath, 'PDF_LETTERHEAD_PATH');
+  }
+
+  /** The company logo for the BOM letterhead block, inlined for the same reason. */
+  async companyLogoDataUri(): Promise<string | null> {
+    return this.imageDataUri(this.config.company.logoPath, 'COMPANY_LOGO_PATH');
+  }
+
+  /**
+   * Read an image and inline it.
+   *
+   * The MIME type comes from the **file's magic bytes**, not its extension. The supplied Southern
+   * IoT logo was named `.png` and was in fact a JPEG; trusting the extension would have emitted
+   * `data:image/png` for JPEG bytes, which some renderers accept and others silently drop.
+   */
+  private async imageDataUri(path: string, settingName: string): Promise<string | null> {
     if (!path) return null;
 
     const absolute = resolve(path);
     if (!existsSync(absolute)) {
-      this.logger.warn(`PDF_LETTERHEAD_PATH is set to ${absolute} but no file is there`);
-      return null;
-    }
-
-    const mime = MIME_BY_EXTENSION[extname(absolute).toLowerCase()];
-    if (!mime) {
-      this.logger.warn(`Unsupported letterhead type ${extname(absolute)}; ignoring it`);
+      this.logger.warn(`${settingName} is set to ${absolute} but no file is there`);
       return null;
     }
 
     const bytes = await readFile(absolute);
+    const mime = sniffImageMime(bytes) ?? MIME_BY_EXTENSION[extname(absolute).toLowerCase()];
+    if (!mime) {
+      this.logger.warn(`Unsupported image type at ${absolute}; ignoring it`);
+      return null;
+    }
+
     return `data:${mime};base64,${bytes.toString('base64')}`;
   }
 
@@ -178,3 +193,22 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   '.svg': 'image/svg+xml',
   '.webp': 'image/webp',
 };
+
+/**
+ * Identify a raster image by its first bytes. Used in preference to the file extension, which
+ * lies more often than you would hope — see `imageDataUri`. SVG has no magic number and falls
+ * back to the extension map, which is fine: it is text either way.
+ */
+function sniffImageMime(bytes: Buffer): string | undefined {
+  if (bytes.length >= 4) {
+    if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
+      return 'image/png';
+    }
+    if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'image/jpeg';
+  }
+  // WEBP is "RIFF" .... "WEBP".
+  if (bytes.length >= 12 && bytes.subarray(0, 4).toString('ascii') === 'RIFF') {
+    if (bytes.subarray(8, 12).toString('ascii') === 'WEBP') return 'image/webp';
+  }
+  return undefined;
+}

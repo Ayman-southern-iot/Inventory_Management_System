@@ -1,182 +1,210 @@
 import type { BomDetail, BomLine, RequisitionFootprints } from '@ims/shared';
 
 /**
- * Renders a `BomDetail` to the HTML that the PDF renderer will turn into the document
- * Accounts files. Pure: no DB, no filesystem, no `Date.now()` — the function takes the
- * already-frozen `generatedAt` and `voidedAt` from the detail and the `letterheadUri`
- * (or null) from the renderer.
+ * Renders a `BomDetail` to the HTML the PDF renderer turns into the document Accounts files.
  *
- * The frozen `sources[].footprints` block is what task 4.2 pinned: a BOM printed in July
- * must still show July's names and designations, even after somebody has been promoted or
- * left. The template reads only the snapshot, never `users` live.
+ * Pure: no DB, no filesystem, no `Date.now()`. Everything time- or file-dependent is resolved by
+ * the caller and passed in — the frozen `generatedAt`/`voidedAt` from the detail, the company
+ * identity from config, and the signature images already read from disk.
+ *
+ * `sources[].footprints` is the snapshot task 4.2 pinned: a BOM printed in July must still show
+ * July's names and designations after somebody is promoted or leaves, so the template reads only
+ * the snapshot and never `users` live.
+ *
+ * **Layout brief (operator, 2026-07-30):** the first version was congested — a meta table, a
+ * per-source section, a line table carrying vendor/purpose/project, and a dense footprints table
+ * of stage/slot/designation/acted-at/on-behalf-of. This one prints a letterhead, nine header
+ * fields, one clean item table, and a signature block. Working detail that belongs on screen was
+ * removed from the page Accounts signs.
  */
-export function renderBomHtml(
-  detail: BomDetail,
-  letterheadUri: string | null,
-): string {
-  const approvedTotal = detail.sources.reduce(
-    (sum, source) => sum + (source.approvedAmount ?? 0),
-    0,
-  );
-  const variance = detail.subtotal - approvedTotal;
-  const variancePct =
-    approvedTotal === 0
-      ? 'n/a'
-      : `${variance > 0 ? '+' : ''}${((variance / approvedTotal) * 100).toFixed(1)}%`;
 
-  const departmentNames = unique(
-    detail.sources.map((s) => s.departmentName).filter((name): name is string => name !== null),
-  );
-  const requisitionsList = detail.requisitionNos.length === 0
-    ? '—'
-    : detail.requisitionNos.map(escape).join(', ');
-  const departmentsText = departmentNames.length === 0 ? '—' : departmentNames.map(escape).join(', ');
+export interface CompanyIdentity {
+  name: string;
+  addressLines: readonly string[];
+  /** Data URI, or null when no logo is configured. */
+  logoUri: string | null;
+}
 
+export interface BomRenderContext {
+  company: CompanyIdentity;
+  /**
+   * Signature images by `stored_files.id`, already read and base64-encoded by the service. A
+   * missing entry renders as a blank signature line rather than a broken image — a document is
+   * better incomplete than obviously broken.
+   */
+  signatureUris: Readonly<Record<string, string>>;
+}
+
+export function renderBomHtml(detail: BomDetail, context: BomRenderContext): string {
   return [
     '<!doctype html>',
     '<html lang="en"><head><meta charset="utf-8">',
     `<title>${escape(detail.bomNo)}</title>`,
-    `<style>${bomStyles(letterheadUri !== null)}</style>`,
+    `<style>${bomStyles()}</style>`,
     '</head><body>',
-    renderHeader(
-      detail,
-      letterheadUri,
-      approvedTotal,
-      variance,
-      variancePct,
-      requisitionsList,
-      departmentsText,
-    ),
+    renderLetterhead(context.company),
     renderVoidBanner(detail),
-    '<h2>Items</h2>',
-    detail.sources.map((source) => renderSource(source, detail.lines)).join('\n'),
-    '<h2>Approval chain (frozen at generation)</h2>',
-    detail.sources.map(renderSourceFootprints).join('\n'),
-    renderFooter(),
+    '<h1>Bill of Materials</h1>',
+    detail.sources.map((source) => renderHeaderBlock(detail, source)).join('\n'),
+    renderItems(detail),
+    renderSignatures(detail, context),
+    renderFooter(context.company),
     '</body></html>',
   ].join('\n');
 }
 
-/* ------------------------------------------------------------- header */
+/* --------------------------------------------------------- letterhead */
 
-function renderHeader(
-  detail: BomDetail,
-  letterheadUri: string | null,
-  approvedTotal: number,
-  variance: number,
-  variancePct: string,
-  requisitionsList: string,
-  departmentsText: string,
-): string {
+function renderLetterhead(company: CompanyIdentity): string {
   return [
-    '<header>',
-    letterheadUri !== null
-      ? `<img class="letterhead" src="${letterheadUri}" alt="">`
-      : '<div class="letterhead-placeholder">Letterhead not configured</div>',
-    '<table class="meta">',
-    `  <tr><th>BOM number</th><td>${escape(detail.bomNo)}</td></tr>`,
-    `  <tr><th>Generated</th><td>${escape(formatDate(detail.generatedAt))} by ${escape(detail.generatedByName)}</td></tr>`,
-    `  <tr><th>Source requisition(s)</th><td>${requisitionsList}</td></tr>`,
-    `  <tr><th>Department(s)</th><td>${departmentsText}</td></tr>`,
-    `  <tr><th>Total approved</th><td class="num">${escape(formatBdt(approvedTotal))}</td></tr>`,
-    `  <tr><th>Subtotal (this BOM)</th><td class="num">${escape(formatBdt(detail.subtotal))}</td></tr>`,
-    `  <tr><th>Variance</th><td class="num">${escape(formatBdt(variance))} (${escape(variancePct)})</td></tr>`,
-    '</table>',
+    '<header class="letterhead">',
+    company.logoUri !== null
+      ? `  <img class="logo" src="${company.logoUri}" alt="">`
+      : '  <div class="logo-missing"></div>',
+    '  <div class="identity">',
+    `    <div class="company">${escape(company.name)}</div>`,
+    ...company.addressLines.map((line) => `    <div class="address">${escape(line)}</div>`),
+    '  </div>',
     '</header>',
   ].join('\n');
 }
 
-function renderVoidBanner(detail: BomDetail): string {
-  if (!detail.isVoid) return '';
+/* ------------------------------------------------------- header block */
+
+/**
+ * The nine fields the operator specified, in their order. One block per source requisition,
+ * because a batched BOM has a different requester, department and project per source and
+ * collapsing them into a comma-joined list is what made the old version unreadable.
+ */
+function renderHeaderBlock(detail: BomDetail, source: RequisitionFootprints): string {
+  const rows: Array<[string, string]> = [
+    ['BOM Number', detail.bomNo],
+    ['Requisition From', source.requesterName],
+    ['Date', formatDate(detail.generatedAt)],
+    ['Department', source.departmentName ?? '—'],
+    ['Project', source.projectName ?? '—'],
+    ['Description', source.description ?? '—'],
+    ['Total Money Requested', money(source.requestedAmount)],
+    ['Approved Money', money(source.approvedAmount)],
+    // OQ-18: what the approvers did not sanction. Requested 15,000 approved 10,000 leaves 5,000.
+    ['Remaining', money(source.remainingAmount)],
+  ];
+
   return [
-    '<div class="void-banner">',
-    '  <strong>VOID</strong> &mdash; ',
-    `  Reason: ${escape(detail.voidReason ?? '')}. `,
-    detail.voidedAt !== null ? `Voided ${escape(formatDate(detail.voidedAt))}` : '',
-    detail.voidedByName !== null ? ` by ${escape(detail.voidedByName)}` : '',
-    '</div>',
+    '<table class="header-block">',
+    ...rows.map(
+      ([label, value]) =>
+        `  <tr><th>${escape(label)}</th><td>${escape(value)}</td></tr>`,
+    ),
+    '</table>',
   ].join('\n');
 }
 
-/* ------------------------------------------------------------ per-source */
+/* -------------------------------------------------------------- items */
 
-function renderSource(source: RequisitionFootprints, allLines: BomLine[]): string {
-  // A line belongs to a source if its `requisitionNo` matches the source's. This is the
-  // explicit join we have in the contract — `bom_lines.requisition_no` is denormalised
-  // precisely so the template does not need to re-join the requisition table.
-  const lines = allLines.filter((line) => line.requisitionNo === source.requisitionNo);
+function renderItems(detail: BomDetail): string {
+  if (detail.lines.length === 0) {
+    return '<p class="muted">No items on this BOM.</p>';
+  }
 
   return [
-    '<section class="source">',
-    `  <h3>${escape(source.requisitionNo)} &mdash; ${escape(source.requesterName)}`,
-    source.departmentName !== null
-      ? ` <span class="muted">(${escape(source.departmentName)})</span>`
-      : '',
-    '</h3>',
-    `  <p class="muted">Approved amount: ${escape(formatBdt(source.approvedAmount ?? 0))}</p>`,
-    lines.length === 0
-      ? '  <p class="muted">No items.</p>'
-      : [
-          '  <table class="lines"><thead><tr>',
-          '    <th>#</th><th>Item</th><th class="num">Qty</th>',
-          '    <th class="num">Unit cost</th><th class="num">Total</th>',
-          '    <th>Vendor</th><th>Purpose</th><th>Project</th>',
-          '  </tr></thead><tbody>',
-          ...lines.map((line, index) => renderLineRow(line, index)),
-          '  </tbody></table>',
-        ].join('\n'),
-    '</section>',
+    '<table class="items">',
+    '  <thead><tr>',
+    '    <th class="idx">#</th><th>Item</th>',
+    '    <th class="num">Qty</th><th class="num">Unit cost</th><th class="num">Amount</th>',
+    '  </tr></thead>',
+    '  <tbody>',
+    ...detail.lines.map((line, index) => renderItemRow(line, index)),
+    '  </tbody>',
+    '  <tfoot><tr>',
+    '    <td colspan="4" class="total-label">Subtotal</td>',
+    `    <td class="num total">${escape(money(detail.subtotal))}</td>`,
+    '  </tr></tfoot>',
+    '</table>',
   ].join('\n');
 }
 
-function renderLineRow(line: BomLine, index: number): string {
+function renderItemRow(line: BomLine, index: number): string {
+  const amount = line.unitCost * line.quantity;
   return [
     '    <tr>',
-    `<td>${index + 1}</td>`,
-    `<td>${escape(line.itemName)}</td>`,
-    `<td class="num">${line.quantity}</td>`,
-    `<td class="num">${escape(formatBdt(line.unitCost))}</td>`,
-    `<td class="num">${escape(formatBdt(line.totalCost))}</td>`,
-    `<td>${escape(line.vendor ?? '—')}</td>`,
-    `<td>${escape(line.purpose ?? '—')}</td>`,
-    `<td>${escape(line.projectName ?? '—')}</td>`,
+    `      <td class="idx">${index + 1}</td>`,
+    `      <td>${escape(line.itemName)}</td>`,
+    `      <td class="num">${line.quantity}</td>`,
+    `      <td class="num">${escape(money(line.unitCost))}</td>`,
+    `      <td class="num">${escape(money(amount))}</td>`,
     '    </tr>',
-  ].join('');
+  ].join('\n');
 }
 
-function renderSourceFootprints(source: RequisitionFootprints): string {
-  if (source.footprints.length === 0) return '';
+/* --------------------------------------------------------- signatures */
+
+/**
+ * One cell per approver, in chain order.
+ *
+ * Every cell prints the name and the word **Approved** — whether or not a signature was applied.
+ * Approving without signing is a deliberate choice (task 5.2), so the document must not imply the
+ * approval is somehow lesser; the signature area simply stays blank for a wet signature. Both
+ * variants reserve the same height so the layout does not shift between documents.
+ */
+function renderSignatures(detail: BomDetail, context: BomRenderContext): string {
+  const footprints = detail.sources.flatMap((source) => source.footprints);
+  if (footprints.length === 0) return '';
+
   return [
-    '<section class="footprints">',
-    `  <h3>${escape(source.requisitionNo)} — approval chain</h3>`,
-    '  <table class="footprints"><thead><tr>',
-    '    <th>Stage</th><th>Slot</th><th>Name</th><th>Designation</th>',
-    '    <th>Acted at</th><th>On behalf of</th>',
-    '  </tr></thead><tbody>',
-    ...source.footprints.map((f) =>
-      [
-        '    <tr>',
-        `<td>${escape(f.stage)}</td>`,
-        `<td>${f.slot === null ? '—' : String(f.slot)}</td>`,
-        `<td>${escape(f.name)}</td>`,
-        `<td>${escape(f.designation)}</td>`,
-        `<td>${escape(f.actedAt === null ? '—' : formatDate(f.actedAt))}</td>`,
-        `<td>${escape(f.onBehalfOf ?? '—')}</td>`,
-        '    </tr>',
-      ].join(''),
-    ),
-    '  </tbody></table>',
+    '<section class="signatures">',
+    '  <div class="signature-row">',
+    ...footprints.map((footprint) => {
+      const uri = footprint.signatureFileId
+        ? context.signatureUris[footprint.signatureFileId]
+        : undefined;
+      const image =
+        footprint.signedWithSignature && uri
+          ? `<img class="signature-image" src="${uri}" alt="">`
+          : '';
+      return [
+        '    <div class="signature-cell">',
+        `      <div class="signature-area">${image}</div>`,
+        '      <div class="signature-line"></div>',
+        `      <div class="signature-name">${escape(footprint.name)}</div>`,
+        `      <div class="signature-designation">${escape(footprint.designation)}</div>`,
+        '      <div class="signature-approved">Approved</div>',
+        footprint.onBehalfOf
+          ? `      <div class="signature-behalf">for ${escape(footprint.onBehalfOf)}</div>`
+          : '',
+        `      <div class="signature-date">Date: ${escape(
+          footprint.actedAt ? formatDateOnly(footprint.actedAt) : '',
+        )}</div>`,
+        '    </div>',
+      ]
+        .filter(Boolean)
+        .join('\n');
+    }),
+    '  </div>',
     '</section>',
   ].join('\n');
 }
 
-function renderFooter(): string {
-  return '<footer class="muted">Generated by Southern IoT</footer>';
+/* ------------------------------------------------------- void / footer */
+
+function renderVoidBanner(detail: BomDetail): string {
+  if (!detail.isVoid) return '';
+  const when = detail.voidedAt ? formatDate(detail.voidedAt) : '';
+  const reason = detail.voidReason ?? '';
+  return `<div class="void-banner">VOID — ${escape(when)}${reason ? ` · ${escape(reason)}` : ''}</div>`;
+}
+
+function renderFooter(company: CompanyIdentity): string {
+  return `<footer class="muted">${escape(company.name)}</footer>`;
 }
 
 /* ------------------------------------------------------------ formatting */
 
-const BDT = new Intl.NumberFormat('en-BD', { style: 'currency', currency: 'BDT', maximumFractionDigits: 2 });
+const BDT = new Intl.NumberFormat('en-BD', {
+  style: 'currency',
+  currency: 'BDT',
+  maximumFractionDigits: 2,
+});
 
 function formatBdt(value: number): string {
   try {
@@ -185,6 +213,11 @@ function formatBdt(value: number): string {
     // Some Node builds lack en-BD currency data; fall back to a sensible prefix.
     return `৳${value.toFixed(2)}`;
   }
+}
+
+/** A null amount prints as an em dash, never as ৳0.00 — "unknown" is not "zero". */
+function money(value: number | null): string {
+  return value === null ? '—' : formatBdt(value);
 }
 
 function formatDate(iso: string): string {
@@ -198,8 +231,12 @@ function formatDate(iso: string): string {
   return `${dd}-${mm}-${yyyy} ${hh}:${min}`;
 }
 
-function unique<T>(items: T[]): T[] {
-  return [...new Set(items)];
+function formatDateOnly(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  const dd = String(date.getDate()).padStart(2, '0');
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  return `${dd}-${mm}-${date.getFullYear()}`;
 }
 
 function escape(value: string): string {
@@ -213,26 +250,67 @@ function escape(value: string): string {
 
 /* -------------------------------------------------------------- styles */
 
-function bomStyles(hasLetterhead: boolean): string {
-  // Page format, margins, orientation all come from the renderer config — not here.
+function bomStyles(): string {
+  // Page format, margins and orientation all come from the renderer config — never from here.
   return `
-    body { font-family: 'Helvetica', 'Arial', sans-serif; font-size: 11pt; color: #222; }
-    h1, h2, h3 { margin-bottom: 4pt; }
-    h1 { font-size: 16pt; }
-    h2 { font-size: 13pt; margin-top: 14pt; border-bottom: 1px solid #ccc; padding-bottom: 3pt; }
-    h3 { font-size: 11pt; margin-top: 10pt; }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 6pt; }
-    th, td { padding: 4pt 6pt; border-bottom: 1px solid #e0e0e0; text-align: left; vertical-align: top; }
-    th { background: #f5f5f5; font-weight: 600; }
-    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
-    .meta th { width: 30%; background: transparent; border: none; font-weight: 600; }
-    .meta td { border: none; }
-    .muted { color: #666; font-size: 10pt; }
-    .letterhead { display: block; max-width: 100%; max-height: 80pt; margin-bottom: 8pt; object-fit: contain; }
-    .letterhead-placeholder { padding: 8pt 12pt; border: 1px dashed #999; color: #666; margin-bottom: 8pt; font-style: italic; }
-    .void-banner { padding: 8pt 12pt; border: 2px solid #b00020; background: #fff0f0; color: #b00020; margin-bottom: 8pt; }
-    footer { margin-top: 16pt; font-size: 9pt; }
-    section.source { page-break-inside: avoid; }
-    ${hasLetterhead ? '' : 'header { margin-top: 0; }'}
+    body { font-family: 'Helvetica', 'Arial', sans-serif; font-size: 10.5pt; color: #1a1a1a; }
+
+    header.letterhead {
+      display: flex; align-items: center; gap: 14pt;
+      padding-bottom: 10pt; margin-bottom: 16pt; border-bottom: 1.5pt solid #1a1a1a;
+    }
+    header.letterhead .logo { max-height: 52pt; max-width: 150pt; object-fit: contain; }
+    header.letterhead .logo-missing { width: 0; }
+    header.letterhead .company { font-size: 15pt; font-weight: 700; letter-spacing: 0.2pt; }
+    header.letterhead .address { font-size: 9pt; color: #555; line-height: 1.35; }
+
+    h1 { font-size: 13pt; margin: 0 0 10pt; text-transform: uppercase; letter-spacing: 0.6pt; }
+
+    /* Two columns of label/value, so nine fields cost far less vertical space than nine rows. */
+    table.header-block {
+      width: 100%; border-collapse: collapse; margin-bottom: 14pt;
+      page-break-inside: avoid;
+    }
+    table.header-block th, table.header-block td {
+      padding: 3pt 6pt 3pt 0; text-align: left; vertical-align: top; border: none;
+      font-size: 10pt;
+    }
+    table.header-block th { width: 33%; font-weight: 600; color: #555; }
+
+    table.items { width: 100%; border-collapse: collapse; margin-bottom: 18pt; }
+    table.items th, table.items td {
+      padding: 5pt 6pt; text-align: left; vertical-align: top;
+      border-bottom: 0.5pt solid #ddd;
+    }
+    table.items thead th {
+      border-bottom: 1pt solid #1a1a1a; font-weight: 600; font-size: 9.5pt;
+      text-transform: uppercase; letter-spacing: 0.3pt;
+    }
+    table.items .idx { width: 22pt; color: #777; }
+    table.items .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    table.items tfoot td { border-bottom: none; border-top: 1pt solid #1a1a1a; font-weight: 700; }
+    table.items .total-label { text-align: right; }
+
+    /* Signatures must never be split across a page break — half a signature block reads as a
+       document that was tampered with. */
+    section.signatures { margin-top: 22pt; page-break-inside: avoid; }
+    .signature-row { display: flex; gap: 18pt; flex-wrap: wrap; }
+    .signature-cell { flex: 1 1 150pt; max-width: 200pt; }
+    /* Fixed height whether or not an image lands, so signed and unsigned cells align. */
+    .signature-area { height: 42pt; display: flex; align-items: flex-end; }
+    .signature-image { max-height: 40pt; max-width: 100%; object-fit: contain; }
+    .signature-line { border-bottom: 0.75pt solid #1a1a1a; margin-bottom: 4pt; }
+    .signature-name { font-weight: 600; font-size: 10pt; }
+    .signature-designation { font-size: 9pt; color: #555; }
+    .signature-approved { font-size: 9.5pt; font-weight: 600; margin-top: 2pt; }
+    .signature-behalf { font-size: 8.5pt; color: #777; font-style: italic; }
+    .signature-date { font-size: 9pt; color: #555; margin-top: 3pt; }
+
+    .void-banner {
+      padding: 7pt 10pt; border: 1.5pt solid #b00020; background: #fff0f0; color: #b00020;
+      font-weight: 700; margin-bottom: 12pt; letter-spacing: 0.4pt;
+    }
+    .muted { color: #777; font-size: 8.5pt; }
+    footer { margin-top: 20pt; padding-top: 6pt; border-top: 0.5pt solid #ddd; }
   `;
 }

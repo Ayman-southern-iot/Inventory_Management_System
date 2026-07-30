@@ -254,3 +254,17 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   batched BOM dropped as unrequested complexity (OQ-21), and `fund_returns` modelled as its own
   table rather than negative receipts so "received" and "returned" never have to be disentangled
   from a signed column.
+- 2026-07-30 — BOM "Remaining" = Total Requested − Approved (OQ-18, answered by the operator).
+  Note it is a property of the approval decision alone, not of spending, so it is fixed once the
+  chain completes and never moves as money is drawn down.
+- 2026-07-30 — The BOM document prints one header block per source requisition rather than
+  comma-joining requesters/departments/projects across a batched BOM. Collapsing them is what
+  made the first draft unreadable, and Accounts needs to see whose spend each figure is.
+- 2026-07-30 — Company name, address and logo path are config (`COMPANY_*`), not literals in the
+  template — another deployment is another company, and an office move should not be a release.
+- 2026-07-30 — Signature images are resolved server-side from the approval snapshot's file id and
+  inlined into the PDF; the id, never the image, travels in `BomDetail`. Keeps signature bytes out
+  of ordinary API responses while still freezing what a printed document shows.
+- 2026-07-30 — Image MIME type is sniffed from magic bytes, not the file extension. The supplied
+  logo was named `.png` and was a JPEG; trusting the extension would have emitted a data URI that
+  some renderers accept and others silently drop.

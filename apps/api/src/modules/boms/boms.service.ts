@@ -27,6 +27,8 @@ import { PdfRendererService } from '../pdf/pdf-renderer.service';
 import { PdfSigningService } from '../pdf/pdf-signing.service';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { FilesService } from '../files/files.service';
+import { CONFIG, type AppConfig } from '../../config';
 import { NOTIFICATION_LINKS } from '../notifications/notifications.links';
 import type { AuditContext } from '../audit/audit-context';
 import { BomsRepository } from './boms.repository';
@@ -92,6 +94,8 @@ export class BomsService {
     private readonly settings: SettingsService,
     private readonly requisitions: RequisitionsRepository,
     private readonly pdfRenderer: PdfRendererService,
+    private readonly files: FilesService,
+    @Inject(CONFIG) private readonly config: AppConfig,
     private readonly pdfSigning: PdfSigningService,
     private readonly audit: AuditService,
     private readonly notifications: NotificationsService,
@@ -381,8 +385,14 @@ export class BomsService {
       return detail;
     }
 
-    const letterheadUri = await this.pdfRenderer.letterheadDataUri();
-    const html = renderBomHtml(detail, letterheadUri);
+    const html = renderBomHtml(detail, {
+      company: {
+        name: this.config.company.name,
+        addressLines: this.config.company.addressLines,
+        logoUri: await this.pdfRenderer.companyLogoDataUri(),
+      },
+      signatureUris: await this.resolveSignatureUris(detail),
+    });
     const buffer = await this.pdfRenderer.render(html);
 
     // The on-disk path is derived from the BOM number so a re-render overwrites in place.
@@ -763,6 +773,47 @@ export class BomsService {
    * name + designation, and again for the actor (delegate) when one was recorded.
    * The shape is `ApprovalFootprint[]` from the shared contract.
    */
+  /**
+   * Read the signature images this document needs, keyed by file id.
+   *
+   * Resolved from the **snapshot on each approval row**, never from the approver's current
+   * signature — that is the whole point of task 5.2's snapshot. Deduplicated because one approver
+   * may sign several source requisitions on a batched BOM.
+   *
+   * A file that cannot be read is logged and skipped: the template then draws a blank signature
+   * line, which is a document someone can still counter-sign by hand. Failing the whole render
+   * because one image is missing would be a worse trade.
+   */
+  private async resolveSignatureUris(detail: BomDetail): Promise<Record<string, string>> {
+    const ids = [
+      ...new Set(
+        detail.sources
+          .flatMap((source) => source.footprints)
+          .filter((footprint) => footprint.signedWithSignature)
+          .map((footprint) => footprint.signatureFileId)
+          .filter((id): id is string => id !== null),
+      ),
+    ];
+
+    const entries = await Promise.all(
+      ids.map(async (id) => {
+        try {
+          const { contents, row } = await this.files.readContents(id);
+          const pair: [string, string] = [
+            id,
+            `data:${row.mime_type};base64,${contents.toString('base64')}`,
+          ];
+          return pair;
+        } catch (error) {
+          this.logger.warn(`Signature ${id} could not be read for a BOM render: ${String(error)}`);
+          return null;
+        }
+      }),
+    );
+
+    return Object.fromEntries(entries.filter((entry): entry is [string, string] => entry !== null));
+  }
+
   private async freezeFootprints(
     /**
      * The generating transaction. Reading this on the pool instead meant the snapshot that is
@@ -785,6 +836,10 @@ export class BomsService {
         'assignee.designation as assignee_designation',
         'actor.full_name as actor_name',
         'requisition_approvals.acted_at',
+        // Task 5.2: frozen into the snapshot alongside the name, so replacing a signature later
+        // cannot change what this document renders.
+        'requisition_approvals.signed_with_signature',
+        'requisition_approvals.signature_file_id',
       ])
       // The order the live tracker walks the chain: IM stage first, approvers in slot order.
       .orderBy('requisition_approvals.stage')
@@ -798,6 +853,8 @@ export class BomsService {
       designation: row.assignee_designation,
       actedAt: row.acted_at ? row.acted_at.toISOString() : null,
       onBehalfOf: row.actor_name,
+      signedWithSignature: row.signed_with_signature,
+      signatureFileId: row.signature_file_id,
     }));
   }
 

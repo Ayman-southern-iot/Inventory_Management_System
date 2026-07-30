@@ -41,6 +41,8 @@ export function footprint(
     designation: 'Head of Operations',
     actedAt: '2026-07-29T10:00:00.000Z',
     onBehalfOf: null,
+    signedWithSignature: false,
+    signatureFileId: null,
     ...overrides,
   };
 }
@@ -53,7 +55,12 @@ export function sourceFootprints(
     requisitionNo: 'REQ-000001',
     requesterName: 'Gina General',
     departmentName: 'Engineering',
+    projectName: 'Sensor rollout',
+    description: 'Replacement sensors for the pilot site',
+    requestedAmount: 4000,
     approvedAmount: 3000,
+    // OQ-18: requested minus approved.
+    remainingAmount: 1000,
     footprints: [footprint()],
     ...overrides,
   };

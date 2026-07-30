@@ -85,6 +85,17 @@ const rawSchema = z.object({
   /** Scanned invoices, which are legitimately larger. */
   UPLOAD_MAX_DOCUMENT_BYTES: z.coerce.number().int().min(1024).max(50_000_000).default(10_000_000),
 
+  // --- Company identity (printed on every BOM) ---------------------------------
+  // Configuration, not literals: another deployment is another company, and the address is the
+  // sort of thing that changes with an office move rather than a release.
+  COMPANY_NAME: z.string().min(1).default('Southern IoT'),
+  /** Pipe-separated so one env var carries a multi-line address block. */
+  COMPANY_ADDRESS: z
+    .string()
+    .default('House 26, Road 13, Sector 14|Uttara, Dhaka - 1230|Bangladesh'),
+  /** Repo-relative or absolute. Embedded as a data URI at render time, never linked. */
+  COMPANY_LOGO_PATH: z.string().default('./assets/letterhead/siot-logo.jpg'),
+
   // --- PDF rendering (OQ-11) ---------------------------------------------------
   // Every measurement is configuration, because the real company pad has not been supplied
   // yet and its margins are unknown. Nothing here may become a literal in a template.
@@ -175,6 +186,11 @@ export interface AppConfig {
   };
   /** Keyed by `SettingDefinition.seedEnvVar`; consumed once, on first boot. */
   readonly settingSeeds: Readonly<Record<string, unknown>>;
+  readonly company: {
+    readonly name: string;
+    readonly addressLines: readonly string[];
+    readonly logoPath: string;
+  };
   readonly uploads: {
     readonly storageDir: string;
     readonly maxImageBytes: number;
@@ -265,6 +281,15 @@ export function buildConfig(source: Record<string, string | undefined>): AppConf
             .filter(Boolean)
         : '',
       SETTING_AUDIT_RETENTION_DAYS: env.SETTING_AUDIT_RETENTION_DAYS,
+    }),
+    company: Object.freeze({
+      name: env.COMPANY_NAME,
+      addressLines: Object.freeze(
+        env.COMPANY_ADDRESS.split('|')
+          .map((line) => line.trim())
+          .filter(Boolean),
+      ),
+      logoPath: env.COMPANY_LOGO_PATH,
     }),
     uploads: Object.freeze({
       storageDir: env.FILE_STORAGE_DIR,
