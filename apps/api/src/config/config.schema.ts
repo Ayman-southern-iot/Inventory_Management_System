@@ -88,6 +88,11 @@ const rawSchema = z.object({
   // --- Company identity (printed on every BOM) ---------------------------------
   // Configuration, not literals: another deployment is another company, and the address is the
   // sort of thing that changes with an office move rather than a release.
+  /**
+   * The business's own calendar. Report date ranges are resolved against this, not UTC — at
+   * +06 a Dhaka morning is the previous UTC day, and a July range would silently drop it.
+   */
+  REPORTING_TIME_ZONE: z.string().min(1).default('Asia/Dhaka'),
   COMPANY_NAME: z.string().min(1).default('Southern IoT'),
   /** Pipe-separated so one env var carries a multi-line address block. */
   COMPANY_ADDRESS: z
@@ -186,6 +191,7 @@ export interface AppConfig {
   };
   /** Keyed by `SettingDefinition.seedEnvVar`; consumed once, on first boot. */
   readonly settingSeeds: Readonly<Record<string, unknown>>;
+  readonly reportingTimeZone: string;
   readonly company: {
     readonly name: string;
     readonly addressLines: readonly string[];
@@ -282,6 +288,7 @@ export function buildConfig(source: Record<string, string | undefined>): AppConf
         : '',
       SETTING_AUDIT_RETENTION_DAYS: env.SETTING_AUDIT_RETENTION_DAYS,
     }),
+    reportingTimeZone: env.REPORTING_TIME_ZONE,
     company: Object.freeze({
       name: env.COMPANY_NAME,
       addressLines: Object.freeze(

@@ -17,6 +17,7 @@ import { CategoriesPage } from '@/features/inventory/CategoriesPage';
 import { LocationsPage } from '@/features/inventory/LocationsPage';
 import { BorrowingPage } from '@/features/borrowing/BorrowingPage';
 import { RequisitionsPage } from '@/features/requisitions/RequisitionsPage';
+import { ExpensesPage } from '@/features/reports/ExpensesPage';
 import { RequisitionFormPage } from '@/features/requisitions/RequisitionFormPage';
 import { RequisitionDetailPage } from '@/features/requisitions/RequisitionDetailPage';
 import { BomsPage } from '@/features/boms/BomsPage';
@@ -90,6 +91,9 @@ export function App() {
                         path={ROUTES.requisitions.approvals}
                         element={<RequisitionsPage mode="approvals" />}
                       />
+                      {/* Same guard as the approver queue: an approver needs the shape of the
+                          spend they are sanctioning, a requester has no business with it. */}
+                      <Route path={ROUTES.reports.expenses} element={<ExpensesPage />} />
                     </Route>
 
                     {/* Browsing the catalogue is everyone's — a general user has to find a

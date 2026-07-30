@@ -15,6 +15,9 @@ export const ROUTES = {
     all: '/borrowing',
     mine: '/my-borrowings',
   },
+  reports: {
+    expenses: '/expenses',
+  },
   boms: {
     all: '/boms',
     new: '/boms/new',

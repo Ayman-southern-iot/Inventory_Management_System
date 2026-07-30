@@ -8,6 +8,7 @@ import type {
   ListUsersQuery,
   ListAuditQuery,
   ListNotificationsQuery,
+  ExpenseReportQuery,
 } from '@ims/shared';
 
 /**
@@ -90,6 +91,10 @@ export const queryKeys = {
   profile: {
     all: () => ['profile'] as const,
     signature: () => ['profile', 'signature'] as const,
+  },
+  reports: {
+    all: () => ['reports'] as const,
+    expenses: (query: ExpenseReportQuery) => ['reports', 'expenses', query] as const,
   },
   notifications: {
     all: () => ['notifications'] as const,

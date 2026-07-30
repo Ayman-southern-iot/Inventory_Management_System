@@ -17,6 +17,7 @@ import {
   Package,
   Settings2,
   Users,
+  Wallet,
   X,
 } from 'lucide-react';
 import { Role } from '@ims/shared';
@@ -61,6 +62,8 @@ const NAV: NavGroup[] = [
     roles: [Role.APPROVER, Role.INVENTORY_MANAGER, Role.ADMIN],
     items: [
       { label: t.nav.approvals, to: ROUTES.requisitions.approvals, icon: Stamp, badge: true },
+      // Approvers see it too: the shape of the spend they are sanctioning is their business.
+      { label: t.nav.expenses, to: ROUTES.reports.expenses, icon: Wallet },
     ],
   },
   {

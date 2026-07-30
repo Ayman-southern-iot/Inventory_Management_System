@@ -20,6 +20,21 @@ export function formatDateTime(isoTimestamp: string): string {
 }
 
 /** Quantities are integers; grouping keeps 12000 from reading as 1200. */
+/**
+ * Money, with exactly two decimals.
+ *
+ * Fixed decimals rather than `toLocaleString()`'s default: in a column of figures that have to be
+ * read against each other, 1,200 next to 1,200.50 invites a misread, and these are the numbers
+ * someone signs off on. No currency symbol — the whole system is BDT and repeating it in every
+ * cell is noise (rules/10: BDT is a project glossary term, not a per-row label).
+ */
+export function formatBdt(amount: number): string {
+  return amount.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 export function formatQuantity(quantity: number): string {
   return quantity.toLocaleString();
 }

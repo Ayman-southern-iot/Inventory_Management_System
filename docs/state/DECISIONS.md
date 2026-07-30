@@ -322,3 +322,23 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   "issued on behalf of" quietly becomes "issued to myself".
 - 2026-07-30 — Issuing to a deactivated user is refused: it would create a borrow nobody can
   return, and an outstanding item nobody is accountable for.
+- 2026-07-31 — The expense report is one SQL query with the per-requisition money pre-aggregated in
+  scalar subqueries. Joining `requisitions` to `fund_receipts`, `purchases` and `fund_returns` at
+  once multiplies the rows and inflates every figure by the size of the other two tables. That
+  fan-out is silent — the report looks plausible and is simply wrong — so there is a test with two
+  receipts, two purchases and a return on one requisition that would fail if anyone "simplified"
+  the query into joins.
+- 2026-07-31 — Report date ranges are calendar days in `REPORTING_TIME_ZONE` (default Asia/Dhaka),
+  resolved to instants by Postgres via `AT TIME ZONE`. Coercing them to `Date` in JavaScript
+  anchored both ends to UTC midnight, so a requisition submitted at 3am Dhaka on the 31st — 9pm
+  UTC on the 30th — fell outside a range that plainly contained it.
+- 2026-07-31 — Report totals are summed from the buckets already on screen, not by a second SQL
+  aggregate. A separate query is a second chance to disagree with the rows the reader is looking
+  at, which is what makes a report untrustworthy.
+- 2026-07-31 — `GROUP BY 1` positionally rather than repeating the group expression. Interpolating
+  the same Kysely `sql` fragment twice re-emits its bound parameters with different placeholder
+  numbers, so Postgres reads the two as different expressions and rejects the query.
+- 2026-07-31 — The permissions spec no longer asserts that its own department appears in the
+  departments list. `resetData` cannot delete departments that requisitions reference, so the test
+  database accumulates them and the row eventually falls off page one. The spec's subject is the
+  permission boundary; ownership of the list's contents belongs to the departments spec.
