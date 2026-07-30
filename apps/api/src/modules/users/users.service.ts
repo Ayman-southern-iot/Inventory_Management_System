@@ -13,6 +13,7 @@ import { RefreshRevocationReason } from '../../database/schema';
 import { PasswordService } from '../../security/password.service';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { NOTIFICATION_LINKS } from '../notifications/notifications.links';
 import type { AuditContext } from '../audit/audit-context';
 import { UsersRepository, toUser, type Tx, type UserWithRoles } from './users.repository';
 
@@ -188,7 +189,7 @@ export class UsersService {
           type: 'account.roles_changed',
           userIds: [id],
           ref: existing.email,
-          link: '/profile',
+          link: NOTIFICATION_LINKS.accountPassword,
           entityType: 'user',
           entityId: id,
           actorId: context.actorId ?? null,
@@ -283,7 +284,7 @@ export class UsersService {
           type: 'account.password_reset',
           userIds: [id],
           ref: existing.email,
-          link: '/profile',
+          link: NOTIFICATION_LINKS.accountPassword,
           entityType: 'user',
           entityId: id,
           actorId: context.actorId ?? null,

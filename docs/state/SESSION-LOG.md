@@ -12,6 +12,49 @@ Format:
 **Next:** the single next action, specific enough to start without thinking
 ```
 
+## 2026-07-30 (end) — Phase 05 re-specified and planned; two live bugs fixed
+
+**Did:**
+- **Fixed a reported blocker.** Submitting a sub-threshold requisition failed with "Approver 1 is
+  not assigned" while the approver slots screen showed both slots correctly filled. Root cause:
+  below `EXPENSE_THRESHOLD_BDT` (14,000 here) the chain does not use the slots at all — it uses
+  `SUBTHRESHOLD_APPROVER_USER_ID`, which was `null`. Both failure paths raised the same
+  slot-shaped error, so the message pointed the admin at the wrong screen. Added
+  `SubthresholdApproverUnassignedError` naming the real setting, with separate wording for the
+  "unset" and "deactivated approver" cases, and a test that leaves the slots populated so the
+  confusion cannot come back. **The operator still needs to set that setting** — the code fix
+  only makes the message honest.
+- **Fixed dead notification links (my own bug from earlier this session).** I had pointed borrow
+  notifications at `/borrowing/:id`, which does not exist. The web router ends in a catch-all
+  redirect, so clicking one silently landed on the dashboard rather than erroring — it would have
+  looked like the feature simply did not work. Routes now come from `notifications.links.ts`,
+  which mirrors `apps/web/src/routes/paths.ts`, borrow notifications point at the right list per
+  recipient (IM queue vs. My borrowings), and a test fails if any notification links somewhere the
+  app does not serve.
+- **Rewrote `plan/PHASE-05-funds-purchasing.md`** against the operator's real specification:
+  password minimum 4, file-upload foundation, digital signatures on approvals, a redesigned BOM
+  document with the Southern IoT letterhead, the lifecycle extension (Sent to Accounts → Money
+  Received → Purchased → Purchase Verified → Stocked / Borrowed out → Closed), invoice upload with
+  money-saved returns, add-to-inventory, borrow-to-user, and expense reporting. Nine ordered tasks
+  with dependencies, schema, and acceptance criteria.
+- Suite green throughout: **288 integration tests**, typecheck and lint clean.
+
+**Decisions:** the plan carries its own reasoning inline. The two worth knowing without opening it:
+`fund_returns` is a separate table rather than negative `fund_receipts` rows, so every future `SUM`
+stays unambiguous; and a signature upload inserts a new `stored_files` row rather than overwriting,
+so a BOM printed in July keeps rendering the signature that was actually used.
+
+**Landmines:**
+- **OQ-18 blocks task 5.3.** The BOM header must print "Remaining" and nobody has said which
+  subtraction that is. Do not guess on a document that goes to Accounts.
+- The password change (5.0) is a deliberate, operator-instructed weakening. OQ-17 records why it
+  is acceptable and what must not be touched as a result.
+- Nothing in Phase 05 is implemented. The plan is a plan.
+- G-11..G-15 remain open. **G-14 in particular must be dealt with before or during 5.7**, which
+  would otherwise copy the same split-transaction shape.
+
+**Next:** task 5.0 (password policy), then 5.1 (file uploads). Get OQ-18 answered before 5.3.
+
 ## 2026-07-30 (later) — Phase 06: notifications, filter rework, green suite
 
 Continuation of the entry below. Everything the previous entry listed as a landmine is now closed.

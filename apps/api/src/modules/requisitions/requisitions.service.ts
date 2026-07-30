@@ -17,6 +17,7 @@ import type { Db } from '../../database/create-db';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { NOTIFICATION_LINKS } from '../notifications/notifications.links';
 import { UsersService } from '../users/users.service';
 import { SettingsService } from '../settings/settings.service';
 import { ApproverSlotsService } from '../settings/approver-slots.service';
@@ -27,6 +28,7 @@ import {
   ApproverSlotUnassignedError,
   InvalidRequisitionTransitionError,
   NotYourApprovalError,
+  SubthresholdApproverUnassignedError,
 } from './requisitions.errors';
 
 @Injectable()
@@ -217,7 +219,7 @@ export class RequisitionsService {
           type: 'requisition.awaiting_your_approval',
           userIds: [inventoryManagerId],
           ref: existing.requisition_no,
-          link: `/requisitions/${id}`,
+          link: NOTIFICATION_LINKS.requisition(id),
           entityType: 'requisition',
           entityId: id,
           actorId,
@@ -318,7 +320,7 @@ export class RequisitionsService {
             type,
             userIds,
             ref: requisition.requisition_no,
-            link: `/requisitions/${approval.requisition_id}`,
+            link: NOTIFICATION_LINKS.requisition(approval.requisition_id),
             entityType: 'requisition',
             entityId: approval.requisition_id,
             actorId,
@@ -497,7 +499,7 @@ export class RequisitionsService {
       // approved request is no longer approved, and whoever now has to decide again.
       const withdrawal = {
         ref: requisition.requisition_no,
-        link: `/requisitions/${approval.requisition_id}`,
+        link: NOTIFICATION_LINKS.requisition(approval.requisition_id),
         entityType: 'requisition',
         entityId: approval.requisition_id,
         actorId,
@@ -555,7 +557,7 @@ export class RequisitionsService {
           type: 'requisition.cancelled',
           userIds: await this.notifications.pendingApproversFor(id, tx),
           ref: existing.requisition_no,
-          link: `/requisitions/${id}`,
+          link: NOTIFICATION_LINKS.requisition(id),
           entityType: 'requisition',
           entityId: id,
           actorId,
@@ -575,20 +577,21 @@ export class RequisitionsService {
   }
 
   /**
-   * The admin-designated approver for sub-threshold requisitions. The setting is `null`
-   * if nobody has been picked yet — we surface that as `ApproverSlotUnassignedError` so the
-   * requester sees the same error as the at-or-above branch and the admin panel can guide
-   * the fix. The user is also checked for `is_active` so a freshly-deactivated approver
-   * does not silently win the assignment (Phase 05 inactive-slot guard).
+   * The admin-designated approver for sub-threshold requisitions.
+   *
+   * This is a *different* setting from the approver slots, which is exactly why it gets its own
+   * error: reporting "Approver 1 is not assigned" here sent admins to a screen that was already
+   * correctly filled in. The user is also checked for `is_active`, so a freshly-deactivated
+   * approver does not silently win the assignment (Phase 05 inactive-slot guard).
    */
   private async subthresholdApproverId(): Promise<string> {
     const userId = await this.settings.get(SettingKey.SUBTHRESHOLD_APPROVER_USER_ID);
     if (userId === null) {
-      throw new ApproverSlotUnassignedError(1);
+      throw new SubthresholdApproverUnassignedError('unset');
     }
     const active = await this.repo.isUserActive(userId);
     if (!active) {
-      throw new ApproverSlotUnassignedError(1);
+      throw new SubthresholdApproverUnassignedError('inactive');
     }
     return userId;
   }

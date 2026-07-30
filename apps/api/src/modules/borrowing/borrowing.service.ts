@@ -14,6 +14,7 @@ import { ConflictError, ForbiddenError, NotFoundError } from '../../common/error
 import { StockService } from '../stock/stock.service';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { NOTIFICATION_LINKS } from '../notifications/notifications.links';
 import type { AuditContext } from '../audit/audit-context';
 import { BorrowingRepository } from './borrowing.repository';
 import {
@@ -118,7 +119,7 @@ export class BorrowingService {
             type: 'borrowing.requested',
             userIds: await this.notifications.usersWithRole(Role.INVENTORY_MANAGER, tx),
             ref: borrowNo,
-            link: `/borrowing/${newId}`,
+            link: NOTIFICATION_LINKS.borrowingQueue,
             entityType: 'borrowing',
             entityId: newId,
             actorId: requesterId,
@@ -211,7 +212,7 @@ export class BorrowingService {
           type: input.approve ? 'borrowing.approved' : 'borrowing.rejected',
           userIds: [request.requester_id],
           ref: request.borrow_no,
-          link: `/borrowing/${id}`,
+          link: NOTIFICATION_LINKS.myBorrowings,
           entityType: 'borrowing',
           entityId: id,
           actorId,
@@ -331,7 +332,7 @@ export class BorrowingService {
           type: 'borrowing.returned',
           userIds: [request.requester_id],
           ref: request.borrow_no,
-          link: `/borrowing/${id}`,
+          link: NOTIFICATION_LINKS.myBorrowings,
           entityType: 'borrowing',
           entityId: id,
           actorId,
@@ -438,7 +439,7 @@ export class BorrowingService {
           type: 'borrowing.reverted',
           userIds: [request.requester_id],
           ref: request.borrow_no,
-          link: `/borrowing/${id}`,
+          link: NOTIFICATION_LINKS.myBorrowings,
           entityType: 'borrowing',
           entityId: id,
           actorId,
@@ -499,7 +500,7 @@ export class BorrowingService {
           type: 'borrowing.cancelled',
           userIds: await this.notifications.usersWithRole(Role.INVENTORY_MANAGER, tx),
           ref: request.borrow_no,
-          link: `/borrowing/${id}`,
+          link: NOTIFICATION_LINKS.borrowingQueue,
           entityType: 'borrowing',
           entityId: id,
           actorId,

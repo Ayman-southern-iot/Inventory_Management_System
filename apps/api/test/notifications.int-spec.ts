@@ -53,12 +53,44 @@ describe('notifications', () => {
     expect(imList.items).toHaveLength(1);
     expect(imList.items[0]?.type).toBe('borrowing.requested');
     expect(imList.items[0]?.severity).toBe('action_required');
-    expect(imList.items[0]?.link).toBe(`/borrowing/${created.body.id}`);
+    // The IM's queue, not a borrow detail route — there isn't one (see NOTIFICATION_LINKS).
+    expect(imList.items[0]?.link).toBe('/borrowing');
     expect(imList.items[0]?.readAt).toBeNull();
 
     // The person who raised it already knows, and an uninvolved colleague must not be told.
     expect((await listFor(requester.client)).total).toBe(0);
     expect((await listFor(bystander.client)).total).toBe(0);
+  });
+
+  /**
+   * The web router ends in a catch-all that redirects to the dashboard, so a link to a route
+   * that does not exist does not 404 — it quietly dumps the user somewhere useless and the
+   * notification looks pointless. This is the cheap guard against that: every link a
+   * notification carries must be one of the routes the app actually serves.
+   */
+  it('only ever links to a route the web app really has', async () => {
+    const knownRoutes = new Set([
+      '/',
+      '/account/password',
+      '/approvals',
+      '/borrowing',
+      '/my-borrowings',
+    ]);
+    const dynamic = [/^\/requisitions\/[0-9a-f-]{36}$/, /^\/boms\/[0-9a-f-]{36}$/];
+
+    await raiseBorrow();
+    const created = await raiseBorrow();
+    await im.client
+      .post(`/borrowing/${created.body.id}/decision`)
+      .send({ approve: true, note: null });
+
+    for (const client of [im.client, requester.client]) {
+      for (const item of (await listFor(client)).items) {
+        if (item.link === null) continue;
+        const known = knownRoutes.has(item.link) || dynamic.some((re) => re.test(item.link!));
+        expect(known, `${item.type} links to an unknown route: ${item.link}`).toBe(true);
+      }
+    }
   });
 
   it('notifies the requester when the IM decides, with the reason on a rejection', async () => {

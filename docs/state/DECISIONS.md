@@ -244,3 +244,13 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   list only loads when the bell is open — with no websocket (ruled out at this scale) the interval
   *is* the system's latency, and the background flag is what stops tabs left open overnight
   polling until morning.
+- 2026-07-30 — Sub-threshold approval failures raise their own error naming
+  `SUBTHRESHOLD_APPROVER_USER_ID` — the shared "Approver N is not assigned" message sent admins to
+  the approver-slots screen, which below the threshold is not the setting in use at all.
+- 2026-07-30 — Notification target routes live in `notifications.links.ts`, mirroring the web
+  router — the SPA ends in a catch-all redirect, so a link to a route that does not exist fails
+  silently by landing on the dashboard. One file plus a test is what makes that failure loud.
+- 2026-07-30 — Phase 05 replanned to the operator's specification; lump-sum allocation across a
+  batched BOM dropped as unrequested complexity (OQ-21), and `fund_returns` modelled as its own
+  table rather than negative receipts so "received" and "returned" never have to be disentangled
+  from a signed column.

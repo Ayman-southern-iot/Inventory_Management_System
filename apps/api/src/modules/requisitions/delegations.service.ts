@@ -6,6 +6,7 @@ import type { Db } from '../../database/create-db';
 import { ConflictError, NotFoundError } from '../../common/errors';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { NOTIFICATION_LINKS } from '../notifications/notifications.links';
 
 /**
  * An approver handing their authority to someone else for a date range (task 3.5).
@@ -119,7 +120,7 @@ export class DelegationsService {
           type: 'delegation.granted',
           userIds: [input.delegateUserId],
           ref: inserted.id,
-          link: '/requisitions/approvals',
+          link: NOTIFICATION_LINKS.approvals,
           entityType: 'delegation',
           entityId: inserted.id,
           actorId: approverUserId,
@@ -172,7 +173,7 @@ export class DelegationsService {
             type: 'delegation.revoked',
             userIds: [existing.delegate_user_id],
             ref: id,
-            link: '/requisitions/approvals',
+            link: NOTIFICATION_LINKS.approvals,
             entityType: 'delegation',
             entityId: id,
             actorId: approverUserId,

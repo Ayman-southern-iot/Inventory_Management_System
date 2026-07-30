@@ -240,6 +240,38 @@ describe('requisitions and approvals', () => {
 
       expect(submitted.status).toBe(409);
       expect(submitted.body.code).toBe(ErrorCode.APPROVER_SLOT_UNASSIGNED);
+      // Must name the sub-threshold setting, not "Approver 1".
+      expect(submitted.body.message).toContain('below the expense threshold');
+    });
+
+    /**
+     * Reported from the running system: both approver slots were assigned, and submitting a
+     * sub-threshold requisition still said "Approver 1 is not assigned" — pointing the admin at
+     * a screen that was already correct. Below the threshold the chain uses
+     * SUBTHRESHOLD_APPROVER_USER_ID, which is a different setting entirely.
+     */
+    it('names the sub-threshold setting, not the approver slots, when it is unset', async () => {
+      // Slots stay assigned. Only the sub-threshold approver is missing.
+      await ctx.db
+        .updateTable('app_settings')
+        .set({ value: JSON.stringify(null) })
+        .where('key', '=', SettingKey.SUBTHRESHOLD_APPROVER_USER_ID)
+        .execute();
+      settings.clearCache();
+
+      const created = await draft(5_000);
+      const submitted = await requester.client.post(`/requisitions/${created.body.id}/submit`).send();
+
+      expect(submitted.status).toBe(409);
+      expect(submitted.body.message).toContain('Sub-threshold approver');
+      // It may *mention* the slots to say they do not apply; what it must never do is claim
+      // they are unassigned, which is what sent the admin to the wrong screen.
+      expect(submitted.body.message).not.toContain('Approver 1 is not assigned');
+      expect(submitted.body.details?.setting).toBe('SUBTHRESHOLD_APPROVER_USER_ID');
+
+      // The slots really were assigned — proving the old message was misleading, not merely terse.
+      const slots = await ctx.db.selectFrom('approver_slots').selectAll().execute();
+      expect(slots.filter((slot) => slot.user_id !== null).length).toBeGreaterThan(0);
     });
 
     it('cannot be submitted twice', async () => {

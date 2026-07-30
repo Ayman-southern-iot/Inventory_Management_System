@@ -27,6 +27,7 @@ import { PdfRendererService } from '../pdf/pdf-renderer.service';
 import { PdfSigningService } from '../pdf/pdf-signing.service';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { NOTIFICATION_LINKS } from '../notifications/notifications.links';
 import type { AuditContext } from '../audit/audit-context';
 import { BomsRepository } from './boms.repository';
 import { renderBomHtml } from './bom-pdf.template';
@@ -315,7 +316,7 @@ export class BomsService {
           type: overBudget ? 'bom.over_budget_bounced' : 'bom.generated',
           userIds: audience,
           ref: bomNo,
-          link: `/boms/${bom.id}`,
+          link: NOTIFICATION_LINKS.bom(bom.id),
           entityType: 'bom',
           entityId: bom.id,
           actorId,
@@ -597,7 +598,7 @@ export class BomsService {
                   .then((rows) => rows.map((row) => row.requester_id))),
           ],
           ref: existing.bom_no,
-          link: `/boms/${id}`,
+          link: NOTIFICATION_LINKS.bom(id),
           entityType: 'bom',
           entityId: id,
           actorId,

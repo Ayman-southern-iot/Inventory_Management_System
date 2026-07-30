@@ -7,8 +7,12 @@
 
 - **Phase:** 06 — Hardening (in progress). Phase 04's BOM module and Phase 06's audit module both
   exist in the working tree; neither has been committed, and neither has passed a green test run.
-- **Next task:** 6.2 — the nightly invariant job (`SUM(stock_ledger) = stock_placements.quantity`
-  per product). Note G-14: it should check `reserved_qty` too, which nothing currently does.
+- **Next task:** **Phase 05**, which the operator re-specified on 2026-07-30 and which now takes
+  priority over the rest of Phase 06. `plan/PHASE-05-funds-purchasing.md` has been rewritten with
+  the real flow and is the document to work from — start at **5.0** (password policy, ~20 min),
+  then **5.1** (file uploads), which everything else depends on. **5.3 is blocked by OQ-18.**
+  Phase 06's remaining task 6.2 (nightly invariant job) is deferred behind it; when it happens it
+  should also check `reserved_qty`, per G-14.
 - **Working tree:** clean. Everything below is committed and verified green:
   `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm --filter @ims/api test:int`
   (**17 files, 286 integration tests**). Migrations 0011–0013 applied and each rollback-verified.
@@ -35,7 +39,7 @@
 | 02 | Borrowing — request, approve, issue, return | ✅ done and verified | 7 migrations, 236 tests |
 | 03 | Requisitions — form, approvals, tracker, notifications | ✅ done and verified | 9 migrations, 277 tests |
 | 04 | BOM — generation, snapshot, letterhead PDF | ✅ done and verified | 10 migrations |
-| 05 | Funds & purchasing — receipts, purchases, receive-to-stock | ⬜ not started | |
+| 05 | Funds, purchasing, signatures, finished BOM | ⬜ planned, not started | plan rewritten 2026-07-30; 9 tasks |
 | 06 | Hardening — exports, audit UI, monitoring, backups drill | 🟡 6.1 audit log + notifications done | 13 migrations, 286 int tests |
 
 Legend: ⬜ not started · 🟡 in progress · ✅ done and verified

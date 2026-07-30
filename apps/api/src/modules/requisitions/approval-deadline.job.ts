@@ -5,6 +5,7 @@ import { ApprovalAction, ApprovalStage, RequisitionStatus } from '@ims/shared';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
 import { NotificationsService } from '../notifications/notifications.service';
+import { NOTIFICATION_LINKS } from '../notifications/notifications.links';
 
 /**
  * Task 3.9 — the approval deadline reminder.
@@ -67,7 +68,7 @@ export class ApprovalDeadlineJob {
         type: 'requisition.approval_reminder',
         userIds: [row.assigned_user_id],
         ref: row.requisition_no,
-        link: `/requisitions/${row.requisition_id}`,
+        link: NOTIFICATION_LINKS.requisition(row.requisition_id),
         entityType: 'requisition',
         entityId: row.requisition_id,
         // No actor: nobody did this, a deadline passed.
