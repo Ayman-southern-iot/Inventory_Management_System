@@ -151,6 +151,25 @@ export async function resetData(db: Db): Promise<void> {
   // Production code never sees the trigger disabled — only this reset path.
   await db.deleteFrom('audit_log').execute();
 
+  /**
+   * Phase 05: `stored_files.uploaded_by` is ON DELETE RESTRICT, so an uploaded signature blocks
+   * the user delete below, and `requisition_approvals.signature_file_id` is RESTRICT too — and
+   * requisitions deliberately survive this reset (their events are append-only), so those rows
+   * are still holding references.
+   *
+   * Both pointers are cleared here rather than the constraints being loosened: in production
+   * neither is ever nulled, which is precisely the guarantee that a printed BOM keeps rendering
+   * the signature it was signed with. This is reset-only surgery, like the audit trigger above.
+   */
+  // Both columns together — `requisition_approvals_signature_consistent` refuses a row that
+  // claims it was signed but names no file, and clearing only the pointer would trip it.
+  await db
+    .updateTable('requisition_approvals')
+    .set({ signature_file_id: null, signed_with_signature: false })
+    .execute();
+  await db.updateTable('users').set({ signature_file_id: null }).execute();
+  await db.deleteFrom('stored_files').execute();
+
   await db.deleteFrom('approver_slots').execute();
   await db.deleteFrom('user_roles').execute();
   await db.deleteFrom('refresh_tokens').execute();

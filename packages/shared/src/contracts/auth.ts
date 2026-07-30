@@ -4,17 +4,20 @@ import { roleSchema } from '../enums/role.js';
 /**
  * Password policy lives here so the login form, the admin "create user" form and the API all
  * enforce exactly one rule (rules/30-frontend.md — a client-only validation rule is a bug).
+ *
+ * Length only, minimum 4, no composition requirement — set by the operator on 2026-07-30
+ * (OQ-17). That is roughly 1.7 million combinations: crackable instantly offline if the database
+ * is ever taken, and guessable online in minutes against an unprotected endpoint.
+ *
+ * What makes it survivable is entirely outside this file: `/auth/login` is capped per IP by the
+ * global throttler, `LoginThrottleService` caps attempts per email, and passwords are hashed with
+ * a deliberate work factor. **Those three are now the whole defence.** Weakening any of them
+ * turns an accepted trade-off into a real hole.
  */
-export const PASSWORD_MIN_LENGTH = 12;
+export const PASSWORD_MIN_LENGTH = 4;
 export const PASSWORD_MAX_LENGTH = 128;
 
-export const passwordSchema = z
-  .string()
-  .min(PASSWORD_MIN_LENGTH)
-  .max(PASSWORD_MAX_LENGTH)
-  .refine((v) => /[a-z]/.test(v) && /[A-Z]/.test(v) && /[0-9]/.test(v), {
-    message: 'Password must contain an upper case letter, a lower case letter and a digit',
-  });
+export const passwordSchema = z.string().min(PASSWORD_MIN_LENGTH).max(PASSWORD_MAX_LENGTH);
 
 export const emailSchema = z.string().trim().toLowerCase().email().max(255);
 

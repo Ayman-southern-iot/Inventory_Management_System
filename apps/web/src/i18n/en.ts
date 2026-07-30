@@ -76,7 +76,7 @@ export const t = {
     confirmPassword: 'Confirm new password',
     passwordMismatch: 'The two passwords do not match.',
     passwordChanged: 'Password changed.',
-    passwordRules: 'At least 12 characters, with an upper case letter, a lower case letter and a digit.',
+    passwordRules: 'At least 4 characters.',
     // Dev-only block under the sign-in form (Phase 05). Never ships to production.
     testAccountsTitle: 'Test accounts (development only)',
     testAccountsHint: 'Demo credentials for local testing. Not present in production builds.',

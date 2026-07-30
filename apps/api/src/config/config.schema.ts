@@ -75,6 +75,16 @@ const rawSchema = z.object({
   SETTING_AUDIT_ENABLED_ACTIONS: z.string().default(''),
   SETTING_AUDIT_RETENTION_DAYS: z.coerce.number().int().min(0).default(0),
 
+  // --- Uploads (Phase 05) ------------------------------------------------------
+  // Signatures and invoices. Separate from PDF_STORAGE_DIR because rendered PDFs are derived
+  // artefacts the system can regenerate, whereas an uploaded invoice exists nowhere else — the
+  // two directories have completely different backup requirements.
+  FILE_STORAGE_DIR: z.string().default('./storage/files'),
+  /** Signature images. Small on purpose: a signature is a few hundred pixels of ink. */
+  UPLOAD_MAX_IMAGE_BYTES: z.coerce.number().int().min(1024).max(50_000_000).default(2_000_000),
+  /** Scanned invoices, which are legitimately larger. */
+  UPLOAD_MAX_DOCUMENT_BYTES: z.coerce.number().int().min(1024).max(50_000_000).default(10_000_000),
+
   // --- PDF rendering (OQ-11) ---------------------------------------------------
   // Every measurement is configuration, because the real company pad has not been supplied
   // yet and its margins are unknown. Nothing here may become a literal in a template.
@@ -165,6 +175,11 @@ export interface AppConfig {
   };
   /** Keyed by `SettingDefinition.seedEnvVar`; consumed once, on first boot. */
   readonly settingSeeds: Readonly<Record<string, unknown>>;
+  readonly uploads: {
+    readonly storageDir: string;
+    readonly maxImageBytes: number;
+    readonly maxDocumentBytes: number;
+  };
   readonly pdf: {
     readonly storageDir: string;
     readonly letterheadPath: string;
@@ -250,6 +265,11 @@ export function buildConfig(source: Record<string, string | undefined>): AppConf
             .filter(Boolean)
         : '',
       SETTING_AUDIT_RETENTION_DAYS: env.SETTING_AUDIT_RETENTION_DAYS,
+    }),
+    uploads: Object.freeze({
+      storageDir: env.FILE_STORAGE_DIR,
+      maxImageBytes: env.UPLOAD_MAX_IMAGE_BYTES,
+      maxDocumentBytes: env.UPLOAD_MAX_DOCUMENT_BYTES,
     }),
     pdf: Object.freeze({
       storageDir: env.PDF_STORAGE_DIR,

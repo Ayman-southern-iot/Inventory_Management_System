@@ -159,13 +159,27 @@ describe('admin user management', () => {
       expect(second.status).toBe(409);
     });
 
-    it('rejects a password that does not meet the shared policy', async () => {
+    it('rejects a password shorter than the shared minimum', async () => {
       const admin = await actingAdmin();
 
-      const response = await admin.client.post('/admin/users').send(newUserBody({ password: 'short' }));
+      // Three characters — one below PASSWORD_MIN_LENGTH.
+      const response = await admin.client.post('/admin/users').send(newUserBody({ password: 'abc' }));
 
       expect(response.status).toBe(400);
       expect(response.body.code).toBe(ErrorCode.VALIDATION_FAILED);
+    });
+
+    /**
+     * OQ-17: the operator set the policy to length-only, minimum 4. A four-character all-lowercase
+     * password with no digit is deliberately valid now, and this test is what stops someone
+     * "helpfully" reinstating a complexity rule later.
+     */
+    it('accepts a four-character password with no digit and no capital', async () => {
+      const admin = await actingAdmin();
+
+      const response = await admin.client.post('/admin/users').send(newUserBody({ password: 'abcd' }));
+
+      expect(response.status).toBe(201);
     });
   });
 

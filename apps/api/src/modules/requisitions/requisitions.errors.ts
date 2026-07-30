@@ -65,3 +65,18 @@ export class SubthresholdApproverUnassignedError extends DomainError {
     );
   }
 }
+
+/**
+ * Approving "with signature" when nothing has been uploaded. Refusing is the point: approving
+ * unsigned instead would produce a document whose signature block is silently empty, and the
+ * approver would have no idea until Accounts asked why.
+ */
+export class SignatureNotUploadedError extends DomainError {
+  constructor() {
+    super(
+      ErrorCode.VALIDATION_FAILED,
+      'You have not uploaded a signature yet. Add one from your profile, or approve without a signature.',
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+}

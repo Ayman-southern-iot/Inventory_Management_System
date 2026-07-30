@@ -212,6 +212,12 @@ export class RequisitionsRepository {
       note: string | null;
       /** Prior actions this claim may transition from. Defaults to just PENDING. */
       expectedActions?: string[];
+      /**
+       * Snapshot of the signature used, resolved by the service before the claim. Frozen here
+       * so a later signature change cannot alter what this approval was signed with.
+       */
+      signedWithSignature?: boolean;
+      signatureFileId?: string | null;
     },
     /**
      * The caller's transaction. Not optional in practice: claiming on the pool auto-commits
@@ -226,6 +232,8 @@ export class RequisitionsRepository {
       .set({
         action: values.action,
         acted_by_user_id: values.actedBy,
+        signed_with_signature: values.signedWithSignature ?? false,
+        signature_file_id: values.signatureFileId ?? null,
         note: values.note,
         acted_at: new Date(),
       })

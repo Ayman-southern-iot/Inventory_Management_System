@@ -6,6 +6,7 @@ import type {
   NotificationSeverity,
   NotificationType,
   Role,
+  StoredFileKind,
 } from '@ims/shared';
 
 /**
@@ -50,6 +51,8 @@ export interface UsersTable {
   department_id: string | null;
   is_active: Generated<boolean>;
   must_change_password: Generated<boolean>;
+  /** The approver's *current* signature. Approvals snapshot their own copy — see 0015. */
+  signature_file_id: ColumnType<string | null, string | null | undefined, string | null>;
   last_login_at: Date | null;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
@@ -329,6 +332,16 @@ export interface RequisitionApprovalsTable {
   acted_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
   /** When this assignee was last nudged about an overdue approval (task 3.9). */
   last_reminded_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
+  /**
+   * Whether the approver chose to sign. Distinct from `signature_file_id IS NOT NULL`: approving
+   * *without* a signature is a deliberate option, and the BOM prints "Approved" either way.
+   */
+  signed_with_signature: Generated<boolean>;
+  /**
+   * Snapshot of the signature used, frozen at approval. Never re-read from the user's current
+   * signature — otherwise replacing your signature would rewrite every document you ever signed.
+   */
+  signature_file_id: ColumnType<string | null, string | null | undefined, string | null>;
   created_at: CreatedAt;
 }
 
@@ -386,6 +399,22 @@ export interface AuditLogTable {
   user_agent: string | null;
   outcome: AuditOutcome;
   error_code: string | null;
+  created_at: CreatedAt;
+}
+
+/* -------------------------------------------------------------- stored files */
+
+/** Uploaded bytes — signatures and invoices. Rows are inserted and read, never updated. */
+export interface StoredFilesTable {
+  id: Generated<string>;
+  kind: StoredFileKind;
+  /** Server-generated, relative to FILE_STORAGE_DIR. Never derived from client input. */
+  relative_path: string;
+  /** What the uploader called it. Display only. */
+  original_name: string;
+  mime_type: string;
+  size_bytes: number;
+  uploaded_by: string;
   created_at: CreatedAt;
 }
 
@@ -468,6 +497,7 @@ export interface Database {
   app_settings: AppSettingsTable;
   audit_log: AuditLogTable;
   notifications: NotificationsTable;
+  stored_files: StoredFilesTable;
   boms: BomsTable;
   bom_requisitions: BomRequisitionsTable;
   bom_lines: BomLinesTable;

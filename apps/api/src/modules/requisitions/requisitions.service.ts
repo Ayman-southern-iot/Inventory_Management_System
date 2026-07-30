@@ -28,6 +28,7 @@ import {
   ApproverSlotUnassignedError,
   InvalidRequisitionTransitionError,
   NotYourApprovalError,
+  SignatureNotUploadedError,
   SubthresholdApproverUnassignedError,
 } from './requisitions.errors';
 
@@ -258,6 +259,14 @@ export class RequisitionsService {
     // not a value any decision depends on, so it must not extend the lock's lifetime.
     const actor = await this.users.findAuthRecordById(actorId);
 
+    // Resolve the signature *before* the transaction, and refuse rather than silently approving
+    // unsigned. Signing is only meaningful on an approval, so a rejection never carries one.
+    const signWith = input.approve && input.withSignature;
+    if (signWith && !actor?.signature_file_id) {
+      throw new SignatureNotUploadedError();
+    }
+    const signatureFileId = signWith ? (actor?.signature_file_id ?? null) : null;
+
     await this.db.transaction().execute(async (tx) => {
       // Lock first, read second. Everything below decides based on the requisition's status,
       // so the status must not be able to change underneath us — the other approver's
@@ -280,6 +289,8 @@ export class RequisitionsService {
           // think again and then act. The row carries its latest state; the event log carries
           // the history.
           expectedActions: [ApprovalAction.PENDING, ApprovalAction.WITHDRAWN],
+          signedWithSignature: signWith,
+          signatureFileId,
         },
         tx,
       );

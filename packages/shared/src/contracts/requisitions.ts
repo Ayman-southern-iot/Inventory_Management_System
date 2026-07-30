@@ -129,6 +129,14 @@ export const decideRequisitionSchema = z.object({
    * from the requested one; only approvers may set it, and only when approving.
    */
   approvedAmount: z.number().nonnegative().max(1_000_000_000).nullable().default(null),
+  /**
+   * Apply the approver's stored signature to the BOM (task 5.2).
+   *
+   * Defaults to `false` so an existing client, or a rejection, never accidentally signs anything.
+   * When true the approver must already have a signature on file; the server refuses rather than
+   * quietly approving unsigned, because "I signed that" is not a thing to be wrong about.
+   */
+  withSignature: z.boolean().default(false),
 });
 export type DecideRequisitionInput = z.infer<typeof decideRequisitionSchema>;
 
