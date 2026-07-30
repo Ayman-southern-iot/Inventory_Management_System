@@ -31,6 +31,20 @@ const positiveMoneySchema = moneyAmountSchema.refine((value) => value > 0, {
   message: 'Amount must be greater than zero',
 });
 
+/* ------------------------------------------------------- sent to accounts */
+
+/**
+ * Handing the BOM to Accounts.
+ *
+ * OQ-19, answered by the operator: this is a status change and a note, nothing more. Nothing is
+ * emailed, no document is pushed anywhere — the IM records that the paperwork left their desk,
+ * and the note is where they say how ("given to Sarjia in person", "emailed 31 July").
+ */
+export const sendToAccountsSchema = z.object({
+  note: z.string().trim().max(500).nullable().default(null),
+});
+export type SendToAccountsInput = z.infer<typeof sendToAccountsSchema>;
+
 /* --------------------------------------------------------- fund receipts */
 
 export const fundReceiptSchema = z.object({

@@ -17,6 +17,7 @@ import { messageForError } from '@/lib/error-message';
 import { ROUTES } from '@/routes/paths';
 import { useAuth } from '@/features/auth/auth-context';
 import { ApprovalTracker } from './components/ApprovalTracker';
+import { FundsPanel } from '@/features/funds/FundsPanel';
 import { DecisionDialog } from './components/DecisionDialog';
 import {
   useCancelRequisition,
@@ -284,6 +285,9 @@ export function RequisitionDetailPage() {
                 <ApprovalTracker requisition={detail} />
               </Panel>
             </div>
+
+            {/* Renders itself only once a BOM exists — before that there is no money story. */}
+            <FundsPanel requisition={detail} />
 
             <DecisionDialog
               deciding={deciding}

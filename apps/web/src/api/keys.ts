@@ -92,6 +92,10 @@ export const queryKeys = {
     all: () => ['profile'] as const,
     signature: () => ['profile', 'signature'] as const,
   },
+  funds: {
+    all: () => ['funds'] as const,
+    funding: (requisitionId: string) => ['funds', 'funding', requisitionId] as const,
+  },
   reports: {
     all: () => ['reports'] as const,
     expenses: (query: ExpenseReportQuery) => ['reports', 'expenses', query] as const,

@@ -6,6 +6,7 @@ import {
   type RecordFundReceiptInput,
   type RecordPurchaseInput,
   type VerifyPurchaseInput,
+  type SendToAccountsInput,
   type ReceiveIntoStockInput,
   type BorrowToUserInput,
   type RequisitionFunding,
@@ -77,7 +78,12 @@ export class FundsService {
 
   /* ------------------------------------------------------ sent to accounts */
 
-  async sendToAccounts(requisitionId: string, actorId: string, context: AuditContext) {
+  async sendToAccounts(
+    requisitionId: string,
+    input: SendToAccountsInput,
+    actorId: string,
+    context: AuditContext,
+  ) {
     return this.db.transaction().execute(async (tx) => {
       const requisition = await this.lock(tx, requisitionId);
       this.assertStatus(requisition.status, 'sent to Accounts', [RequisitionStatus.BOM_GENERATED]);
@@ -88,7 +94,7 @@ export class FundsService {
         requisitionId,
         RequisitionEventType.SENT_TO_ACCOUNTS,
         actorId,
-        {},
+        { note: input.note },
       );
       await this.audit.record(
         {
@@ -97,7 +103,7 @@ export class FundsService {
           entityId: requisitionId,
           entityRef: requisition.requisition_no,
           summary: `Sent ${requisition.requisition_no} to Accounts`,
-          metadata: { approvedAmount: requisition.approved_amount },
+          metadata: { approvedAmount: requisition.approved_amount, note: input.note },
         },
         context,
         tx,

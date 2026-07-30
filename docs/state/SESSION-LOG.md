@@ -12,6 +12,43 @@ Format:
 **Next:** the single next action, specific enough to start without thinking
 ```
 
+## 2026-07-31 — Phase 05 finished: expense report and the IM funds panel
+
+**Did:**
+- **5.8 expense report** — six figures per bucket (requested, approved, funded, spent, returned,
+  net), grouped by month / department / project, with range and preset filters. Visible to
+  Approvers, IMs and Admin, not to General. Backend, UI and 8 integration tests.
+- **The IM funds panel**, which was the real remaining gap: tasks 5.4–5.7 were working APIs with
+  no screens, so the Inventory Manager could not reach any of the money lifecycle from a browser.
+  It sits on the requisition detail page, shows the money summary, and offers exactly **one** next
+  action driven by the status — the server refuses anything out of turn, so six buttons of which
+  five return 409 would only teach the user to expect errors.
+- **OQ-19 answered** by the operator: "Sent to Accounts" is a status change and a note, nothing
+  more. The endpoint now takes an optional note that lands on the tracker event and the audit row.
+- **Fixed the sub-threshold approver error properly.** The previous fix changed the server message
+  but reused `APPROVER_SLOT_UNASSIGNED`, and the web app selects copy by *code* — so the clearer
+  wording never reached the screen. It has its own code now, and the test asserts the code.
+
+**Three bugs found while building 5.8, all of the looks-fine-is-wrong kind:**
+- A **fan-out**: joining a requisition to `fund_receipts`, `purchases` and `fund_returns` at once
+  multiplies the rows and inflates every figure by the size of the other two. The money is
+  pre-aggregated per requisition, and a test with two receipts, two purchases and a return guards
+  it.
+- A **timezone bug the operator's own data triggered**: ranges were resolved in UTC, but at 4am in
+  Dhaka the UTC date is still yesterday, so asking for "today" found nothing. Ranges are now
+  calendar days in `REPORTING_TIME_ZONE`, resolved by Postgres via `AT TIME ZONE`.
+- Interpolating the same Kysely `sql` fragment twice re-emits its bound parameters with
+  **different** placeholder numbers, so `GROUP BY` did not match `SELECT` and Postgres rejected
+  the query. Grouped positionally instead.
+
+**Landmines added to NOW.md:** the test database accumulates requisitions, departments and users
+because `resetData` cannot delete them — never assert "exactly one row" or "it is on page one".
+A latent flake in the permissions spec had been depending on exactly that, and my new spec tipped
+it over; it is fixed.
+
+**Next:** Phase 06. Task 6.2 (nightly invariant job, extended to `reserved_qty` per G-14), then
+6.3 (backup and restore drill) — the one not to skip given the no-data-loss requirement.
+
 ## 2026-07-30 (end) — Phase 05 re-specified and planned; two live bugs fixed
 
 **Did:**

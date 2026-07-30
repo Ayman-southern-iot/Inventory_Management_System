@@ -5,19 +5,18 @@
 
 ## Current position
 
-- **Phase:** 06 — Hardening (in progress). Phase 04's BOM module and Phase 06's audit module both
-  exist in the working tree; neither has been committed, and neither has passed a green test run.
-- **Next task:** **Phase 05**, which the operator re-specified on 2026-07-30 and which now takes
-  priority over the rest of Phase 06. `plan/PHASE-05-funds-purchasing.md` has been rewritten with
-  the real flow and is the document to work from — start at **5.0** (password policy, ~20 min),
-  then **5.1** (file uploads), which everything else depends on. **5.3 is blocked by OQ-18.**
-  Phase 06's remaining task 6.2 (nightly invariant job) is deferred behind it; when it happens it
-  should also check `reserved_qty`, per G-14.
-- **Working tree:** clean. Everything below is committed and verified green:
-  `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm --filter @ims/api test:int`
-  (**17 files, 286 integration tests**). Migrations 0011–0013 applied and each rollback-verified.
-- **Blocked by:** nothing external. OQ-14 and OQ-15 (always-on audit actions; whether the purge
-  should default to a retention period) are recorded assumptions, not hard blocks.
+- **Phase:** 05 complete. Phase 06 in progress — 6.1 (audit log UI) effectively done, 6.2–6.7 open.
+- **Next task:** **6.2, the nightly invariant job** (`SUM(stock_ledger) = stock_placements.quantity`
+  per product). Extend it to `reserved_qty` at the same time, per G-14 — it currently cannot see a
+  stranded reservation, which is the whole failure mode G-14 describes. Then **6.3, the backup and
+  restore drill**, which is the highest-value remaining task given the no-data-loss requirement.
+- **Working tree:** clean. Everything is committed and verified green: `pnpm typecheck`,
+  `pnpm lint`, `pnpm test`, and `pnpm --filter @ims/api test:int` (**20 files, 341 integration
+  tests**). Migrations 0001–0018 applied; 0014–0018 each rollback-verified.
+- **Blocked by:** nothing. OQ-18 and OQ-19 are answered. OQ-14, OQ-15, OQ-16, OQ-20 and OQ-22 are
+  recorded assumptions, not hard blocks.
+- **Operator action outstanding:** Settings → Sub-threshold approver is unset, so requisitions
+  below the 14,000 threshold refuse to submit. Configuration, not a defect.
 - **Measured load (2026-07-30):** a concurrency probe at **4 virtual users × 7 different
   operations fired simultaneously** — 28 in-flight requests against `POSTGRES_POOL_MAX=10`, about
   ten times the stated real peak of 2–3 people — ran **700 requests with zero failures**,
@@ -39,8 +38,8 @@
 | 02 | Borrowing — request, approve, issue, return | ✅ done and verified | 7 migrations, 236 tests |
 | 03 | Requisitions — form, approvals, tracker, notifications | ✅ done and verified | 9 migrations, 277 tests |
 | 04 | BOM — generation, snapshot, letterhead PDF | ✅ done and verified | 10 migrations |
-| 05 | Funds, purchasing, signatures, finished BOM | ⬜ planned, not started | plan rewritten 2026-07-30; 9 tasks |
-| 06 | Hardening — exports, audit UI, monitoring, backups drill | 🟡 6.1 audit log + notifications done | 13 migrations, 286 int tests |
+| 05 | Funds, purchasing, signatures, finished BOM | done and verified | 18 migrations, 341 int tests |
+| 06 | Hardening — invariant job, backups, monitoring, runbook | 6.1 done; 6.2-6.7 open | |
 
 Legend: ⬜ not started · 🟡 in progress · ✅ done and verified
 

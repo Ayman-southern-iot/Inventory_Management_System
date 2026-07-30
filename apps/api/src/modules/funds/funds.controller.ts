@@ -21,12 +21,14 @@ import {
   recordFundReceiptSchema,
   recordPurchaseSchema,
   verifyPurchaseSchema,
+  sendToAccountsSchema,
   receiveIntoStockSchema,
   borrowToUserSchema,
   type RecordFundReceiptInput,
   type RecordPurchaseInput,
   type RequisitionFunding,
   type VerifyPurchaseInput,
+  type SendToAccountsInput,
   type ReceiveIntoStockInput,
   type BorrowToUserInput,
 } from '@ims/shared';
@@ -64,10 +66,11 @@ export class FundsController {
   @HttpCode(HttpStatus.OK)
   async sendToAccounts(
     @Param('id', ParseUUIDPipe) id: string,
+    @Body(zodPipe(sendToAccountsSchema)) body: SendToAccountsInput,
     @CurrentUser() actor: RequestUser,
     @CurrentAuditContext() ctx: AuditContext,
   ): Promise<RequisitionFunding> {
-    await this.funds.sendToAccounts(id, actor.id, ctx);
+    await this.funds.sendToAccounts(id, body, actor.id, ctx);
     return this.funds.funding(id);
   }
 

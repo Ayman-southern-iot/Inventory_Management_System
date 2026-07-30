@@ -1,0 +1,258 @@
+import { useEffect, useState } from 'react';
+import type { RequisitionDetail, RequisitionFunding } from '@ims/shared';
+import { Button } from '@/components/ui/Button';
+import { Dialog } from '@/components/ui/Dialog';
+import { TextAreaField, TextField } from '@/components/ui/Field';
+import { useToast } from '@/components/ui/Toast';
+import { t } from '@/i18n/en';
+import { messageForError } from '@/lib/error-message';
+import { formatBdt } from '@/lib/format';
+import {
+  useRecordPurchase,
+  useRecordReceipt,
+  useSendToAccounts,
+  useVerifyPurchase,
+} from './api';
+import { ReceiveToStockForm } from './ReceiveToStockForm';
+
+export type FundsAction = 'send-to-accounts' | 'receipt' | 'purchase' | 'verify' | 'stock';
+
+const TITLES: Record<FundsAction, string> = {
+  'send-to-accounts': t.funds.sendToAccounts,
+  receipt: t.funds.recordReceipt,
+  purchase: t.funds.recordPurchase,
+  verify: t.funds.verifyPurchase,
+  stock: t.funds.receiveToStock,
+};
+
+/** Today, in the browser's calendar — the default for every "when did this happen" field. */
+function today(): string {
+  return new Intl.DateTimeFormat('en-CA').format(new Date());
+}
+
+/**
+ * One dialog, switching on the action. The forms are small and share the same submit/close/toast
+ * shape, so five separate dialog components would be five copies of the same wiring.
+ */
+export function FundsActionDialog({
+  action,
+  requisition,
+  funding,
+  onClose,
+}: {
+  action: FundsAction | null;
+  requisition: RequisitionDetail;
+  funding: RequisitionFunding | null;
+  onClose: () => void;
+}) {
+  const toast = useToast();
+  const sendToAccounts = useSendToAccounts(requisition.id);
+  const recordReceipt = useRecordReceipt(requisition.id);
+  const recordPurchase = useRecordPurchase(requisition.id);
+  const verify = useVerifyPurchase(requisition.id);
+
+  // Form state, reset whenever the dialog opens so a previous attempt never leaks into the next.
+  const [note, setNote] = useState('');
+  const [amount, setAmount] = useState('');
+  const [when, setWhen] = useState(today());
+  const [reference, setReference] = useState('');
+  const [vendor, setVendor] = useState('');
+  const [invoiceNo, setInvoiceNo] = useState('');
+  const [unitCosts, setUnitCosts] = useState<Record<string, string>>({});
+  const [returnedAmount, setReturnedAmount] = useState('0');
+
+  useEffect(() => {
+    if (!action) return;
+    setNote('');
+    setWhen(today());
+    setReference('');
+    setVendor('');
+    setInvoiceNo('');
+    setReturnedAmount('0');
+    // Pre-fill the receipt with what is still outstanding: the common case is Accounts releasing
+    // exactly the remainder, and typing it again is friction.
+    setAmount(funding && funding.outstanding > 0 ? String(funding.outstanding) : '');
+    setUnitCosts({});
+  }, [action, funding]);
+
+  const busy =
+    sendToAccounts.isPending ||
+    recordReceipt.isPending ||
+    recordPurchase.isPending ||
+    verify.isPending;
+
+  async function onSubmit() {
+    if (!action) return;
+    try {
+      switch (action) {
+        case 'send-to-accounts':
+          await sendToAccounts.mutateAsync({ note: note.trim() || null });
+          toast.success(t.funds.sentToAccounts);
+          break;
+        case 'receipt':
+          await recordReceipt.mutateAsync({
+            amount: Number(amount),
+            // The date input gives a calendar day; the API wants an instant.
+            receivedAt: new Date(`${when}T00:00:00`).toISOString(),
+            reference: reference.trim() || null,
+            note: note.trim() || null,
+          });
+          toast.success(t.funds.receiptRecorded);
+          break;
+        case 'purchase':
+          await recordPurchase.mutateAsync({
+            vendor: vendor.trim(),
+            invoiceNo: invoiceNo.trim() || null,
+            purchasedAt: new Date(`${when}T00:00:00`).toISOString(),
+            note: note.trim() || null,
+            lines: requisition.items
+              .filter((item) => Number(unitCosts[item.id] ?? '') > 0)
+              .map((item) => ({
+                requisitionItemId: item.id,
+                quantity: item.quantity,
+                unitCost: Number(unitCosts[item.id]),
+                overBomQuantity: false,
+                overBomNote: null,
+              })),
+          });
+          toast.success(t.funds.purchaseRecorded);
+          break;
+        case 'verify':
+          await verify.mutateAsync({
+            returnedAmount: Number(returnedAmount) || 0,
+            returnNote: note.trim() || null,
+          });
+          toast.success(t.funds.purchaseVerified);
+          break;
+        default:
+          return;
+      }
+      onClose();
+    } catch (error) {
+      toast.error(messageForError(error));
+    }
+  }
+
+  // Receiving into stock has its own form: it is per purchase line, with an optional new-product
+  // block, and folding it in here would double this component's size.
+  if (action === 'stock') {
+    return (
+      <ReceiveToStockForm
+        requisitionId={requisition.id}
+        funding={funding}
+        onClose={onClose}
+      />
+    );
+  }
+
+  return (
+    <Dialog
+      open={action !== null}
+      onClose={onClose}
+      title={action ? TITLES[action] : ''}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={busy}>
+            {t.common.cancel}
+          </Button>
+          <Button onClick={() => void onSubmit()} isLoading={busy}>
+            {t.common.save}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        {action === 'send-to-accounts' && (
+          <p className="text-sm text-ink-muted">{t.funds.sendToAccountsHint}</p>
+        )}
+
+        {action === 'receipt' && (
+          <>
+            <TextField
+              label={t.funds.amount}
+              type="number"
+              min={0}
+              step="0.01"
+              value={amount}
+              onChange={(event) => setAmount(event.target.value)}
+            />
+            <TextField
+              label={t.funds.receivedAt}
+              type="date"
+              value={when}
+              onChange={(event) => setWhen(event.target.value)}
+            />
+            <TextField
+              label={t.funds.reference}
+              hint={t.funds.referenceHint}
+              value={reference}
+              onChange={(event) => setReference(event.target.value)}
+            />
+          </>
+        )}
+
+        {action === 'purchase' && (
+          <>
+            <TextField
+              label={t.funds.vendor}
+              value={vendor}
+              onChange={(event) => setVendor(event.target.value)}
+            />
+            <TextField
+              label={t.funds.invoiceNo}
+              value={invoiceNo}
+              onChange={(event) => setInvoiceNo(event.target.value)}
+            />
+            <TextField
+              label={t.funds.purchasedAt}
+              type="date"
+              value={when}
+              onChange={(event) => setWhen(event.target.value)}
+            />
+            <div className="flex flex-col gap-2">
+              {requisition.items.map((item) => (
+                <TextField
+                  key={item.id}
+                  label={`${item.itemName} × ${item.quantity}`}
+                  hint={t.funds.unitCost}
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={unitCosts[item.id] ?? ''}
+                  onChange={(event) =>
+                    setUnitCosts((previous) => ({ ...previous, [item.id]: event.target.value }))
+                  }
+                />
+              ))}
+            </div>
+          </>
+        )}
+
+        {action === 'verify' && (
+          <>
+            {funding && (
+              <p className="text-sm text-ink-muted">
+                {t.funds.unspent}: <strong>{formatBdt(funding.unspent)}</strong>
+              </p>
+            )}
+            <TextField
+              label={t.funds.returnedAmount}
+              hint={t.funds.returnedAmountHint}
+              type="number"
+              min={0}
+              step="0.01"
+              value={returnedAmount}
+              onChange={(event) => setReturnedAmount(event.target.value)}
+            />
+          </>
+        )}
+
+        <TextAreaField
+          label={action === 'verify' ? t.funds.returnNote : t.common.note}
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
+        />
+      </div>
+    </Dialog>
+  );
+}

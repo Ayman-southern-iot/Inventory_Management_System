@@ -55,7 +55,7 @@ built twice:
 
 ## Tasks
 
-### 5.0 Password policy — minimum 4 characters, no composition rules
+### ✅ 5.0 Password policy — minimum 4 characters, no composition rules
 
 `packages/shared/src/contracts/auth.ts` currently sets `PASSWORD_MIN_LENGTH = 12` plus a `refine`
 demanding upper case, lower case and a digit. Drop the minimum to `4` and delete the refine.
@@ -78,7 +78,7 @@ self-service change, and at login; a 3-character one is rejected with a clear me
 
 ---
 
-### 5.1 File-upload foundation
+### ✅ 5.1 File-upload foundation
 
 One boring shared upload path, built once, used by signatures (5.2) and invoices (5.5).
 
@@ -110,7 +110,7 @@ valid signed URL.
 
 ---
 
-### 5.2 Digital signatures for approvers and the IM
+### ✅ 5.2 Digital signatures for approvers and the IM
 
 **Upload.** `POST /users/me/signature` (multipart, PNG/JPEG, image cap). Any user holding
 `APPROVER`, `INVENTORY_MANAGER` or `ADMIN` may upload **their own**; nobody may upload anyone
@@ -141,7 +141,7 @@ neither upload nor read another user's signature.
 
 ---
 
-### 5.3 BOM document redesign
+### ✅ 5.3 BOM document redesign
 
 The current document is congested: a meta table, a per-source section, a line table carrying
 vendor/purpose/project, and a dense footprints table with stage/slot/designation/acted-at/
@@ -189,7 +189,7 @@ all render from config; an approval made without a digital signature still shows
 
 ---
 
-### 5.4 Lifecycle: Sent to Accounts → Money Received → Purchased
+### ✅ 5.4 Lifecycle: Sent to Accounts → Money Received → Purchased
 
 Extends the tracker past `BOM_GENERATED`. **Every transition is Inventory-Manager-only**, and each
 writes the status change, a `requisition_events` row, an audit row and a notification — all in one
@@ -233,7 +233,7 @@ step is refused with a message naming the current state.
 
 ---
 
-### 5.5 Invoice upload and money saved
+### ✅ 5.5 Invoice upload and money saved
 
 At the verify-purchase step the IM uploads the invoice and, if the purchase came in under the
 funded amount, records what went back to Accounts, with a note.
@@ -256,7 +256,7 @@ with its note, and the tracker shows the returned amount.
 
 ---
 
-### 5.6 Add to inventory
+### ✅ 5.6 Add to inventory
 
 Once a purchase is verified, the IM can put the goods into stock from the same screen.
 
@@ -272,7 +272,7 @@ carrying a ledger row pointing at the requisition. The nightly reconciliation st
 
 ---
 
-### 5.7 Borrow to user
+### ✅ 5.7 Borrow to user
 
 The other exit: goods bought for one person go straight out to them instead of onto a shelf.
 
@@ -297,7 +297,7 @@ arithmetic reconciles.
 
 ---
 
-### 5.8 Expense reporting
+### ✅ 5.8 Expense reporting
 
 Visible to `APPROVER`, `INVENTORY_MANAGER` and `ADMIN`. Not to `GENERAL`.
 
