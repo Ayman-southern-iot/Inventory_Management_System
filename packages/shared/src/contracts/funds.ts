@@ -190,6 +190,34 @@ export const receiveIntoStockSchema = z.object({
 });
 export type ReceiveIntoStockInput = z.infer<typeof receiveIntoStockSchema>;
 
+/* ------------------------------------------------------------ borrow to user */
+
+/**
+ * Handing a purchased line straight to a person instead of putting it on a shelf.
+ *
+ * `borrowerId` defaults to the requester in the UI but may be anyone active (OQ-22): an item
+ * bought on one person's requisition is often handed to a colleague who will actually use it.
+ */
+export const borrowToUserLineSchema = z.object({
+  purchaseLineId: uuidSchema,
+  /** The units still pass through a compartment, so the ledger records where they came from. */
+  compartmentId: uuidSchema,
+  quantity: z.number().int().positive().max(1_000_000),
+  newProduct: newCatalogueProductSchema.optional(),
+});
+export type BorrowToUserLine = z.infer<typeof borrowToUserLineSchema>;
+
+export const borrowToUserSchema = z.object({
+  borrowerId: uuidSchema,
+  lines: z.array(borrowToUserLineSchema).min(1).max(200),
+  /** Null for a consumable that is never coming back. */
+  expectedReturnDate: z.string().date().nullable().default(null),
+  isReturnable: z.boolean().default(true),
+  purpose: z.string().trim().max(500).nullable().default(null),
+  projectId: uuidSchema.nullable().default(null),
+});
+export type BorrowToUserInput = z.infer<typeof borrowToUserSchema>;
+
 /* ------------------------------------------------------------- the summary */
 
 /**

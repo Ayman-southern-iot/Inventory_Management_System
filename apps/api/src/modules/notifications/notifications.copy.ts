@@ -125,6 +125,17 @@ export const NOTIFICATION_COPY: Record<NotificationType, NotificationTemplate> =
     title: (ref) => `Borrow ${ref} was returned`,
     body: (c) => (c.quantity ? `${c.quantity} unit(s) returned` : null),
   },
+  'borrowing.issued_to_you': {
+    severity: 'info',
+    title: (ref, actor) => `${actor ?? 'The Inventory Manager'} issued ${ref} to you`,
+    body: (c) => {
+      const parts = [
+        c.quantity ? `${c.quantity} unit(s)` : null,
+        c.dueDate ? `due back on ${c.dueDate}` : null,
+      ].filter(Boolean);
+      return parts.length > 0 ? parts.join(', ') : null;
+    },
+  },
   'borrowing.due_soon': {
     severity: 'warning',
     title: (ref) => `Borrow ${ref} is due back soon`,

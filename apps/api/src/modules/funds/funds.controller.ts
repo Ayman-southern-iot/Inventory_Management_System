@@ -22,11 +22,13 @@ import {
   recordPurchaseSchema,
   verifyPurchaseSchema,
   receiveIntoStockSchema,
+  borrowToUserSchema,
   type RecordFundReceiptInput,
   type RecordPurchaseInput,
   type RequisitionFunding,
   type VerifyPurchaseInput,
   type ReceiveIntoStockInput,
+  type BorrowToUserInput,
 } from '@ims/shared';
 import { zodPipe } from '../../common/zod-validation.pipe';
 import { ConflictError, ValidationFailedError } from '../../common/errors';
@@ -183,6 +185,26 @@ export class FundsController {
   ): Promise<RequisitionFunding> {
     return this.runOnce(idempotencyKey, actor.id, `funds:stock:${id}`, async () => {
       await this.funds.receiveIntoStock(id, body, actor.id, ctx);
+      return this.funds.funding(id);
+    });
+  }
+
+  /**
+   * The other exit: issue the purchased goods straight to a person rather than shelving them.
+   * Idempotency-keyed — a double-click would create two borrows and two stock movements.
+   */
+  @Post('borrow-to-user')
+  @Roles(Role.INVENTORY_MANAGER, Role.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async borrowToUser(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(zodPipe(borrowToUserSchema)) body: BorrowToUserInput,
+    @CurrentUser() actor: RequestUser,
+    @CurrentAuditContext() ctx: AuditContext,
+    @Headers(IDEMPOTENCY_HEADER) idempotencyKey?: string,
+  ): Promise<RequisitionFunding> {
+    return this.runOnce(idempotencyKey, actor.id, `funds:borrow:${id}`, async () => {
+      await this.funds.borrowToUser(id, body, actor.id, ctx);
       return this.funds.funding(id);
     });
   }

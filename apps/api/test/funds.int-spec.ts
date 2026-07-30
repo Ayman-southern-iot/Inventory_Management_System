@@ -593,6 +593,156 @@ describe('funds and purchasing', () => {
     expect(strayProduct).toBeUndefined();
   });
 
+  /* --------------------------------------------------------- borrow to user */
+
+  it('issues a verified purchase straight to a user, with a real ledger trail', async () => {
+    const req = await verified(5000, 4000);
+    const line = (await fundingOf(req.id)).purchases[0]!.lines[0]!;
+    const borrower = await signIn([Role.GENERAL]);
+
+    const issued = await im.client.post(`/requisitions/${req.id}/borrow-to-user`).send({
+      borrowerId: borrower.id,
+      expectedReturnDate: '2026-12-31',
+      isReturnable: true,
+      purpose: 'Field kit',
+      lines: [
+        {
+          purchaseLineId: line.id,
+          compartmentId: fixture.compartmentA,
+          quantity: 1,
+          newProduct: {
+            productCode: `BRW-${Date.now() % 100000}`,
+            name: 'Widget',
+            categoryId: fixture.categoryId,
+            unit: 'pcs',
+          },
+        },
+      ],
+    });
+    expect(issued.status).toBe(200);
+    expect(await statusOf(req.id)).toBe('STOCKED');
+
+    // The borrow exists, belongs to the borrower, and is already issued.
+    const borrow = await ctx.db
+      .selectFrom('borrow_requests')
+      .where('requester_id', '=', borrower.id)
+      .selectAll()
+      .executeTakeFirst();
+    expect(borrow).toBeDefined();
+    expect(borrow!.status).toBe('ISSUED');
+    expect(borrow!.issued_at).not.toBeNull();
+    expect(borrow!.quantity).toBe(1);
+
+    // The stock genuinely moved through the shelf: a RECEIPT from the requisition and an ISSUE
+    // against the borrow. Nothing shortcut straight to "issued".
+    const ledger = await ctx.db
+      .selectFrom('stock_ledger')
+      .selectAll()
+      .orderBy('created_at')
+      .execute();
+    const receipt = ledger.find((r) => r.ref_type === 'REQUISITION' && r.ref_id === req.id);
+    const issue = ledger.find((r) => r.ref_type === 'BORROW' && r.movement_type === 'ISSUE');
+    expect(receipt?.movement_type).toBe('RECEIPT');
+    expect(issue?.quantity).toBe(1);
+
+    // And no reservation is left stranded — the placement is gone because it hit zero.
+    const placements = await ctx.db.selectFrom('stock_placements').selectAll().execute();
+    const stranded = placements.filter((p) => p.reserved_qty > 0);
+    expect(stranded).toHaveLength(0);
+  });
+
+  it('notifies the borrower, who never asked for it', async () => {
+    const req = await verified(5000, 4000);
+    const line = (await fundingOf(req.id)).purchases[0]!.lines[0]!;
+    const borrower = await signIn([Role.GENERAL]);
+
+    await im.client.post(`/requisitions/${req.id}/borrow-to-user`).send({
+      borrowerId: borrower.id,
+      lines: [
+        {
+          purchaseLineId: line.id,
+          compartmentId: fixture.compartmentA,
+          quantity: 1,
+          newProduct: {
+            productCode: `NOT-${Date.now() % 100000}`,
+            name: 'Widget',
+            categoryId: fixture.categoryId,
+            unit: 'pcs',
+          },
+        },
+      ],
+    });
+
+    const notifications = await borrower.client.get('/notifications');
+    const types = notifications.body.items.map((n: { type: string }) => n.type);
+    expect(types).toContain('borrowing.issued_to_you');
+  });
+
+  it('refuses to issue to a deactivated user', async () => {
+    const req = await verified(5000, 4000);
+    const line = (await fundingOf(req.id)).purchases[0]!.lines[0]!;
+    const borrower = await signIn([Role.GENERAL]);
+    await ctx.db
+      .updateTable('users')
+      .set({ is_active: false })
+      .where('id', '=', borrower.id)
+      .execute();
+
+    const attempt = await im.client.post(`/requisitions/${req.id}/borrow-to-user`).send({
+      borrowerId: borrower.id,
+      lines: [
+        {
+          purchaseLineId: line.id,
+          compartmentId: fixture.compartmentA,
+          quantity: 1,
+          newProduct: {
+            productCode: `DEA-${Date.now() % 100000}`,
+            name: 'Widget',
+            categoryId: fixture.categoryId,
+            unit: 'pcs',
+          },
+        },
+      ],
+    });
+
+    expect(attempt.status).toBe(400);
+    // Nothing moved *for this requisition* — the shared stock fixture has its own ledger rows.
+    const ledger = await ctx.db
+      .selectFrom('stock_ledger')
+      .where('ref_id', '=', req.id)
+      .selectAll()
+      .execute();
+    expect(ledger).toHaveLength(0);
+  });
+
+  it('cannot issue the same line twice', async () => {
+    const req = await verified(5000, 4000);
+    const line = (await fundingOf(req.id)).purchases[0]!.lines[0]!;
+    const borrower = await signIn([Role.GENERAL]);
+
+    const body = {
+      borrowerId: borrower.id,
+      lines: [
+        {
+          purchaseLineId: line.id,
+          compartmentId: fixture.compartmentA,
+          quantity: 1,
+          newProduct: {
+            productCode: `TWICE-${Date.now() % 100000}`,
+            name: 'Widget',
+            categoryId: fixture.categoryId,
+            unit: 'pcs',
+          },
+        },
+      ],
+    };
+
+    expect((await im.client.post(`/requisitions/${req.id}/borrow-to-user`).send(body)).status).toBe(200);
+    // The line is fully accounted for now, so a second issue has nothing left to give.
+    const again = await im.client.post(`/requisitions/${req.id}/borrow-to-user`).send(body);
+    expect(again.status).toBe(409);
+  });
+
   /* ----------------------------------------------------------- helpers */
 
   async function signIn(roles: Role[]): Promise<{ id: string; client: HttpClient }> {

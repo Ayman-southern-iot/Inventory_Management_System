@@ -269,10 +269,14 @@ export class StockService {
    * One transaction, one lock, one RECEIPT ledger row (the reservation is a column, not a
    * movement — see `reserve`), so it either all happens or none of it does.
    */
-  async receiveAndHold(input: ReceiveInput, context: StockContext): Promise<PlacementRow> {
+  async receiveAndHold(
+    input: ReceiveInput,
+    context: StockContext,
+    existingTx?: Tx,
+  ): Promise<PlacementRow> {
     this.assertPositive(input.quantity);
 
-    return this.db.transaction().execute(async (tx) => {
+    const run = async (tx: Tx): Promise<PlacementRow> => {
       await this.assertProductIsTrackable(tx, input.productId);
       await this.assertCompartmentUsable(tx, input.compartmentId);
 
@@ -291,7 +295,9 @@ export class StockService {
       });
 
       return updated;
-    });
+    };
+
+    return existingTx ? run(existingTx) : this.db.transaction().execute(run);
   }
 
   /**
@@ -338,10 +344,15 @@ export class StockService {
    * issue always follows a reservation — releasing first and issuing second would briefly
    * expose the units to another borrower.
    */
-  async issue(input: ReserveInput, context: StockContext): Promise<PlacementRow | null> {
+  async issue(
+    input: ReserveInput,
+    context: StockContext,
+    /** See `receive` — lets a caller make the issue atomic with whatever it is doing alongside. */
+    existingTx?: Tx,
+  ): Promise<PlacementRow | null> {
     this.assertPositive(input.quantity);
 
-    return this.db.transaction().execute(async (tx) => {
+    const run = async (tx: Tx): Promise<PlacementRow | null> => {
       const placement = await this.lockPlacement(tx, input.productId, input.compartmentId);
       if (!placement) throw new NotFoundError('Stock in that compartment');
 
@@ -369,7 +380,9 @@ export class StockService {
       }
 
       return this.applyDelta(tx, placement.id, -input.quantity, -input.quantity);
-    });
+    };
+
+    return existingTx ? run(existingTx) : this.db.transaction().execute(run);
   }
 
   /** A borrowed item comes back. Increments quantity only — the reservation ended at issue. */

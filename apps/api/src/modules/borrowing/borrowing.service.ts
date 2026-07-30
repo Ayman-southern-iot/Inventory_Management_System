@@ -17,6 +17,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { NOTIFICATION_LINKS } from '../notifications/notifications.links';
 import type { AuditContext } from '../audit/audit-context';
 import { BorrowingRepository } from './borrowing.repository';
+import type { Tx } from '../audit/audit.repository';
 import {
   BorrowAlreadyDecidedError,
   InvalidBorrowTransitionError,
@@ -529,8 +530,135 @@ export class BorrowingService {
   }
 
   /** Gapless and sequential, so "BR-000042" is a reference people can read out loud. */
-  private async nextBorrowNo(): Promise<string> {
-    const row = await sql<{ n: string }>`SELECT nextval('borrow_no_seq') AS n`.execute(this.db);
+  /**
+   * Issue stock straight to a person, on their behalf, inside the caller's transaction.
+   *
+   * Task 5.7: goods bought on a requisition often go to someone rather than onto a shelf. The IM
+   * is the person who would approve a borrow anyway, so routing it back to themselves for a
+   * decision is theatre — it is created and issued in one step.
+   *
+   * What it is **not** is a shortcut past the stock rules. The units are received into the
+   * compartment and immediately held (`receiveAndHold`), then issued, both on the caller's
+   * transaction, so the ledger records a RECEIPT and an ISSUE exactly as an ordinary borrow
+   * would and `reserved_qty` is never left stranded. That last part is why this takes a `tx` at
+   * all — the split-transaction shape is G-14, and this path must not reproduce it.
+   *
+   * `requesterId` is the borrower and `actorId` is the IM doing it: the borrow row records whose
+   * item it is, the audit row records who handed it over. They are deliberately different
+   * parameters — collapsing them is how "issued on behalf of" quietly becomes "issued to myself".
+   */
+  async issueOnBehalf(
+    tx: Tx,
+    input: {
+      requesterId: string;
+      productId: string;
+      compartmentId: string;
+      quantity: number;
+      projectId: string | null;
+      isReturnable: boolean;
+      expectedReturnDate: string | null;
+      purpose: string | null;
+      /** Ledger provenance — the requisition this delivery came from. */
+      refType: string;
+      refId: string;
+    },
+    actorId: string,
+    context: AuditContext,
+  ): Promise<{ id: string; borrowNo: string }> {
+    const borrowNo = await this.nextBorrowNo(tx);
+
+    const placement = await this.stock.receiveAndHold(
+      {
+        productId: input.productId,
+        compartmentId: input.compartmentId,
+        quantity: input.quantity,
+      },
+      { performedBy: actorId, refType: input.refType, refId: input.refId },
+      tx,
+    );
+
+    const id = await this.repo.insert(
+      {
+        borrowNo,
+        requesterId: input.requesterId,
+        productId: input.productId,
+        placementId: placement.id,
+        compartmentId: input.compartmentId,
+        quantity: input.quantity,
+        projectId: input.projectId,
+        isReturnable: input.isReturnable,
+        expectedReturnDate: input.expectedReturnDate,
+        purpose: input.purpose,
+      },
+      tx,
+    );
+
+    // Straight to ISSUED: the IM is the approver, and they have just handed the item over.
+    const didClaim = await this.repo.claimPendingDecision(
+      id,
+      {
+        status: BorrowStatus.ISSUED,
+        decidedBy: actorId,
+        decisionNote: input.purpose,
+        markIssued: true,
+      },
+      tx,
+    );
+    if (!didClaim) throw new ConflictError('The borrow could not be issued');
+
+    await this.stock.issue(
+      {
+        productId: input.productId,
+        compartmentId: input.compartmentId,
+        quantity: input.quantity,
+      },
+      { performedBy: actorId, refType: BORROW_REF_TYPE, refId: id },
+      tx,
+    );
+
+    await this.audit.record(
+      {
+        action: 'borrowing.issue_on_behalf',
+        entityType: 'borrowing',
+        entityId: id,
+        entityRef: borrowNo,
+        summary: `Issued ${input.quantity} unit(s) on ${borrowNo} to another user`,
+        metadata: {
+          borrowNo,
+          requesterId: input.requesterId,
+          productId: input.productId,
+          compartmentId: input.compartmentId,
+          quantity: input.quantity,
+          refType: input.refType,
+          refId: input.refId,
+        },
+      },
+      context,
+      tx,
+    );
+
+    // The borrower did not ask for this, so they certainly need telling.
+    await this.notifications.notify(
+      {
+        type: 'borrowing.issued_to_you',
+        userIds: [input.requesterId],
+        ref: borrowNo,
+        link: NOTIFICATION_LINKS.myBorrowings,
+        entityType: 'borrowing',
+        entityId: id,
+        actorId,
+        actorName: context.actorName,
+        context: { quantity: input.quantity, dueDate: input.expectedReturnDate },
+      },
+      tx,
+    );
+
+    return { id, borrowNo };
+  }
+
+  /** `executor` so a borrow number can be drawn inside the caller's transaction. */
+  private async nextBorrowNo(executor: Db | Tx = this.db): Promise<string> {
+    const row = await sql<{ n: string }>`SELECT nextval('borrow_no_seq') AS n`.execute(executor);
     const value = Number(row.rows[0]?.n ?? 1);
     return `BR-${String(value).padStart(6, '0')}`;
   }

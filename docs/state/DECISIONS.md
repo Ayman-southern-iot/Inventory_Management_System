@@ -310,3 +310,15 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
 - 2026-07-30 — `received_quantity` is a counter on the purchase line, not a boolean, and is capped
   at the purchased quantity by a CHECK. Part-deliveries are normal; receiving more than was bought
   is not a partial state but a mistake, and the database is the right place to refuse it.
+- 2026-07-30 — `StockService.issue` and `receiveAndHold` gained the same optional-transaction
+  parameter as `receive`, so borrow-to-user is atomic end to end. This is the shape G-14 should be
+  fixed into; the three stock entry points a caller needs now all support it.
+- 2026-07-30 — Borrow-to-user still moves the units through a compartment: `receiveAndHold` then
+  `issue`, so the ledger records a RECEIPT and an ISSUE exactly as an ordinary borrow does. It
+  would have been shorter to write the borrow row straight as ISSUED, and it would have left the
+  ledger unable to explain where the item came from.
+- 2026-07-30 — `issueOnBehalf` takes `requesterId` and `actorId` as separate parameters: the borrow
+  row records whose item it is, the audit row records who handed it over. Collapsing them is how
+  "issued on behalf of" quietly becomes "issued to myself".
+- 2026-07-30 — Issuing to a deactivated user is refused: it would create a borrow nobody can
+  return, and an outstanding item nobody is accountable for.

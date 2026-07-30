@@ -7,6 +7,7 @@ import {
   type RecordPurchaseInput,
   type VerifyPurchaseInput,
   type ReceiveIntoStockInput,
+  type BorrowToUserInput,
   type RequisitionFunding,
 } from '@ims/shared';
 import { DB } from '../../database/database.module';
@@ -20,6 +21,7 @@ import { RequisitionsRepository } from '../requisitions/requisitions.repository'
 import { FilesService } from '../files/files.service';
 import { StockService } from '../stock/stock.service';
 import { ProductsService } from '../products/products.service';
+import { BorrowingService } from '../borrowing/borrowing.service';
 import { FundsRepository, type Tx } from './funds.repository';
 import {
   FundingExceedsApprovedError,
@@ -70,6 +72,7 @@ export class FundsService {
     private readonly files: FilesService,
     private readonly stock: StockService,
     private readonly products: ProductsService,
+    private readonly borrowing: BorrowingService,
   ) {}
 
   /* ------------------------------------------------------ sent to accounts */
@@ -658,6 +661,136 @@ export class FundsService {
       }
 
       return requisitionId;
+    });
+  }
+
+  /* --------------------------------------------------------- borrow to user */
+
+  /**
+   * The other exit from a verified purchase: the goods go straight out to a person.
+   *
+   * Same transaction discipline as `receiveIntoStock`, and for the same reason — the stock
+   * movements, the borrow rows, the received counters and the requisition's status either all
+   * happen or none do. `BorrowingService.issueOnBehalf` does the stock work through
+   * `StockService`, so the ledger records a RECEIPT and an ISSUE exactly as an ordinary borrow
+   * would; nothing here shortcuts to "issued".
+   */
+  async borrowToUser(
+    requisitionId: string,
+    input: BorrowToUserInput,
+    actorId: string,
+    context: AuditContext,
+  ) {
+    return this.db.transaction().execute(async (tx) => {
+      const requisition = await this.lock(tx, requisitionId);
+      this.assertStatus(requisition.status, 'issued to a user', [
+        RequisitionStatus.PURCHASE_VERIFIED,
+        RequisitionStatus.STOCKED,
+      ]);
+
+      const borrower = await tx
+        .selectFrom('users')
+        .where('id', '=', input.borrowerId)
+        .select(['id', 'is_active'])
+        .executeTakeFirst();
+      if (!borrower) throw new NotFoundError('User');
+      // Issuing to a deactivated account would create a borrow nobody can return.
+      if (!borrower.is_active) {
+        throw new ValidationFailedError({
+          path: 'borrowerId',
+          message: 'That user is deactivated, so nothing can be issued to them',
+        });
+      }
+
+      // Same sorted lock order as receiving, so the two paths cannot deadlock against each other.
+      const lines = [...input.lines].sort((a, b) =>
+        a.purchaseLineId.localeCompare(b.purchaseLineId),
+      );
+
+      const issued: Array<{ borrowNo: string; itemName: string; quantity: number }> = [];
+
+      for (const line of lines) {
+        const locked = await this.repo.lockPurchaseLine(tx, line.purchaseLineId);
+        if (!locked || locked.requisitionId !== requisitionId) {
+          throw new NotFoundError('Purchase line');
+        }
+
+        const outstanding = locked.quantity - locked.receivedQuantity;
+        if (line.quantity > outstanding) {
+          throw new ReceiveExceedsPurchasedError(locked.itemName, outstanding, line.quantity);
+        }
+
+        let productId = locked.productId;
+        if (!productId) {
+          if (!line.newProduct) {
+            throw new ValidationFailedError({
+              path: `lines.${line.purchaseLineId}.newProduct`,
+              message: `"${locked.itemName}" is not in the catalogue yet, so it needs product details`,
+            });
+          }
+          productId = await this.products.createWithin(
+            tx,
+            { ...line.newProduct, defaultReturnable: input.isReturnable, description: null },
+            context,
+          );
+          await this.repo.linkRequisitionItemProduct(tx, locked.requisitionItemId, productId);
+        }
+
+        const borrow = await this.borrowing.issueOnBehalf(
+          tx,
+          {
+            requesterId: input.borrowerId,
+            productId,
+            compartmentId: line.compartmentId,
+            quantity: line.quantity,
+            projectId: input.projectId,
+            isReturnable: input.isReturnable,
+            expectedReturnDate: input.expectedReturnDate,
+            purpose: input.purpose,
+            refType: REQUISITION_REF_TYPE,
+            refId: requisitionId,
+          },
+          actorId,
+          context,
+        );
+
+        // Counted as received: it left the purchase and is now accounted for by a borrow, so it
+        // must not also be receivable onto a shelf.
+        await this.repo.addReceivedQuantity(tx, line.purchaseLineId, line.quantity);
+        issued.push({
+          borrowNo: borrow.borrowNo,
+          itemName: locked.itemName,
+          quantity: line.quantity,
+        });
+      }
+
+      const outstandingLines = await this.repo.countOutstandingLines(requisitionId, tx);
+      const fullyHandled = outstandingLines === 0;
+      if (fullyHandled) {
+        await this.requisitions.setStatus(tx, requisitionId, RequisitionStatus.STOCKED, false);
+      }
+
+      await this.requisitions.appendEvent(
+        tx,
+        requisitionId,
+        RequisitionEventType.BORROWED_OUT,
+        actorId,
+        { borrowerId: input.borrowerId, issued, fullyHandled },
+      );
+      await this.audit.record(
+        {
+          action: 'requisition.borrowed_out',
+          entityType: 'requisition',
+          entityId: requisitionId,
+          entityRef: requisition.requisition_no,
+          summary: `Issued ${issued.length} line(s) of ${requisition.requisition_no} to a user`,
+          metadata: { borrowerId: input.borrowerId, issued, fullyHandled },
+        },
+        context,
+        tx,
+      );
+
+      return issued;
     });
   }
 

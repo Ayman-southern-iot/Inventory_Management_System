@@ -3,6 +3,7 @@ import { CommonModule } from '../../common/common.module';
 import { FilesModule } from '../files/files.module';
 import { StockModule } from '../stock/stock.module';
 import { ProductsModule } from '../products/products.module';
+import { BorrowingModule } from '../borrowing/borrowing.module';
 import { AuditModule } from '../audit/audit.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { RequisitionsModule } from '../requisitions/requisitions.module';
@@ -26,6 +27,7 @@ import { FundsService } from './funds.service';
     FilesModule,
     StockModule,
     ProductsModule,
+    BorrowingModule,
   ],
   controllers: [FundsController],
   providers: [FundsService, FundsRepository],

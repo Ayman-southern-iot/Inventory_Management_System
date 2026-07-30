@@ -73,6 +73,7 @@ export const AUDIT_ACTIONS = [
   'borrowing.revert',
   'borrowing.cancel',
   'borrowing.return',
+  'borrowing.issue_on_behalf',
   // Requisitions
   'requisition.create',
   'requisition.update',
@@ -93,6 +94,7 @@ export const AUDIT_ACTIONS = [
   'requisition.funds_returned',
   'requisition.purchase_verified',
   'requisition.stocked',
+  'requisition.borrowed_out',
   'requisition.cancel',
   // Delegations
   'delegation.create',

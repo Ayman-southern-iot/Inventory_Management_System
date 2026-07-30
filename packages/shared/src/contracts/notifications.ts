@@ -46,6 +46,7 @@ export const NOTIFICATION_TYPES = [
   'borrowing.reverted',
   'borrowing.cancelled',
   'borrowing.returned',
+  'borrowing.issued_to_you',
   'borrowing.due_soon',
   'borrowing.overdue',
   // BOM
