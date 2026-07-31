@@ -6,54 +6,56 @@
 >
 > Deeper context, only when actually needed:
 > `docs/state/SESSION-LOG.md` (history) · `docs/state/DECISIONS.md` (why) ·
-> `docs/state/OPEN-QUESTIONS.md` (OQ/G items) · `plan/PHASE-*.md` (the work)
+> `docs/state/OPEN-QUESTIONS.md` (OQ/G items) · `plan/PHASE-*.md` (the work) ·
+> `docs/RUNBOOK.md` (deploy, restore, incidents)
 
 **Updated:** 2026-07-31
 
 ## Where the build is
 
-- **Phases 00–05 are done.** Phase 06 is partly done (audit log UI + notifications).
-- Phase 05 includes the IM funds panel, so the whole money lifecycle is reachable from the
-  browser rather than API-only. The expense report is live under **Expenses** in the nav.
-- **Next: Phase 06** — `plan/PHASE-06-hardening.md`. 6.1 is effectively done. Open: **6.2**
-  nightly invariant job · **6.3** backup/restore drill · **6.4** monitoring · **6.5** performance
-  pass · **6.6** security review · **6.7** operator runbook.
-- **6.3 is the one not to skip.** Backups that have never been restored are not backups, and the
-  operator's stated requirement is that no data is ever lost.
+- **Phases 00–06 are all done.** There is no next phase file. The build is feature-complete
+  against the plan and hardened; what remains is go-live, not construction.
+- Phase 06 closed with: the nightly invariant job, a drilled backup/restore, an hourly
+  monitoring floor, a performance pass, a security review, and `docs/RUNBOOK.md`.
 
 ## Green as of last run
 
 `pnpm typecheck` · `pnpm lint` · `pnpm test` · `pnpm --filter @ims/api test:int`
-→ **20 files, 341 integration tests, all passing.** Migrations 0001–0018 applied.
+→ **23 files, 368 integration tests, all passing.** Migrations 0001–0018 applied.
 
-## Blocked / needs the operator
+## Before go-live — the operator's list, not the code's
 
-- Nothing blocking. **OQ-18** (BOM "Remaining" = Requested − Approved) and **OQ-19** ("Sent to
-  Accounts" is a status plus a note) are both answered.
-- Assumed but unconfirmed: **OQ-20** part-payments are kept · **OQ-22** borrow-to-user may target
-  any active user · **OQ-16** who gets notified about what.
-- Operator action outstanding: **Settings → Sub-threshold approver is unset**, so any requisition
-  below the 14,000 threshold refuses to submit. Config, not code.
+1. **Offsite backups (G-16).** Backups sit on the same VM as the database. Uncomment one of the
+   rclone/aws lines in `infra/backup.sh` and give it credentials. Survives a bad migration
+   today, not a dead VM.
+2. **Run the restore drill on the production stack (G-17).** Drilled against a scratch DB only.
+3. **Set the three settings** that have no safe default: Approver slots 1/2, **Sub-threshold
+   approver** (a separate setting, and the most commonly missed), expense threshold.
+4. Appoint a **second Inventory Manager and a third approver** — nobody may approve their own
+   requisition, so a lone IM or approver cannot submit one.
+
+## Remaining engineering debt
+
+`G-18` (integration tests write uploads into the dev storage dir) and `G-19` (five endpoints
+return a bare array rather than `Paginated<T>` — deliberate, revisit past ~1000 rows).
+Unconfirmed assumptions: **OQ-16** notification audience · **OQ-20** part-payments kept ·
+**OQ-22** borrow-to-user may target any active user.
 
 ## Landmines (each has cost a session before)
 
 - **Docker Desktop stops itself between sessions.** `docker info` before any migration or test.
 - **Never run `apps/api` through `tsx`** — esbuild drops the decorator metadata Nest DI needs.
 - **A stale API process is not a code bug.** Check process start time against `dist/` mtime.
+  The built entrypoint is `apps/api/dist/src/main.js`, not `dist/main.js`.
 - Dev DB **5433**, test DB **5434**. Never `docker compose down -v`.
+- The **web dev server binds IPv6 only** — `localhost:5173` works, `127.0.0.1:5173` does not.
 - `stock_ledger`, `requisition_events` and `audit_log` are **append-only by trigger**.
 - `resetData` cannot delete requisitions, departments or users, so the **test DB accumulates
   them**. Never assert "exactly one row" or "it is on page one" — scope by an id you created.
 - `boms-pdf.int-spec.ts` overrides `PdfRendererService` with a local stub: add any new renderer
-  method there too. `test/app.ts` sets `logger: false`, so a 500 arrives with no stack — flip it
-  to `['error']` while debugging, then put it back.
+  method there too. `test/app.ts` sets `logger: false`, so a 500 arrives with no stack.
 - Interpolating the same Kysely `sql` fragment twice re-emits its parameters with **different**
   placeholder numbers, so `GROUP BY <expr>` will not match `SELECT <expr>`. Group positionally.
-
-## Open engineering debt
-
-`G-11`..`G-15` in OPEN-QUESTIONS.md. **G-14/G-15 are now cheap**: `StockService.receive`, `issue`
-and `receiveAndHold` all take an optional transaction, which is exactly the shape those bugs need.
-Tasks 5.6 and 5.7 were built that way; `borrowing.decide`, `cancel` and `recordReturn` were not
-retrofitted. Do it alongside 6.2, and extend the invariant job to `reserved_qty` — it cannot
-currently see a stranded reservation.
+- **The web app selects error copy by `code`, not message.** A new failure mode needs a new
+  `ErrorCode` member, or the UI shows the old sentence however good the server's message is.
+- `approver_slots.slot_no` is constrained to **(1, 2)** — there is no slot 3 to fall back to.
