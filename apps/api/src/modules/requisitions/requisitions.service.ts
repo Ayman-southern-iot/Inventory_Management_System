@@ -28,6 +28,8 @@ import {
   ApproverSlotUnassignedError,
   InvalidRequisitionTransitionError,
   NotYourApprovalError,
+  SelfApprovalForbiddenError,
+  SelfApprovalNoSubstituteError,
   SignatureNotUploadedError,
   SubthresholdApproverUnassignedError,
 } from './requisitions.errors';
@@ -138,16 +140,26 @@ export class RequisitionsService {
     // (SUBTHRESHOLD_APPROVER_USER_ID) instead of the historical "count + slot 1" setup.
     // That setup shared slot 1 with the at-or-above case, which made "below" brittle when
     // an admin reassigned the company default for slot 1.
+    // requirements §10: nobody approves their own requisition, so the requester is excluded
+    // from every slot the chain resolves and a substitute is taken instead (OQ-07).
     const isSubThreshold = requestedAmount < threshold;
     const approverIds: string[] = isSubThreshold
-      ? [await this.subthresholdApproverId()]
+      ? [await this.subthresholdApproverId(existing.requester_id, existing.department_id)]
       : await (async () => {
           const approverCount = await this.settings.get(
             SettingKey.APPROVER_SLOTS_AT_OR_ABOVE_THRESHOLD,
           );
           try {
-            return await this.approverSlots.resolveForDepartment(existing.department_id, approverCount);
-          } catch {
+            return await this.approverSlots.resolveForDepartment(
+              existing.department_id,
+              approverCount,
+              existing.requester_id,
+            );
+          } catch (error) {
+            // "No substitute exists" is a different problem from "a slot is empty", and the web
+            // app picks its copy by code — collapsing them here would tell an admin to fill in
+            // a slot that is already filled.
+            if (error instanceof SelfApprovalNoSubstituteError) throw error;
             throw new ApproverSlotUnassignedError(approverCount);
           }
         })();
@@ -157,8 +169,18 @@ export class RequisitionsService {
     // has been downstream of this name for several releases.
     const approverCount = isSubThreshold ? 1 : approverIds.length;
 
-    const inventoryManagerId = await this.repo.findAnyActiveUserWithRole(Role.INVENTORY_MANAGER);
+    // requirements §10 again: the IM stage is an approval, so an IM raising a requisition cannot
+    // be assigned to review it. Excluding them first tells the two failures apart — "there is no
+    // IM at all" and "the only IM is you" need different things from an administrator.
+    const inventoryManagerId = await this.repo.findAnyActiveUserWithRole(
+      Role.INVENTORY_MANAGER,
+      existing.requester_id,
+    );
     if (!inventoryManagerId) {
+      const anyInventoryManager = await this.repo.findAnyActiveUserWithRole(
+        Role.INVENTORY_MANAGER,
+      );
+      if (anyInventoryManager) throw new SelfApprovalNoSubstituteError('inventory_manager');
       throw new ConflictError('No active Inventory Manager exists to review this requisition');
     }
 
@@ -273,6 +295,14 @@ export class RequisitionsService {
       // decision, or a withdrawal, waits here until we commit.
       const requisition = await this.repo.lockRequisition(tx, approval.requisition_id);
       if (!requisition) throw new NotFoundError('Requisition');
+
+      // requirements §10: nobody approves their own requisition. `submit` already keeps the
+      // requester out of the chain, so reaching this means a row predating that rule or an
+      // assignment changed since. Refusing here is what makes the rule an invariant rather than
+      // a property of one code path — and a delegation must not become a way around it either.
+      if (requisition.requester_id === actorId || requisition.requester_id === actingFor) {
+        throw new SelfApprovalForbiddenError();
+      }
 
       this.assertStageIsActionable(approval.stage, requisition.status as RequisitionStatus);
 
@@ -595,7 +625,10 @@ export class RequisitionsService {
    * correctly filled in. The user is also checked for `is_active`, so a freshly-deactivated
    * approver does not silently win the assignment (Phase 05 inactive-slot guard).
    */
-  private async subthresholdApproverId(): Promise<string> {
+  private async subthresholdApproverId(
+    requesterId: string,
+    departmentId: string | null,
+  ): Promise<string> {
     const userId = await this.settings.get(SettingKey.SUBTHRESHOLD_APPROVER_USER_ID);
     if (userId === null) {
       throw new SubthresholdApproverUnassignedError('unset');
@@ -604,7 +637,27 @@ export class RequisitionsService {
     if (!active) {
       throw new SubthresholdApproverUnassignedError('inactive');
     }
-    return userId;
+    if (userId !== requesterId) return userId;
+
+    // The designated sub-threshold approver is raising the requisition themselves. There is no
+    // "next" sub-threshold approver — the setting holds exactly one — so fall back to the slot
+    // chain, which is what requirements §10's "next configured approver" points at once the
+    // single designated one is out. Refuses with its own code if that chain cannot help either.
+    try {
+      const [substitute] = await this.approverSlots.resolveForDepartment(
+        departmentId,
+        1,
+        requesterId,
+      );
+      if (!substitute) throw new SelfApprovalNoSubstituteError('approver');
+      return substitute;
+    } catch (error) {
+      // An unfilled slot 1 is a real problem, but "Approver slot 1 is not assigned" is the wrong
+      // sentence here: this requisition is below the threshold and does not use the slot chain
+      // except as a stand-in. Say what actually needs configuring.
+      if (error instanceof SelfApprovalNoSubstituteError) throw error;
+      throw new SelfApprovalNoSubstituteError('approver');
+    }
   }
 
   /**

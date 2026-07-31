@@ -17,6 +17,7 @@ import { CurrentUser, Roles } from '../auth/auth.decorators';
 import type { RequestUser } from '../auth/request-user';
 import { CurrentAuditContext } from '../audit/audit.decorators';
 import type { AuditContext } from '../audit/audit-context';
+import { config } from '../../config';
 import { ValidationFailedError } from '../../common/errors';
 import { SignatureService } from './signature.service';
 
@@ -66,7 +67,9 @@ export class ProfileController {
   @Post('signature')
   @Roles(Role.APPROVER, Role.INVENTORY_MANAGER, Role.ADMIN)
   @HttpCode(HttpStatus.OK)
-  @UseInterceptors(FileInterceptor('file'))
+  // Capped at the interceptor because multer buffers the entire body into memory before the
+  // handler runs — FileStorageService's check happens too late to prevent the heap exhaustion.
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: config.uploads.maxImageBytes } }))
   async upload(
     @CurrentUser() actor: RequestUser,
     @CurrentAuditContext() ctx: AuditContext,

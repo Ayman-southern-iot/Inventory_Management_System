@@ -66,12 +66,21 @@ export class RequisitionsRepository {
       .executeTakeFirst();
   }
 
-  async findAnyActiveUserWithRole(role: Role): Promise<string | undefined> {
+  /**
+   * `excludeUserId` keeps a requester out of their own approval chain — requirements §10
+   * forbids approving your own requisition, and the Inventory Manager stage is an approval
+   * stage like any other.
+   */
+  async findAnyActiveUserWithRole(
+    role: Role,
+    excludeUserId?: string,
+  ): Promise<string | undefined> {
     const row = await this.db
       .selectFrom('users')
       .innerJoin('user_roles', 'user_roles.user_id', 'users.id')
       .where('users.is_active', '=', true)
       .where('user_roles.role', '=', role)
+      .$if(excludeUserId !== undefined, (qb) => qb.where('users.id', '!=', excludeUserId!))
       .select('users.id')
       .orderBy('users.created_at')
       .executeTakeFirst();

@@ -1,8 +1,9 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { Role, SettingKey } from '@ims/shared';
+import { ErrorCode, Role, SettingKey } from '@ims/shared';
 import { createTestApp, httpClient, type HttpClient, type TestApp } from './app';
 import { createUser, login, resetData } from './factories';
 import { SettingsService } from '../src/modules/settings/settings.service';
+import { CONFIG, type AppConfig } from '../src/config';
 
 /** A real 1x1 PNG. Magic bytes matter — the storage service validates them, not the header. */
 const PNG = Buffer.from(
@@ -59,6 +60,30 @@ describe('signatures', () => {
 
   it('refuses an upload with no file', async () => {
     expect((await approver.client.post('/me/signature').send()).status).toBe(400);
+  });
+
+  /**
+   * The size cap has to bite at the multipart interceptor, not in FileStorageService. Multer
+   * buffers the entire body into memory before the handler runs, so a check that happens after
+   * it finishes cannot stop an oversized upload from exhausting the heap — it only reports one
+   * that already landed. Found in the 6.6 security review.
+   */
+  it('rejects an oversized upload with 413 rather than buffering it', async () => {
+    const config = ctx.app.get<AppConfig>(CONFIG);
+    // A valid PNG header followed by enough padding to cross the ceiling, so the only thing
+    // that can reject this is the size limit and not the magic-byte check.
+    const oversized = Buffer.concat([
+      PNG,
+      Buffer.alloc(config.uploads.maxImageBytes + 1024, 0),
+    ]);
+
+    const result = await approver.client
+      .post('/me/signature')
+      .attach('file', oversized, 'huge.png');
+
+    expect(result.status).toBe(413);
+    // Its own code: falling through to INTERNAL would tell the user the server broke.
+    expect(result.body.code).toBe(ErrorCode.PAYLOAD_TOO_LARGE);
   });
 
   it('refuses a user with no signing role', async () => {

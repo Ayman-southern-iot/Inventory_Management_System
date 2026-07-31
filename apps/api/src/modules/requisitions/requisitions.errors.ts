@@ -69,6 +69,44 @@ export class SubthresholdApproverUnassignedError extends DomainError {
 }
 
 /**
+ * Someone tried to decide an approval on their own requisition. `submit` keeps the requester out
+ * of the chain, so this is the backstop for rows assigned before that rule existed and for a
+ * delegation that would otherwise hand the requester their own slot.
+ */
+export class SelfApprovalForbiddenError extends DomainError {
+  constructor() {
+    super(
+      ErrorCode.SELF_APPROVAL_FORBIDDEN,
+      'You cannot approve your own requisition. Another approver has to act on this one.',
+      HttpStatus.FORBIDDEN,
+    );
+  }
+}
+
+/**
+ * The requester is the configured approver for their own requisition and no substitute exists.
+ *
+ * requirements §10 (docs/reference/10-permissions.md:19) forbids approving your own requisition
+ * and says to skip to the next configured approver. When there is no next one, refusing the
+ * submit is the only remaining option — assigning the requester their own approval is precisely
+ * what the rule exists to prevent, and silently doing it is how a spend approves itself.
+ *
+ * OPEN QUESTION: OQ-07 — "skip and substitute" is settled, the substitute is not.
+ */
+export class SelfApprovalNoSubstituteError extends DomainError {
+  constructor(stage: 'inventory_manager' | 'approver') {
+    super(
+      ErrorCode.SELF_APPROVAL_NO_SUBSTITUTE,
+      stage === 'inventory_manager'
+        ? 'You are the only active Inventory Manager, so there is nobody to review your own requisition. An administrator must appoint another Inventory Manager before you can submit this.'
+        : 'You are the approver for this requisition and nobody is configured to stand in. An administrator must assign another approver before you can submit this.',
+      HttpStatus.CONFLICT,
+      { stage },
+    );
+  }
+}
+
+/**
  * Approving "with signature" when nothing has been uploaded. Refusing is the point: approving
  * unsigned instead would produce a document whose signature block is silently empty, and the
  * approver would have no idea until Accounts asked why.

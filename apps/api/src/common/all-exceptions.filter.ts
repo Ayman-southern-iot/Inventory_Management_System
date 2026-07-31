@@ -79,6 +79,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
         return ErrorCode.RATE_LIMITED;
       case HttpStatus.BAD_REQUEST:
         return ErrorCode.VALIDATION_FAILED;
+      // Multer rejects an oversized upload before the handler runs, and Nest surfaces that as a
+      // 413. Falling through to INTERNAL would tell the user the server broke.
+      case HttpStatus.PAYLOAD_TOO_LARGE:
+        return ErrorCode.PAYLOAD_TOO_LARGE;
       default:
         return ErrorCode.INTERNAL;
     }

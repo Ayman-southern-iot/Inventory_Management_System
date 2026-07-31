@@ -1,9 +1,10 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'kysely';
 import { Role, type ApproverSlot, type SetApproverSlotInput } from '@ims/shared';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
 import { ConflictError, NotFoundError } from '../../common/errors';
+import { SelfApprovalNoSubstituteError } from '../requisitions/requisitions.errors';
 import { AuditService } from '../audit/audit.service';
 import type { AuditContext } from '../audit/audit-context';
 
@@ -14,6 +15,8 @@ import type { AuditContext } from '../audit/audit-context';
  */
 @Injectable()
 export class ApproverSlotsService {
+  private readonly logger = new Logger(ApproverSlotsService.name);
+
   constructor(
     @Inject(DB) private readonly db: Db,
     private readonly audit: AuditService,
@@ -103,8 +106,18 @@ export class ApproverSlotsService {
     return this.list();
   }
 
-  /** Resolution used by Phase 03 when a requisition is submitted. */
-  async resolveForDepartment(departmentId: string | null, slotCount: number): Promise<string[]> {
+  /**
+   * Resolution used by Phase 03 when a requisition is submitted.
+   *
+   * `excludeUserId` is the requester. `requirements §10` (docs/reference/10-permissions.md:19)
+   * forbids anyone approving their own requisition and says the system "skips to the next
+   * configured approver and logs the substitution".
+   */
+  async resolveForDepartment(
+    departmentId: string | null,
+    slotCount: number,
+    excludeUserId?: string,
+  ): Promise<string[]> {
     const rows = await this.db
       .selectFrom('approver_slots')
       // The inner join makes a deactivated slot holder invisible to submit. Without this,
@@ -114,7 +127,9 @@ export class ApproverSlotsService {
       .innerJoin('users', 'users.id', 'approver_slots.user_id')
       .select(['approver_slots.department_id', 'approver_slots.slot_no', 'approver_slots.user_id'])
       .where('users.is_active', '=', true)
-      .where('approver_slots.slot_no', '<=', slotCount)
+      // Deliberately no `slot_no <= slotCount` ceiling. The strict loop below still fills the
+      // first `slotCount` slots and still reports an unassigned one by number, but a
+      // substitution has to be able to reach a slot beyond the ceiling to find its candidate.
       .where((eb) =>
         departmentId === null
           ? eb('approver_slots.department_id', 'is', null)
@@ -145,7 +160,64 @@ export class ApproverSlotsService {
       }
       resolved.push(userId);
     }
-    return resolved;
+
+    if (excludeUserId === undefined || !resolved.includes(excludeUserId)) return resolved;
+
+    // The requester holds one of the slots. Skip them and stand someone else in.
+    //
+    // OPEN QUESTION: OQ-07 — the spec mandates "skip and substitute" but leaves the substitute
+    // undefined. "The next configured approver" cannot mean only the next slot: `slot_no` is
+    // constrained to (1, 2) by migration 0004, so when both slots are in use there is no next
+    // one and every above-threshold requisition raised by an approver would be unsubmittable.
+    //
+    // So the pool is the remaining configured slots first — deterministic, and what an admin
+    // would expect — then any other active approver, oldest account first for stability. The
+    // approver *count* is never reduced: dropping to one approver because the requester happened
+    // to hold a slot would quietly weaken the control the threshold exists to enforce.
+    const spare = [
+      ...[...bySlot.entries()]
+        .sort(([a], [b]) => a - b)
+        .filter(([slotNo]) => slotNo > slotCount)
+        .map(([, userId]) => userId),
+      ...(await this.otherActiveApprovers(excludeUserId)),
+    ];
+
+    const substituted = resolved.map((userId) => {
+      if (userId !== excludeUserId) return userId;
+      const replacement = spare.find(
+        (candidate) => candidate !== excludeUserId && !resolved.includes(candidate),
+      );
+      // Its own typed error, not a bare ConflictError: `submit` wraps any failure out of this
+      // method in ApproverSlotUnassignedError, which would tell an admin to fill in a slot that
+      // is already filled. Same trap SubthresholdApproverUnassignedError was created to escape.
+      if (!replacement) throw new SelfApprovalNoSubstituteError('approver');
+      // Remove it so a second occupied slot does not draw the same substitute twice.
+      spare.splice(spare.indexOf(replacement), 1);
+      this.logger.log(
+        `Approver substitution: requester ${excludeUserId} holds a slot on their own ` +
+          `requisition; substituted ${replacement} (requirements §10).`,
+      );
+      return replacement;
+    });
+
+    return substituted;
+  }
+
+  /**
+   * Active users holding the approver role, excluding one. Oldest account first so the same
+   * requisition resolves the same substitute on a retry rather than picking at random.
+   */
+  private async otherActiveApprovers(excludeUserId: string): Promise<string[]> {
+    const rows = await this.db
+      .selectFrom('users')
+      .innerJoin('user_roles', 'user_roles.user_id', 'users.id')
+      .where('users.is_active', '=', true)
+      .where('user_roles.role', '=', Role.APPROVER)
+      .where('users.id', '!=', excludeUserId)
+      .select('users.id')
+      .orderBy('users.created_at')
+      .execute();
+    return rows.map((row) => row.id);
   }
 
   private async assertIsActiveApprover(userId: string): Promise<void> {

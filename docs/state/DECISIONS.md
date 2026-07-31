@@ -382,3 +382,30 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
 - 2026-07-31 — Disk and backup detail sit behind an admin-only endpoint, not on public `/health`.
   Free space and backup timing tell an attacker when the host is under pressure and whether anyone
   is watching; the compose healthcheck needs one bit and already has it.
+- 2026-07-31 — The BOM list resolves its source requisition numbers with one grouped query for
+  the page, not one per row. Found by logging every statement the database ran and counting the
+  queries per list request rather than by reading code — it was the only endpoint with a repeated
+  query shape. Every other list endpoint is 2-3 flat queries.
+- 2026-07-31 — Five endpoints deliberately stay unpaginated (`categories`, `locations`,
+  `admin/settings`, `borrowing/projects`, `boms/candidates`). Three are reference data bounded by
+  admin action, and paginating them would break the tree and the dropdowns that consume them. The
+  two that grow with usage are small at twelve users. Recorded as G-19 rather than hidden.
+- 2026-07-31 — **Self-approval is now prevented at submit and at decide** (requirements §10,
+  OQ-07). It was specified, marked resolved, and never implemented: the Inventory Manager raising
+  a requisition was assigned their own IM approval and could clear it on the happy path. The
+  requester is excluded when the chain is resolved, and `decide` refuses independently so the rule
+  is an invariant rather than a property of one code path.
+- 2026-07-31 — The self-approval substitute is "remaining configured slots first, then any other
+  active approver, oldest account first". `slot_no` is constrained to (1, 2) by migration 0004, so
+  "skip to the next configured slot" alone would make every above-threshold requisition raised by
+  an approver unsubmittable. The approver **count** is never reduced to route around a missing
+  substitute — that would quietly weaken the control the expense threshold exists to enforce.
+  Refusing the submit is the fallback, with its own error code so an admin is told to appoint
+  another approver rather than to fill in a slot that is already filled.
+- 2026-07-31 — `GET /requisitions/:id/funding` now authorises the object, not just the session.
+  It shipped with no guard at all while carrying vendor names, invoice numbers and purchase
+  totals, and `GET /stock/ledger` is readable by every authenticated user and returns the
+  requisition ids. Same reader set as the invoice download, which already had the check.
+- 2026-07-31 — Upload size limits moved onto the multipart interceptor. Multer buffers the whole
+  body into memory before the handler runs, so the `FileStorageService` check could only report an
+  oversized upload that had already landed — it could not stop one from exhausting the heap.

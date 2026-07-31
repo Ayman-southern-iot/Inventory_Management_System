@@ -785,6 +785,12 @@ export const t = {
     // not use the approver slots, so pointing at that screen sent admins somewhere already correct.
     SUBTHRESHOLD_APPROVER_UNASSIGNED:
       'No approver is set for requests below the expense threshold. An administrator must choose one in Settings → Sub-threshold approver. (Approver 1 and 2 do not apply below the threshold.)',
+    // Nobody approves their own requisition, so an approver raising one needs someone to stand in.
+    PAYLOAD_TOO_LARGE: 'That file is too large. Choose a smaller one and try again.',
+    SELF_APPROVAL_FORBIDDEN:
+      'You cannot approve your own requisition. Another approver has to act on this one.',
+    SELF_APPROVAL_NO_SUBSTITUTE:
+      'You are the approver for this requisition, and nobody is configured to approve it in your place. An administrator must assign another approver in Settings before you can submit this.',
     UNAUTHENTICATED: 'Please sign in.',
     INVALID_CREDENTIALS: 'Email or password is incorrect.',
     TOKEN_EXPIRED: 'Your session expired. Please sign in again.',

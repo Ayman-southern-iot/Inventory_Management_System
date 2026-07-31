@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger, type OnApplicationShutdown } from '@nestjs/
 import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import { dirname, extname, join, resolve } from 'node:path';
+import { dirname, extname, join, resolve, sep } from 'node:path';
 import puppeteer, { type Browser } from 'puppeteer';
 import { HttpStatus } from '@nestjs/common';
 import { ErrorCode } from '@ims/shared';
@@ -10,13 +10,18 @@ import { CONFIG, type AppConfig } from '../../config';
 import { DomainError } from '../../common/errors';
 
 export class PdfRenderFailedError extends DomainError {
-  constructor(cause: string) {
-    // The caller gets a stable code; the reason goes to the log, never to the user.
+  /**
+   * `reason` is kept as a field and deliberately **not** passed as `details`. DomainError's fourth
+   * argument is serialised straight into the response body, so passing it there shipped the
+   * Chromium launch failure — container paths, executable location, library-loading detail —
+   * to the caller. Same mistake PdfDownloadTokenInvalidError was fixed for; the log keeps it.
+   * Named `reason` rather than `cause` so it does not shadow `Error.cause`.
+   */
+  constructor(readonly reason: string) {
     super(
       ErrorCode.PDF_RENDER_FAILED,
       'The document could not be generated. Try again in a moment.',
       HttpStatus.INTERNAL_SERVER_ERROR,
-      { cause },
     );
   }
 }
@@ -112,7 +117,9 @@ export class PdfRendererService implements OnApplicationShutdown {
   absolutePathFor(relativePath: string): string {
     const base = resolve(this.config.pdf.storageDir);
     const absolute = resolve(join(base, relativePath));
-    if (!absolute.startsWith(base)) {
+    // `base + sep`, not a bare prefix check: `/storage/pdf-evil` starts with `/storage/pdf`
+    // but is a different directory. Same guard as FileStorageService.absolutePathFor.
+    if (absolute !== base && !absolute.startsWith(base + sep)) {
       throw new PdfRenderFailedError(`Refusing a path outside the storage directory`);
     }
     return absolute;

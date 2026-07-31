@@ -16,6 +16,13 @@ export const ErrorCode = {
   CONFLICT: 'CONFLICT',
   ACCOUNT_DEACTIVATED: 'ACCOUNT_DEACTIVATED',
   RATE_LIMITED: 'RATE_LIMITED',
+
+  /**
+   * An upload exceeded the configured ceiling. Distinct from INTERNAL because the multipart
+   * interceptor rejects the body before any handler runs — without its own code the user is told
+   * the server broke, when in fact their file is simply too big.
+   */
+  PAYLOAD_TOO_LARGE: 'PAYLOAD_TOO_LARGE',
   UNKNOWN_SETTING: 'UNKNOWN_SETTING',
 
   // Stock. These are the ones later phases branch on rather than just display.
@@ -42,6 +49,16 @@ export const ErrorCode = {
    * approver slots were unassigned while the slots screen showed them correctly filled in.
    */
   SUBTHRESHOLD_APPROVER_UNASSIGNED: 'SUBTHRESHOLD_APPROVER_UNASSIGNED',
+
+  /**
+   * The requester holds an approver slot on their own requisition and nobody is configured to
+   * stand in. Separate from the two codes above for the same reason they are separate from each
+   * other: the fix is "configure another approver", not "fill in the slot you already filled in".
+   */
+  SELF_APPROVAL_NO_SUBSTITUTE: 'SELF_APPROVAL_NO_SUBSTITUTE',
+
+  /** Deciding an approval on your own requisition. The backstop behind the submit-time rule. */
+  SELF_APPROVAL_FORBIDDEN: 'SELF_APPROVAL_FORBIDDEN',
 
   // BOM
   BOM_REQUISITION_NOT_APPROVED: 'BOM_REQUISITION_NOT_APPROVED',

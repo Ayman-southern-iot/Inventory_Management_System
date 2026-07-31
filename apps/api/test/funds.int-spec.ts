@@ -412,6 +412,27 @@ describe('funds and purchasing', () => {
     expect((await bystander.client.get(path)).status).toBe(403);
   });
 
+  /**
+   * The funding summary carries the same commercially sensitive detail as the invoice — vendor
+   * names, invoice numbers, purchase totals — so it needs the same set of readers. It shipped
+   * with no guard at all, and `GET /stock/ledger` is readable by everyone and returns the
+   * requisition ids that make the ids guessable-free. Found in the 6.6 security review.
+   */
+  it('restricts the funding summary to the same people as the invoice', async () => {
+    const req = await verifiable(5000, 4000);
+    const path = `/requisitions/${req.id}/funding`;
+
+    expect((await im.client.get(path)).status).toBe(200);
+    expect((await requester.client.get(path)).status).toBe(200);
+    expect((await approver.client.get(path)).status).toBe(200);
+
+    const bystander = await signIn([Role.GENERAL]);
+    const denied = await bystander.client.get(path);
+    expect(denied.status).toBe(403);
+    // And nothing about the purchase leaked in the refusal body.
+    expect(JSON.stringify(denied.body)).not.toContain('Techshop');
+  });
+
   /* --------------------------------------------------- receiving to stock */
 
   it('receives a verified purchase into stock, creating the catalogue product', async () => {

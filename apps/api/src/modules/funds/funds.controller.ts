@@ -32,6 +32,7 @@ import {
   type ReceiveIntoStockInput,
   type BorrowToUserInput,
 } from '@ims/shared';
+import { config } from '../../config';
 import { zodPipe } from '../../common/zod-validation.pipe';
 import { ConflictError, ValidationFailedError } from '../../common/errors';
 import { IdempotencyService } from '../../common/idempotency.service';
@@ -56,8 +57,17 @@ export class FundsController {
     private readonly idempotency: IdempotencyService,
   ) {}
 
+  /**
+   * "Wider" means the requester and this requisition's approvers as well as IM/Admin — not
+   * everyone. Without the check any authenticated user could read a requisition's vendors,
+   * invoice numbers and totals, and `GET /stock/ledger` hands out requisition ids to anyone.
+   */
   @Get('funding')
-  async funding(@Param('id', ParseUUIDPipe) id: string): Promise<RequisitionFunding> {
+  async funding(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() actor: RequestUser,
+  ): Promise<RequisitionFunding> {
+    await this.funds.assertCanReadFunding(id, actor);
     return this.funds.funding(id);
   }
 
@@ -118,7 +128,12 @@ export class FundsController {
   @Post('purchases/:purchaseId/invoice')
   @Roles(Role.INVENTORY_MANAGER, Role.ADMIN)
   @HttpCode(HttpStatus.OK)
-  @UseInterceptors(FileInterceptor('file'))
+  // The limit belongs on the interceptor, not only in FileStorageService: multer buffers the
+  // whole upload into memory before the handler runs, so a check that happens after it has
+  // finished cannot stop a 2GB body from exhausting the heap on a single-VM deployment.
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: config.uploads.maxDocumentBytes } }),
+  )
   async attachInvoice(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('purchaseId', ParseUUIDPipe) purchaseId: string,
@@ -146,7 +161,7 @@ export class FundsController {
     @CurrentUser() actor: RequestUser,
     @Res({ passthrough: true }) response: Response,
   ): Promise<StreamableFile> {
-    await this.funds.assertCanReadInvoice(id, actor);
+    await this.funds.assertCanReadFunding(id, actor);
     const { contents, mimeType, fileName } = await this.funds.readInvoice(id, purchaseId);
     response.setHeader('Content-Type', mimeType);
     response.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`);

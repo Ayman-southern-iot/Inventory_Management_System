@@ -391,7 +391,7 @@ export class FundsService {
    * because someone who sanctioned the spend has a legitimate interest in what it actually cost.
    * Nobody else — an invoice carries vendor pricing.
    */
-  async assertCanReadInvoice(
+  async assertCanReadFunding(
     requisitionId: string,
     actor: { id: string; roles: readonly Role[] },
   ): Promise<void> {
@@ -412,7 +412,7 @@ export class FundsService {
     throw new ForbiddenError('You cannot view the invoices on this requisition');
   }
 
-  /** The invoice bytes. Call `assertCanReadInvoice` first — this does no authorisation. */
+  /** The invoice bytes. Call `assertCanReadFunding` first — this does no authorisation. */
   async readInvoice(
     requisitionId: string,
     purchaseId: string,
