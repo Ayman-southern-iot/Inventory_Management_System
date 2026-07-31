@@ -64,7 +64,11 @@ services:
       migrate:
         condition: service_completed_successfully
     volumes:
-      - files:/app/storage                       # generated BOM PDFs + letterhead
+      - files:/app/storage                       # generated BOM PDFs, uploads, letterhead
+      # Read-only, and only so the monitoring check can stat the newest dump's mtime. Without
+      # this the backup-freshness check reports "not configured" forever and a backup job that
+      # quietly stopped looks exactly like a healthy system.
+      - ./backups:/backups:ro
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
       interval: 15s

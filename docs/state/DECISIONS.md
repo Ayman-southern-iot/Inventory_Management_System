@@ -409,3 +409,11 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
 - 2026-07-31 — Upload size limits moved onto the multipart interceptor. Multer buffers the whole
   body into memory before the handler runs, so the `FileStorageService` check could only report an
   oversized upload that had already landed — it could not stop one from exhausting the heap.
+- 2026-07-31 — `infra/.env.example` was missing `PDF_SIGNING_SECRET`, which has no default, so a
+  fresh production deploy would have crashed at boot. Found by running the real config validator
+  against the template rather than by reading it. The template is now boot-tested, and the same
+  check is worth repeating whenever a required variable is added.
+- 2026-07-31 — The api container now mounts `./backups` read-only. Without it `MONITOR_BACKUP_DIR`
+  could only ever be blank in production, which the health check reports as "not configured" and
+  passes — so the backup-freshness alarm built in 6.4 would have been inert exactly where it
+  matters, and a stopped cron job would have looked like a healthy system.
