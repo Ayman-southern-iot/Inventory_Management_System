@@ -13,7 +13,7 @@
       a mismatch raises an alert, not a log line.
       *Accept:* deliberately corrupting a placement in a test database triggers the alert.
 
-- [ ] **6.3 Backup and restore drill** — run `infra/backup.sh`, wipe a scratch environment, restore
+- [x] **6.3 Backup and restore drill** — run `infra/backup.sh`, wipe a scratch environment, restore
       with `infra/restore.sh`, log in and verify data. Document the elapsed time.
       *Accept:* the drill is written up in `docs/adr/` or `docs/state/DECISIONS.md` with the actual
       restore duration, not an estimate.

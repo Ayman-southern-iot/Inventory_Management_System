@@ -355,3 +355,13 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   an unconditional `returned_qty - quantity` with a status captured before the claim; a second
   partial return landing in between made it subtract from the newer total and stamp the older
   status back. A hand-rolled compensation is the bug, so leaving it available invites its return.
+- 2026-07-31 — The backup script now verifies the archive it just wrote before pruning anything.
+  `pg_dump` exiting 0 only means it finished writing; a truncated file or a full disk still exits 0
+  and leaves a useless artefact nobody finds until a restore. The check reads the dump back with
+  `pg_restore --list`, and both branches were tested — a good dump passes, a truncated one fails.
+  Note `pg_restore --list /dev/stdin` rejects *good* archives, so the dump is copied into the
+  container and read from a real path; the tidier-looking form would have failed every backup.
+- 2026-07-31 — The restore drill is written up in `docs/state/BACKUP-DRILL.md` with measured times
+  (4.2s end to end at 11 MB) rather than estimates, and with an explicit list of what it did *not*
+  prove. The largest remaining risk is recorded as G-16: backups still live on the same VM as the
+  database, because choosing where they go offsite is the operator's decision, not mine.
