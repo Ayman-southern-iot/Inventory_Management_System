@@ -365,3 +365,20 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   (4.2s end to end at 11 MB) rather than estimates, and with an explicit list of what it did *not*
   prove. The largest remaining risk is recorded as G-16: backups still live on the same VM as the
   database, because choosing where they go offsite is the operator's decision, not mine.
+- 2026-07-31 — The monitoring floor checks four things: database, disk headroom, whether the
+  storage directory is genuinely writable, and how old the newest backup is. The last three are
+  the point — none of them raises an error on its own. A full disk surfaces as an unrelated 500,
+  a read-only volume fails only uploads, and a backup job that stopped looks exactly like a
+  healthy system until someone needs a restore.
+- 2026-07-31 — The storage check writes and deletes a real file rather than calling `access()`.
+  A full or read-only-remounted volume passes a permission check and still fails every upload.
+- 2026-07-31 — Disk headroom is measured from blocks available *to this user*, not total free.
+  Most filesystems reserve a few percent for root, so a naive used/total figure reads comfortable
+  while the process can no longer write.
+- 2026-07-31 — Monitoring alerts fire on the **transition** into failure, not every sweep.
+  Re-notifying hourly that the disk is still 84% full is how a badge becomes wallpaper and the
+  next real alert goes unread with it. Delivery is in-app only (OQ-10, no SMTP), which is a real
+  limitation: an admin who never signs in never sees it. The log line is written regardless.
+- 2026-07-31 — Disk and backup detail sit behind an admin-only endpoint, not on public `/health`.
+  Free space and backup timing tell an attacker when the host is under pressure and whether anyone
+  is watching; the compose healthcheck needs one bit and already has it.

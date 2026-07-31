@@ -85,6 +85,15 @@ const rawSchema = z.object({
   /** Scanned invoices, which are legitimately larger. */
   UPLOAD_MAX_DOCUMENT_BYTES: z.coerce.number().int().min(1024).max(50_000_000).default(10_000_000),
 
+  // --- Monitoring floor (Phase 06 task 6.4) ------------------------------------
+  // Thresholds, not literals: what counts as "nearly full" depends on the volume, and how stale
+  // a backup may be depends on how often cron runs it.
+  MONITOR_DISK_WARN_PERCENT: z.coerce.number().int().min(50).max(99).default(80),
+  /** Nightly at 02:00 plus slack. Anything older means the job stopped and nobody noticed. */
+  MONITOR_BACKUP_MAX_AGE_HOURS: z.coerce.number().int().min(1).max(720).default(26),
+  /** Where infra/backup.sh writes. Blank disables the check — dev machines take no backups. */
+  MONITOR_BACKUP_DIR: z.string().default(''),
+
   // --- Company identity (printed on every BOM) ---------------------------------
   // Configuration, not literals: another deployment is another company, and the address is the
   // sort of thing that changes with an office move rather than a release.
@@ -191,6 +200,11 @@ export interface AppConfig {
   };
   /** Keyed by `SettingDefinition.seedEnvVar`; consumed once, on first boot. */
   readonly settingSeeds: Readonly<Record<string, unknown>>;
+  readonly monitoring: {
+    readonly diskWarnPercent: number;
+    readonly backupMaxAgeHours: number;
+    readonly backupDir: string;
+  };
   readonly reportingTimeZone: string;
   readonly company: {
     readonly name: string;
@@ -287,6 +301,11 @@ export function buildConfig(source: Record<string, string | undefined>): AppConf
             .filter(Boolean)
         : '',
       SETTING_AUDIT_RETENTION_DAYS: env.SETTING_AUDIT_RETENTION_DAYS,
+    }),
+    monitoring: Object.freeze({
+      diskWarnPercent: env.MONITOR_DISK_WARN_PERCENT,
+      backupMaxAgeHours: env.MONITOR_BACKUP_MAX_AGE_HOURS,
+      backupDir: env.MONITOR_BACKUP_DIR,
     }),
     reportingTimeZone: env.REPORTING_TIME_ZONE,
     company: Object.freeze({

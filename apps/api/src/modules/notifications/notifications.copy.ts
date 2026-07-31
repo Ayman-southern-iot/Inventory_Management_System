@@ -170,6 +170,13 @@ export const NOTIFICATION_COPY: Record<NotificationType, NotificationTemplate> =
     body: (c) => (c.quantity === null || c.quantity === undefined ? null : `${c.quantity} left`),
   },
 
+  /* --------------------------------------------------------------- system */
+  'system.check_failed': {
+    severity: 'action_required',
+    title: (ref) => `System check failed: ${ref}`,
+    body: (c) => c.note ?? null,
+  },
+
   /* ------------------------------------------------------------ delegation */
   'delegation.granted': {
     severity: 'info',

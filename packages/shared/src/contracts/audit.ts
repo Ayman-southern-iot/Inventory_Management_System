@@ -106,6 +106,7 @@ export const AUDIT_ACTIONS = [
   'bom.void',
   // System
   'system.reminder_run',
+  'system.check_failed',
   /**
    * Recorded by the retention job when it removes expired rows. Always enabled and never
    * purged away by its own cutoff — deleting audit history without leaving a trace of the

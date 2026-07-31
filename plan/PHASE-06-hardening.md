@@ -18,7 +18,7 @@
       *Accept:* the drill is written up in `docs/adr/` or `docs/state/DECISIONS.md` with the actual
       restore duration, not an estimate.
 
-- [ ] **6.4 Monitoring floor** — `/health` endpoint, uptime check, disk-above-80% cron, backup
+- [x] **6.4 Monitoring floor** — `/health` endpoint, uptime check, disk-above-80% cron, backup
       success notification.
       *Accept:* stopping the database makes the health check fail within a minute.
 

@@ -55,6 +55,8 @@ export const NOTIFICATION_TYPES = [
   'bom.voided',
   // Stock / inventory
   'stock.low',
+  /** A monitoring check failed — disk, storage or backups. Admin-only, and rare by design. */
+  'system.check_failed',
   // Delegation
   'delegation.granted',
   'delegation.revoked',
