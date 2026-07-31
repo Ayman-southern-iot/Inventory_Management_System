@@ -17,6 +17,7 @@ import { messageForError } from '@/lib/error-message';
 import { ROUTES } from '@/routes/paths';
 import { useAuth } from '@/features/auth/auth-context';
 import { ApprovalTracker } from './components/ApprovalTracker';
+import { LifecycleTracker } from './components/LifecycleTracker';
 import { FundsPanel } from '@/features/funds/FundsPanel';
 import { DecisionDialog } from './components/DecisionDialog';
 import {
@@ -77,19 +78,24 @@ export function RequisitionDetailPage() {
     );
   }, [requisition.data, user]);
 
-  /** An approval this viewer already granted and may still take back. */
+  /** An approval this viewer already decided and may still take back. */
   const withdrawable = useMemo(() => {
     if (!requisition.data || !user) return undefined;
     const detail = requisition.data;
+    // IM rejections land the requisition on IM_REVIEW when withdrawn; approver decisions
+    // (approval or rejection) return it to AWAITING_APPROVAL.
     const canWithdraw =
+      detail.status === RequisitionStatus.IM_REVIEW ||
       detail.status === RequisitionStatus.AWAITING_APPROVAL ||
       detail.status === RequisitionStatus.APPROVED;
     if (!canWithdraw) return undefined;
     return detail.approvals.find(
       (approval) =>
         approval.assignedUserId === user.id &&
-        approval.stage === ApprovalStage.APPROVER &&
-        approval.action === ApprovalAction.APPROVED,
+        // Both APPROVED and REJECTED are revocable: withdrawing exists precisely so the
+        // approver can think again and re-decide.
+        (approval.action === ApprovalAction.APPROVED ||
+          approval.action === ApprovalAction.REJECTED),
     );
   }, [requisition.data, user]);
 
@@ -297,6 +303,12 @@ export function RequisitionDetailPage() {
                 <ApprovalTracker requisition={detail} />
               </Panel>
             </div>
+
+            {/* Full horizontal lifecycle tracker — sits above the funds panel because money
+                is only meaningful once the requisition has been approved. */}
+            <Panel className="p-5">
+              <LifecycleTracker requisition={detail} />
+            </Panel>
 
             {/* Renders itself only once a BOM exists — before that there is no money story. */}
             <FundsPanel requisition={detail} />

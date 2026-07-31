@@ -522,6 +522,55 @@ describe('requisitions and approvals', () => {
         .send({ reason: 'nothing to withdraw' });
       expect(withdrawn.status).toBe(409);
     });
+
+    it('lets an approver withdraw a rejection and returns the chain to awaiting approval', async () => {
+      const created = await draft(5_000);
+      let detail = (await requester.client.post(`/requisitions/${created.body.id}/submit`).send())
+        .body;
+      detail = (
+        await im.client
+          .post(
+            `/requisitions/approvals/${approvalOf(detail, ApprovalStage.INVENTORY_MANAGER).id}/decision`,
+          )
+          .send({ approve: true })
+      ).body;
+
+      const approval = approvalOf(detail, ApprovalStage.APPROVER, 1).id;
+      await approver1.client.post(`/requisitions/approvals/${approval}/decision`).send({ approve: false });
+      const after = await approver1.client
+        .post(`/requisitions/approvals/${approval}/withdraw`)
+        .send({ reason: 'changed my mind' });
+
+      expect(after.status).toBe(200);
+      expect(after.body).toBeDefined();
+      expect(after.body.status).toBe(RequisitionStatus.AWAITING_APPROVAL);
+      expect(
+        (after.body.approvals as Array<{ id: string; action: string }>).find((a) => a.id === approval)
+          ?.action,
+      ).toBe(ApprovalAction.WITHDRAWN);
+      // The withdrawal event records the stage so the timeline can distinguish IM vs approver.
+      const types = (after.body.events as Array<{ eventType: string }>).map((e) => e.eventType);
+      expect(types).toContain(RequisitionEventType.APPROVER_WITHDREW);
+    });
+
+    it('lets the IM withdraw a rejection and returns the chain to IM review', async () => {
+      const created = await draft(5_000);
+      const detail = (await requester.client.post(`/requisitions/${created.body.id}/submit`).send())
+        .body;
+      const imApproval = approvalOf(detail, ApprovalStage.INVENTORY_MANAGER).id;
+
+      await im.client.post(`/requisitions/approvals/${imApproval}/decision`).send({ approve: false });
+      const after = await im.client
+        .post(`/requisitions/approvals/${imApproval}/withdraw`)
+        .send({ reason: 'wrong call' });
+
+      expect(after.status).toBe(200);
+      expect(after.body.status).toBe(RequisitionStatus.IM_REVIEW);
+      expect(
+        (after.body.approvals as Array<{ id: string; action: string }>).find((a) => a.id === imApproval)
+          ?.action,
+      ).toBe(ApprovalAction.WITHDRAWN);
+    });
   });
 
   describe('delegation (task 3.5)', () => {

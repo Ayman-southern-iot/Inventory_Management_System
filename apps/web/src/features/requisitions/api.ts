@@ -34,6 +34,11 @@ export function useRequisition(id: string) {
     queryKey: queryKeys.requisitions.detail(id),
     queryFn: ({ signal }) => api.get<RequisitionDetail>(`/requisitions/${id}`, signal),
     enabled: id.length > 0,
+    // 15s is short enough that the lifecycle tracker feels live, but long enough that an
+    // idle page doesn't hammer the API. Mutations on this requisition also call
+    // `setQueryData` directly, so this is the fallback for changes made by other users
+    // (e.g. accounts funding the requisition, or an approver acting in another tab).
+    refetchInterval: 15_000,
   });
 }
 

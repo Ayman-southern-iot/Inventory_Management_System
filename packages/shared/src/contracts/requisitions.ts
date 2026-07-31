@@ -27,8 +27,13 @@ export const requisitionStatusSchema = z.enum(
   Object.values(RequisitionStatus) as [RequisitionStatus, ...RequisitionStatus[]],
 );
 
-/** Stages where an approver may still withdraw — up to BOM generation (domain-context.md). */
+/** Stages where an approver may still withdraw — up to BOM generation (domain-context.md).
+ *  `REJECTED` lets a withdrawn rejection resurrect the chain; `IM_REVIEW` is the post-resurrection
+ *  landing for an IM rejection withdrawal; `APPROVED` and the pre-approval `AWAITING_APPROVAL`
+ *  round out the lifecycle. */
 export const WITHDRAWABLE_STATUSES: readonly RequisitionStatus[] = [
+  RequisitionStatus.REJECTED,
+  RequisitionStatus.IM_REVIEW,
   RequisitionStatus.AWAITING_APPROVAL,
   RequisitionStatus.APPROVED,
 ];

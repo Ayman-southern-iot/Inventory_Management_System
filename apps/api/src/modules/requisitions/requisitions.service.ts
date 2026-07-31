@@ -477,8 +477,11 @@ export class RequisitionsService {
     const actingFor = await this.resolveActingFor(approval.assigned_user_id, actorId);
     if (!actingFor) throw new NotYourApprovalError();
 
-    if (approval.action !== ApprovalAction.APPROVED) {
-      throw new ConflictError('Only an approval that was granted can be withdrawn');
+    if (
+      approval.action !== ApprovalAction.APPROVED &&
+      approval.action !== ApprovalAction.REJECTED
+    ) {
+      throw new ConflictError('Only an approval that was granted or refused can be withdrawn');
     }
 
     const actor = await this.users.findAuthRecordById(actorId);
@@ -503,25 +506,26 @@ export class RequisitionsService {
           action: ApprovalAction.WITHDRAWN,
           actedBy: actorId,
           note: input.reason,
-          expectedActions: [ApprovalAction.APPROVED],
+          expectedActions: [ApprovalAction.APPROVED, ApprovalAction.REJECTED],
         },
         tx,
       );
       if (!claimed) throw new ApprovalAlreadyActedError();
 
-      // Back to awaiting approval: the chain is incomplete again, whatever it was before.
-      await this.repo.setStatus(
-        tx,
-        approval.requisition_id,
-        RequisitionStatus.AWAITING_APPROVAL,
-        false,
-      );
+      // Back to the right "in flight" stage for the chain. Withdrawing an IM rejection
+      // resurrects the requisition to IM_REVIEW so the IM can re-decide; withdrawing an
+      // approver decision (approval or rejection) sends it back to AWAITING_APPROVAL.
+      const nextStatus =
+        approval.stage === ApprovalStage.INVENTORY_MANAGER
+          ? RequisitionStatus.IM_REVIEW
+          : RequisitionStatus.AWAITING_APPROVAL;
+      await this.repo.setStatus(tx, approval.requisition_id, nextStatus, false);
       await this.repo.appendEvent(
         tx,
         approval.requisition_id,
         RequisitionEventType.APPROVER_WITHDREW,
         actorId,
-        { reason: input.reason, slot: approval.slot },
+        { reason: input.reason, stage: approval.stage, slot: approval.slot },
       );
       await this.audit.record(
         {

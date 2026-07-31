@@ -654,6 +654,22 @@ export const t = {
     notReached: 'Not reached yet',
     skipped: 'Skipped',
     history: 'History',
+    // horizontal lifecycle tracker (full requisition lifecycle)
+    lifecycleHeading: 'Lifecycle',
+    lifecycleRejected: 'Rejected',
+    lifecycleCancelled: 'Cancelled',
+    lifecycleDoneAt: 'Completed {when}',
+    lifecycleStages: {
+      submitted: 'Submitted',
+      imReview: 'IM review',
+      approved: 'Approved',
+      bom: 'BOM',
+      accounts: 'Accounts',
+      funded: 'Funded',
+      purchased: 'Purchased',
+      verified: 'Verified',
+      inStock: 'In stock',
+    },
     // filters
     filterAll: 'All',
     filterAwaitingMe: 'Waiting on me',
