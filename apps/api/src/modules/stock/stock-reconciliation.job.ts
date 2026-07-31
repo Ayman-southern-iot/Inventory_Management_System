@@ -21,8 +21,42 @@ export class StockReconciliationJob {
   // 02:00 Asia/Dhaka — after the working day, before anyone arrives to act on it.
   @Cron(CronExpression.EVERY_DAY_AT_2AM, { name: 'stock-reconciliation' })
   async run(): Promise<void> {
-    const mismatches = await this.reconcile();
-    if (mismatches === 0) this.logger.log('Stock reconciliation clean');
+    // Both checks always run. Reporting only the first would hide a reservation problem behind
+    // an unrelated quantity problem, and these two fail for completely different reasons.
+    const [quantity, reservations] = await Promise.all([
+      this.reconcile(),
+      this.reconcileReservations(),
+    ]);
+    if (quantity === 0 && reservations === 0) this.logger.log('Stock reconciliation clean');
+  }
+
+  /**
+   * The reservation invariant: reserved units are held by a pending borrow, or by nothing.
+   *
+   * Separate from the quantity check because it catches a different failure. `reserved_qty` never
+   * appears in the ledger, so `SUM(ledger) = quantity` balances perfectly while units sit reserved
+   * against a borrow that was rejected, cancelled or issued minutes ago (gap G-14). The symptom
+   * reaches a human as "the shelf has six but the system will only lend me four", which is a
+   * miserable thing to debug without this line in a log.
+   */
+  async reconcileReservations(): Promise<number> {
+    const mismatches = await this.stock.findReservationMismatches();
+    if (mismatches.length === 0) return 0;
+
+    for (const row of mismatches) {
+      const drift = row.reserved_qty - row.expected_qty;
+      this.logger.error(
+        `RESERVATION MISMATCH product=${row.product_id} compartment=${row.compartment_id} ` +
+          `reserved=${row.reserved_qty} pendingBorrows=${row.expected_qty} drift=${drift} ` +
+          `(${drift > 0 ? 'units held by nothing' : 'promised more than is reserved'})`,
+      );
+    }
+    this.logger.error(
+      `Stock reconciliation found ${mismatches.length} reservation mismatch(es). ` +
+        'Pending borrow requests are authoritative; correct by cancelling the phantom request or ' +
+        're-reserving, never by editing reserved_qty directly.',
+    );
+    return mismatches.length;
   }
 
   /** Exposed so an admin endpoint or a test can run it on demand. Returns the mismatch count. */

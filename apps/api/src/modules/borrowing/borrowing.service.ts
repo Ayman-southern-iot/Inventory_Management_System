@@ -170,10 +170,14 @@ export class BorrowingService {
 
     const nextStatus = input.approve ? BorrowStatus.ISSUED : BorrowStatus.REJECTED;
     const action = input.approve ? 'borrowing.approve' : 'borrowing.reject';
-    // Audit row commits atomically with the status flip. `stock.issue` / `stock.release` are
-    // each their own transaction (they hold the placement row lock) — so we write the audit row
-    // first, then perform the stock move; if the stock move fails the audit row's transaction
-    // has already committed the decision, which we then revert.
+    // One transaction for the whole decision: the claim, the audit row, the notification **and**
+    // the stock movement.
+    //
+    // This used to commit the status first and move stock afterwards, unwinding by hand if the
+    // move failed. The `catch` covered a failing query but not a crash, a restart or a dropped
+    // connection in the gap — and the residue was invisible, because a stranded `reserved_qty`
+    // never appears in the ledger and `SUM(ledger) = quantity` stays balanced (gap G-14). The
+    // stock methods take the caller's transaction now, so there is no gap to fall into.
     await this.db.transaction().execute(async (tx) => {
       const didClaim = await this.repo.claimPendingDecision(
         id,
@@ -222,34 +226,22 @@ export class BorrowingService {
         },
         tx,
       );
-    });
 
-    try {
+      const movement = {
+        productId: request.product_id,
+        compartmentId: request.compartment_id,
+        quantity: request.quantity,
+      };
+      const provenance = { performedBy: actorId, refType: BORROW_REF_TYPE, refId: id };
+
+      // Approving issues the stock; rejecting releases the reservation. Either way it rides on
+      // `tx`, so a failure rolls the decision back with it — no compensating update needed.
       if (input.approve) {
-        await this.stock.issue(
-          {
-            productId: request.product_id,
-            compartmentId: request.compartment_id,
-            quantity: request.quantity,
-          },
-          { performedBy: actorId, refType: BORROW_REF_TYPE, refId: id },
-        );
+        await this.stock.issue(movement, provenance, tx);
       } else {
-        await this.stock.release(
-          {
-            productId: request.product_id,
-            compartmentId: request.compartment_id,
-            quantity: request.quantity,
-          },
-          { performedBy: actorId, refType: BORROW_REF_TYPE, refId: id },
-        );
+        await this.stock.release(movement, provenance, tx);
       }
-    } catch (error) {
-      // The stock move failed after the row was claimed. Put the request back so it is visible
-      // in the pending list again rather than sitting in a status the shelf does not agree with.
-      await this.repo.revertToPending(id);
-      throw error;
-    }
+    });
 
     return this.requireView(id);
   }
@@ -342,9 +334,15 @@ export class BorrowingService {
         },
         tx,
       );
-    });
 
-    try {
+      // Both the stock movement and the `borrow_returns` row ride on `tx`.
+      //
+      // This used to run them after the claim committed, unwinding with `rollbackReturn` on
+      // failure — an unconditional `returned_qty - quantity` plus a status read from *before*
+      // the claim. A second partial return landing in between made that compensation subtract
+      // from the newer total and stamp the older status back, leaving `returned_qty` and
+      // `status` disagreeing with `borrow_returns` (gap G-15). There is nothing to compensate
+      // now, so `rollbackReturn` is gone.
       await this.stock.returnStock(
         {
           productId: request.product_id,
@@ -352,21 +350,19 @@ export class BorrowingService {
           quantity: input.quantity,
         },
         { performedBy: actorId, refType: BORROW_REF_TYPE, refId: id },
+        tx,
       );
-      await this.repo.insertReturn({
-        borrowRequestId: id,
-        quantity: input.quantity,
-        compartmentId: input.compartmentId,
-        receivedBy: actorId,
-        conditionNote: input.conditionNote,
-      });
-    } catch (error) {
-      await this.repo.rollbackReturn(id, {
-        quantity: input.quantity,
-        status: request.status,
-      });
-      throw error;
-    }
+      await this.repo.insertReturn(
+        {
+          borrowRequestId: id,
+          quantity: input.quantity,
+          compartmentId: input.compartmentId,
+          receivedBy: actorId,
+          conditionNote: input.conditionNote,
+        },
+        tx,
+      );
+    });
 
     return this.requireView(id);
   }
@@ -509,16 +505,20 @@ export class BorrowingService {
         },
         tx,
       );
-    });
 
-    await this.stock.release(
-      {
-        productId: request.product_id,
-        compartmentId: request.compartment_id,
-        quantity: request.quantity,
-      },
-      { performedBy: actorId, refType: BORROW_REF_TYPE, refId: id },
-    );
+      // Same transaction as the cancellation. Releasing afterwards left a window in which the
+      // request was CANCELLED but its units were still reserved against it — a reservation held
+      // by nothing, which is what `reconcileReservations` now detects (G-14).
+      await this.stock.release(
+        {
+          productId: request.product_id,
+          compartmentId: request.compartment_id,
+          quantity: request.quantity,
+        },
+        { performedBy: actorId, refType: BORROW_REF_TYPE, refId: id },
+        tx,
+      );
+    });
 
     return this.requireView(id);
   }

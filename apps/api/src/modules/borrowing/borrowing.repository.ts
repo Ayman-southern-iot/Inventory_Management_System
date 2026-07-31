@@ -140,22 +140,10 @@ export class BorrowingRepository {
     return Number(result.numUpdatedRows ?? 0n) === 1;
   }
 
-  async rollbackReturn(
-    id: string,
-    values: { quantity: number; status: BorrowStatus },
-    tx?: Tx,
-  ): Promise<void> {
-    const writer: Writer = tx ?? this.db;
-    await writer
-      .updateTable('borrow_requests')
-      .set((eb) => ({
-        returned_qty: eb('returned_qty', '-', values.quantity),
-        status: values.status,
-        returned_at: null,
-      }))
-      .where('id', '=', id)
-      .execute();
-  }
+  // `rollbackReturn` used to live here: an unconditional `returned_qty - quantity` plus a status
+  // captured before the claim, used to unwind a return whose stock movement failed. It was
+  // removed with G-15 — the return and its stock movement now share one transaction, so there is
+  // nothing to compensate. Reintroducing a hand-rolled compensation is the bug, not the fix.
 
   async revertToPending(id: string, tx?: Tx): Promise<void> {
     const writer: Writer = tx ?? this.db;

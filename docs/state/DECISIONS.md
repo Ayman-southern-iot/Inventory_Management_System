@@ -342,3 +342,16 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   departments list. `resetData` cannot delete departments that requisitions reference, so the test
   database accumulates them and the row eventually falls off page one. The spec's subject is the
   permission boundary; ownership of the list's contents belongs to the departments spec.
+- 2026-07-31 — The nightly job now checks a second invariant: `stock_placements.reserved_qty` must
+  equal the total quantity of PENDING borrows for that product and compartment. `reserved_qty`
+  never appears in the ledger, so the original `SUM(ledger) = quantity` check balanced perfectly
+  while units sat reserved against a borrow that had been rejected minutes earlier. That blind
+  spot was G-14, and it reaches a human as "the shelf has six but the system will only lend four".
+- 2026-07-31 — G-14/G-15 fixed at the source, not just detected: `borrowing.decide`, `cancel` and
+  `recordReturn` now do their stock movement inside the same transaction as the status change.
+  `StockService.issue`, `release`, `returnStock`, `receive` and `receiveAndHold` all take an
+  optional transaction, so there is no window to fall into and nothing to compensate.
+- 2026-07-31 — `BorrowingRepository.rollbackReturn` deleted rather than left unused. It performed
+  an unconditional `returned_qty - quantity` with a status captured before the claim; a second
+  partial return landing in between made it subtract from the newer total and stamp the older
+  status back. A hand-rolled compensation is the bug, so leaving it available invites its return.

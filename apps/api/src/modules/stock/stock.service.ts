@@ -3,6 +3,7 @@ import { sql } from 'kysely';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
 import {
+  BorrowStatusValue,
   StockMovementType,
   type Database,
   type StockLedgerTable,
@@ -322,10 +323,14 @@ export class StockService {
   }
 
   /** Releases a reservation — the borrow was rejected or cancelled. */
-  async release(input: ReserveInput, _context: StockContext): Promise<PlacementRow> {
+  async release(
+    input: ReserveInput,
+    _context: StockContext,
+    existingTx?: Tx,
+  ): Promise<PlacementRow> {
     this.assertPositive(input.quantity);
 
-    return this.db.transaction().execute(async (tx) => {
+    const run = async (tx: Tx): Promise<PlacementRow> => {
       const placement = await this.lockPlacement(tx, input.productId, input.compartmentId);
       if (!placement) throw new NotFoundError('Stock in that compartment');
 
@@ -336,7 +341,9 @@ export class StockService {
       }
 
       return this.applyDelta(tx, placement.id, 0, -input.quantity);
-    });
+    };
+
+    return existingTx ? run(existingTx) : this.db.transaction().execute(run);
   }
 
   /**
@@ -386,10 +393,14 @@ export class StockService {
   }
 
   /** A borrowed item comes back. Increments quantity only — the reservation ended at issue. */
-  async returnStock(input: ReserveInput, context: StockContext): Promise<PlacementRow> {
+  async returnStock(
+    input: ReserveInput,
+    context: StockContext,
+    existingTx?: Tx,
+  ): Promise<PlacementRow> {
     this.assertPositive(input.quantity);
 
-    return this.db.transaction().execute(async (tx) => {
+    const run = async (tx: Tx): Promise<PlacementRow> => {
       await this.assertCompartmentUsable(tx, input.compartmentId);
 
       const placement = await this.lockOrCreatePlacement(
@@ -409,7 +420,9 @@ export class StockService {
       });
 
       return updated;
-    });
+    };
+
+    return existingTx ? run(existingTx) : this.db.transaction().execute(run);
   }
 
   /**
@@ -516,6 +529,54 @@ export class StockService {
    * per-product check would pass while two compartments were individually wrong in opposite
    * directions, which is exactly the state a bad MOVE leaves behind.
    */
+  /**
+   * The second invariant: every reserved unit is held by a borrow that is still pending.
+   *
+   * `reserved_qty` is not in the ledger — a reservation changes availability, not the physical
+   * shelf — so the quantity check below cannot see it drift. That blind spot is exactly gap G-14:
+   * a borrow whose status commits in one transaction and whose stock moves in another can leave
+   * units reserved forever with no request holding them, and `SUM(ledger) = quantity` stays
+   * perfectly balanced the whole time. Nobody notices until an item that is physically on the
+   * shelf refuses to be borrowed.
+   *
+   * The rule: for each (product, compartment), `reserved_qty` must equal the total quantity of
+   * borrows in PENDING. Anything else is either a stranded reservation (reserved too much) or a
+   * promise the stock cannot keep (reserved too little).
+   */
+  async findReservationMismatches(): Promise<
+    Array<{
+      product_id: string;
+      compartment_id: string;
+      reserved_qty: number;
+      expected_qty: number;
+    }>
+  > {
+    const result = await sql<{
+      product_id: string;
+      compartment_id: string;
+      reserved_qty: number;
+      expected_qty: number;
+    }>`
+      WITH pending AS (
+        SELECT product_id, compartment_id, SUM(quantity)::int AS expected_qty
+        FROM borrow_requests
+        WHERE status = ${BorrowStatusValue.PENDING}
+        GROUP BY product_id, compartment_id
+      )
+      SELECT
+        COALESCE(p.product_id, b.product_id)         AS product_id,
+        COALESCE(p.compartment_id, b.compartment_id) AS compartment_id,
+        COALESCE(p.reserved_qty, 0)                  AS reserved_qty,
+        COALESCE(b.expected_qty, 0)                  AS expected_qty
+      FROM stock_placements p
+      FULL OUTER JOIN pending b
+        ON p.product_id = b.product_id AND p.compartment_id = b.compartment_id
+      WHERE COALESCE(p.reserved_qty, 0) <> COALESCE(b.expected_qty, 0)
+    `.execute(this.db);
+
+    return result.rows;
+  }
+
   async findReconciliationMismatches(): Promise<
     Array<{ product_id: string; compartment_id: string; ledger_qty: number; placement_qty: number }>
   > {

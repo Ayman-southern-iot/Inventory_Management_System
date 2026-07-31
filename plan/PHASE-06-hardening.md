@@ -6,10 +6,10 @@
 
 ## Tasks
 
-- [ ] **6.1 Audit log UI** — admin-only, filterable by actor, entity, and date.
+- [x] **6.1 Audit log UI** — admin-only, filterable by actor, entity, and date.
       *Accept:* every state-changing action in phases 01–05 appears with actor and timestamp.
 
-- [ ] **6.2 Nightly invariant job** — `SUM(stock_ledger) = stock_placements.quantity` per product;
+- [x] **6.2 Nightly invariant job** — `SUM(stock_ledger) = stock_placements.quantity` per product;
       a mismatch raises an alert, not a log line.
       *Accept:* deliberately corrupting a placement in a test database triggers the alert.
 
