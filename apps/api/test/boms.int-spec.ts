@@ -136,6 +136,7 @@ describe('BOMs', () => {
       await requester.client.get(`/requisitions/${created.body.id}`)
     ).body as {
       id: string;
+      requisitionNo: string;
       items: Array<{ id: string; itemName: string; quantity: number; estimatedUnitPrice: number }>;
       approvedAmount: number;
       approvals: Array<{
@@ -460,6 +461,44 @@ describe('BOMs', () => {
       expect(list.body.items.length).toBeGreaterThan(0);
       expect(list.body.items[0].requisitionNos.length).toBe(1);
       expect(list.body.items[0].hasPdf).toBe(false);
+    });
+
+    /**
+     * The source numbers are resolved for the whole page in one grouped query rather than one
+     * query per row. That batching is only correct if each BOM gets its own sources back, so
+     * this uses two BOMs with different source counts — a grouping bug that hands every row the
+     * same list, or the wrong row's list, passes the single-BOM test above and fails here.
+     */
+    it('gives each BOM on a page its own source numbers, not the page\'s', async () => {
+      const solo = await approveRequisition(5000);
+      const pairA = await approveRequisition(1000, 'ItemA');
+      const pairB = await approveRequisition(2000, 'ItemB');
+
+      const soloBom = await im.client.post('/boms').send(generatePayload(solo.id, solo.items));
+      expect(soloBom.status).toBe(201);
+
+      const pairBom = await im.client.post('/boms').send({
+        requisitionIds: [pairA.id, pairB.id],
+        lines: [...pairA.items, ...pairB.items].map((item) => ({
+          requisitionItemId: item.id,
+          unitCost: 100,
+          vendor: 'Vendor',
+        })),
+      });
+      expect(pairBom.status).toBe(201);
+
+      const list = await im.client.get('/boms?limit=100');
+      expect(list.status).toBe(200);
+
+      // The test database accumulates BOMs across runs, so find our two by number rather than
+      // assuming anything about position or page size.
+      const find = (bomNo: string) =>
+        list.body.items.find((item: { bomNo: string }) => item.bomNo === bomNo);
+
+      expect(find(soloBom.body.bomNo).requisitionNos).toEqual([solo.requisitionNo]);
+      expect(find(pairBom.body.bomNo).requisitionNos.sort()).toEqual(
+        [pairA.requisitionNo, pairB.requisitionNo].sort(),
+      );
     });
 
     it('detail includes lines, sources, and the frozen footprints block', async () => {

@@ -284,9 +284,9 @@ export class BomsRepository {
       .select((eb) => eb.fn.countAll<number>().as('count'))
       .executeTakeFirst();
 
-    const items = await Promise.all(rows.map((row) => this.toBomWithSourceNos(row)));
+    const sourceNos = await this.sourceNosByBom(rows.map((row) => row.id));
     return {
-      items,
+      items: rows.map((row) => toBom(row, sourceNos.get(row.id) ?? [])),
       page: query.page,
       limit: query.limit,
       total: Number(counted?.count ?? 0),
@@ -294,17 +294,31 @@ export class BomsRepository {
   }
 
   /**
-   * Resolves the source `requisition_no`s onto each row so the list view shows "this BOM
-   * covers REQ-0042, REQ-0043" without a second round-trip.
+   * Resolves the source `requisition_no`s for a whole page of BOMs in one query, so the list
+   * view can show "this BOM covers REQ-0042, REQ-0043".
+   *
+   * Batched deliberately: doing this per row is an N+1 that costs 25 extra round trips on a
+   * default page, and it grows with the page size rather than staying flat.
    */
-  private async toBomWithSourceNos(row: BomRow): Promise<Bom> {
+  private async sourceNosByBom(bomIds: string[]): Promise<Map<string, string[]>> {
+    const byBom = new Map<string, string[]>();
+    if (bomIds.length === 0) return byBom;
+
     const sources = await this.db
       .selectFrom('bom_requisitions')
       .innerJoin('requisitions', 'requisitions.id', 'bom_requisitions.requisition_id')
-      .where('bom_requisitions.bom_id', '=', row.id)
-      .select('requisitions.requisition_no')
+      .where('bom_requisitions.bom_id', 'in', bomIds)
+      .select(['bom_requisitions.bom_id', 'requisitions.requisition_no'])
+      // Stable order, so the same BOM lists its sources the same way on every request.
+      .orderBy('requisitions.requisition_no')
       .execute();
-    return toBom(row, sources.map((source) => source.requisition_no));
+
+    for (const source of sources) {
+      const existing = byBom.get(source.bom_id);
+      if (existing) existing.push(source.requisition_no);
+      else byBom.set(source.bom_id, [source.requisition_no]);
+    }
+    return byBom;
   }
 
   /* --------------------------------------------------------------- detail */
