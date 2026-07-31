@@ -65,7 +65,11 @@ export function RequisitionDetailPage() {
     return detail.approvals.find(
       (approval) =>
         approval.assignedUserId === user.id &&
-        approval.action === ApprovalAction.PENDING &&
+        // Both PENDING and WITHDRAWN are decidable again: withdrawing exists precisely so the
+        // approver can think again and then act. The backend already accepts either
+        // (requisitions.service.ts `decide` -> `claimApproval`).
+        (approval.action === ApprovalAction.PENDING ||
+          approval.action === ApprovalAction.WITHDRAWN) &&
         ((approval.stage === ApprovalStage.INVENTORY_MANAGER &&
           detail.status === RequisitionStatus.IM_REVIEW) ||
           (approval.stage === ApprovalStage.APPROVER &&
@@ -226,8 +230,16 @@ export function RequisitionDetailPage() {
                       value={(detail.requestedAmount ?? 0).toLocaleString()}
                     />
                     <Figure
-                      label={t.requisitions.approved}
+                      label={t.requisitions.sanctioned}
                       value={(detail.approvedAmount ?? 0).toLocaleString()}
+                      hint={
+                        // Until at least one approver has acted, the sanctioned figure is just
+                        // a copy of the requested one — say so explicitly so the label "Sanctioned"
+                        // doesn't mislead in the same way "Approved" did.
+                        detail.approvals.every((a) => a.action !== ApprovalAction.APPROVED)
+                          ? t.requisitions.sanctionedHintPending
+                          : t.requisitions.sanctionedHintRevised
+                      }
                     />
                     {detail.requiredApproverCount !== null ? (
                       <Figure

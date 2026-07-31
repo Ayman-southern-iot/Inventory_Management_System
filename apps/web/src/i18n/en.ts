@@ -602,7 +602,12 @@ export const t = {
     freeText: 'Not in the catalogue',
     // money
     requested: 'Requested',
-    approved: 'Approved',
+    // Pre-approval, this column is seeded with the requested figure so the BOM has a number
+    // to print; an approver may revise it down. We label it "Sanctioned" so the UI does not
+    // claim an approver signed off before one has.
+    sanctioned: 'Sanctioned',
+    sanctionedHintPending: 'Defaults to the requested amount; approvers may revise down.',
+    sanctionedHintRevised: 'An approver revised this from the requested amount.',
     total: 'Total',
     thresholdNote: 'Threshold at submit',
     approverCount: 'Approvers required',
@@ -614,13 +619,22 @@ export const t = {
     approve: 'Approve',
     approveWithSignature: 'Approve with signature',
     approveWithoutSignature: 'Approve without signature',
-    noSignatureHint: 'Upload a signature on your account page to sign approvals.',
+    noSignatureHint: 'Upload a signature below to enable "Approve with signature".',
+    noSignatureTitle: 'No signature on file',
+    noSignatureBody:
+      'Upload one now to enable signing this approval. PNG or JPEG; the same file is reused for every approval until you replace it.',
+    uploadSignatureHere: 'Upload signature',
+    removeSignature: 'Remove signature',
+    signatureUploading: 'Uploading…',
+    signatureUploadedInline: 'Signature saved. You can now approve with signature.',
     reject: 'Reject',
     withdraw: 'Withdraw approval',
-    withdrawReason: 'Why are you withdrawing?',
+    withdrawReason: 'Why are you withdrawing? (You can still approve or reject again afterwards.)',
     decisionNote: 'Note',
-    reviseAmount: 'Revise the approved amount',
+    reviseAmount: 'Revise the sanctioned amount',
     reviseAmountHint: 'Leave blank to approve the full requested amount.',
+    reviseAmountOptIn: 'Revise the sanctioned amount',
+    reviseAmountOptInHint: 'Tick to enter a different figure; leave unticked to approve the full requested amount.',
     rejectWarning:
       'Rejecting ends the whole request. The other approvers will not be asked, and it cannot be reopened.',
     // results

@@ -213,7 +213,7 @@ export function RequisitionsPage({ mode }: { mode: Mode }) {
                       {requisition.approvedAmount !== null &&
                       requisition.approvedAmount !== requisition.requestedAmount ? (
                         <span className="block text-xs text-ink-subtle">
-                          {t.requisitions.approved}:{' '}
+                          {t.requisitions.sanctioned}:{' '}
                           {requisition.approvedAmount.toLocaleString()}
                         </span>
                       ) : null}
