@@ -49,7 +49,43 @@ const rawSchema = z.object({
   JWT_REFRESH_TTL_SECONDS: durationSecondsSchema.default(60 * 60 * 24 * 14),
 
   LOGIN_RATE_LIMIT_MAX_ATTEMPTS: z.coerce.number().int().min(1).default(5),
+  /**
+   * Legacy key kept for back-compat. New code reads `loginThrottle.baseWindowSeconds`
+   * and `loginThrottle.maxWindowSeconds` for the exponential backoff calculation. When both
+   * `LOGIN_RATE_LIMIT_WINDOW_SECONDS` and `LOGIN_THROTTLE_BASE_WINDOW_SECONDS` are set, the new
+   * value wins.
+   */
   LOGIN_RATE_LIMIT_WINDOW_SECONDS: durationSecondsSchema.default(300),
+
+  // --- Login exponential backoff (Phase 06 hardening) -------------------------
+  // Base of the exponential. After N failed attempts in the IP/email window, the lockout
+  // duration is `min(2^N × baseWindow, maxWindow)`. Caps prevent a long-running attacker from
+  // being locked out for hours.
+  LOGIN_THROTTLE_BASE_WINDOW_SECONDS: durationSecondsSchema.default(30),
+  LOGIN_THROTTLE_MAX_WINDOW_SECONDS: z.coerce.number().int().min(60).default(900),
+
+  // --- Throttler tiers (Phase 06 hardening) ------------------------------------
+  // Each tier is applied per-IP. `auth` is the strictest (login, refresh, password change,
+  // signature download). `public` covers routes that are reachable without a session (BOM PDF
+  // download, /health). `authenticated` is the budget for everything else. `loginBurst` is a
+  // fourth, separate counter layered on top of `auth` specifically for the password-spray
+  // shape — the burst limit and the credential backoff solve different problems.
+  THROTTLE_AUTH_LIMIT: z.coerce.number().int().min(1).max(10_000).default(10),
+  THROTTLE_AUTH_TTL_SECONDS: durationSecondsSchema.default(60),
+  THROTTLE_PUBLIC_LIMIT: z.coerce.number().int().min(1).max(10_000).default(60),
+  THROTTLE_PUBLIC_TTL_SECONDS: durationSecondsSchema.default(60),
+  THROTTLE_AUTHENTICATED_LIMIT: z.coerce.number().int().min(1).max(100_000).default(300),
+  THROTTLE_AUTHENTICATED_TTL_SECONDS: durationSecondsSchema.default(60),
+  /** Replaces the previously hardcoded 10/60s login burst limit on `POST /auth/login`. */
+  LOGIN_BURST_LIMIT: z.coerce.number().int().min(1).max(10_000).default(10),
+  LOGIN_BURST_TTL_SECONDS: durationSecondsSchema.default(60),
+
+  // --- Body size limits (Phase 06 hardening) -----------------------------------
+  // Explicit application-level caps. Multipart uploads are bounded separately at the
+  // `FileInterceptor` and inside `FileStorageService`; these only govern JSON and url-encoded
+  // bodies. Acceptable value syntax is whatever `bytes` accepts (e.g. `100kb`, `1mb`).
+  JSON_BODY_LIMIT: z.string().min(1).default('100kb'),
+  URLENCODED_BODY_LIMIT: z.string().min(1).default('100kb'),
 
   // First-boot seed values for `app_settings`. Read ONLY by the settings seeder — never at
   // the point of use, or the threshold becomes unchangeable without a redeploy.
@@ -197,6 +233,21 @@ export interface AppConfig {
     readonly accessTtlSeconds: number;
     readonly refreshTtlSeconds: number;
     readonly loginRateLimit: { readonly maxAttempts: number; readonly windowSeconds: number };
+    /** Capped exponential backoff applied to repeated failed logins. */
+    readonly loginThrottle: {
+      readonly baseWindowSeconds: number;
+      readonly maxWindowSeconds: number;
+    };
+  };
+  readonly throttling: {
+    readonly auth: { readonly limit: number; readonly ttlSeconds: number };
+    readonly public: { readonly limit: number; readonly ttlSeconds: number };
+    readonly authenticated: { readonly limit: number; readonly ttlSeconds: number };
+    readonly loginBurst: { readonly limit: number; readonly ttlSeconds: number };
+  };
+  readonly body: {
+    readonly jsonLimit: string;
+    readonly urlencodedLimit: string;
   };
   /** Keyed by `SettingDefinition.seedEnvVar`; consumed once, on first boot. */
   readonly settingSeeds: Readonly<Record<string, unknown>>;
@@ -285,6 +336,32 @@ export function buildConfig(source: Record<string, string | undefined>): AppConf
         maxAttempts: env.LOGIN_RATE_LIMIT_MAX_ATTEMPTS,
         windowSeconds: env.LOGIN_RATE_LIMIT_WINDOW_SECONDS,
       }),
+      loginThrottle: Object.freeze({
+        baseWindowSeconds: env.LOGIN_THROTTLE_BASE_WINDOW_SECONDS,
+        maxWindowSeconds: env.LOGIN_THROTTLE_MAX_WINDOW_SECONDS,
+      }),
+    }),
+    throttling: Object.freeze({
+      auth: Object.freeze({
+        limit: env.THROTTLE_AUTH_LIMIT,
+        ttlSeconds: env.THROTTLE_AUTH_TTL_SECONDS,
+      }),
+      public: Object.freeze({
+        limit: env.THROTTLE_PUBLIC_LIMIT,
+        ttlSeconds: env.THROTTLE_PUBLIC_TTL_SECONDS,
+      }),
+      authenticated: Object.freeze({
+        limit: env.THROTTLE_AUTHENTICATED_LIMIT,
+        ttlSeconds: env.THROTTLE_AUTHENTICATED_TTL_SECONDS,
+      }),
+      loginBurst: Object.freeze({
+        limit: env.LOGIN_BURST_LIMIT,
+        ttlSeconds: env.LOGIN_BURST_TTL_SECONDS,
+      }),
+    }),
+    body: Object.freeze({
+      jsonLimit: env.JSON_BODY_LIMIT,
+      urlencodedLimit: env.URLENCODED_BODY_LIMIT,
     }),
     settingSeeds: Object.freeze<Record<string, unknown>>({
       SETTING_EXPENSE_THRESHOLD_BDT: env.SETTING_EXPENSE_THRESHOLD_BDT,

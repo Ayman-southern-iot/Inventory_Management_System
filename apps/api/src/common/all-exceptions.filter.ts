@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { ErrorCode, type ApiErrorBody } from '@ims/shared';
-import { DomainError } from './errors';
+import { DomainError, RateLimitedError } from './errors';
 
 /**
  * The single place an error becomes an HTTP response. Every response is `{ code, message }`,
@@ -24,7 +24,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
 
-    const { status, body } = this.toResponse(exception);
+    const { status, body, retryAfterSeconds } = this.toResponse(exception);
 
     if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
       this.logger.error(
@@ -35,24 +35,41 @@ export class AllExceptionsFilter implements ExceptionFilter {
       this.logger.warn(`${request.method} ${request.url} -> ${status} ${body.code}`);
     }
 
+    if (retryAfterSeconds !== undefined && !response.headersSent) {
+      // RFC 7231 §7.1.3 — Retry-After is integer seconds (or HTTP-date). We always use seconds
+      // so clients and intermediaries don't need a clock to interpret it. Setting it only when
+      // we have a finite value avoids a `Retry-After: NaN` on malformed upstream errors.
+      response.setHeader('Retry-After', String(Math.ceil(retryAfterSeconds)));
+    }
+
     response.status(status).json(body);
   }
 
-  private toResponse(exception: unknown): { status: number; body: ApiErrorBody } {
+  private toResponse(
+    exception: unknown,
+  ): { status: number; body: ApiErrorBody; retryAfterSeconds?: number } {
     if (exception instanceof DomainError) {
       const payload = exception.getResponse() as ApiErrorBody;
-      return {
-        status: exception.getStatus(),
-        body: {
-          code: payload.code,
-          message: payload.message,
-          ...(payload.details === undefined ? {} : { details: payload.details }),
-        },
+      const body: ApiErrorBody = {
+        code: payload.code,
+        message: payload.message,
+        ...(payload.details === undefined ? {} : { details: payload.details }),
       };
+      const retryAfterSeconds =
+        exception instanceof RateLimitedError
+          ? this.retryAfterFromDetails(payload.details)
+          : undefined;
+      return { status: exception.getStatus(), body, retryAfterSeconds };
     }
 
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
+      // The Nest throttler throws `ThrottlerException` (a plain HttpException, status=429) and
+      // already writes its own `Retry-After-{name}` headers in `ThrottlerGuard.handleRequest`
+      // before throwing. We do NOT add a generic `Retry-After` here — doing so would duplicate
+      // the header and overwrite a more specific value with a less specific one. Clients reading
+      // the throttler's per-tier header continue to work; clients needing a single name can
+      // inspect either.
       return {
         status,
         body: { code: this.codeForStatus(status), message: exception.message },
@@ -63,6 +80,19 @@ export class AllExceptionsFilter implements ExceptionFilter {
       status: HttpStatus.INTERNAL_SERVER_ERROR,
       body: { code: ErrorCode.INTERNAL, message: 'Something went wrong' },
     };
+  }
+
+  /**
+   * Reads the `retryAfterSeconds` out of a `RateLimitedError.details`, defensively. A
+   * future-shaped payload (number, object, or any structurally wrong value) must NEVER become
+   * a `Retry-After: NaN` header — the absence of a header is a better signal than a wrong one.
+   */
+  private retryAfterFromDetails(details: unknown): number | undefined {
+    if (!details || typeof details !== 'object') return undefined;
+    const value = (details as { retryAfterSeconds?: unknown }).retryAfterSeconds;
+    return typeof value === 'number' && Number.isFinite(value) && value >= 0
+      ? value
+      : undefined;
   }
 
   private codeForStatus(status: number): string {

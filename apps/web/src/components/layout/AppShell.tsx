@@ -27,7 +27,7 @@ import { useAuth } from '@/features/auth/auth-context';
 import { Badge } from '@/components/ui/primitives';
 import { Button } from '@/components/ui/Button';
 import { ROUTES } from '@/routes/paths';
-import { AwaitingApprovalBadge } from './NavBadge';
+import { AwaitingApprovalBadge, PendingBorrowBadge } from './NavBadge';
 import { NotificationBell } from '@/features/notifications/NotificationBell';
 
 interface NavItem {
@@ -38,6 +38,8 @@ interface NavItem {
   roles?: Role[];
   /** Rendered at the end of the row — the approver's pending count. */
   badge?: boolean;
+  /** Rendered alongside the label — the IM/Admin's pending borrow count. */
+  borrowBadge?: boolean;
 }
 
 interface NavGroup {
@@ -70,7 +72,7 @@ const NAV: NavGroup[] = [
     label: t.nav.inventory,
     roles: [Role.INVENTORY_MANAGER, Role.ADMIN],
     items: [
-      { label: t.nav.borrowing, to: ROUTES.borrowing.all, icon: ClipboardList },
+      { label: t.nav.borrowing, to: ROUTES.borrowing.all, icon: ClipboardList, borrowBadge: true },
       { label: t.nav.allRequisitions, to: ROUTES.requisitions.all, icon: FileText },
       { label: t.nav.inventoryCategories, to: ROUTES.inventory.categories, icon: FolderTree },
       { label: t.nav.inventoryLocations, to: ROUTES.inventory.locations, icon: MapPin },
@@ -209,6 +211,7 @@ export function AppShell() {
                   <item.icon aria-hidden className="size-4" />
                   {item.label}
                   {item.badge ? <AwaitingApprovalBadge /> : null}
+                  {item.borrowBadge ? <PendingBorrowBadge /> : null}
                 </NavLink>
               ))}
             </div>

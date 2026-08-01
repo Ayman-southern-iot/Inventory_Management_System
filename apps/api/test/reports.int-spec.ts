@@ -50,11 +50,11 @@ describe('expense report', () => {
     expect(bucket.spent).toBe(6_500);
     expect(bucket.returned).toBe(1_500);
     // What the organisation is actually out of pocket.
-    expect(bucket.netFunded).toBe(6_500);
+    expect(bucket.netCash).toBe(6_500);
 
     // The totals are the sum of the rows, not a second query that could disagree with them.
     expect(report.totals.requested).toBe(bucket.requested);
-    expect(report.totals.netFunded).toBe(bucket.netFunded);
+    expect(report.totals.netCash).toBe(bucket.netCash);
   });
 
   /**
@@ -81,7 +81,7 @@ describe('expense report', () => {
     expect(bucket.funded).toBe(10_000);
     expect(bucket.spent).toBe(7_000);
     expect(bucket.returned).toBe(1_000);
-    expect(bucket.netFunded).toBe(9_000);
+    expect(bucket.netCash).toBe(9_000);
   });
 
   it('sums several requisitions into one bucket', async () => {
@@ -152,6 +152,108 @@ describe('expense report', () => {
 
     // A requester has no business browsing every department's spend.
     expect((await requester.client.get('/reports/expenses')).status).toBe(403);
+  });
+
+  describe('export', () => {
+    /** Parses the small subset of CSV we emit — fields never contain a comma or quote, so a
+     *  bare split is enough. Money figures come back as numbers in the second column onwards. */
+    function parseCsv(body: string): string[][] {
+      return body
+        .split(/\r?\n/)
+        .filter((line) => line.length > 0)
+        .map((line) => line.split(','));
+    }
+
+    it('exports CSV whose totals match the JSON endpoint', async () => {
+      await fullyProcessed({ requested: 10_000, approved: 8_000, spend: 6_500, giveBack: 1_500 });
+
+      const json = await fetchReport();
+      const csvResponse = await im.client
+        .get(`/reports/expenses/export.csv?departmentId=${departmentId}`)
+        // `buffer(true)` makes supertest give us the raw bytes instead of parsing the body as JSON
+        // — we need a string for the parser, not an object graph.
+        .buffer(true)
+        .parse((res, callback) => {
+          const chunks: Buffer[] = [];
+          res.on('data', (chunk: Buffer) => chunks.push(chunk));
+          res.on('end', () => callback(null, Buffer.concat(chunks).toString('utf-8')));
+        });
+      expect(csvResponse.status).toBe(200);
+      expect(csvResponse.headers['content-type']).toMatch(/^text\/csv/);
+      expect(csvResponse.headers['content-disposition']).toMatch(/^attachment; filename=/);
+
+      const rows = parseCsv(csvResponse.body as string);
+      // header + 1 data row + totals
+      expect(rows).toHaveLength(3);
+      expect(rows[0]).toEqual([
+        'Bucket',
+        'Requisitions',
+        'Requested',
+        'Approved',
+        'Funded',
+        'Spent',
+        'Returned',
+        'Net cash',
+      ]);
+      // The data row agrees with the JSON bucket (last column is `netCash`).
+      expect(Number(rows[1]![1])).toBe(json.buckets[0]!.requisitionCount);
+      expect(Number(rows[1]![5])).toBeCloseTo(json.buckets[0]!.spent, 2);
+      expect(Number(rows[1]![7])).toBeCloseTo(json.buckets[0]!.netCash, 2);
+      // Totals row == bucket row here because there is only one bucket, and equals the JSON totals.
+      expect(Number(rows[2]![5])).toBeCloseTo(json.totals.spent, 2);
+      expect(Number(rows[2]![7])).toBeCloseTo(json.totals.netCash, 2);
+    });
+
+    it('CSV export honours the date filter', async () => {
+      await fullyProcessed({ requested: 5_000, approved: 5_000, spend: 4_000, giveBack: 0 });
+
+      const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(new Date());
+      const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const tomorrowStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka' }).format(tomorrow);
+
+      const raw = (signer: HttpClient, qs: string) =>
+        signer
+          .get(`/reports/expenses/export.csv?${qs}`)
+          .buffer(true)
+          .parse((res, callback) => {
+            const chunks: Buffer[] = [];
+            res.on('data', (chunk: Buffer) => chunks.push(chunk));
+            res.on('end', () => callback(null, Buffer.concat(chunks).toString('utf-8')));
+          });
+
+      // A range well outside the fixture window must come back empty.
+      const empty = await raw(im.client, `departmentId=${departmentId}&from=2020-01-01&to=2020-12-31`);
+      const emptyRows = parseCsv(empty.body as string);
+      // header + totals row only, no data rows.
+      expect(emptyRows).toHaveLength(2);
+      expect(emptyRows[1]![0]).toBe('Total');
+
+      // Today's range includes the fixture.
+      const inRange = await raw(im.client, `departmentId=${departmentId}&from=${today}&to=${tomorrowStr}`);
+      expect(parseCsv(inRange.body as string)).toHaveLength(3);
+    });
+
+    it('exports PDF with the right content type and PDF magic bytes', async () => {
+      await fullyProcessed({ requested: 5_000, approved: 5_000, spend: 4_000, giveBack: 0 });
+
+      const response = await im.client.get(
+        `/reports/expenses/export.pdf?departmentId=${departmentId}`,
+      );
+      expect(response.status).toBe(200);
+      expect(response.headers['content-type']).toBe('application/pdf');
+      expect(response.headers['content-disposition']).toMatch(/^attachment; filename=/);
+      // supertest parses binary bodies as Buffer when `body` is requested without an override.
+      const body = response.body as Buffer;
+      expect(body.length).toBeGreaterThan(100);
+      expect(body.subarray(0, 5).toString('ascii')).toBe('%PDF-');
+    });
+
+    it('denies CSV/PDF export to a plain user', async () => {
+      const csv = await requester.client.get('/reports/expenses/export.csv');
+      const pdf = await requester.client.get('/reports/expenses/export.pdf');
+      expect(csv.status).toBe(403);
+      expect(pdf.status).toBe(403);
+    });
   });
 
   /* ----------------------------------------------------------- helpers */

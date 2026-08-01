@@ -66,6 +66,15 @@ export const AUDIT_ACTIONS = [
   'stock.receive',
   'stock.move',
   'stock.adjust',
+  /**
+   * Quarantine resolution writes the ledger and the audit row in the same transaction as the
+   * placement update. RELEASE writes no ledger row (nothing physically left the shelf);
+   * DISPOSE writes a DISPOSE row because the units are gone. Splitting them keeps the
+   * `stock.*` filter on the admin page readable: "show me everything that happened to
+   * quarantine" stays a substring match on `stock.release_quarantine` / `stock.dispose`.
+   */
+  'stock.release_quarantine',
+  'stock.dispose',
   // Borrowing
   'borrowing.create',
   'borrowing.approve',

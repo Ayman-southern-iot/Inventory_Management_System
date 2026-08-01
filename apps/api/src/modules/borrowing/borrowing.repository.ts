@@ -7,9 +7,11 @@ import {
   type BorrowRequest,
   type ListBorrowsQuery,
   type Paginated,
+  type ReturnCondition,
 } from '@ims/shared';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
+import { ConflictError } from '../../common/errors';
 import type { Tx } from '../audit/audit.repository';
 
 /** A writer that is either the pool-backed db or a kysely transaction handle. */
@@ -166,7 +168,7 @@ export class BorrowingRepository {
       quantity: number;
       compartmentId: string;
       receivedBy: string;
-      conditionNote: string | null;
+      condition: ReturnCondition;
     },
     tx?: Tx,
   ): Promise<void> {
@@ -178,9 +180,47 @@ export class BorrowingRepository {
         quantity: values.quantity,
         compartment_id: values.compartmentId,
         received_by: values.receivedBy,
-        condition_note: values.conditionNote,
+        condition: values.condition,
       })
       .execute();
+  }
+
+  /**
+   * Increment quarantined_qty on a placement by `delta`. A no-op when delta is zero. Throws
+   * `ConflictError` if the increment would push `quarantined + reserved > quantity`, which the
+   * CHECK constraint also enforces — the explicit check turns the DB error into a useful
+   * message instead of a 500.
+   */
+  async incrementQuarantine(
+    tx: Writer,
+    productId: string,
+    compartmentId: string,
+    delta: number,
+  ): Promise<void> {
+    if (delta === 0) return;
+    if (!Number.isInteger(delta) || delta < 0) {
+      throw new ConflictError('Quarantine increment must be a non-negative whole number');
+    }
+    const result = await tx
+      .updateTable('stock_placements')
+      .set((eb) => ({
+        quarantined_qty: eb('quarantined_qty', '+', delta),
+        version: eb('version', '+', 1),
+      }))
+      .where('product_id', '=', productId)
+      .where('compartment_id', '=', compartmentId)
+      .returningAll()
+      .executeTakeFirst();
+    if (!result) {
+      throw new ConflictError('Placement has disappeared; cannot quarantine this return');
+    }
+    // The DB CHECK is the real guarantee — if the UPDATE somehow slipped past it the second
+    // statement would catch us. We surface its message rather than a raw constraint name.
+    if (result.quarantined_qty + result.reserved_qty > result.quantity) {
+      throw new ConflictError(
+        'Cannot quarantine that many units; the placement does not have that much free stock',
+      );
+    }
   }
 
   /** Everything a row needs, joined once. The log is the screen the IM lives on. */
@@ -311,6 +351,89 @@ export class BorrowingRepository {
       .where('status', 'in', [...OUTSTANDING_STATUSES])
       .where('expected_return_date', '<', sql<string>`current_date`)
       .execute();
+  }
+
+  /**
+   * Active borrows for a single product, ordered by issue date desc. The product detail page
+   * shows this list under "Currently in use" so people can see who has the product and on
+   * which project, without having to walk the borrow list one row at a time.
+   *
+   * Status scope follows `OUTSTANDING_STATUSES`: a fully-returned borrow is gone from this
+   * list — the moment the last unit came back is the moment its information stops being
+   * useful. PENDING borrows are excluded because the stock is still on the shelf, not in
+   * use; the borrowing list shows PENDING already.
+   *
+   * `lastReturnCondition` is fetched with a LATERAL so a partial return that came back
+   * DAMAGED still shows on the borrow row even though the borrow is still active. NULL for
+   * borrows that have no returns yet (newly issued).
+   */
+  async listActiveForProduct(productId: string): Promise<
+    Array<{
+      borrowId: string;
+      borrowNo: string;
+      borrowerId: string;
+      borrowerName: string;
+      projectId: string | null;
+      projectName: string | null;
+      quantity: number;
+      returnedQty: number;
+      outstandingQty: number;
+      expectedReturnDate: Date | string | null;
+      issuedAt: Date | null;
+      isOverdue: boolean;
+      lastReturnCondition: ReturnCondition | null;
+    }>
+  > {
+    const rows = await this.db
+      .selectFrom('borrow_requests')
+      .innerJoin('users as requester', 'requester.id', 'borrow_requests.requester_id')
+      .leftJoin('projects', 'projects.id', 'borrow_requests.project_id')
+      .leftJoinLateral(
+        (eb) =>
+          eb
+            .selectFrom('borrow_returns')
+            .whereRef('borrow_returns.borrow_request_id', '=', 'borrow_requests.id')
+            .orderBy('borrow_returns.returned_at', 'desc')
+            .limit(1)
+            .select('borrow_returns.condition as last_return_condition')
+            .as('latest_return'),
+        (join) => join.onTrue(),
+      )
+      .where('borrow_requests.product_id', '=', productId)
+      .where('borrow_requests.status', 'in', [...OUTSTANDING_STATUSES])
+      .select([
+        'borrow_requests.id as borrow_id',
+        'borrow_requests.borrow_no as borrow_no',
+        'borrow_requests.requester_id as borrower_id',
+        'requester.full_name as borrower_name',
+        'borrow_requests.project_id as project_id',
+        'projects.name as project_name',
+        'borrow_requests.quantity as quantity',
+        'borrow_requests.returned_qty as returned_qty',
+        'borrow_requests.expected_return_date as expected_return_date',
+        'borrow_requests.issued_at as issued_at',
+        sql<boolean>`borrow_requests.expected_return_date IS NOT NULL
+          AND borrow_requests.expected_return_date < current_date`.as('is_overdue'),
+        'latest_return.last_return_condition as last_return_condition',
+      ])
+      .orderBy('borrow_requests.issued_at', 'desc')
+      .execute();
+
+    return rows.map((row) => ({
+      borrowId: row.borrow_id,
+      borrowNo: row.borrow_no,
+      borrowerId: row.borrower_id,
+      borrowerName: row.borrower_name,
+      projectId: row.project_id,
+      projectName: row.project_name,
+      quantity: row.quantity,
+      returnedQty: row.returned_qty,
+      outstandingQty: row.quantity - row.returned_qty,
+      expectedReturnDate: row.expected_return_date,
+      issuedAt: row.issued_at,
+      isOverdue: row.is_overdue,
+      lastReturnCondition: row.last_return_condition,
+    }));
   }
 }
 

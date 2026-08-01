@@ -41,6 +41,38 @@ export type SettingKey = (typeof SettingKey)[keyof typeof SettingKey];
 
 export type SettingKind = 'currency_bdt' | 'integer' | 'uuid' | 'audit_actions' | 'days';
 
+/**
+ * Retention policies the admin UI presents for `AUDIT_RETENTION_DAYS`. `0` keeps the historical
+ * "do not purge" contract, which the nightly retention job (`pruneAuditLog`) reads as a
+ * short-circuit. The other values are an explicit preset list so an admin cannot type a value
+ * (e.g. `7`) the retention job would honour but that has no UI label.
+ */
+export interface RetentionPreset {
+  /** Wire value persisted in `app_settings.value` and consumed by `pruneAuditLog`. */
+  readonly days: number;
+  /** Display label for the admin dropdown. */
+  readonly label: string;
+}
+
+export const AUDIT_RETENTION_PRESETS: readonly RetentionPreset[] = [
+  { days: 5, label: '5 days' },
+  { days: 10, label: '10 days' },
+  { days: 15, label: '15 days' },
+  { days: 30, label: '1 month' },
+  { days: 90, label: '3 months' },
+  { days: 180, label: '6 months' },
+  { days: 365, label: '1 year' },
+  { days: 1095, label: '3 years' },
+  { days: 1825, label: '5 years' },
+  { days: 3650, label: '10 years' },
+  { days: 0, label: 'Forever' },
+] as const;
+
+/** Type guard for the preset values — useful when the wire type is `number`. */
+export function isRetentionPresetValue(value: number): value is (typeof AUDIT_RETENTION_PRESETS)[number]['days'] {
+  return AUDIT_RETENTION_PRESETS.some((preset) => preset.days === value);
+}
+
 export interface SettingDefinition<T> {
   readonly key: SettingKey;
   /** Parses both the env seed (after JSON coercion) and any admin-supplied update. */
@@ -132,10 +164,11 @@ const definitions = {
     labelKey: 'auditEnabledActions',
   },
   /**
-   * Days of audit history to keep. `0` disables the purge entirely and is the default: this
+   * Days of audit history to keep. `0` disables the purge entirely and is the default — this
    * system's standing requirement is that no data is lost, so history is only ever deleted
-   * because an admin deliberately asked for it. The floor of 30 on any non-zero value stops a
-   * typo like `1` from erasing the trail an incident is being investigated from.
+   * because an admin deliberately asked for it. Non-zero values are restricted to the explicit
+   * preset list above so the UI label always matches the persisted value, and so a stray
+   * integer from a future hand-edited DB row cannot silently change retention behaviour.
    */
   [SettingKey.AUDIT_RETENTION_DAYS]: {
     key: SettingKey.AUDIT_RETENTION_DAYS,
@@ -143,8 +176,8 @@ const definitions = {
       .number()
       .int()
       .min(0)
-      .refine((days) => days === 0 || days >= 30, {
-        message: 'Retention must be 0 (keep forever) or at least 30 days',
+      .refine(isRetentionPresetValue, {
+        message: 'Retention must be one of the presets (5/10/15 days, 1/3/6 months, 1/3/5/10 years, or Forever)',
       }),
     seedEnvVar: 'SETTING_AUDIT_RETENTION_DAYS',
     kind: 'days',

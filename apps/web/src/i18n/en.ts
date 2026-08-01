@@ -40,6 +40,8 @@ export const t = {
     note: 'Note',
     filters: 'Filters',
     unknown: 'Unknown',
+    manage: 'Manage',
+    dash: '—',
   },
 
   states: {
@@ -202,6 +204,28 @@ export const t = {
       'This slot points at a deactivated user. New requisitions will refuse until it is reassigned or the user is reactivated.',
     slotHeldByInactiveWarning:
       'Slot is held by an inactive user — submissions will be refused.',
+    /**
+     * Audit log configuration. The audit recording set is an explicit allow-list rather than a
+     * blacklist so turning actions back on does not silently recover history that was disabled
+     * — the never-recorded entries stay gone (see AUDIT_ENABLED_ACTIONS in registry.ts).
+     */
+    auditEnabledActions: 'Audit recorded actions',
+    auditEnabledActionsHint:
+      'Actions the audit log records. Always-on entries cannot be turned off; turning the others off stops future recording only.',
+    auditActionsSelectedSummary: (count: number, total: number) =>
+      `${count} of ${total} actions selected`,
+    auditAlwaysOn: 'Always on',
+    auditAlwaysOnHint: 'Recorded no matter what. Cannot be turned off.',
+    auditSelectAll: 'Select all',
+    auditClearOptional: 'Clear optional',
+    /**
+     * Retention presets match AUDIT_RETENTION_PRESETS in the shared registry; the labels here
+     * exist so the admin UI can show them in plain English without an inline map.
+     */
+    auditRetentionDays: 'Audit history retention',
+    auditRetentionDaysHint:
+      'How long the audit log is kept before the nightly job purges it. Forever keeps everything.',
+    auditRetentionForever: 'Forever',
   },
 
   inventory: {
@@ -218,6 +242,29 @@ export const t = {
     onHand: 'On hand',
     reserved: 'Reserved',
     available: 'Available',
+    /**
+     * One-sentence gloss for "Available": what it is, what it is not. The number alone is
+     * misleading — it conflates "free to lend" with "physically present, but held back". The
+     * parentheticals point at the two reductions that subtract from on-hand to get here.
+     */
+    availableHint: 'On hand minus reserved minus quarantined.',
+    /**
+     * "Currently in use" / "In project use" — the headline of the section that lists active
+     * borrows on the product detail page. The list row label says "Currently in use" (more
+     * natural English) while the figure label says "In project use" (less ambiguous about
+     * what kind of use). Both come out of the same column.
+     */
+    inProjectUse: 'In project use',
+    /**
+     * "Total owned" — the headline figure for an IM looking at the product card. Sum of the
+     * physical on-hand and the outstanding (issued but not returned) units. The product card
+     * shows it next to On hand so the comparison is obvious.
+     */
+    totalOwned: 'Total owned',
+    totalOwnedHint: 'On hand plus what is currently out on borrow.',
+    quarantined: 'Quarantined',
+    quarantinedHint:
+      'Units on the shelf but excluded from available — damaged returns wait here for review.',
     availableShort: 'available',
     allCategories: 'All categories',
     inStockOnly: 'In stock only',
@@ -354,8 +401,15 @@ export const t = {
     funded: 'Funded',
     spent: 'Spent',
     returned: 'Returned',
-    netFunded: 'Net',
+    /**
+     * `Net cash` is funded minus returned — what actually left the bank account. It is *not*
+     * the purchase expense (that is the `spent` column). The two columns are kept apart so a
+     * reader never has to guess which one describes the goods.
+     */
+    netCash: 'Net cash',
     total: 'Total',
+    downloadCsv: 'Download CSV',
+    downloadPdf: 'Download PDF',
     emptyTitle: 'Nothing in this range',
     emptyBody: 'No submitted requisitions fall inside these dates.',
     netHint: 'Funded minus what went back to Accounts — what the company is actually out of pocket.',
@@ -530,7 +584,17 @@ export const t = {
     revertReason: 'Why is this being reverted?',
     cancel: 'Cancel request',
     decisionNote: 'Note',
-    conditionNote: 'Condition on return',
+    returnCondition: 'Return condition',
+    conditionGood: 'Good',
+    conditionPartiallyDamagedUsable: 'Partially damaged but usable',
+    conditionDamaged: 'Damaged',
+    conditionNotWorking: 'Not working',
+    /**
+     * The DAMAGED / NOT_WORKING choice goes hand-in-hand with a note in the admin feed; this
+     * hint makes the consequence visible without hovering over the dropdown.
+     */
+    returnConditionHint:
+      'Damaged / Not-working units are quarantined and excluded from available stock.',
     // results
     requested: 'Request submitted. The Inventory Manager will review it.',
     approved: 'Approved and issued.',
@@ -554,6 +618,36 @@ export const t = {
     myEmptyTitle: 'You have not borrowed anything yet',
     myEmptyBody: 'Find a product in the inventory and press Borrow.',
     outstandingHint: 'You can return part of a borrow; the rest stays out.',
+    /**
+     * "Currently in use" section on the product detail page. One row per active borrow, ordered
+     * most-recently-issued first; "returned X of Y" lets a partial return show clearly.
+     */
+    currentlyInUse: 'Currently in use',
+    currentlyInUseEmpty: 'Nothing is currently in use.',
+    borrowedBy: 'Borrowed by',
+    lastReturnCondition: 'Most recent return',
+    conditionLabels: {
+      GOOD: 'Good',
+      PARTIALLY_DAMAGED_USABLE: 'Partially damaged but usable',
+      DAMAGED: 'Damaged',
+      NOT_WORKING: 'Not working',
+    },
+    /**
+     * Quarantine lifecycle for placements shown next to product totals. The chip carries the
+     * count; the buttons here only render when quarantined_qty > 0 because releasing or
+     * disposing nothing is a no-op the API would reject.
+     */
+    quarantineTitle: 'Quarantined stock',
+    quarantineRelease: 'Release (verified usable)',
+    quarantineDispose: 'Dispose (write off)',
+    quarantineDialogTitle: 'Quarantine action',
+    quarantineQuantityLabel: 'Units',
+    quarantineQuantityHint: 'Cannot exceed the quarantined quantity on this placement.',
+    quarantineNoteLabel: 'Note',
+    quarantineNoteHint:
+      'Required — describe what you did with the damaged units, so a future audit reader knows.',
+    quarantineReleasedToast: 'Quarantined units released back to available.',
+    quarantineDisposedToast: 'Quarantined units written off.',
     status: {
       PENDING: 'Pending',
       REJECTED: 'Rejected',
@@ -676,6 +770,7 @@ export const t = {
     filterDrafts: 'Drafts',
     filterApproved: 'Approved',
     filterRejected: 'Rejected',
+
     searchPlaceholder: 'Search by reference, requester or reason',
     emptyTitle: 'Nothing to show',
     emptyBody: 'No requisitions match this filter.',

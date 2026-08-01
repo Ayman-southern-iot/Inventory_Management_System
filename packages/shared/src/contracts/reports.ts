@@ -68,10 +68,12 @@ export const expenseBucketSchema = z.object({
   requested: z.number(),
   approved: z.number(),
   funded: z.number(),
+  /** Sum of purchase invoice totals — what the company actually bought, and the expense figure. */
   spent: z.number(),
+  /** Money refunded to Accounts. Kept separate so it is never mistaken for an expense. */
   returned: z.number(),
-  /** `funded − returned` — what the organisation is actually out of pocket. */
-  netFunded: z.number(),
+  /** `funded − returned` — cash out of pocket, not the purchase expense. */
+  netCash: z.number(),
 });
 export type ExpenseBucket = z.infer<typeof expenseBucketSchema>;
 

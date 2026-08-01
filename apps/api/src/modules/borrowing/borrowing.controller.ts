@@ -32,6 +32,7 @@ import {
 import { ConflictError } from '../../common/errors';
 import { IdempotencyService } from '../../common/idempotency.service';
 import { zodPipe } from '../../common/zod-validation.pipe';
+import { AuthenticatedThrottle } from '../../common/throttling';
 import { CurrentUser, Roles } from '../auth/auth.decorators';
 import type { RequestUser } from '../auth/request-user';
 import { CurrentAuditContext } from '../audit/audit.decorators';
@@ -43,6 +44,7 @@ import { ProjectsService } from './projects.service';
 /** Roles that may see and act on everyone's borrows. */
 const STOCK_ROLES = [Role.INVENTORY_MANAGER, Role.ADMIN] as const;
 
+@AuthenticatedThrottle
 @Controller('borrowing')
 export class BorrowingController {
   constructor(

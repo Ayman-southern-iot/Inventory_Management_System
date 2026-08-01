@@ -116,7 +116,7 @@ describe('DecisionDialog', () => {
     await user.click(screen.getByRole('button', { name: /approve without signature/i }));
 
     expect(decideSpy).toHaveBeenCalledTimes(1);
-    const call = decideSpy.mock.calls[0][0];
+    const call = decideSpy.mock.calls[0]![0];
     expect(call.input.approve).toBe(true);
     expect(call.input.approvedAmount).toBeNull();
     expect(call.input.withSignature).toBe(false);
@@ -137,7 +137,7 @@ describe('DecisionDialog', () => {
     await user.click(screen.getByRole('button', { name: /approve without signature/i }));
 
     expect(decideSpy).toHaveBeenCalledTimes(1);
-    expect(decideSpy.mock.calls[0][0].input.approvedAmount).toBe(85_000);
+    expect(decideSpy.mock.calls[0]![0].input.approvedAmount).toBe(85_000);
   });
 
   it('never offers the amount field when the actor is the Inventory Manager', () => {

@@ -6,7 +6,7 @@ import { EmptyState, QueryBoundary, SkeletonRows } from '@/components/ui/states'
 import { t } from '@/i18n/en';
 import { cn } from '@/lib/cn';
 import { formatBdt } from '@/lib/format';
-import { useExpenseReport } from './api';
+import { useExpenseReport, expenseExportUrl } from './api';
 
 /** `YYYY-MM-DD` in the business's own calendar, matching what the API expects. */
 function localDate(date: Date): string {
@@ -124,6 +124,26 @@ export function ExpensesPage() {
               </Button>
             ))}
           </div>
+
+          {/* Anchors, not buttons: the browser handles the download, the auth cookie rides along
+              because the URL is same-origin, and there is no in-app loading state to manage.
+              Plain anchor styling matches the ghost-variant button — no nested interactive element. */}
+          <div className="ml-auto flex flex-wrap items-center gap-1.5 pb-0.5">
+            <a
+              href={expenseExportUrl(query, 'csv')}
+              download
+              className="inline-flex h-8 items-center justify-center rounded-[--radius-control] px-3 text-sm font-medium text-ink-muted transition-colors hover:bg-surface-muted hover:text-ink"
+            >
+              {t.expenses.downloadCsv}
+            </a>
+            <a
+              href={expenseExportUrl(query, 'pdf')}
+              download
+              className="inline-flex h-8 items-center justify-center rounded-[--radius-control] px-3 text-sm font-medium text-ink-muted transition-colors hover:bg-surface-muted hover:text-ink"
+            >
+              {t.expenses.downloadPdf}
+            </a>
+          </div>
         </div>
 
         <QueryBoundary
@@ -147,7 +167,7 @@ export function ExpensesPage() {
                     t.expenses.funded,
                     t.expenses.spent,
                     t.expenses.returned,
-                    t.expenses.netFunded,
+                    t.expenses.netCash,
                   ]}
                 >
                   {data.buckets.map((bucket) => (
@@ -159,7 +179,7 @@ export function ExpensesPage() {
                       <Amount value={bucket.funded} />
                       <Amount value={bucket.spent} />
                       <Amount value={bucket.returned} />
-                      <Amount value={bucket.netFunded} emphasis />
+                      <Amount value={bucket.netCash} emphasis />
                     </tr>
                   ))}
                   {/* The totals ride in the body because the shared Table owns thead/tbody. The
@@ -172,7 +192,7 @@ export function ExpensesPage() {
                     <Amount value={data.totals.funded} />
                     <Amount value={data.totals.spent} />
                     <Amount value={data.totals.returned} />
-                    <Amount value={data.totals.netFunded} emphasis />
+                    <Amount value={data.totals.netCash} emphasis />
                   </tr>
                 </Table>
                 {/* The two different date bases are the one thing that surprises people reading

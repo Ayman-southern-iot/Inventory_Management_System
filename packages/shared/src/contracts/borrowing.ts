@@ -39,6 +39,32 @@ export const borrowStatusSchema = z.enum(
   Object.values(BorrowStatus) as [BorrowStatus, ...BorrowStatus[]],
 );
 
+/**
+ * What the IM records about a returned unit. Required on every return — there is no
+ * "default good" any more, because silently treating every return as good is how a damaged
+ * cable ends up on the same shelf as a fresh one (requirement: record return condition).
+ *
+ *   GOOD                       — fits the catalogue default, goes back to available stock.
+ *   PARTIALLY_DAMAGED_USABLE   — usable but flawed; counted back into available so the next
+ *                                borrower can decide for themselves whether to take it.
+ *   DAMAGED                    — physically present, excluded from availability; held in
+ *                                quarantine until the IM releases it (verified repaired) or
+ *                                disposes of it (ledger DISPOSE).
+ *   NOT_WORKING                — same as DAMAGED for stock purposes; the label lets the IM
+ *                                distinguish "fixable" from "beyond repair" in the report.
+ */
+export const ReturnCondition = {
+  GOOD: 'GOOD',
+  PARTIALLY_DAMAGED_USABLE: 'PARTIALLY_DAMAGED_USABLE',
+  DAMAGED: 'DAMAGED',
+  NOT_WORKING: 'NOT_WORKING',
+} as const;
+export type ReturnCondition = (typeof ReturnCondition)[keyof typeof ReturnCondition];
+
+export const returnConditionSchema = z.enum(
+  Object.values(ReturnCondition) as [ReturnCondition, ...ReturnCondition[]],
+);
+
 /** Statuses meaning "the item is physically out". Used by the overdue job and the Out filter. */
 export const OUTSTANDING_STATUSES: readonly BorrowStatus[] = [
   BorrowStatus.ISSUED,
@@ -89,7 +115,12 @@ export const returnBorrowSchema = z.object({
   quantity: z.number().int().positive().max(100_000),
   /** Where it goes back. Usually the origin, but the IM may reshelve it. */
   compartmentId: z.string().uuid(),
-  conditionNote: z.string().trim().max(1000).nullable().default(null),
+  /**
+   * Required. Drives the same-transaction quarantine of DAMAGED / NOT_WORKING quantities
+   * (see migration 0019). The previous free-text `conditionNote` was dropped because a note
+   * cannot drive availability — only an enum can.
+   */
+  condition: returnConditionSchema,
 });
 export type ReturnBorrowInput = z.infer<typeof returnBorrowSchema>;
 

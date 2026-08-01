@@ -12,11 +12,13 @@ import {
   type UpdateProductInput,
 } from '@ims/shared';
 import { zodPipe } from '../../common/zod-validation.pipe';
+import { AuthenticatedThrottle } from '../../common/throttling';
 import { Roles } from '../auth/auth.decorators';
 import { CurrentAuditContext } from '../audit/audit.decorators';
 import type { AuditContext } from '../audit/audit-context';
 import { ProductsService } from './products.service';
 
+@AuthenticatedThrottle
 @Controller('products')
 export class ProductsController {
   constructor(private readonly products: ProductsService) {}

@@ -18,6 +18,10 @@ export default defineConfig(({ mode }) => {
     server: {
       port: devPort,
       strictPort: true,
+      // Listen on every interface (IPv4 + IPv6) so the SPA is reachable as both `localhost` and
+      // `127.0.0.1`. Without this, Windows resolves `localhost` to `::1` first and a request to
+      // `http://127.0.0.1:5173` is refused, which makes the login page look unreachable.
+      host: true,
       // Lets the SPA call same-origin `/api/v1/...` in dev exactly as it does behind Caddy
       // in production, so there is no environment-specific URL logic in the app code.
       proxy: {

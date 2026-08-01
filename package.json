@@ -19,7 +19,8 @@
     "db:make": "pnpm --filter @ims/api db:make",
     "db:seed": "pnpm --filter @ims/api db:seed",
     "db:up": "docker compose -f infra/docker-compose.dev.yml up -d",
-    "db:down": "docker compose -f infra/docker-compose.dev.yml stop"
+    "db:down": "docker compose -f infra/docker-compose.dev.yml stop",
+    "audit:deps": "bash scripts/audit-deps.sh"
   },
   "devDependencies": {
     "@eslint/js": "9.17.0",

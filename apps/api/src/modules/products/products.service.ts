@@ -16,6 +16,7 @@ import type { AuditContext } from '../audit/audit-context';
 import { diffSafeFields } from '../audit/audit-sanitizer';
 import { StockService } from '../stock/stock.service';
 import { toPlacement } from '../stock/stock.mappers';
+import { BorrowingRepository } from '../borrowing/borrowing.repository';
 import { ProductsRepository, type Tx } from './products.repository';
 
 @Injectable()
@@ -24,6 +25,8 @@ export class ProductsService {
     private readonly repo: ProductsRepository,
     /** Placements are read through the service; no module outside it touches those tables. */
     private readonly stock: StockService,
+    /** Active borrows for the "Currently in use" section — read-only access. */
+    private readonly borrowing: BorrowingRepository,
     @Inject(DB) private readonly db: Db,
     private readonly audit: AuditService,
   ) {}
@@ -37,8 +40,36 @@ export class ProductsService {
     const product = await this.repo.findById(id);
     if (!product) throw new NotFoundError('Product');
 
-    const placements = await this.stock.placementsForProduct(id);
-    return { ...product, placements: placements.map(toPlacement) };
+    // Two reads, not one: a LEFT JOIN would inflate every product row with N borrow rows
+    // and require a window-function trick to recover the original product shape. At 12 users
+    // and borrowing volume in the dozens, two indexed reads are simpler and equally cheap.
+    const [placements, activeBorrows] = await Promise.all([
+      this.stock.placementsForProduct(id),
+      this.borrowing.listActiveForProduct(id),
+    ]);
+    return {
+      ...product,
+      placements: placements.map(toPlacement),
+      activeBorrows: activeBorrows.map((b) => ({
+        borrowId: b.borrowId,
+        borrowNo: b.borrowNo,
+        borrowerId: b.borrowerId,
+        borrowerName: b.borrowerName,
+        projectId: b.projectId,
+        projectName: b.projectName,
+        quantity: b.quantity,
+        returnedQty: b.returnedQty,
+        outstandingQty: b.outstandingQty,
+        expectedReturnDate: b.expectedReturnDate
+          ? typeof b.expectedReturnDate === 'string'
+            ? b.expectedReturnDate
+            : b.expectedReturnDate.toISOString().slice(0, 10)
+          : null,
+        issuedAt: b.issuedAt ? b.issuedAt.toISOString() : null,
+        isOverdue: b.isOverdue,
+        lastReturnCondition: b.lastReturnCondition,
+      })),
+    };
   }
 
   /**

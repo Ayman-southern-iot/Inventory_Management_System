@@ -9,6 +9,7 @@ import {
   type UnreadCount,
 } from '@ims/shared';
 import { zodPipe } from '../../common/zod-validation.pipe';
+import { AuthenticatedThrottle } from '../../common/throttling';
 import { CurrentUser } from '../auth/auth.decorators';
 import type { RequestUser } from '../auth/request-user';
 import { NotificationsService } from './notifications.service';
@@ -19,6 +20,7 @@ import { NotificationsService } from './notifications.service';
  * or clear another's queue. That is the whole authorization model for this module, which is why
  * it carries no `@Roles`: every authenticated user has notifications.
  */
+@AuthenticatedThrottle
 @Controller('notifications')
 export class NotificationsController {
   constructor(private readonly notifications: NotificationsService) {}

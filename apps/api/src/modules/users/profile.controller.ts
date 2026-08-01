@@ -19,6 +19,7 @@ import { CurrentAuditContext } from '../audit/audit.decorators';
 import type { AuditContext } from '../audit/audit-context';
 import { config } from '../../config';
 import { ValidationFailedError } from '../../common/errors';
+import { AuthenticatedThrottle, authThrottle } from '../../common/throttling';
 import { SignatureService } from './signature.service';
 
 /**
@@ -29,6 +30,7 @@ import { SignatureService } from './signature.service';
  *
  * `@Roles` still applies: only people who actually sign things need a signature on file.
  */
+@AuthenticatedThrottle
 @Controller('me')
 export class ProfileController {
   constructor(private readonly signatures: SignatureService) {}
@@ -48,6 +50,7 @@ export class ProfileController {
    */
   @Get('signature/content')
   @Roles(Role.APPROVER, Role.INVENTORY_MANAGER, Role.ADMIN)
+  @authThrottle
   async content(
     @CurrentUser() actor: RequestUser,
     @Res({ passthrough: true }) response: Response,

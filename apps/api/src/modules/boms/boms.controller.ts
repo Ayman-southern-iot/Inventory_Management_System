@@ -32,6 +32,7 @@ import {
 import { ConflictError } from '../../common/errors';
 import { IdempotencyService } from '../../common/idempotency.service';
 import { zodPipe } from '../../common/zod-validation.pipe';
+import { AuthenticatedThrottle, publicThrottle } from '../../common/throttling';
 import { CurrentUser, Public, Roles } from '../auth/auth.decorators';
 import type { RequestUser } from '../auth/request-user';
 import { CurrentAuditContext } from '../audit/audit.decorators';
@@ -39,6 +40,7 @@ import type { AuditContext } from '../audit/audit-context';
 import { BomsService } from './boms.service';
 
 @Controller('boms')
+@AuthenticatedThrottle
 export class BomsController {
   constructor(
     private readonly boms: BomsService,
@@ -140,9 +142,11 @@ export class BomsController {
   /**
    * Stream the cached PDF. `@Public()` because the token in the query string *is* the auth.
    * The service rejects bad/expired/mismatched-BOM tokens with a 403 before touching the
-   * database.
+   * database. `@Throttle({public})` keeps this reachable-but-bounded — a token is not free to
+   * spam.
    */
   @Get(':id/pdf')
+  @publicThrottle
   @Public()
   async downloadPdf(
     @Param('id', ParseUUIDPipe) id: string,

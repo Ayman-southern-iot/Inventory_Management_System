@@ -15,6 +15,7 @@
     "db:rollback": "tsx scripts/migrate.ts down",
     "db:make": "tsx scripts/migrate.ts make",
     "db:seed": "tsx scripts/seed.ts",
+    "db:seed:scenarios": "vitest run --config vitest.scenarios.config.ts",
     "migration:run": "node dist/scripts/migrate.js up"
   },
   "dependencies": {

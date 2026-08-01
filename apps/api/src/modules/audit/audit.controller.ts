@@ -1,6 +1,7 @@
 import { Controller, Get, HttpCode, HttpStatus, NotFoundException, Param, ParseUUIDPipe, Query } from '@nestjs/common';
 import { Role, type AuditEntry, type ListAuditQuery, type Paginated } from '@ims/shared';
 import { zodPipe } from '../../common/zod-validation.pipe';
+import { AuthenticatedThrottle } from '../../common/throttling';
 import { Roles } from '../auth/auth.decorators';
 import { listAuditQuerySchema } from '@ims/shared';
 import { AuditService } from './audit.service';
@@ -9,6 +10,7 @@ import { AuditService } from './audit.service';
  * Admin-only endpoints for the audit feed. `Roles(Role.ADMIN)` is the same pattern every
  * other admin route in this codebase uses; non-admins get 403 before reaching the handler.
  */
+@AuthenticatedThrottle
 @Roles(Role.ADMIN)
 @Controller('admin/audit-log')
 export class AuditController {

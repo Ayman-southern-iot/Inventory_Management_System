@@ -130,7 +130,7 @@ describe('stock reconciliation', () => {
     await im.client.post(`/borrowing/${borrow.id}/decision`).send({ approve: true, note: null });
     const returned = await im.client
       .post(`/borrowing/${borrow.id}/returns`)
-      .send({ quantity: 5, compartmentId: fixture.compartmentA });
+      .send({ quantity: 5, compartmentId: fixture.compartmentA, condition: 'GOOD' });
     expect(returned.status).toBe(200);
 
     expect(await mismatches()).toEqual([]);
@@ -148,7 +148,7 @@ describe('stock reconciliation', () => {
     for (const quantity of [2, 3]) {
       const response = await im.client
         .post(`/borrowing/${borrow.id}/returns`)
-        .send({ quantity, compartmentId: fixture.compartmentA });
+        .send({ quantity, compartmentId: fixture.compartmentA, condition: 'GOOD' });
       expect(response.status).toBe(200);
     }
 

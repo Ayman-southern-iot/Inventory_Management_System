@@ -34,6 +34,7 @@ import {
 } from '@ims/shared';
 import { config } from '../../config';
 import { zodPipe } from '../../common/zod-validation.pipe';
+import { AuthenticatedThrottle } from '../../common/throttling';
 import { ConflictError, ValidationFailedError } from '../../common/errors';
 import { IdempotencyService } from '../../common/idempotency.service';
 import { CurrentUser, Roles } from '../auth/auth.decorators';
@@ -50,6 +51,7 @@ import { FundsService } from './funds.service';
  * Reading the funding summary is deliberately wider — the requester needs to see where their own
  * money has got to, and approvers need it for the expense view in 5.8.
  */
+@AuthenticatedThrottle
 @Controller('requisitions/:id')
 export class FundsController {
   constructor(

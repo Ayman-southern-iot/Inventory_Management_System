@@ -93,7 +93,7 @@ describe('borrowing', () => {
       // --- partial return ---------------------------------------------------
       const partial = await im.client
         .post(`/borrowing/${created.body.id}/returns`)
-        .send({ quantity: 3, compartmentId: fixture.compartmentA });
+        .send({ quantity: 3, compartmentId: fixture.compartmentA, condition: 'GOOD' });
       expect(partial.status).toBe(200);
       expect(partial.body.status).toBe(BorrowStatus.PARTIALLY_RETURNED);
       expect(partial.body.outstandingQty).toBe(2);
@@ -105,7 +105,7 @@ describe('borrowing', () => {
       // --- full return ------------------------------------------------------
       const full = await im.client
         .post(`/borrowing/${created.body.id}/returns`)
-        .send({ quantity: 2, compartmentId: fixture.compartmentA });
+        .send({ quantity: 2, compartmentId: fixture.compartmentA, condition: 'GOOD' });
       expect(full.status).toBe(200);
       expect(full.body.status).toBe(BorrowStatus.RETURNED);
       expect(full.body.outstandingQty).toBe(0);
@@ -267,7 +267,7 @@ describe('borrowing', () => {
 
       const partial = await im.client
         .post(`/borrowing/${created.body.id}/returns`)
-        .send({ quantity: 3, compartmentId: fixture.compartmentA });
+        .send({ quantity: 3, compartmentId: fixture.compartmentA, condition: 'GOOD' });
 
       expect(partial.body.returnedQty).toBe(3);
       expect(partial.body.outstandingQty).toBe(2);
@@ -280,7 +280,7 @@ describe('borrowing', () => {
 
       const tooMany = await im.client
         .post(`/borrowing/${created.body.id}/returns`)
-        .send({ quantity: 4, compartmentId: fixture.compartmentA });
+        .send({ quantity: 4, compartmentId: fixture.compartmentA, condition: 'GOOD' });
 
       expect(tooMany.status).toBe(409);
       await assertReconciled();
@@ -292,7 +292,7 @@ describe('borrowing', () => {
 
       const attempted = await im.client
         .post(`/borrowing/${created.body.id}/returns`)
-        .send({ quantity: 1, compartmentId: fixture.compartmentA });
+        .send({ quantity: 1, compartmentId: fixture.compartmentA, condition: 'GOOD' });
 
       expect(attempted.status).toBe(409);
       expect(attempted.body.message).toMatch(/consumable/i);
@@ -309,10 +309,76 @@ describe('borrowing', () => {
 
       await im.client
         .post(`/borrowing/${created.body.id}/returns`)
-        .send({ quantity: 4, compartmentId: fixture.compartmentB });
+        .send({ quantity: 4, compartmentId: fixture.compartmentB, condition: 'GOOD' });
 
       expect((await placementOf(ctx.db, fixture.productId, fixture.compartmentB))!.quantity).toBe(4);
       await assertReconciled();
+    });
+
+    it('quarantines the returned units when the condition is DAMAGED', async () => {
+      // Start 10 -> borrow 4 -> quantity 6 -> return 2 DAMAGED -> quantity 8, quarantined 2.
+      const created = await raise({ quantity: 4 });
+      await im.client.post(`/borrowing/${created.body.id}/decision`).send({ approve: true });
+
+      await im.client
+        .post(`/borrowing/${created.body.id}/returns`)
+        .send({ quantity: 2, compartmentId: fixture.compartmentA, condition: 'DAMAGED' });
+
+      const placement = await placementOf(ctx.db, fixture.productId, fixture.compartmentA);
+      expect(placement).toMatchObject({ quantity: 8, reserved_qty: 0, quarantined_qty: 2 });
+      await assertReconciled();
+    });
+
+    it('quarantines the returned units when the condition is NOT_WORKING', async () => {
+      // Start 10 -> borrow 3 -> quantity 7 -> return 3 NOT_WORKING -> quantity 10, quarantined 3.
+      const created = await raise({ quantity: 3 });
+      await im.client.post(`/borrowing/${created.body.id}/decision`).send({ approve: true });
+
+      await im.client
+        .post(`/borrowing/${created.body.id}/returns`)
+        .send({ quantity: 3, compartmentId: fixture.compartmentA, condition: 'NOT_WORKING' });
+
+      const placement = await placementOf(ctx.db, fixture.productId, fixture.compartmentA);
+      expect(placement).toMatchObject({ quantity: 10, reserved_qty: 0, quarantined_qty: 3 });
+      await assertReconciled();
+    });
+
+    it('PARTIALLY_DAMAGED_USABLE returns go back to available, not quarantine', async () => {
+      // Start 10 -> borrow 5 -> quantity 5 -> return 5 PARTIALLY_DAMAGED_USABLE -> quantity 10,
+      // quarantined 0 (the units are usable, so they join available stock like a GOOD return).
+      const created = await raise({ quantity: 5 });
+      await im.client.post(`/borrowing/${created.body.id}/decision`).send({ approve: true });
+
+      await im.client
+        .post(`/borrowing/${created.body.id}/returns`)
+        .send({
+          quantity: 5,
+          compartmentId: fixture.compartmentA,
+          condition: 'PARTIALLY_DAMAGED_USABLE',
+        });
+
+      const placement = await placementOf(ctx.db, fixture.productId, fixture.compartmentA);
+      expect(placement).toMatchObject({ quantity: 10, reserved_qty: 0, quarantined_qty: 0 });
+      await assertReconciled();
+    });
+
+    it('refuses to return more than is free when quarantine would overflow available', async () => {
+      // Floor the placement: bring everything out, then return it all DAMAGED, then try to
+      // partially return more quarantine than the placement can hold.
+      const created = await raise({ quantity: 4 });
+      await im.client.post(`/borrowing/${created.body.id}/decision`).send({ approve: true });
+
+      // First return quarantines all 4 units.
+      await im.client
+        .post(`/borrowing/${created.body.id}/returns`)
+        .send({ quantity: 4, compartmentId: fixture.compartmentA, condition: 'DAMAGED' });
+
+      // 4 still out and requested to return DAMAGED again — there's no placement room.
+      const tooMany = await im.client
+        .post(`/borrowing/${created.body.id}/returns`)
+        .send({ quantity: 1, compartmentId: fixture.compartmentA, condition: 'DAMAGED' });
+
+      expect(tooMany.status).toBe(409);
     });
   });
 
@@ -340,7 +406,7 @@ describe('borrowing', () => {
       await im.client.post(`/borrowing/${created.body.id}/decision`).send({ approve: true });
       await im.client
         .post(`/borrowing/${created.body.id}/returns`)
-        .send({ quantity: 1, compartmentId: fixture.compartmentA });
+        .send({ quantity: 1, compartmentId: fixture.compartmentA, condition: 'GOOD' });
 
       const reverted = await im.client
         .post(`/borrowing/${created.body.id}/revert`)
@@ -372,7 +438,10 @@ describe('borrowing', () => {
 
       for (const [path, body] of [
         [`/borrowing/${created.body.id}/decision`, { approve: true }],
-        [`/borrowing/${created.body.id}/returns`, { quantity: 1, compartmentId: fixture.compartmentA }],
+        [
+          `/borrowing/${created.body.id}/returns`,
+          { quantity: 1, compartmentId: fixture.compartmentA, condition: 'GOOD' },
+        ],
         [`/borrowing/${created.body.id}/revert`, { reason: 'nope' }],
       ] as const) {
         const response = await requester.client.post(path).send(body);
@@ -445,6 +514,37 @@ describe('borrowing', () => {
       const list = await im.client.get('/borrowing?limit=1');
       expect(list.body.limit).toBe(1);
       expect(typeof list.body.total).toBe('number');
+    });
+  });
+
+  describe('pending count badge (sidebar)', () => {
+    // The badge drives the IM sidebar (NavBadge.tsx). Two things must be true:
+    //   1. It only counts borrow requests a stock-role could decide from.
+    //   2. A decision decrements it on the next read, so the polling badge doesn't drift.
+    it('reflects pending requests and decrements after a decision', async () => {
+      const initial = await im.client.get('/borrowing/pending-count');
+      expect(initial.status).toBe(200);
+      expect(initial.body.count).toBe(0);
+
+      await raise({ quantity: 1 });
+      await raise({ quantity: 1 });
+
+      const pending = await im.client.get('/borrowing/pending-count');
+      expect(pending.body.count).toBe(2);
+
+      const list = await im.client.get('/borrowing?filter=PENDING');
+      const approvableId = list.body.items[0].id as string;
+
+      await im.client.post(`/borrowing/${approvableId}/decision`).send({ approve: true });
+
+      const after = await im.client.get('/borrowing/pending-count');
+      expect(after.body.count).toBe(1);
+    });
+
+    it('is not exposed to a general user', async () => {
+      await raise();
+      const response = await requester.client.get('/borrowing/pending-count');
+      expect(response.status).toBe(403);
     });
   });
 });

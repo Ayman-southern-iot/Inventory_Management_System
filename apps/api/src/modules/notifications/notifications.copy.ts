@@ -27,6 +27,11 @@ export interface NotificationCopyContext {
   amount?: string | null;
   dueDate?: string | null;
   quantity?: number | null;
+  /**
+   * Free-form discriminator for "what kind of return was this". The renderer decides
+   * whether to surface it — the copy knows it as a string and never inspects the enum.
+   */
+  condition?: string | null;
 }
 
 const by = (actorName?: string | null): string => (actorName ? ` by ${actorName}` : '');
@@ -123,7 +128,13 @@ export const NOTIFICATION_COPY: Record<NotificationType, NotificationTemplate> =
   'borrowing.returned': {
     severity: 'success',
     title: (ref) => `Borrow ${ref} was returned`,
-    body: (c) => (c.quantity ? `${c.quantity} unit(s) returned` : null),
+    body: (c) => {
+      const parts = [
+        c.quantity ? `${c.quantity} unit(s) returned` : null,
+        c.condition ? `condition: ${c.condition.replace(/_/g, ' ').toLowerCase()}` : null,
+      ].filter(Boolean);
+      return parts.length > 0 ? parts.join(' — ') : null;
+    },
   },
   'borrowing.issued_to_you': {
     severity: 'info',

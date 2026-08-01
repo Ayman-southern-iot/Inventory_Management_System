@@ -6,6 +6,7 @@ import {
   listLedgerQuerySchema,
   moveStockSchema,
   receiveStockSchema,
+  resolveQuarantineSchema,
   type AdjustStockInput,
   type LedgerEntry,
   type ListLedgerQuery,
@@ -13,6 +14,7 @@ import {
   type Paginated,
   type Placement,
   type ReceiveStockInput,
+  type ResolveQuarantineInput,
 } from '@ims/shared';
 import { zodPipe } from '../../common/zod-validation.pipe';
 import { CurrentUser, Roles } from '../auth/auth.decorators';
@@ -23,6 +25,7 @@ import { StockLedgerRepository } from './stock-ledger.repository';
 import { toPlacement } from './stock.mappers';
 import { StockService } from './stock.service';
 import { IdempotencyService } from '../../common/idempotency.service';
+import { AuthenticatedThrottle } from '../../common/throttling';
 import { ConflictError } from '../../common/errors';
 
 /**
@@ -32,6 +35,7 @@ import { ConflictError } from '../../common/errors';
  * Phase 02's borrow lifecycle, which drives them from a request's state machine. Exposing them
  * as free-standing endpoints would let someone reserve stock with no borrow attached to it.
  */
+@AuthenticatedThrottle
 @Controller('stock')
 export class StockController {
   constructor(
@@ -114,8 +118,47 @@ export class StockController {
         { performedBy: actor.id, refType: 'ADJUSTMENT' },
         audit,
       );
-      return this.placementsOf(body.productId);
+      return this.placementOf(body.productId, body.compartmentId);
     });
+  }
+
+  /**
+   * Settle quarantined quantity for a placement. Two outcomes:
+   *   RELEASE — the units were verified usable; quarantined_qty decreases only.
+   *   DISPOSE — the units are written off; quarantined_qty and quantity both decrease
+   *             and a DISPOSE ledger row is appended.
+   *
+   * The body requires a note because the future reader needs to know which of the two this
+   * was and why. Two clicks of "Release 5" against the same placement are also the kind of
+   * error the idempotency key exists for, so we run this through `runOnce` too.
+   */
+  @Roles(Role.INVENTORY_MANAGER, Role.ADMIN)
+  @Post('quarantine/resolve')
+  @HttpCode(HttpStatus.OK)
+  async resolveQuarantine(
+    @Body(zodPipe(resolveQuarantineSchema)) body: ResolveQuarantineInput,
+    @CurrentUser() actor: RequestUser,
+    @CurrentAuditContext() audit: AuditContext,
+    @Headers(IDEMPOTENCY_HEADER) idempotencyKey?: string,
+  ): Promise<Placement[]> {
+    return this.runOnce(
+      idempotencyKey,
+      actor.id,
+      `stock:quarantine:${body.productId}:${body.compartmentId}:${body.action}`,
+      async () => {
+        await this.stock.resolveQuarantine(
+          {
+            productId: body.productId,
+            compartmentId: body.compartmentId,
+            action: body.action,
+            quantity: body.quantity,
+          },
+          { performedBy: actor.id, refType: 'QUARANTINE', note: body.note },
+          audit,
+        );
+        return this.placementOf(body.productId, body.compartmentId);
+      },
+    );
   }
 
   private async runOnce<T>(
@@ -144,5 +187,18 @@ export class StockController {
   private async placementsOf(productId: string): Promise<Placement[]> {
     const rows = await this.stock.placementsForProduct(productId);
     return rows.map(toPlacement);
+  }
+
+  /**
+   * One placement, returned so the IM card can redraw the single chip that just changed. If the
+   * row disappeared (DISPOSE of the last unit, or an adjust to zero) the result is `[]` — the
+   * caller treats absence as "this compartment no longer holds stock".
+   */
+  private async placementOf(
+    productId: string,
+    compartmentId: string,
+  ): Promise<Placement[]> {
+    const rows = await this.stock.placementsForProduct(productId);
+    return rows.filter((r) => r.compartment_id === compartmentId).map(toPlacement);
   }
 }

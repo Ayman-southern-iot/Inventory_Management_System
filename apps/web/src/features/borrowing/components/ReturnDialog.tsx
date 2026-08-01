@@ -1,16 +1,36 @@
 import { useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { returnBorrowSchema, type BorrowRequest, type ReturnBorrowInput } from '@ims/shared';
+import {
+  returnBorrowSchema,
+  ReturnCondition,
+  type BorrowRequest,
+  type ReturnBorrowInput,
+} from '@ims/shared';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
-import { SelectField, TextAreaField } from '@/components/ui/Field';
+import { SelectField } from '@/components/ui/Field';
 import { useToast } from '@/components/ui/Toast';
 import { t } from '@/i18n/en';
 import { messageForError } from '@/lib/error-message';
 import { QuantityField } from '@/features/inventory/components/QuantityField';
 import { useZones } from '@/features/inventory/api';
 import { useReturnBorrow } from '../api';
+
+/**
+ * The four return conditions drive product availability, so the dropdown is required and the
+ * default is the safest one — "Good". A blank submit would either be silently accepted as
+ * "Good" (the old bug) or rejected for missing field (more honest, so we do that).
+ */
+const conditionOptions: ReadonlyArray<{ value: ReturnCondition; label: string }> = [
+  { value: ReturnCondition.GOOD, label: t.borrowing.conditionGood },
+  {
+    value: ReturnCondition.PARTIALLY_DAMAGED_USABLE,
+    label: t.borrowing.conditionPartiallyDamagedUsable,
+  },
+  { value: ReturnCondition.DAMAGED, label: t.borrowing.conditionDamaged },
+  { value: ReturnCondition.NOT_WORKING, label: t.borrowing.conditionNotWorking },
+];
 
 export function ReturnDialog({ borrow, onClose }: { borrow?: BorrowRequest; onClose: () => void }) {
   const toast = useToast();
@@ -34,7 +54,11 @@ export function ReturnDialog({ borrow, onClose }: { borrow?: BorrowRequest; onCl
 
   const form = useForm<ReturnBorrowInput>({
     resolver: zodResolver(returnBorrowSchema),
-    defaultValues: { quantity: undefined, compartmentId: '', conditionNote: null },
+    defaultValues: {
+      quantity: undefined,
+      compartmentId: '',
+      condition: ReturnCondition.GOOD,
+    },
   });
 
   useEffect(() => {
@@ -44,7 +68,7 @@ export function ReturnDialog({ borrow, onClose }: { borrow?: BorrowRequest; onCl
       quantity: borrow.outstandingQty,
       // Back where it came from unless the IM reshelves it.
       compartmentId: borrow.compartmentId,
-      conditionNote: null,
+      condition: ReturnCondition.GOOD,
     });
   }, [borrow, form]);
 
@@ -106,11 +130,17 @@ export function ReturnDialog({ borrow, onClose }: { borrow?: BorrowRequest; onCl
           ))}
         </SelectField>
 
-        <TextAreaField
-          label={t.borrowing.conditionNote}
-          error={errors.conditionNote?.message}
-          {...form.register('conditionNote')}
-        />
+        <SelectField
+          label={t.borrowing.returnCondition}
+          error={errors.condition?.message}
+          {...form.register('condition')}
+        >
+          {conditionOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </SelectField>
       </form>
     </Dialog>
   );

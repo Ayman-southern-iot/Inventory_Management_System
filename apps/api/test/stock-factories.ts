@@ -84,10 +84,18 @@ export async function placementOf(
   db: Db,
   productId: string,
   compartmentId: string,
-): Promise<{ quantity: number; reserved_qty: number; version: number } | undefined> {
+): Promise<
+  | {
+      quantity: number;
+      reserved_qty: number;
+      quarantined_qty: number;
+      version: number;
+    }
+  | undefined
+> {
   return db
     .selectFrom('stock_placements')
-    .select(['quantity', 'reserved_qty', 'version'])
+    .select(['quantity', 'reserved_qty', 'quarantined_qty', 'version'])
     .where('product_id', '=', productId)
     .where('compartment_id', '=', compartmentId)
     .executeTakeFirst();

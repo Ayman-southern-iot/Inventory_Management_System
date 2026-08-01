@@ -59,9 +59,11 @@ export class AuthService {
       await this.throttle.record(input.email, context.ip, false);
       // Only report the per-account lockout to someone who failed. Checking the password first
       // means a third party spraying wrong passwords at a colleague's address can no longer
-      // lock that colleague out of their own account.
-      if (this.throttle.isEmailThrottled(failures.byEmail)) {
-        throw new RateLimitedError(this.throttle.windowSeconds);
+      // lock that colleague out of their own account. The Retry-After grows exponentially with
+      // the failure count for this address, so a persistent attacker recovers less and less.
+      const retryAfter = this.throttle.emailRetryAfterSeconds(failures.byEmail);
+      if (retryAfter !== null) {
+        throw new RateLimitedError(retryAfter);
       }
       await this.audit.recordFailure(
         {

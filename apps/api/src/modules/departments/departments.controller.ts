@@ -11,11 +11,13 @@ import {
   type UpdateDepartmentInput,
 } from '@ims/shared';
 import { zodPipe } from '../../common/zod-validation.pipe';
+import { AuthenticatedThrottle } from '../../common/throttling';
 import { Roles } from '../auth/auth.decorators';
 import { CurrentAuditContext } from '../audit/audit.decorators';
 import type { AuditContext } from '../audit/audit-context';
 import { DepartmentsService } from './departments.service';
 
+@AuthenticatedThrottle
 @Controller('departments')
 export class DepartmentsController {
   constructor(private readonly departments: DepartmentsService) {}

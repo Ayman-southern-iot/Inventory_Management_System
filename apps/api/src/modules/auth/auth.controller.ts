@@ -1,5 +1,4 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req } from '@nestjs/common';
-import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import {
   changePasswordSchema,
@@ -12,13 +11,11 @@ import {
   type RefreshInput,
 } from '@ims/shared';
 import { zodPipe } from '../../common/zod-validation.pipe';
+import { authThrottle, loginBurstThrottle } from '../../common/throttling';
 import { UsersService } from '../users/users.service';
 import { AuthService, type LoginContext } from './auth.service';
 import { AllowPendingPasswordChange, CurrentUser, Public } from './auth.decorators';
 import type { RequestUser } from './request-user';
-
-/** Coarse per-IP ceiling in front of the per-account throttle in LoginThrottleService. */
-const LOGIN_BURST_LIMIT = { default: { limit: 10, ttl: 60_000 } };
 
 function contextOf(request: Request): LoginContext {
   return {
@@ -34,8 +31,13 @@ export class AuthController {
     private readonly users: UsersService,
   ) {}
 
+  /**
+   * Two named throttlers layered in one decorator: `auth` (general auth ceiling) and
+   * `loginBurst` (extra-tight burst limit on top). Either tripping produces a 429 with its own
+   * `Retry-After-{name}` header written by `ThrottlerGuard` before the exception bubbles here.
+   */
   @Public()
-  @Throttle(LOGIN_BURST_LIMIT)
+  @loginBurstThrottle
   @Post('login')
   @HttpCode(HttpStatus.OK)
   async login(
@@ -46,6 +48,7 @@ export class AuthController {
   }
 
   @Public()
+  @authThrottle
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   async refresh(
@@ -55,6 +58,7 @@ export class AuthController {
     return this.auth.refresh(body.refreshToken, contextOf(request));
   }
 
+  @authThrottle
   @AllowPendingPasswordChange()
   @Post('logout')
   @HttpCode(HttpStatus.NO_CONTENT)
@@ -66,6 +70,7 @@ export class AuthController {
     await this.auth.logout(body.refreshToken, user.id);
   }
 
+  @authThrottle
   @AllowPendingPasswordChange()
   @Get('me')
   async me(@CurrentUser() user: RequestUser): Promise<AuthUser> {
@@ -73,6 +78,7 @@ export class AuthController {
   }
 
   /** Returns a fresh session so the caller is not signed out by their own password change. */
+  @authThrottle
   @AllowPendingPasswordChange()
   @Post('change-password')
   @HttpCode(HttpStatus.OK)

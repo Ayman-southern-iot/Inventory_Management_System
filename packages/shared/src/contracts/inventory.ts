@@ -86,6 +86,11 @@ export const placementSchema = z.object({
   zoneName: z.string(),
   quantity: z.number().int(),
   reservedQty: z.number().int(),
+  /**
+   * Units on this shelf but held back because they came back damaged or not working. Physically
+   * present (counted in `quantity`), excluded from `available`, see migration 0019.
+   */
+  quarantinedQty: z.number().int(),
   availableQty: z.number().int(),
   /** Sent back on a move so a stale screen is rejected rather than silently applied. */
   version: z.number().int(),
@@ -103,15 +108,55 @@ export const productSchema = z.object({
   defaultReturnable: z.boolean(),
   description: z.string().nullable(),
   isActive: z.boolean(),
+  /**
+   * Aggregate across every shelf the product is on. Kept for the list view; the product card
+   * explains each one. `totalOwned = onHand + inUse` is what an IM reads as "stock this
+   * company currently holds, in any state".
+   */
   totalQuantity: z.number().int(),
   totalReserved: z.number().int(),
   totalAvailable: z.number().int(),
+  totalOnHand: z.number().int(),
+  totalQuarantined: z.number().int(),
+  totalInUse: z.number().int(),
+  totalOwned: z.number().int(),
   createdAt: z.string(),
 });
 export type Product = z.infer<typeof productSchema>;
 
+/**
+ * One row in the "Currently in use" section of a product detail page. The IM, the requester
+ * and the requester's project are all shown — the point is to answer "who has it and why" by
+ * searching the product, which is how people find things here.
+ *
+ * Returned quantity is shown when it differs from the borrowed quantity so partial returns are
+ * obvious at a glance. Fully-returned borrows are filtered out — there is no value in
+ * remembering who used it last.
+ */
+export const activeProductBorrowSchema = z.object({
+  borrowId: z.string().uuid(),
+  borrowNo: z.string(),
+  borrowerId: z.string().uuid(),
+  borrowerName: z.string(),
+  projectId: z.string().uuid().nullable(),
+  projectName: z.string().nullable(),
+  quantity: z.number().int(),
+  returnedQty: z.number().int(),
+  outstandingQty: z.number().int(),
+  expectedReturnDate: z.string().nullable(),
+  issuedAt: z.string().nullable(),
+  isOverdue: z.boolean(),
+  /** The IM sees the most recent return condition on partially-returned borrows. */
+  lastReturnCondition: z
+    .enum(['GOOD', 'PARTIALLY_DAMAGED_USABLE', 'DAMAGED', 'NOT_WORKING'])
+    .nullable(),
+});
+export type ActiveProductBorrow = z.infer<typeof activeProductBorrowSchema>;
+
 export interface ProductDetail extends Product {
   placements: Placement[];
+  /** Active borrows (ISSUED or PARTIALLY_RETURNED) ordered by issue date desc. */
+  activeBorrows: ActiveProductBorrow[];
 }
 
 /* --------------------------------------------------------------------- locations */
@@ -188,6 +233,32 @@ export const adjustStockSchema = z.object({
   reason: z.string().trim().min(3).max(500),
 });
 export type AdjustStockInput = z.infer<typeof adjustStockSchema>;
+
+/**
+ * Settle quarantined quantity for a (product, compartment) placement.
+ *
+ *   RELEASE — the units were repaired or verified usable. `quarantined_qty` decreases only;
+ *             quantity and the ledger are untouched. The units simply become available again.
+ *   DISPOSE — the units are written off. `quarantined_qty` decreases AND `quantity` decreases,
+ *             and a DISPOSE row is appended to the ledger in the same transaction.
+ *
+ * Either action requires a note — "what did you do with the damaged goods" is exactly the
+ * thing a future reader needs to know.
+ */
+export const QuarantineAction = {
+  RELEASE: 'RELEASE',
+  DISPOSE: 'DISPOSE',
+} as const;
+export type QuarantineAction = (typeof QuarantineAction)[keyof typeof QuarantineAction];
+
+export const resolveQuarantineSchema = z.object({
+  productId: z.string().uuid(),
+  compartmentId: z.string().uuid(),
+  action: z.enum(Object.values(QuarantineAction) as [QuarantineAction, ...QuarantineAction[]]),
+  quantity: positiveQuantitySchema,
+  note: z.string().trim().min(3).max(500),
+});
+export type ResolveQuarantineInput = z.infer<typeof resolveQuarantineSchema>;
 
 export const StockMovementType = {
   RECEIPT: 'RECEIPT',

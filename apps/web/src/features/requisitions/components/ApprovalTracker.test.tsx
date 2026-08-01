@@ -4,7 +4,6 @@ import userEvent from '@testing-library/user-event';
 import {
   ApprovalAction,
   ApprovalStage,
-  RequisitionEventType,
   RequisitionStatus,
   RequisitionUrgency,
   type Approval,
@@ -155,30 +154,30 @@ describe('ApprovalTracker', () => {
   });
 
   /**
-   * The case the plan singles out: a status column can only hold the latest value, so the
-   * history has to come from the event log or this is unreadable.
+   * The history block lives in LifecycleTracker now (per "history should be in Lifecycle
+   * part, not in progress part"), so this tracker renders only the chain. The withdrawn
+   * node still surfaces its note inline.
    */
-  it('shows the whole history for a requisition approved, withdrawn, then re-approved', async () => {
-    const now = new Date().toISOString();
+  it('shows the withdrawn note inline for an approval that was withdrawn', () => {
+    const note = 'changed my mind, second look needed';
     render(
       <ApprovalTracker
         requisition={requisition({
-          status: RequisitionStatus.APPROVED,
-          approvals: [approval({ action: ApprovalAction.APPROVED, actedAt: now })],
-          events: [
-            { id: '1', eventType: RequisitionEventType.APPROVER_APPROVED, actorId: 'user-1', actorName: 'Ayesha Approver', payload: {}, createdAt: now },
-            { id: '2', eventType: RequisitionEventType.APPROVER_WITHDREW, actorId: 'user-1', actorName: 'Ayesha Approver', payload: {}, createdAt: now },
-            { id: '3', eventType: RequisitionEventType.APPROVER_APPROVED, actorId: 'user-1', actorName: 'Ayesha Approver', payload: {}, createdAt: now },
+          status: RequisitionStatus.AWAITING_APPROVAL,
+          approvals: [
+            approval({
+              action: ApprovalAction.WITHDRAWN,
+              actedAt: new Date().toISOString(),
+              note,
+            }),
           ],
         })}
       />,
     );
 
-    await userEvent.click(screen.getByText(t.requisitions.history));
-
-    // Two approvals and one withdrawal, in order — the node alone would only show the last.
-    expect(screen.getAllByText(/APPROVER APPROVED/)).toHaveLength(2);
-    expect(screen.getByText(/APPROVER WITHDREW/)).toBeInTheDocument();
+    expect(screen.getByText(note)).toBeInTheDocument();
+    // The history block is no longer part of this view.
+    expect(screen.queryByText(t.requisitions.history)).toBeNull();
   });
 
   it('marks untouched stages as skipped once the request is dead', () => {

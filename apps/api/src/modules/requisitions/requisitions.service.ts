@@ -14,7 +14,11 @@ import {
 } from '@ims/shared';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
-import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+} from '../../common/errors';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NOTIFICATION_LINKS } from '../notifications/notifications.links';
@@ -184,6 +188,8 @@ export class RequisitionsService {
       throw new ConflictError('No active Inventory Manager exists to review this requisition');
     }
 
+    const submitStatus = RequisitionStatus.IM_REVIEW;
+
     await this.db.transaction().execute(async (tx) => {
       await this.repo.markSubmitted(tx, id, {
         requestedAmount,
@@ -191,18 +197,19 @@ export class RequisitionsService {
         approvedAmount: requestedAmount,
         requiredApproverCount: approverCount,
         thresholdAtSubmit: threshold,
-        // The IM reviews first: "confirmed, we don't have this" before anyone spends money.
-        status: RequisitionStatus.IM_REVIEW,
+        status: submitStatus,
       });
 
       await this.repo.freezeInStockQuantities(tx, id);
 
-      await this.repo.insertApproval(tx, {
-        requisitionId: id,
-        stage: ApprovalStage.INVENTORY_MANAGER,
-        slot: 1,
-        assignedUserId: inventoryManagerId,
-      });
+      if (inventoryManagerId) {
+        await this.repo.insertApproval(tx, {
+          requisitionId: id,
+          stage: ApprovalStage.INVENTORY_MANAGER,
+          slot: 1,
+          assignedUserId: inventoryManagerId,
+        });
+      }
 
       for (const [index, approverId] of approverIds.entries()) {
         await this.repo.insertApproval(tx, {
@@ -247,7 +254,9 @@ export class RequisitionsService {
           entityId: id,
           actorId,
           actorName: null,
-          context: { amount: String(requestedAmount) },
+          context: {
+            amount: String(requestedAmount),
+          },
         },
         tx,
       );

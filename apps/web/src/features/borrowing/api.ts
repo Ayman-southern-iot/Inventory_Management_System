@@ -36,6 +36,8 @@ export function usePendingBorrowCount(enabled: boolean) {
     queryKey: queryKeys.borrows.pendingCount(),
     queryFn: ({ signal }) => api.get<{ count: number }>('/borrowing/pending-count', signal),
     enabled,
+    // Same cadence as the requisition approval badge, so the two sidebar numbers move in sync.
+    refetchInterval: 60_000,
   });
 }
 

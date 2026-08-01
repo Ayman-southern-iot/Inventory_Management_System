@@ -17,6 +17,7 @@ import type {
   Product,
   ProductDetail,
   ReceiveStockInput,
+  ResolveQuarantineInput,
   UpdateCategoryInput,
   UpdateCompartmentInput,
   UpdateProductInput,
@@ -203,6 +204,20 @@ export function useAdjustStock() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: AdjustStockInput) => api.post<void>('/stock/adjust', input),
+    onSuccess: (_result, input) =>
+      invalidateAfterStockWrite(queryClient, input.productId, { placementsOnly: false }),
+  });
+}
+
+/**
+ * Settle quarantined quantity on a placement. RELEASE / DISPOSE both invalidate the product
+ * detail so totals and chips redraw; the IM cares about the totals, not the placement row.
+ */
+export function useResolveQuarantine() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ResolveQuarantineInput) =>
+      api.post<void>('/stock/quarantine/resolve', input),
     onSuccess: (_result, input) =>
       invalidateAfterStockWrite(queryClient, input.productId, { placementsOnly: false }),
   });

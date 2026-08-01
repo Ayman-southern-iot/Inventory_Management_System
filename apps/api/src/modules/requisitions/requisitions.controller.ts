@@ -33,6 +33,7 @@ import {
 import { ConflictError, ForbiddenError } from '../../common/errors';
 import { IdempotencyService } from '../../common/idempotency.service';
 import { zodPipe } from '../../common/zod-validation.pipe';
+import { AuthenticatedThrottle } from '../../common/throttling';
 import { CurrentUser, Roles } from '../auth/auth.decorators';
 import type { RequestUser } from '../auth/request-user';
 import { DelegationsService } from './delegations.service';
@@ -42,6 +43,7 @@ import { RequisitionsService } from './requisitions.service';
 /** Roles that see everyone's requisitions rather than only their own. */
 const OVERSIGHT_ROLES = [Role.INVENTORY_MANAGER, Role.APPROVER, Role.ADMIN] as const;
 
+@AuthenticatedThrottle
 @Controller('requisitions')
 export class RequisitionsController {
   constructor(

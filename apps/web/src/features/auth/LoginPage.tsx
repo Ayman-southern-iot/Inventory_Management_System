@@ -22,10 +22,8 @@ const TEST_ACCOUNTS: ReadonlyArray<{
   email: string;
   password: string;
 }> = [
-  { label: 'General user', email: 'saad@southerniot.net', password: 'demo' },
-  { label: 'Inventory Manager', email: 'sarjia@southerniot.net', password: 'demo' },
-  { label: 'Approver 1', email: 'pritu@southerniot.net', password: 'demo' },
-  { label: 'Approver 2', email: 'raqueeb@southerniot.net', password: 'demo' },
+  { label: 'Admin (ims.net)', email: 'admin@ims.net', password: '@admin@' },
+  { label: 'Admin (admin.net)', email: 'admin@admin.net', password: '@admin@' },
 ];
 
 export function LoginPage() {

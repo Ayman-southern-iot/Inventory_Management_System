@@ -4,6 +4,7 @@ import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
 import { Role } from '@ims/shared';
 import { Public, Roles } from '../auth/auth.decorators';
+import { AuthenticatedThrottle, publicThrottle } from '../../common/throttling';
 import {
   SystemHealthService,
   type SystemHealth,
@@ -22,6 +23,7 @@ export class HealthController {
   ) {}
 
   @Public()
+  @publicThrottle
   @Get('health')
   async health(): Promise<{ status: 'ok'; database: 'up' }> {
     await sql`SELECT 1`.execute(this.db);
@@ -36,6 +38,7 @@ export class HealthController {
    * timing tell an attacker when the host is under pressure and whether anyone is watching, and
    * the compose healthcheck has no use for either — it needs one bit, and it already has it.
    */
+  @AuthenticatedThrottle
   @Roles(Role.ADMIN)
   @Get('admin/system-health')
   async systemHealth(): Promise<SystemHealth> {

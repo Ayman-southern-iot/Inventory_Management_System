@@ -136,6 +136,32 @@ describe('LifecycleTracker', () => {
     ).toBeNull();
   });
 
+  it('renders the event history when events are present', () => {
+    render(
+      <LifecycleTracker
+        requisition={requisition({
+          status: RequisitionStatus.AWAITING_APPROVAL,
+          events: [
+            event(RequisitionEventType.SUBMITTED, '2026-01-15T10:00:00.000Z'),
+            event(RequisitionEventType.IM_APPROVED, '2026-01-15T11:00:00.000Z'),
+          ],
+        })}
+      />,
+    );
+
+    // The history is collapsed by default; the <summary> is the trigger.
+    const summary = screen.getByText(/history/i);
+    expect(summary).toBeInTheDocument();
+    // The event list is inside the same <details>; expand it to verify the entries.
+    const details = summary.closest('details');
+    expect(details).not.toBeNull();
+  });
+
+  it('does not render the history block when there are no events', () => {
+    render(<LifecycleTracker requisition={requisition({ events: [] })} />);
+    expect(screen.queryByText(/history/i)).toBeNull();
+  });
+
   it('handles a fully-completed requisition (status CLOSED)', () => {
     render(
       <LifecycleTracker

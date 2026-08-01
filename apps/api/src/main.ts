@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import { json, urlencoded } from 'express';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { config } from './config';
@@ -12,6 +13,12 @@ async function bootstrap(): Promise<void> {
 
   app.setGlobalPrefix(config.http.globalPrefix, { exclude: ['health'] });
   app.useGlobalFilters(new AllExceptionsFilter());
+  // Explicit body-size cap. NestJS installs no parser of its own, so without this the body is
+  // unbounded and a single attacker POST can blow the heap. The cap is intentionally below the
+  // reverse proxy's ceiling so the API fails loudly on oversized bodies instead of letting
+  // them hit any controller.
+  app.use(json({ limit: config.body.jsonLimit }));
+  app.use(urlencoded({ extended: true, limit: config.body.urlencodedLimit }));
   app.use(helmet());
 
   // Behind Caddy the SPA is same-origin and this list is empty; in dev it is the Vite origin.

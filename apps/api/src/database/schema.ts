@@ -176,6 +176,13 @@ export interface StockPlacementsTable {
   compartment_id: string;
   quantity: Generated<number>;
   reserved_qty: Generated<number>;
+  /**
+   * Physically present but unavailable. Damaged and not-working returns land here so a unit
+   * with a chewed end cannot be loaned again. `quantity - reserved_qty - quarantined_qty`
+   * is the available figure exposed by the product API; the CHECK above keeps the invariants
+   * structural rather than aspirational.
+   */
+  quarantined_qty: Generated<number>;
   /** Optimistic lock for the IM screen; a stale version is a 409, not a silent overwrite. */
   version: Generated<number>;
   created_at: CreatedAt;
@@ -224,6 +231,27 @@ export const BorrowStatusValue = {
 
 export type BorrowStatusValue = (typeof BorrowStatusValue)[keyof typeof BorrowStatusValue];
 
+export const ReturnConditionValue = {
+  GOOD: 'GOOD',
+  PARTIALLY_DAMAGED_USABLE: 'PARTIALLY_DAMAGED_USABLE',
+  DAMAGED: 'DAMAGED',
+  NOT_WORKING: 'NOT_WORKING',
+} as const;
+
+export type ReturnConditionValue = (typeof ReturnConditionValue)[keyof typeof ReturnConditionValue];
+
+/**
+ * The two outcomes for a quarantined placement. Not an enum on the database — the action is
+ * an API-level discriminator that decides what to write to the ledger and what to change on
+ * the placement row. RELEASE writes no ledger row; DISPOSE writes one.
+ */
+export const QuarantineAction = {
+  RELEASE: 'RELEASE',
+  DISPOSE: 'DISPOSE',
+} as const;
+
+export type QuarantineAction = (typeof QuarantineAction)[keyof typeof QuarantineAction];
+
 export interface ProjectsTable {
   id: Generated<string>;
   name: string;
@@ -265,7 +293,7 @@ export interface BorrowReturnsTable {
   quantity: number;
   compartment_id: string;
   received_by: string | null;
-  condition_note: string | null;
+  condition: ReturnConditionValue;
   returned_at: Generated<Date>;
 }
 

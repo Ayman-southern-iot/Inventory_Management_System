@@ -27,8 +27,13 @@ export function formatDateTime(isoTimestamp: string): string {
  * read against each other, 1,200 next to 1,200.50 invites a misread, and these are the numbers
  * someone signs off on. No currency symbol — the whole system is BDT and repeating it in every
  * cell is noise (rules/10: BDT is a project glossary term, not a per-row label).
+ *
+ * `undefined` / `NaN` print as an em dash: an unknown figure is not the same as zero, and the
+ * underlying API returning a stale shape (a renamed field, say) would otherwise throw at render
+ * time and crash the whole screen. Crashing on a transient mismatch costs more than it saves.
  */
-export function formatBdt(amount: number): string {
+export function formatBdt(amount: number | null | undefined): string {
+  if (amount === null || amount === undefined || Number.isNaN(amount)) return '—';
   return amount.toLocaleString(undefined, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,

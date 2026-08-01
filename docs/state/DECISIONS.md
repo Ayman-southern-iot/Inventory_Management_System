@@ -214,7 +214,10 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   defeats the point of the feature. OQ-14 records that this list was chosen, not specified.
 - 2026-07-30 — The audit purge ships **disabled by default** (`AUDIT_RETENTION_DAYS` = keep
   forever) and must be opted into by an admin — the standing requirement is that no data is lost
-  in any case, so deleting history is never the default behaviour of an upgrade.
+  in any case, so deleting history is never the default behaviour of an upgrade. The retention
+  setting is an explicit preset list (`AUDIT_RETENTION_PRESETS`: 5/10/15 days, 1/3/6 months,
+  1/3/5/10 years, Forever) so the persisted day count always matches a label and a hand-typed
+  value cannot silently change retention behaviour.
 - 2026-07-30 — The `audit_log` append-only trigger keeps rejecting UPDATE and TRUNCATE for every
   role including the owner, but permits DELETE only inside a transaction that has set the
   `ims.audit_purge` flag — the retention job is the one legitimate deleter, and a session flag

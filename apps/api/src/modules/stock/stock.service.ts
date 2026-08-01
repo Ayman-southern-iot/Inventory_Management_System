@@ -4,6 +4,7 @@ import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
 import {
   BorrowStatusValue,
+  QuarantineAction,
   StockMovementType,
   type Database,
   type StockLedgerTable,
@@ -426,6 +427,129 @@ export class StockService {
   }
 
   /**
+   * Settle quarantined units for a single placement.
+   *
+   *   RELEASE — damaged units were verified usable. `quarantined_qty` decreases by N, the
+   *             units simply become available again. No ledger row: physically nothing left
+   *             the shelf.
+   *   DISPOSE — the units are written off. `quarantined_qty` decreases by N AND `quantity`
+   *             decreases by N, and a DISPOSE ledger row is appended. The next reconciliation
+   *             pass therefore agrees that those units are gone.
+   *
+   * Both run inside the single transaction that locks the placement — without the FOR UPDATE
+   * the assertion that "we are only disposing units that were quarantined" would race against
+   * a concurrent return that is moving the same placement's quarantined count up.
+   *
+   * A note is required (`context.note`): a future reader needs to know what the IM actually
+   * did with the damaged goods, and "verified usable" / "scrapped" are the only honest answers.
+   */
+  async resolveQuarantine(
+    input: {
+      productId: string;
+      compartmentId: string;
+      action: QuarantineAction;
+      quantity: number;
+    },
+    context: StockContext,
+    auditContext: AuditContext,
+  ): Promise<PlacementRow> {
+    this.assertPositive(input.quantity);
+
+    return this.db.transaction().execute(async (tx) => {
+      await this.assertProductIsTrackable(tx, input.productId);
+
+      const placement = await this.lockPlacement(tx, input.productId, input.compartmentId);
+      if (!placement) throw new NotFoundError('Stock in that compartment');
+
+      if (input.quantity > placement.quarantined_qty) {
+        throw new ConflictError(
+          `Only ${placement.quarantined_qty} unit(s) are quarantined; cannot resolve ${input.quantity}`,
+        );
+      }
+
+      let updated: PlacementRow;
+      if (input.action === QuarantineAction.RELEASE) {
+        updated = await this.applyQuarantineDelta(tx, placement.id, -input.quantity);
+      } else {
+        // DISPOSE — write off the units. The single update handles both quantity and
+        // quarantined_qty, so a crash between two statements cannot leave one moved
+        // without the other.
+        const ledgerId = await this.appendLedger(tx, {
+          product_id: input.productId,
+          from_compartment_id: input.compartmentId,
+          to_compartment_id: null,
+          quantity: input.quantity,
+          movement_type: StockMovementType.DISPOSE,
+          ...this.provenance(context),
+        });
+
+        const after = await tx
+          .updateTable('stock_placements')
+          .set((eb) => ({
+            quarantined_qty: eb('quarantined_qty', '-', input.quantity),
+            quantity: eb('quantity', '-', input.quantity),
+            version: eb('version', '+', 1),
+          }))
+          .where('id', '=', placement.id)
+          .returningAll()
+          .executeTakeFirstOrThrow();
+
+        const productRef = await this.lookupProductRef(tx, input.productId);
+        await this.audit.record(
+          {
+            action: 'stock.dispose',
+            entityType: 'stock',
+            entityId: ledgerId,
+            entityRef: productRef,
+            summary: `Disposed ${input.quantity} of ${productRef} from quarantine`,
+            metadata: {
+              productId: input.productId,
+              compartmentId: input.compartmentId,
+              quantity: input.quantity,
+              note: context.note,
+            },
+          },
+          auditContext,
+          tx,
+        );
+
+        // Empty placements disappear so the product card stops showing dead compartments. The
+        // row was only zero because we just disposed everything that was here, so there is
+        // nothing for the next reconciler to disagree about.
+        if (after.quantity === 0 && after.reserved_qty === 0 && after.quarantined_qty === 0) {
+          await tx.deleteFrom('stock_placements').where('id', '=', placement.id).execute();
+          return after;
+        }
+        updated = after;
+      }
+
+      // RELEASE only — DISPOSE already audit-logged above.
+      if (input.action === QuarantineAction.RELEASE) {
+        const productRef = await this.lookupProductRef(tx, input.productId);
+        await this.audit.record(
+          {
+            action: 'stock.release_quarantine',
+            entityType: 'stock',
+            entityId: placement.id,
+            entityRef: productRef,
+            summary: `Released ${input.quantity} of ${productRef} from quarantine`,
+            metadata: {
+              productId: input.productId,
+              compartmentId: input.compartmentId,
+              quantity: input.quantity,
+              note: context.note,
+            },
+          },
+          auditContext,
+          tx,
+        );
+      }
+
+      return updated;
+    });
+  }
+
+  /**
    * A stock take correction. Requires a reason: an unexplained adjustment is indistinguishable
    * from theft when someone reads the ledger back in six months.
    */
@@ -514,6 +638,7 @@ export class StockService {
         'stock_placements.compartment_id',
         'stock_placements.quantity',
         'stock_placements.reserved_qty',
+        'stock_placements.quarantined_qty',
         'stock_placements.version',
         'storage_compartments.code as compartment_code',
         'storage_zones.id as zone_id',
@@ -741,6 +866,29 @@ export class StockService {
       .set((eb) => ({
         quantity: eb('quantity', '+', quantityDelta),
         reserved_qty: eb('reserved_qty', '+', reservedDelta),
+        version: eb('version', '+', 1),
+      }))
+      .where('id', '=', placementId)
+      .returningAll()
+      .executeTakeFirstOrThrow();
+  }
+
+  /**
+   * Quarantine-only delta — same shape as `applyDelta`, but does not touch `quantity` or
+   * `reserved_qty`. Used by `resolveQuarantine(RELEASE)` and by borrowing service when a
+   * DAMAGED / NOT_WORKING return lands. The CHECK constraint refuses to push quarantined +
+   * reserved past quantity, so a negative delta that would underflow zero is caught at the
+   * database layer.
+   */
+  private async applyQuarantineDelta(
+    tx: Tx,
+    placementId: string,
+    quarantineDelta: number,
+  ): Promise<PlacementRow> {
+    return tx
+      .updateTable('stock_placements')
+      .set((eb) => ({
+        quarantined_qty: eb('quarantined_qty', '+', quarantineDelta),
         version: eb('version', '+', 1),
       }))
       .where('id', '=', placementId)

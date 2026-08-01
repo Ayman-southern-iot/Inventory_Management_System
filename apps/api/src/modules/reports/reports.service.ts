@@ -28,7 +28,7 @@ export class ReportsService {
         funded: round2(values.funded),
         spent: round2(values.spent),
         returned: round2(values.returned),
-        netFunded: round2(values.funded - values.returned),
+        netCash: round2(values.funded - values.returned),
       };
     });
 
@@ -43,7 +43,7 @@ export class ReportsService {
         funded: round2(sum.funded + bucket.funded),
         spent: round2(sum.spent + bucket.spent),
         returned: round2(sum.returned + bucket.returned),
-        netFunded: round2(sum.netFunded + bucket.netFunded),
+        netCash: round2(sum.netCash + bucket.netCash),
       }),
       {
         requisitionCount: 0,
@@ -52,7 +52,7 @@ export class ReportsService {
         funded: 0,
         spent: 0,
         returned: 0,
-        netFunded: 0,
+        netCash: 0,
       },
     );
 

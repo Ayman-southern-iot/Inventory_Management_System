@@ -218,6 +218,29 @@ export function LifecycleTracker({ requisition }: { requisition: RequisitionDeta
           />
         ))}
       </ol>
+
+      {/* The full event timeline belongs with the lifecycle (which is the chronological
+          view), not the per-approval chain. Collapsed by default — most readers don't need
+          it, and the lifecycle chips already show the same timestamps on hover. */}
+      {requisition.events.length > 0 ? (
+        <details className="mt-4">
+          <summary className="cursor-pointer text-sm text-ink-muted hover:text-ink">
+            {t.requisitions.history}
+          </summary>
+          <ul className="mt-2 flex flex-col gap-1.5 border-l border-border pl-4">
+            {requisition.events.map((event) => (
+              <li key={event.id} className="text-xs text-ink-muted">
+                <span className="font-medium text-ink">{event.eventType.replace(/_/g, ' ')}</span>
+                {event.actorName ? ` · ${event.actorName}` : null}
+                <span className="text-ink-subtle">
+                  {' '}
+                  · {new Date(event.createdAt).toLocaleString()}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
     </div>
   );
 }

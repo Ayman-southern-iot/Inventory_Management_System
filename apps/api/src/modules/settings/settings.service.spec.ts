@@ -178,4 +178,22 @@ describe('SettingsService', () => {
       SEED_VALUES[SettingKey.APPROVER_SLOTS_BELOW_THRESHOLD],
     );
   });
+
+  it('accepts every AUDIT_RETENTION_DAYS preset and round-trips it', async () => {
+    for (const days of [5, 10, 15, 30, 90, 180, 365, 1095, 1825, 3650, 0]) {
+      await service.set(SettingKey.AUDIT_RETENTION_DAYS, days, ACTOR_CONTEXT);
+      expect(await service.get(SettingKey.AUDIT_RETENTION_DAYS)).toBe(days);
+    }
+  });
+
+  it('rejects an AUDIT_RETENTION_DAYS value outside the preset list', async () => {
+    // 0 (forever) and the preset values pass; everything else is refused.
+    for (const days of [1, 7, 14, 29, 45, 100, -1, 1.5, NaN]) {
+      await expect(
+        service.set(SettingKey.AUDIT_RETENTION_DAYS, days, ACTOR_CONTEXT),
+      ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
+    }
+    // Stored value stays at the seed (0 = forever).
+    expect(await service.get(SettingKey.AUDIT_RETENTION_DAYS)).toBe(0);
+  });
 });

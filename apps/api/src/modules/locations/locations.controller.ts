@@ -14,6 +14,7 @@ import {
   type Zone,
 } from '@ims/shared';
 import { zodPipe } from '../../common/zod-validation.pipe';
+import { AuthenticatedThrottle } from '../../common/throttling';
 import { Roles } from '../auth/auth.decorators';
 import { CurrentAuditContext } from '../audit/audit.decorators';
 import type { AuditContext } from '../audit/audit-context';
@@ -23,6 +24,7 @@ const listQuerySchema = z.object({
   includeInactive: z.coerce.boolean().default(false),
 });
 
+@AuthenticatedThrottle
 @Controller('locations')
 export class LocationsController {
   constructor(private readonly locations: LocationsService) {}

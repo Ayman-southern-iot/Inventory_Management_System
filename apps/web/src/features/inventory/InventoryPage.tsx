@@ -129,7 +129,8 @@ export function InventoryPage() {
                   t.inventory.productCode,
                   t.inventory.name,
                   t.inventory.category,
-                  t.inventory.onHand,
+                  t.inventory.totalOwned,
+                  t.inventory.inProjectUse,
                   t.inventory.available,
                   t.users.status,
                 ]}
@@ -146,7 +147,14 @@ export function InventoryPage() {
                     <td className="px-4 py-2.5 font-medium text-ink">{product.name}</td>
                     <td className="px-4 py-2.5 text-ink-muted">{product.categoryName}</td>
                     <td className="px-4 py-2.5 tabular-nums text-ink">
-                      {product.totalQuantity} {product.unit}
+                      {product.totalOwned} {product.unit}
+                    </td>
+                    <td className="px-4 py-2.5 tabular-nums text-ink">
+                      {product.totalInUse > 0 ? (
+                        <span className="font-medium">{product.totalInUse}</span>
+                      ) : (
+                        <span className="text-ink-subtle">0</span>
+                      )}
                     </td>
                     <td className="px-4 py-2.5 tabular-nums text-ink">{product.totalAvailable}</td>
                     <td className="px-4 py-2.5">

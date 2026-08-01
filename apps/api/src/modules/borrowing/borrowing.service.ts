@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'kysely';
 import {
   BorrowStatus,
+  ReturnCondition,
   Role,
   type CreateBorrowRequestInput,
   type DecideBorrowInput,
@@ -310,7 +311,7 @@ export class BorrowingService {
             quantity: input.quantity,
             returnedQtyAfter: request.returned_qty + input.quantity,
             fullyReturned,
-            conditionNote: input.conditionNote,
+            condition: input.condition,
           },
         },
         context,
@@ -330,7 +331,7 @@ export class BorrowingService {
           entityId: id,
           actorId,
           actorName: context.actorName,
-          context: { quantity: input.quantity },
+          context: { quantity: input.quantity, condition: input.condition },
         },
         tx,
       );
@@ -352,13 +353,28 @@ export class BorrowingService {
         { performedBy: actorId, refType: BORROW_REF_TYPE, refId: id },
         tx,
       );
+      // Damaged / not-working units are physically present on the shelf but excluded from
+      // available. We add them to `quarantined_qty` on the same placement in the same transaction
+      // — the DB CHECK refuses to put quantity into quarantine past quantity, so partial returns
+      // against a fully-quarantined placement are impossible.
+      if (
+        input.condition === ReturnCondition.DAMAGED ||
+        input.condition === ReturnCondition.NOT_WORKING
+      ) {
+        await this.repo.incrementQuarantine(
+          tx,
+          request.product_id,
+          input.compartmentId,
+          input.quantity,
+        );
+      }
       await this.repo.insertReturn(
         {
           borrowRequestId: id,
           quantity: input.quantity,
           compartmentId: input.compartmentId,
           receivedBy: actorId,
-          conditionNote: input.conditionNote,
+          condition: input.condition,
         },
         tx,
       );
