@@ -42,7 +42,9 @@ import {
   type Client,
 } from './scenario-seed-helpers';
 
-const DEV_PASSWORD = 'DevPassword123';
+// The seed script's persona password now comes from config (DEMO_ACCOUNT_PASSWORD) rather than
+// a literal, so this reads the same source instead of restating a value that can drift.
+const DEV_PASSWORD = config.demo.password;
 
 interface Actor extends Client {
   fullName: string;

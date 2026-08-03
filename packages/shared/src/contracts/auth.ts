@@ -61,3 +61,24 @@ export type AuthTokens = z.infer<typeof authTokensSchema>;
 
 export const loginResponseSchema = authTokensSchema.extend({ user: authUserSchema });
 export type LoginResponse = z.infer<typeof loginResponseSchema>;
+
+/**
+ * The accounts listed on the login page when demo mode is on.
+ *
+ * `password` is the single configured demo password shared by every listed account — not a
+ * stored one. Real passwords are argon2id hashes and cannot be read back, so if an admin
+ * changes an individual account's password this stops describing it.
+ */
+export const demoAccountSchema = z.object({
+  email: z.string().email(),
+  fullName: z.string(),
+  designation: z.string(),
+  roles: z.array(roleSchema),
+});
+export type DemoAccount = z.infer<typeof demoAccountSchema>;
+
+export const demoAccountsSchema = z.object({
+  password: z.string(),
+  accounts: z.array(demoAccountSchema),
+});
+export type DemoAccounts = z.infer<typeof demoAccountsSchema>;

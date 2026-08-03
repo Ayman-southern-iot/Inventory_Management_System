@@ -420,3 +420,35 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   could only ever be blank in production, which the health check reports as "not configured" and
   passes — so the backup-freshness alarm built in 6.4 would have been inert exactly where it
   matters, and a stopped cron job would have looked like a healthy system.
+- 2026-07-31 — Per-line freight lives in its own `numeric(14,2)` column rather than inside
+  `estimatedUnitPrice`. Hiding it would distort every unit-cost figure and, worse, let a
+  requisition slip under the expense threshold that decides how many approvers it needs.
+- 2026-07-31 — Post-submit requisition edits accept **freight changes only**. The edit window was
+  widened to APPROVED so a late shipping quote does not need a round-trip through the approver
+  queue, but `replaceItems` rewrites the whole set — without the guard an approved requisition
+  could be rewritten while `requested_amount` stayed frozen at the sanctioned figure, and a
+  modest edit would sit inside the over-budget tolerance and never bounce.
+- 2026-07-31 — `main.ts` and the integration harness now share one `configureApp`. They had
+  configured themselves separately and drifted: the body-size cap and helmet existed only in
+  production, so the spec asserting oversized bodies are refused could not pass and every other
+  spec ran against a server that differed from production in a way no assertion could see.
+- 2026-07-31 — The exception filter maps body-parser failures explicitly. body-parser rejects
+  before Nest sees the request and throws a plain Error carrying `type`, so an oversized or
+  malformed body became a generic 500 that told the caller the server had broken.
+- 2026-07-31 — The API image installs Alpine's chromium and points puppeteer at it through
+  `PDF_BROWSER_EXECUTABLE_PATH`. Puppeteer's bundled build is linked against glibc and cannot
+  run on Alpine, so PDF rendering would have failed in the container while working in dev. The
+  image also copies `assets/`, which it never did — the BOM letterhead resolved to nothing.
+- 2026-07-31 — LAN deployment uses `IMS_DOMAIN=:80`: Caddy serves plain HTTP on any Host, which
+  is what reaching the system by bare IP requires. No CA issues certificates for an IP address,
+  so this mode has no HTTPS by construction and is only defensible on a trusted network.
+- 2026-07-31 — Demo mode (`DEMO_ACCOUNTS_ENABLED`) seeds the five personas with one shared
+  password and lists them on the login page. It is **off by default** and enabled explicitly in
+  the root compose file, because it removes authentication in practice: anyone who can open the
+  login page can act as the administrator. Requested deliberately for an internal LAN trial.
+  Real passwords are argon2id and cannot be read back, so the page advertises the single
+  configured demo password rather than anything stored — and says on the page that an
+  admin-changed password stops matching it. The account list itself is read live from the
+  database, so the admin panel stays the one place users are managed.
+- 2026-07-31 — The `migrate` one-shot now runs the seed after the migrations. The seed is
+  idempotent by design, so a fresh machine needs exactly one command to get a working stack.

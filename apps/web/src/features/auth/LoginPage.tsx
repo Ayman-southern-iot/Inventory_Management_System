@@ -1,30 +1,17 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { useQuery } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { loginSchema, type LoginInput } from '@ims/shared';
-import { ApiError } from '@/api/client';
+import { loginSchema, type DemoAccounts, type LoginInput } from '@ims/shared';
+import { ApiError, api } from '@/api/client';
+import { queryKeys } from '@/api/keys';
 import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/Field';
 import { t } from '@/i18n/en';
 import { messageForError } from '@/lib/error-message';
 import { useAuth } from './auth-context';
 import { ROUTES } from '@/routes/paths';
-
-/**
- * Hard-coded demo credentials displayed under the sign-in card. Strictly a developer
- * convenience — the block is wrapped in `import.meta.env.DEV` so the production bundle
- * never ships it (rules/30-frontend.md; verified by the production-safety grep in the
- * Phase 05 plan).
- */
-const TEST_ACCOUNTS: ReadonlyArray<{
-  label: string;
-  email: string;
-  password: string;
-}> = [
-  { label: 'Admin (ims.net)', email: 'admin@ims.net', password: '@admin@' },
-  { label: 'Admin (admin.net)', email: 'admin@admin.net', password: '@admin@' },
-];
 
 export function LoginPage() {
   const { user, isRestoring, signIn } = useAuth();
@@ -36,10 +23,24 @@ export function LoginPage() {
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: '', password: '' },
+  });
+
+  /**
+   * The server decides whether demo accounts exist at all — it answers 404 when
+   * `DEMO_ACCOUNTS_ENABLED` is off, and this renders nothing. Deliberately server-driven
+   * rather than a build-time flag: the same production bundle is what runs on the demo box,
+   * and a list of who works here is not something a bundler should be deciding.
+   */
+  const demo = useQuery({
+    queryKey: queryKeys.auth.demoAccounts(),
+    queryFn: ({ signal }) => api.get<DemoAccounts>('/auth/demo-accounts', signal),
+    retry: false,
+    staleTime: 30_000,
   });
 
   if (!isRestoring && user) {
@@ -61,9 +62,14 @@ export function LoginPage() {
     }
   }
 
-  // `import.meta.env.DEV` is statically replaced by Vite at build time, so the whole
-  // test-accounts block is dead-code-eliminated from the production bundle.
-  const isDev = import.meta.env.DEV;
+  /** Fills the form rather than signing in directly, so the credentials are visible first. */
+  function fillCredentials(email: string, password: string) {
+    setValue('email', email, { shouldValidate: true });
+    setValue('password', password, { shouldValidate: true });
+    setFormError(null);
+  }
+
+  const accounts = demo.data?.accounts ?? [];
 
   return (
     <main className="flex min-h-dvh items-center justify-center bg-canvas px-4 py-10">
@@ -120,35 +126,38 @@ export function LoginPage() {
           </Button>
         </form>
 
-        {isDev ? (
+        {accounts.length > 0 && demo.data ? (
           <section
-            aria-label={t.auth.testAccountsTitle}
+            aria-label={t.auth.demoAccountsTitle}
             className="mt-4 rounded-[--radius-panel] border border-border bg-surface-2 p-4 text-xs text-ink-muted"
           >
-            <h3 className="text-sm font-semibold text-ink">{t.auth.testAccountsTitle}</h3>
-            <p className="mt-1">{t.auth.testAccountsHint}</p>
-            <table className="mt-3 w-full text-left">
-              <thead className="text-[0.7rem] uppercase tracking-wide text-ink-subtle">
-                <tr>
-                  <th className="pb-1 pr-2 font-medium">{t.auth.testAccountsRole}</th>
-                  <th className="pb-1 pr-2 font-medium">{t.auth.testAccountsEmail}</th>
-                  <th className="pb-1 font-medium">{t.auth.testAccountsPassword}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {TEST_ACCOUNTS.map((account) => (
-                  <tr key={account.email}>
-                    <td className="py-1.5 pr-2 text-ink">{account.label}</td>
-                    <td className="py-1.5 pr-2 font-mono text-[0.7rem] text-ink">
-                      {account.email}
-                    </td>
-                    <td className="py-1.5 font-mono text-[0.7rem] text-ink">
-                      {account.password}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <h3 className="text-sm font-semibold text-ink">{t.auth.demoAccountsTitle}</h3>
+            <p className="mt-1">
+              {t.auth.demoAccountsPasswordLabel}{' '}
+              <code className="rounded bg-surface px-1 py-0.5 font-mono text-ink">
+                {demo.data.password}
+              </code>
+            </p>
+            <ul className="mt-3 divide-y divide-border">
+              {accounts.map((account) => (
+                <li key={account.email}>
+                  <button
+                    type="button"
+                    onClick={() => fillCredentials(account.email, demo.data.password)}
+                    className="flex w-full flex-col items-start gap-0.5 py-2 text-left hover:bg-surface focus-visible:bg-surface"
+                  >
+                    <span className="font-medium text-ink">
+                      {account.fullName}
+                      <span className="ml-2 font-normal text-ink-subtle">
+                        {account.roles.join(', ')}
+                      </span>
+                    </span>
+                    <span className="font-mono text-[0.7rem] text-ink-muted">{account.email}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-3 text-[0.7rem] text-ink-subtle">{t.auth.demoAccountsCaveat}</p>
           </section>
         ) : null}
       </div>

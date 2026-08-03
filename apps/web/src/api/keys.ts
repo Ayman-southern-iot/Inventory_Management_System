@@ -19,6 +19,7 @@ import type {
 export const queryKeys = {
   auth: {
     me: () => ['auth', 'me'] as const,
+    demoAccounts: () => ['auth', 'demo-accounts'] as const,
   },
   users: {
     all: () => ['users'] as const,

@@ -1,7 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
+  PAGINATION_MAX_LIMIT,
   Role,
   type CreateUserInput,
+  type DemoAccount,
   type ListUsersQuery,
   type Paginated,
   type ResetPasswordInput,
@@ -55,6 +57,31 @@ export class UsersService {
   async list(query: ListUsersQuery): Promise<Paginated<User>> {
     const { items, total } = await this.repo.list(query);
     return { items: items.map(toUser), page: query.page, limit: query.limit, total };
+  }
+
+  /**
+   * Every active account, for the demo-mode login page. Deliberately minimal — name, email,
+   * designation and roles, nothing else — and read live so the admin panel stays the single
+   * place users are managed.
+   *
+   * The controller is what refuses to call this when demo mode is off.
+   */
+  async demoAccounts(): Promise<DemoAccount[]> {
+    const { items } = await this.repo.list({
+      page: 1,
+      limit: PAGINATION_MAX_LIMIT,
+      includeInactive: false,
+    } as ListUsersQuery);
+
+    return items.map((row) => {
+      const user = toUser(row);
+      return {
+        email: user.email,
+        fullName: user.fullName,
+        designation: user.designation,
+        roles: user.roles,
+      };
+    });
   }
 
   async create(input: CreateUserInput, context: AuditContext): Promise<User> {

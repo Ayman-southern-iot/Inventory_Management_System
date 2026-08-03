@@ -80,11 +80,12 @@ export const t = {
     passwordChanged: 'Password changed.',
     passwordRules: 'At least 4 characters.',
     // Dev-only block under the sign-in form (Phase 05). Never ships to production.
-    testAccountsTitle: 'Test accounts (development only)',
-    testAccountsHint: 'Demo credentials for local testing. Not present in production builds.',
-    testAccountsRole: 'Role',
-    testAccountsEmail: 'Email',
-    testAccountsPassword: 'Password',
+    // Shown only when the server has DEMO_ACCOUNTS_ENABLED on; the list is read live from the
+    // database, so users added or renamed in the admin panel appear here without a redeploy.
+    demoAccountsTitle: 'Demo accounts',
+    demoAccountsPasswordLabel: 'Password for every account below:',
+    demoAccountsCaveat:
+      'Anyone who can open this page can sign in as any of these people. Turn demo mode off before this system holds anything real. If an administrator changes one account’s password, that account no longer uses the password above.',
   },
 
   nav: {

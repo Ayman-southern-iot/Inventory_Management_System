@@ -20,8 +20,13 @@ const ARGON2 = {
   parallelism: 1,
 } as const;
 
-/** Only used outside production. The password is intentionally obvious, and so is the risk. */
-const DEV_PASSWORD = 'DevPassword123';
+/**
+ * The persona accounts exist when `DEMO_ACCOUNTS_ENABLED` is on, or in any non-production
+ * environment. Their password is deliberately obvious and comes from config — with demo mode
+ * on it is also printed on the login page, which is the whole point and the whole risk.
+ */
+const demoEnabled = config.demo.accountsEnabled || !config.isProduction;
+const DEMO_PASSWORD = config.demo.password;
 
 interface SeedUser {
   email: string;
@@ -83,7 +88,7 @@ async function main(): Promise<void> {
 
     // --- departments ----------------------------------------------------------
     const departmentIds = new Map<string, string>();
-    if (!config.isProduction) {
+    if (demoEnabled) {
       for (const name of DEV_DEPARTMENTS) {
         await db
           .insertInto('departments')
@@ -108,7 +113,7 @@ async function main(): Promise<void> {
         roles: [Role.GENERAL, Role.ADMIN],
         department: null,
       },
-      ...(config.isProduction ? [] : DEV_USERS),
+      ...(demoEnabled ? DEV_USERS : []),
     ];
 
     for (const user of toSeed) {
@@ -118,15 +123,31 @@ async function main(): Promise<void> {
         .where('email', '=', user.email.toLowerCase())
         .executeTakeFirst();
 
+      // The admin keeps its own configured password unless demo mode is explicitly on, in which
+      // case every listed account shares the demo password — including the admin, because the
+      // login page advertises one password for the whole set.
+      const plaintext =
+        user.roles.includes(Role.ADMIN) && !config.demo.accountsEnabled
+          ? config.seedAdmin.password
+          : DEMO_PASSWORD;
+      const passwordHash = await hash(plaintext, ARGON2);
+
       if (existing) {
-        console.log(`  user     ${user.email} (exists, untouched)`);
+        // Ordinarily a seed never overwrites what a human has changed. Demo mode is the
+        // exception and has to be: switching it on against a database that already holds these
+        // accounts would otherwise advertise a password that does not work.
+        if (config.demo.accountsEnabled) {
+          await db
+            .updateTable('users')
+            .set({ password_hash: passwordHash, must_change_password: false, is_active: true })
+            .where('id', '=', existing.id)
+            .execute();
+          console.log(`  user     ${user.email} (demo password reset)`);
+        } else {
+          console.log(`  user     ${user.email} (exists, untouched)`);
+        }
         continue;
       }
-
-      const plaintext = user.roles.includes(Role.ADMIN)
-        ? config.seedAdmin.password
-        : DEV_PASSWORD;
-      const passwordHash = await hash(plaintext, ARGON2);
 
       await db.transaction().execute(async (tx) => {
         const inserted = await tx
@@ -137,9 +158,10 @@ async function main(): Promise<void> {
             full_name: user.fullName,
             designation: user.designation,
             department_id: user.department ? (departmentIds.get(user.department) ?? null) : null,
-            // The seeded accounts are meant to be logged into directly during development;
-            // forcing a change on first login would break every integration test.
-            must_change_password: config.isProduction,
+            // Seeded accounts are meant to be logged into directly, and a demo whose accounts
+            // all demand a password change on first use is not a demo. Outside demo mode a
+            // production admin still has to change the seed password immediately.
+            must_change_password: config.isProduction && !config.demo.accountsEnabled,
           })
           .returning('id')
           .executeTakeFirstOrThrow();
@@ -154,7 +176,7 @@ async function main(): Promise<void> {
     }
 
     // --- approver slots (OQ-02: global defaults) --------------------------------
-    if (!config.isProduction) {
+    if (demoEnabled) {
       const approvers = await db
         .selectFrom('users')
         .innerJoin('user_roles', 'user_roles.user_id', 'users.id')
@@ -185,7 +207,7 @@ async function main(): Promise<void> {
     // Enough of a catalogue that the inventory screens show something real on a fresh
     // checkout. Never in production: invented products in a live stock register are worse
     // than an empty one, because someone will eventually trust them.
-    if (!config.isProduction) {
+    if (demoEnabled) {
       const categories: Array<{ name: string; trackable: boolean }> = [
         { name: 'Laptops', trackable: true },
         { name: 'R&D Hardware', trackable: true },

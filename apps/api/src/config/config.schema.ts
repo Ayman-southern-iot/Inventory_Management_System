@@ -111,6 +111,23 @@ const rawSchema = z.object({
   SETTING_AUDIT_ENABLED_ACTIONS: z.string().default(''),
   SETTING_AUDIT_RETENTION_DAYS: z.coerce.number().int().min(0).default(0),
 
+  // --- Demo accounts -----------------------------------------------------------
+  /**
+   * Seeds a known set of accounts sharing one obvious password, and lists them on the login
+   * page so anyone can sign in as any persona.
+   *
+   * This removes authentication in practice: whoever can reach the login page can act as the
+   * administrator. It exists for demos and internal trials on a trusted network and must be
+   * `false` on anything real. Defaults to `false` so it is never inherited by accident — a
+   * deployment that wants it has to say so.
+   */
+  DEMO_ACCOUNTS_ENABLED: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+  /** Shared password for the demo accounts. Four characters is the policy minimum. */
+  DEMO_ACCOUNT_PASSWORD: z.string().min(4).default('demo'),
+
   // --- Uploads (Phase 05) ------------------------------------------------------
   // Signatures and invoices. Separate from PDF_STORAGE_DIR because rendered PDFs are derived
   // artefacts the system can regenerate, whereas an uploaded invoice exists nowhere else — the
@@ -262,6 +279,11 @@ export interface AppConfig {
     readonly addressLines: readonly string[];
     readonly logoPath: string;
   };
+  /** Demo accounts: a known persona set sharing one obvious password. Off unless asked for. */
+  readonly demo: {
+    readonly accountsEnabled: boolean;
+    readonly password: string;
+  };
   readonly uploads: {
     readonly storageDir: string;
     readonly maxImageBytes: number;
@@ -393,6 +415,10 @@ export function buildConfig(source: Record<string, string | undefined>): AppConf
           .filter(Boolean),
       ),
       logoPath: env.COMPANY_LOGO_PATH,
+    }),
+    demo: Object.freeze({
+      accountsEnabled: env.DEMO_ACCOUNTS_ENABLED,
+      password: env.DEMO_ACCOUNT_PASSWORD,
     }),
     uploads: Object.freeze({
       storageDir: env.FILE_STORAGE_DIR,

@@ -9,7 +9,10 @@ import {
   type LoginInput,
   type LoginResponse,
   type RefreshInput,
+  type DemoAccounts,
 } from '@ims/shared';
+import { config } from '../../config';
+import { NotFoundError } from '../../common/errors';
 import { zodPipe } from '../../common/zod-validation.pipe';
 import { authThrottle, loginBurstThrottle } from '../../common/throttling';
 import { UsersService } from '../users/users.service';
@@ -30,6 +33,29 @@ export class AuthController {
     private readonly auth: AuthService,
     private readonly users: UsersService,
   ) {}
+
+  /**
+   * The account list shown on the login page when `DEMO_ACCOUNTS_ENABLED` is on.
+   *
+   * Read live from the database, so adding, renaming, deactivating or re-roling anyone in the
+   * admin panel is reflected here on the next page load — no second list to keep in step.
+   *
+   * The password is the configured demo password, not a stored one: real passwords are
+   * argon2id hashes and cannot be read back. If an admin changes an individual account's
+   * password, that account's real password stops matching what this advertises. Say so on the
+   * page rather than pretending otherwise.
+   *
+   * 404 when demo mode is off, so a production deployment does not even hint the route exists.
+   */
+  @Public()
+  @Get('demo-accounts')
+  async demoAccounts(): Promise<DemoAccounts> {
+    if (!config.demo.accountsEnabled) throw new NotFoundError('Demo accounts');
+    return {
+      password: config.demo.password,
+      accounts: await this.users.demoAccounts(),
+    };
+  }
 
   /**
    * Two named throttlers layered in one decorator: `auth` (general auth ceiling) and
