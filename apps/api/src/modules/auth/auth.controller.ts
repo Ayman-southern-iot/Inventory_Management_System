@@ -51,10 +51,16 @@ export class AuthController {
   @Get('demo-accounts')
   async demoAccounts(): Promise<DemoAccounts> {
     if (!config.demo.accountsEnabled) throw new NotFoundError('Demo accounts');
-    return {
-      password: config.demo.password,
-      accounts: await this.users.demoAccounts(),
-    };
+    const { passwordOverrides: overrides, accountEmails: allowed } = config.demo;
+    const accounts = (await this.users.demoAccounts())
+      // An unlisted persona is better than one that fails on click, so when a list is
+      // configured it is the whole list.
+      .filter((account) => allowed.length === 0 || allowed.includes(account.email.toLowerCase()))
+      .map((account) => {
+        const own = overrides[account.email.toLowerCase()];
+        return own ? { ...account, password: own } : account;
+      });
+    return { password: config.demo.password, accounts };
   }
 
   /**

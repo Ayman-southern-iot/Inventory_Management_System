@@ -143,7 +143,10 @@ export function LoginPage() {
                 <li key={account.email}>
                   <button
                     type="button"
-                    onClick={() => fillCredentials(account.email, demo.data.password)}
+                    // An account may carry its own password when it differs from the shared one.
+                    onClick={() =>
+                      fillCredentials(account.email, account.password ?? demo.data.password)
+                    }
                     className="flex w-full flex-col items-start gap-0.5 py-2 text-left hover:bg-surface focus-visible:bg-surface"
                   >
                     <span className="font-medium text-ink">
@@ -152,7 +155,12 @@ export function LoginPage() {
                         {account.roles.join(', ')}
                       </span>
                     </span>
-                    <span className="font-mono text-[0.7rem] text-ink-muted">{account.email}</span>
+                    <span className="font-mono text-[0.7rem] text-ink-muted">
+                      {account.email}
+                      <span className="ml-2 text-ink-subtle">
+                        {account.password ?? demo.data.password}
+                      </span>
+                    </span>
                   </button>
                 </li>
               ))}

@@ -127,6 +127,43 @@ const rawSchema = z.object({
     .transform((v) => v === 'true'),
   /** Shared password for the demo accounts. Four characters is the policy minimum. */
   DEMO_ACCOUNT_PASSWORD: z.string().min(4).default('demo'),
+  /**
+   * Per-account exceptions, as `email=password` pairs separated by commas. For accounts that
+   * predate demo mode and keep their own password rather than being reset to the shared one.
+   * Credentials belong in configuration, never in source.
+   */
+  /**
+   * Restricts the login page to these emails, comma separated. Without it the page lists every
+   * active user, including ones whose password is not the demo one — a persona that fails on
+   * click is worse than one that is absent. Empty means "list them all".
+   */
+  DEMO_ACCOUNT_EMAILS: z
+    .string()
+    .default('')
+    .transform((raw) =>
+      raw
+        .split(',')
+        .map((email) => email.trim().toLowerCase())
+        .filter((email) => email.length > 0),
+    ),
+  DEMO_ACCOUNT_PASSWORD_OVERRIDES: z
+    .string()
+    .default('')
+    .transform((raw) =>
+      Object.fromEntries(
+        raw
+          .split(',')
+          .map((pair) => pair.trim())
+          .filter((pair) => pair.includes('='))
+          .map((pair) => {
+            const separator = pair.indexOf('=');
+            return [
+              pair.slice(0, separator).trim().toLowerCase(),
+              pair.slice(separator + 1).trim(),
+            ] as const;
+          }),
+      ),
+    ),
 
   // --- Uploads (Phase 05) ------------------------------------------------------
   // Signatures and invoices. Separate from PDF_STORAGE_DIR because rendered PDFs are derived
@@ -283,6 +320,10 @@ export interface AppConfig {
   readonly demo: {
     readonly accountsEnabled: boolean;
     readonly password: string;
+    /** Lower-cased emails to list. Empty lists every active user. */
+    readonly accountEmails: readonly string[];
+    /** Per-account exceptions, keyed by lower-cased email. */
+    readonly passwordOverrides: Readonly<Record<string, string>>;
   };
   readonly uploads: {
     readonly storageDir: string;
@@ -419,6 +460,8 @@ export function buildConfig(source: Record<string, string | undefined>): AppConf
     demo: Object.freeze({
       accountsEnabled: env.DEMO_ACCOUNTS_ENABLED,
       password: env.DEMO_ACCOUNT_PASSWORD,
+      accountEmails: env.DEMO_ACCOUNT_EMAILS,
+      passwordOverrides: env.DEMO_ACCOUNT_PASSWORD_OVERRIDES,
     }),
     uploads: Object.freeze({
       storageDir: env.FILE_STORAGE_DIR,

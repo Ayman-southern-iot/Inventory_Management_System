@@ -74,6 +74,12 @@ export const demoAccountSchema = z.object({
   fullName: z.string(),
   designation: z.string(),
   roles: z.array(roleSchema),
+  /**
+   * This account's own demo password when it differs from the shared one — the admin account
+   * predates demo mode and keeps its existing password rather than being reset to match.
+   * Absent means "use the shared password".
+   */
+  password: z.string().optional(),
 });
 export type DemoAccount = z.infer<typeof demoAccountSchema>;
 
