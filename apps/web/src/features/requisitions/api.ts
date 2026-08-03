@@ -1,3 +1,4 @@
+import { randomId } from '@/lib/random-id';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   CreateDelegationInput,
@@ -18,7 +19,7 @@ import { toSearchParams } from '@/api/search-params';
 const AWAITING_POLL_MS = 60_000;
 
 /** Fresh per submit: a retry of a failed attempt is new, a double-click is a repeat. */
-const newIdempotencyKey = () => crypto.randomUUID();
+const newIdempotencyKey = () => randomId();
 
 export function useRequisitions(query: ListRequisitionsQuery) {
   return useQuery({

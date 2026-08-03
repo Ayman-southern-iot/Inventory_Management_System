@@ -1,3 +1,4 @@
+import { randomId } from '@/lib/random-id';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   BorrowToUserInput,
@@ -50,7 +51,7 @@ export function useRecordReceipt(id: string) {
   return useFundsMutation<RecordFundReceiptInput>(id, (input) =>
     // Idempotency-keyed: a double-click would otherwise look exactly like two genuine instalments.
     api.post<RequisitionFunding>(`/requisitions/${id}/fund-receipts`, input, {
-      idempotencyKey: crypto.randomUUID(),
+      idempotencyKey: randomId(),
     }),
   );
 }
@@ -58,7 +59,7 @@ export function useRecordReceipt(id: string) {
 export function useRecordPurchase(id: string) {
   return useFundsMutation<RecordPurchaseInput>(id, (input) =>
     api.post<RequisitionFunding>(`/requisitions/${id}/purchases`, input, {
-      idempotencyKey: crypto.randomUUID(),
+      idempotencyKey: randomId(),
     }),
   );
 }
@@ -66,7 +67,7 @@ export function useRecordPurchase(id: string) {
 export function useVerifyPurchase(id: string) {
   return useFundsMutation<VerifyPurchaseInput>(id, (input) =>
     api.post<RequisitionFunding>(`/requisitions/${id}/verify-purchase`, input, {
-      idempotencyKey: crypto.randomUUID(),
+      idempotencyKey: randomId(),
     }),
   );
 }
@@ -74,7 +75,7 @@ export function useVerifyPurchase(id: string) {
 export function useReceiveIntoStock(id: string) {
   return useFundsMutation<ReceiveIntoStockInput>(id, (input) =>
     api.post<RequisitionFunding>(`/requisitions/${id}/receive-to-stock`, input, {
-      idempotencyKey: crypto.randomUUID(),
+      idempotencyKey: randomId(),
     }),
   );
 }
@@ -82,7 +83,7 @@ export function useReceiveIntoStock(id: string) {
 export function useBorrowToUser(id: string) {
   return useFundsMutation<BorrowToUserInput>(id, (input) =>
     api.post<RequisitionFunding>(`/requisitions/${id}/borrow-to-user`, input, {
-      idempotencyKey: crypto.randomUUID(),
+      idempotencyKey: randomId(),
     }),
   );
 }

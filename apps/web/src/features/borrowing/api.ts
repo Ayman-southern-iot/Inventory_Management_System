@@ -1,3 +1,4 @@
+import { randomId } from '@/lib/random-id';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   BorrowRequest,
@@ -19,7 +20,7 @@ import { toSearchParams } from '@/api/search-params';
  * on the same one is recognised as a repeat.
  */
 function newIdempotencyKey(): string {
-  return crypto.randomUUID();
+  return randomId();
 }
 
 export function useBorrows(query: ListBorrowsQuery) {
