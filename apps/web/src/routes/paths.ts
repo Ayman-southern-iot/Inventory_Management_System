@@ -42,4 +42,8 @@ export const ROUTES = {
     settings: '/admin/settings',
     auditLog: '/admin/audit-log',
   },
+  /** Per-user settings. `changePassword` stays top-level: ProtectedRoute redirects to it. */
+  account: {
+    profile: '/account/profile',
+  },
 } as const;

@@ -418,6 +418,11 @@ export const t = {
       'Requested and approved are counted by submission date; funded, spent and returned by the date the money moved.',
   },
 
+  account: {
+    title: 'My account',
+    changePassword: 'Change your password',
+  },
+
   signature: {
     title: 'Signature',
     subtitle:

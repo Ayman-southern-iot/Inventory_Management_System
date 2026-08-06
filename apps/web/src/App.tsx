@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/ui/states';
 import { ToastProvider } from '@/components/ui/Toast';
 import { AuthProvider } from '@/features/auth/auth-context';
 import { ChangePasswordPage } from '@/features/auth/ChangePasswordPage';
+import { ProfilePage } from '@/features/profile/ProfilePage';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { DashboardPage } from '@/features/dashboard/DashboardPage';
 import { DepartmentsPage } from '@/features/admin/DepartmentsPage';
@@ -67,6 +68,7 @@ export function App() {
                   <Route element={<AppShell />}>
                     <Route path={ROUTES.dashboard} element={<DashboardPage />} />
                     <Route path={ROUTES.changePassword} element={<ChangePasswordPage />} />
+                    <Route path={ROUTES.account.profile} element={<ProfilePage />} />
                     {/* Anyone may borrow, so My borrowings is not role-gated. */}
                     <Route path={ROUTES.borrowing.mine} element={<BorrowingPage mine />} />
 
