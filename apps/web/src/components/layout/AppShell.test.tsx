@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Role, type AuthUser } from '@ims/shared';
 import { t } from '@/i18n/en';
+import { ROUTES } from '@/routes/paths';
 import { AppShell } from './AppShell';
 
 /**
@@ -87,5 +89,16 @@ describe('AppShell navigation', () => {
     currentUser = null;
     const { container } = renderShell();
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it('offers My account in the user menu', async () => {
+    currentUser = userWithRoles([Role.GENERAL]);
+    const user = userEvent.setup();
+    renderShell();
+
+    await user.click(screen.getByRole('button', { name: 'Test Person' }));
+
+    const link = screen.getByRole('menuitem', { name: t.nav.account });
+    expect(link).toHaveAttribute('href', ROUTES.account.profile);
   });
 });

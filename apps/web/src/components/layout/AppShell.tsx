@@ -17,6 +17,7 @@ import {
   Package,
   Settings2,
   Users,
+  UserRound,
   Wallet,
   X,
 } from 'lucide-react';
@@ -24,8 +25,8 @@ import { Role } from '@ims/shared';
 import { t } from '@/i18n/en';
 import { cn } from '@/lib/cn';
 import { useAuth } from '@/features/auth/auth-context';
-import { Badge } from '@/components/ui/primitives';
 import { Button } from '@/components/ui/Button';
+import { UserIdentity } from '@/components/UserIdentity';
 import { ROUTES } from '@/routes/paths';
 import { AwaitingApprovalBadge, PendingBorrowBadge } from './NavBadge';
 import { NotificationBell } from '@/features/notifications/NotificationBell';
@@ -153,16 +154,17 @@ export function AppShell() {
                 role="menu"
                 className="absolute right-0 mt-1 w-64 rounded-[--radius-panel] border border-border bg-surface p-3 shadow-[--shadow-overlay]"
               >
-                <p className="text-sm font-medium text-ink">{user.fullName}</p>
-                <p className="text-xs text-ink-muted">{user.email}</p>
-                <p className="mt-1 text-xs text-ink-subtle">{user.designation}</p>
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {user.roles.map((role) => (
-                    <Badge key={role} tone="info">
-                      {t.roles[role]}
-                    </Badge>
-                  ))}
-                </div>
+                <UserIdentity user={user} />
+                {/* Closes the menu on navigate, or it hangs over the page it just opened. */}
+                <NavLink
+                  to={ROUTES.account.profile}
+                  role="menuitem"
+                  onClick={() => setMenuOpen(false)}
+                  className="mt-3 flex items-center gap-2 rounded-[--radius-control] px-2 py-1.5 text-sm text-ink hover:bg-surface-muted"
+                >
+                  <UserRound aria-hidden className="size-4 text-ink-subtle" />
+                  {t.nav.account}
+                </NavLink>
                 <Button
                   variant="secondary"
                   size="sm"
