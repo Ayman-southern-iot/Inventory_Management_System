@@ -145,6 +145,7 @@ export function AppShell() {
               aria-haspopup="menu"
               className="flex items-center gap-2 rounded-[--radius-control] px-2 py-1.5 text-sm hover:bg-surface-muted"
             >
+              <span className="sr-only sm:hidden">{user.fullName}</span>
               <span className="hidden text-ink sm:inline">{user.fullName}</span>
               <ChevronDown aria-hidden className="size-4 text-ink-subtle" />
             </button>
@@ -155,16 +156,20 @@ export function AppShell() {
                 className="absolute right-0 mt-1 w-64 rounded-[--radius-panel] border border-border bg-surface p-3 shadow-[--shadow-overlay]"
               >
                 <UserIdentity user={user} />
-                {/* Closes the menu on navigate, or it hangs over the page it just opened. */}
-                <NavLink
-                  to={ROUTES.account.profile}
-                  role="menuitem"
-                  onClick={() => setMenuOpen(false)}
-                  className="mt-3 flex items-center gap-2 rounded-[--radius-control] px-2 py-1.5 text-sm text-ink hover:bg-surface-muted"
-                >
-                  <UserRound aria-hidden className="size-4 text-ink-subtle" />
-                  {t.nav.account}
-                </NavLink>
+                {/* A forced password change pins the user to the change-password screen
+                    (ProtectedRoute), so the link would only bounce them back — hide it. */}
+                {!user.mustChangePassword && (
+                  // Closes the menu on navigate, or it hangs over the page it just opened.
+                  <NavLink
+                    to={ROUTES.account.profile}
+                    role="menuitem"
+                    onClick={() => setMenuOpen(false)}
+                    className="mt-3 flex items-center gap-2 rounded-[--radius-control] px-2 py-1.5 text-sm text-ink hover:bg-surface-muted"
+                  >
+                    <UserRound aria-hidden className="size-4 text-ink-subtle" />
+                    {t.nav.account}
+                  </NavLink>
+                )}
                 <Button
                   variant="secondary"
                   size="sm"

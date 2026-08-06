@@ -24,7 +24,7 @@ export function ProfilePage() {
 
   return (
     <div className="mx-auto max-w-md">
-      <PageHeader title={t.account.title} />
+      <PageHeader title={t.nav.account} />
 
       <Panel className="p-5">
         <UserIdentity user={user} />

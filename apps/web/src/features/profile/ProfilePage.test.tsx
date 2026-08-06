@@ -65,6 +65,8 @@ describe('ProfilePage', () => {
   it('hides the signature panel from a general user', () => {
     currentUser = userWithRoles([Role.GENERAL]);
     renderPage();
+    // Positive assertion first, so this cannot pass because the page rendered nothing at all.
+    expect(screen.getByRole('heading', { name: t.nav.account })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: t.signature.title })).not.toBeInTheDocument();
   });
 

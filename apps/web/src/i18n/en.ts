@@ -419,7 +419,6 @@ export const t = {
   },
 
   account: {
-    title: 'My account',
     changePassword: 'Change your password',
   },
 

@@ -96,7 +96,10 @@ describe('AppShell navigation', () => {
     const user = userEvent.setup();
     renderShell();
 
-    await user.click(screen.getByRole('button', { name: 'Test Person' }));
+    // `css: false` in vitest.config.ts means jsdom never applies the `hidden`/`sr-only`
+    // breakpoint classes, so both the mobile and desktop name spans are "visible" to the
+    // accessible-name algorithm here — a substring match is the width-independent way to find it.
+    await user.click(screen.getByRole('button', { name: /Test Person/ }));
 
     const link = screen.getByRole('menuitem', { name: t.nav.account });
     expect(link).toHaveAttribute('href', ROUTES.account.profile);
