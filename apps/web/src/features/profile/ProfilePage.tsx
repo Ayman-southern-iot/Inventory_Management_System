@@ -22,8 +22,10 @@ export function ProfilePage() {
 
   if (!user) return null;
 
+  // Wider than the password form's `max-w-md`: SignaturePanel lays out a fixed 224px preview, a
+  // metadata column and a button group side by side from `sm` up, and squeezes badly below ~600px.
   return (
-    <div className="mx-auto max-w-md">
+    <div className="mx-auto max-w-2xl">
       <PageHeader title={t.nav.account} />
 
       <Panel className="p-5">
