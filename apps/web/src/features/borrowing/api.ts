@@ -46,16 +46,39 @@ export function usePendingBorrowCount(enabled: boolean) {
 /**
  * Every project, for the pickers in the borrow dialog and the requisition form.
  *
- * `limit` is not decoration: `GET /projects` is paginated and defaults to 25, so without it
- * the picker would silently offer only the first 25 projects alphabetically and a user would
- * conclude their project does not exist. `select` unwraps the page so both consumers keep
- * receiving a plain `Project[]`.
+ * `GET /projects` is paginated (rules/40-database.md) and cannot return more than
+ * `PAGINATION_MAX_LIMIT` in one call, so a single request silently truncates once the project
+ * count passes 100 — realistic for this org per OQ-19. There is no search or "load more" in
+ * either picker, so truncation would just make a project disappear with no signal. Instead this
+ * pages through with the server's own `total` as the stop condition and concatenates, so the
+ * hook still resolves to a plain `Project[]` and neither consumer needs to change.
  */
+/** Exported only for the pagination unit test — not part of the feature's public surface. */
+export async function fetchAllProjects(signal: AbortSignal | undefined): Promise<Project[]> {
+  const items: Project[] = [];
+  let page = 1;
+  let total = Infinity;
+
+  while (items.length < total) {
+    const result = await api.get<Paginated<Project>>(
+      `/projects?page=${page}&limit=${PAGINATION_MAX_LIMIT}`,
+      signal,
+    );
+    items.push(...result.items);
+    total = result.total;
+    // A page with no rows but a total the loop hasn't reached would spin forever; treat it as
+    // the end rather than trust `total` to be perfectly in sync with a concurrently-changing table.
+    if (result.items.length === 0) break;
+    page += 1;
+  }
+
+  return items;
+}
+
 export function useProjects() {
   return useQuery({
     queryKey: queryKeys.projects.all(),
-    queryFn: ({ signal }) => api.get<Paginated<Project>>(`/projects?limit=${PAGINATION_MAX_LIMIT}`, signal),
-    select: (page) => page.items,
+    queryFn: ({ signal }) => fetchAllProjects(signal),
   });
 }
 

@@ -46,10 +46,11 @@ export type SettingKey = (typeof SettingKey)[keyof typeof SettingKey];
  *
  * Deliberately **not** members of `SettingKey`: nobody administers these. Keeping them out of
  * the registry is what makes them invisible without a special case anywhere — `isSettingKey`
- * is false, so `SettingsService.list()` skips the row, `PUT /admin/settings` answers
- * `UNKNOWN_SETTING`, and the admin panel (which renders whatever `list()` returns) cannot
- * offer one as a toggle. They also have no `seedEnvVar`, because they describe what the
- * *code* knew, which env has nothing to say about.
+ * is false, so `SettingsService.list()` skips the row, `PUT /admin/settings` rejects one with a
+ * 400 from `updateSettingSchema`'s `z.enum(SETTING_KEYS)` before the request body is even
+ * accepted (never reaching `set()`, so `UNKNOWN_SETTING` is not involved), and the admin panel
+ * (which renders whatever `list()` returns) cannot offer one as a toggle. They also have no
+ * `seedEnvVar`, because they describe what the *code* knew, which env has nothing to say about.
  */
 export const InternalSettingKey = {
   /**

@@ -4,6 +4,7 @@ import { AUDIT_ACTIONS, Role, SettingKey, type AuditEntry, type Paginated } from
 import { createTestApp, httpClient, type HttpClient, type TestApp } from './app';
 import { TEST_PASSWORD } from './config/test-env';
 import { createUser, createUserAndLogin, login, resetData, uniqueEmail } from './factories';
+import { AuditService } from '../src/modules/audit/audit.service';
 
 /**
  * Phase 06 — global audit log verification.
@@ -22,12 +23,26 @@ import { createUser, createUserAndLogin, login, resetData, uniqueEmail } from '.
 describe('audit log', () => {
   let ctx: TestApp;
   let http: HttpClient;
+  let audit: AuditService;
 
   beforeAll(async () => {
     ctx = await createTestApp();
+    audit = ctx.app.get(AuditService);
   });
 
   afterAll(async () => {
+    // 'stops recording an action the admin has disabled' below narrows AUDIT_ENABLED_ACTIONS
+    // via the real admin endpoint and never restores it. `resetData` only nulls
+    // `app_settings.updated_by`, never `value` (see factories.ts), and boot no longer repairs a
+    // narrowed list (the AUDIT_KNOWN_ACTIONS correction) — so left alone this leaks
+    // category.create disabled into every spec file that boots after this one in the shared
+    // suite database. Mirrors settings.int-spec.ts's own cleanup for the same setting.
+    await ctx.db
+      .updateTable('app_settings')
+      .set({ value: JSON.stringify([...AUDIT_ACTIONS]) })
+      .where('key', '=', SettingKey.AUDIT_ENABLED_ACTIONS)
+      .execute();
+    audit.clearEnabledActionsCache();
     await ctx.close();
   });
 

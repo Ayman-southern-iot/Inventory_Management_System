@@ -5,6 +5,7 @@ import {
   SETTING_KEYS,
   SettingKey,
   getSettingDefinition,
+  type AppSettingKey,
   type SettingKey as SettingKeyType,
 } from '@ims/shared';
 import type { AppConfig } from '../../config';
@@ -64,7 +65,10 @@ class FakeSettingsRepository {
     return true;
   }
 
-  async upsert(key: SettingKeyType, value: unknown, updatedBy: string | null): Promise<void> {
+  // Widened to `AppSettingKey`, matching `SettingsRepository.upsert` post-KNOWN-set: the
+  // service also writes `InternalSettingKey.AUDIT_KNOWN_ACTIONS` through this method, which is
+  // not a `SettingKey`. Narrower here would be a fake lying about the interface it stands in for.
+  async upsert(key: AppSettingKey, value: unknown, updatedBy: string | null): Promise<void> {
     this.rows.set(key, { value, updatedBy });
   }
 
