@@ -24,6 +24,7 @@ import { RequisitionDetailPage } from '@/features/requisitions/pages/Requisition
 import { BomsPage } from '@/features/boms/pages/BomsPage';
 import { BomGeneratePage } from '@/features/boms/pages/BomGeneratePage';
 import { BomDetailPage } from '@/features/boms/pages/BomDetailPage';
+import { ProjectsPage } from '@/features/projects/pages/ProjectsPage';
 import { SettingsPage } from '@/features/admin/pages/SettingsPage';
 import { UsersPage } from '@/features/admin/pages/UsersPage';
 import { AuditLogPage } from '@/features/admin/pages/AuditLogPage';
@@ -71,6 +72,9 @@ export function App() {
                     <Route path={ROUTES.account.profile} element={<ProfilePage />} />
                     {/* Anyone may borrow, so My borrowings is not role-gated. */}
                     <Route path={ROUTES.borrowing.mine} element={<BorrowingPage mine />} />
+
+                    {/* The project hub is shared context — every role sees it, so no guard. */}
+                    <Route path={ROUTES.projects.all} element={<ProjectsPage />} />
 
                     {/* Anyone may raise a requisition and follow their own. The API decides
                         what each caller sees, so these are not role-gated. New before the

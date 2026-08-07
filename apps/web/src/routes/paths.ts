@@ -36,6 +36,12 @@ export const ROUTES = {
     detail: (id: string) => '/requisitions/' + id,
     edit: (id: string) => '/requisitions/' + id + '/edit',
   },
+  projects: {
+    all: '/projects',
+    /** The router pattern; the helper below builds links. */
+    detailPattern: '/projects/:projectId',
+    detail: (id: string) => '/projects/' + id,
+  },
   admin: {
     users: '/admin/users',
     departments: '/admin/departments',

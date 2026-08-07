@@ -5,6 +5,7 @@ import type {
   ListDepartmentsQuery,
   ListLedgerQuery,
   ListProductsQuery,
+  ListProjectItemsQuery,
   ListUsersQuery,
   ListAuditQuery,
   ListNotificationsQuery,
@@ -62,6 +63,13 @@ export const queryKeys = {
   },
   projects: {
     all: () => ['projects'] as const,
+    /** Every project in one array. The hook pages through the API to build it. */
+    list: () => ['projects', 'list'] as const,
+    detail: (id: string) => ['projects', 'detail', id] as const,
+    /** Prefix for one project's item pages, whatever the usage filter. */
+    itemsFor: (id: string) => ['projects', 'items', id] as const,
+    items: (id: string, query: ListProjectItemsQuery) =>
+      ['projects', 'items', id, query] as const,
   },
   requisitions: {
     all: () => ['requisitions'] as const,

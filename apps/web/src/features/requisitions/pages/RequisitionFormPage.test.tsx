@@ -25,7 +25,7 @@ vi.mock('@/features/admin/api', () => ({
   useDepartments: () => ({ data: { items: [] }, isPending: false }),
 }));
 
-vi.mock('@/features/borrowing/api', () => ({
+vi.mock('@/features/projects/api', () => ({
   useProjects: () => ({ data: [], isPending: false }),
 }));
 

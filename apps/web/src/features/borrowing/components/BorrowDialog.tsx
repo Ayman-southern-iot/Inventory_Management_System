@@ -15,7 +15,8 @@ import { useToast } from '@/components/ui/Toast';
 import { t } from '@/i18n/en';
 import { messageForError } from '@/lib/error-message';
 import { QuantityField } from '@/features/inventory/components/QuantityField';
-import { useCreateBorrow, useCreateProject, useProjects } from '../api';
+import { useCreateProject, useProjects } from '@/features/projects/api';
+import { useCreateBorrow } from '../api';
 
 interface Props {
   open: boolean;
@@ -191,8 +192,8 @@ export function BorrowDialog({ open, onClose, product }: Props) {
               />
               {duplicateWarning ? (
                 <div className="rounded-[--radius-control] bg-pending-subtle px-3 py-2 text-xs text-ink">
-                  <p className="font-medium">{t.borrowing.duplicateProjectTitle}</p>
-                  <p className="mt-0.5">{t.borrowing.duplicateProjectBody}</p>
+                  <p className="font-medium">{t.projects.duplicateTitle}</p>
+                  <p className="mt-0.5">{t.projects.duplicateBody}</p>
                   <Button
                     type="button"
                     variant="secondary"
@@ -200,7 +201,7 @@ export function BorrowDialog({ open, onClose, product }: Props) {
                     className="mt-2"
                     onClick={() => void submit(form.getValues(), true)}
                   >
-                    {t.borrowing.createAnyway}
+                    {t.projects.createAnyway}
                   </Button>
                 </div>
               ) : null}

@@ -18,7 +18,7 @@ import { t } from '@/i18n/en';
 import { messageForError } from '@/lib/error-message';
 import { ROUTES } from '@/routes/paths';
 import { useDepartments } from '@/features/admin/api';
-import { useProjects } from '@/features/borrowing/api';
+import { useProjects } from '@/features/projects/api';
 import { useProducts } from '@/features/inventory/api';
 import { ItemRow } from '../components/ItemRow';
 import {

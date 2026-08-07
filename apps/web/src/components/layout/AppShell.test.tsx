@@ -85,6 +85,21 @@ describe('AppShell navigation', () => {
     expect(screen.getByRole('link', { name: t.nav.adminSettings })).toBeInTheDocument();
   });
 
+  // The project hub is shared context: a general user borrowing for a project has as much
+  // business seeing what it holds as the IM does, so it sits in the unroled nav group.
+  it.each([[Role.GENERAL], [Role.APPROVER], [Role.INVENTORY_MANAGER], [Role.ADMIN]])(
+    'shows the project hub to a %s',
+    (role) => {
+      currentUser = userWithRoles([Role.GENERAL, role]);
+      renderShell();
+
+      expect(screen.getByRole('link', { name: t.nav.projects })).toHaveAttribute(
+        'href',
+        ROUTES.projects.all,
+      );
+    },
+  );
+
   it('renders nothing when there is no user rather than crashing', () => {
     currentUser = null;
     const { container } = renderShell();

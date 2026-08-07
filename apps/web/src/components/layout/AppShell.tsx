@@ -9,6 +9,7 @@ import {
   History,
   Stamp,
   ChevronDown,
+  FolderKanban,
   FolderTree,
   LayoutDashboard,
   LogOut,
@@ -58,6 +59,7 @@ const NAV: NavGroup[] = [
       { label: t.nav.inventoryProducts, to: ROUTES.inventory.products, icon: Package },
       { label: t.nav.myBorrowings, to: ROUTES.borrowing.mine, icon: HandCoins },
       { label: t.nav.myRequisitions, to: ROUTES.requisitions.mine, icon: FileText },
+      { label: t.nav.projects, to: ROUTES.projects.all, icon: FolderKanban },
     ],
   },
   {
