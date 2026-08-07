@@ -800,4 +800,29 @@ describe('requisitions and approvals', () => {
       expect(actor.body.total).toBeGreaterThanOrEqual(1);
     });
   });
+
+  /** Feeds the Project Hub's requisitions section (task 4). */
+  describe('project filter', () => {
+    it('scopes the list to one project when projectId is given', async () => {
+      const mine = await requester.client
+        .post('/projects')
+        .send({ name: `ReqFilter ${Date.now()}` });
+      const other = await requester.client
+        .post('/projects')
+        .send({ name: `ReqOther ${Date.now()}` });
+
+      const inProject = await draft(5_000, { projectId: mine.body.id });
+      const elsewhere = await draft(5_000, { projectId: other.body.id });
+
+      const list = await requester.client
+        .get('/requisitions')
+        .query({ page: 1, limit: 25, mine: 'true', projectId: mine.body.id })
+        .send();
+
+      expect(list.status).toBe(200);
+      const ids = list.body.items.map((r: { id: string }) => r.id);
+      expect(ids).toContain(inProject.body.id);
+      expect(ids).not.toContain(elsewhere.body.id);
+    });
+  });
 });

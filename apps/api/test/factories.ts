@@ -144,7 +144,23 @@ export async function resetData(db: Db): Promise<void> {
 
   await db.deleteFrom('borrow_returns').execute();
   await db.deleteFrom('borrow_requests').execute();
-  await db.deleteFrom('projects').execute();
+  // Same reasoning as the `users`/`departments` guards below: `requisitions.project_id` is
+  // ON DELETE RESTRICT and requisitions outlive this reset, so a project still charged by a
+  // surviving requisition must be skipped rather than deleted, or every later spec's
+  // `beforeEach` throws on this delete for the rest of the run.
+  await db
+    .deleteFrom('projects')
+    .where((eb) =>
+      eb.not(
+        eb.exists(
+          eb
+            .selectFrom('requisitions')
+            .select('requisitions.id')
+            .whereRef('requisitions.project_id', '=', 'projects.id'),
+        ),
+      ),
+    )
+    .execute();
   await db.deleteFrom('idempotency_keys').execute();
   // Phase 06: `audit_log.actor_id` is ON DELETE RESTRICT and the trigger is currently disabled
   // for the duration of this reset, so we can clean every audit row the previous test wrote.

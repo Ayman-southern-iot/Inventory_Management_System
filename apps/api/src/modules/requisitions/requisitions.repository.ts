@@ -448,6 +448,11 @@ export class RequisitionsRepository {
         .$if(query.status !== undefined, (b) =>
           b.where('requisitions.status', '=', query.status!),
         )
+        // Project Hub (task 4): requisitions charged to one project. Applied here, inside the
+        // shared closure, so the row query and the count query never disagree on the total.
+        .$if(query.projectId !== undefined, (b) =>
+          b.where('requisitions.project_id', '=', query.projectId!),
+        )
         // "Waiting on me": an approval assigned to me, or to someone I am standing in for.
         .$if(query.awaitingMe, (b) =>
           b.where((eb) =>
