@@ -222,6 +222,14 @@ const rawSchema = z.object({
    * mistake.
    */
   PDF_SIGNING_SECRET: secretSchema,
+  /**
+   * Absolute path to the Chrome/Chromium binary puppeteer should launch. Alpine's
+   * puppeteer-core is linked against musl, and the system chromium works with it; puppeteer's
+   * bundled chromium is linked against glibc and cannot run on Alpine, so a containerised
+   * API must point this at the system binary. Empty (the default) keeps puppeteer's own
+   * behaviour — fine on a dev host that already has Chrome installed.
+   */
+  PDF_BROWSER_EXECUTABLE_PATH: z.string().default(''),
 
   // Seeds the first ADMIN so a fresh install is reachable. Required in every environment,
   // because an install nobody can log into is not an install.
@@ -342,6 +350,8 @@ export interface AppConfig {
     };
     readonly renderTimeoutMs: number;
     readonly signedUrlTtlSeconds: number;
+    /** Empty in dev, set to `/usr/bin/chromium-browser` in the container. */
+    readonly browserExecutablePath: string;
     /** HMAC key for download URLs — kept off `JWT_ACCESS_SECRET` so a leak stays bounded. */
     readonly signedUrlKey: string;
   };
@@ -482,6 +492,7 @@ export function buildConfig(source: Record<string, string | undefined>): AppConf
       renderTimeoutMs: env.PDF_RENDER_TIMEOUT_MS,
       signedUrlTtlSeconds: env.PDF_SIGNED_URL_TTL_SECONDS,
       signedUrlKey: env.PDF_SIGNING_SECRET,
+      browserExecutablePath: env.PDF_BROWSER_EXECUTABLE_PATH,
     }),
     seedAdmin: Object.freeze({
       email: env.SEED_ADMIN_EMAIL.toLowerCase(),

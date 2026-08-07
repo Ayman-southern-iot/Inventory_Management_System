@@ -36,7 +36,19 @@ FROM node:${NODE_VERSION} AS runtime
 ENV NODE_ENV=production
 # Reject a container started without a real TZ; the whole system is Asia/Dhaka.
 ENV TZ=Asia/Dhaka
-RUN apk add --no-cache tzdata wget
+# tzdata + wget as before. Chromium + the libs puppeteer's headless mode needs (musl
+# targets the system chromium, not the glibc one puppeteer bundles). ttf-dejavu is the
+# only font we need; Alpine's chromium is built against it.
+RUN apk add --no-cache \
+      chromium \
+      nss \
+      libstdc++ \
+      freetype \
+      harfbuzz \
+      ttf-dejavu \
+      ca-certificates \
+      tzdata \
+      wget
 
 WORKDIR /app
 
@@ -53,6 +65,10 @@ COPY --from=build --chown=node:node /repo/packages/shared/dist ./packages/shared
 COPY --from=build --chown=node:node /repo/apps/api/package.json ./apps/api/
 COPY --from=build --chown=node:node /repo/apps/api/node_modules ./apps/api/node_modules
 COPY --from=build --chown=node:node /repo/apps/api/dist ./apps/api/dist
+# Letterhead logo and any future assets. Same ownership so the unprivileged `node` user
+# can read them. Without this the BOM letterhead resolves to nothing and the template
+# falls back to its placeholder.
+COPY --from=build --chown=node:node /repo/apps/api/assets ./apps/api/assets
 
 # Generated BOM PDFs live on a mounted volume; the directory must exist and be writable
 # before the volume is attached, or the first render fails on a fresh host.

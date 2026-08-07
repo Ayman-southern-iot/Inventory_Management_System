@@ -69,6 +69,10 @@ x-api-env: &api-env
   # adds. A persona that fails on click is worse than one that is absent.
   DEMO_ACCOUNT_EMAILS: ${SEED_ADMIN_EMAIL:-admin@ims.local},im@ims.local,approver1@ims.local,approver2@ims.local,general@ims.local
 
+  # /usr/bin/chromium-browser is where the Alpine chromium package installs the binary;
+  # without this the api container has no Chrome for puppeteer to launch.
+  PDF_BROWSER_EXECUTABLE_PATH: ${PDF_BROWSER_EXECUTABLE_PATH:-/usr/bin/chromium-browser}
+
 services:
   db:
     <<: *logging

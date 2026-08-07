@@ -177,6 +177,11 @@ export class PdfRendererService implements OnApplicationShutdown {
         // --no-sandbox is required in the container, where the process is already unprivileged
         // and there is no user namespace to sandbox into.
         args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+        // Empty in dev (host has Chrome); the container sets
+        // PDF_BROWSER_EXECUTABLE_PATH=/usr/bin/chromium-browser via docker-compose.
+        ...(this.config.pdf.browserExecutablePath
+          ? { executablePath: this.config.pdf.browserExecutablePath }
+          : {}),
       })
       .then((browser) => {
         this.browser = browser;
