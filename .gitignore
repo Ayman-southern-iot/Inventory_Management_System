@@ -25,3 +25,6 @@ storage/
 # Playwright MCP artefacts from local UI verification
 .playwright-mcp/
 *.png
+
+# Graphify knowledge graph (generated locally, large artifacts)
+graphify-out/
