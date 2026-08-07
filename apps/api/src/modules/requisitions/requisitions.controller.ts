@@ -87,7 +87,14 @@ export class RequisitionsController {
     if (!hasOversight && detail.requesterId !== actor.id) {
       throw new ForbiddenError('That requisition is not yours');
     }
-    return detail;
+    // The repo leaves the URL null so HTTP stays out of the repository layer. Build it here so
+    // the detail page can hand the card a single click target.
+    return {
+      ...detail,
+      supportingDocumentUrl: detail.supportingDocument
+        ? `/api/v1/requisitions/${id}/supporting-document`
+        : null,
+    };
   }
 
   @Post()

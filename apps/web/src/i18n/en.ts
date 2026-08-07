@@ -850,6 +850,21 @@ export const t = {
       INVENTORY_MANAGER: 'Inventory Manager',
       APPROVER: 'Approver',
     },
+    // supporting document (request details panel + paper thumbnail)
+    supportingDocument: {
+      fieldHeading: 'Supporting document',
+      fieldHint:
+        'Optional. A quote, vendor proposal or spec sheet that helps your approvers decide.',
+      empty: 'No document attached yet.',
+      pickerCta: 'Attach document',
+      replace: 'Replace',
+      remove: 'Remove',
+      tooLarge: 'That file is too large. Maximum size is 5 MB.',
+      uploadFailed: 'Upload failed. Try again.',
+    },
+    supportingDocumentCard: {
+      label: 'Supporting document',
+    },
   },
 
   boms: {

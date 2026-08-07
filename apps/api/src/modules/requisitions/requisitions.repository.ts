@@ -67,6 +67,19 @@ export class RequisitionsRepository {
   }
 
   /**
+   * Repoint the supporting-document FK. The caller must already have inserted the new
+   * `stored_files` row (so the FK is satisfied) and verified that the requisition is
+   * still in DRAFT — the row's CHECK there is the structural guarantee, not this one.
+   */
+  async setSupportingDocumentFileId(id: string, fileId: string | null, tx: Tx = this.db) {
+    await tx
+      .updateTable('requisitions')
+      .set({ supporting_document_file_id: fileId })
+      .where('id', '=', id)
+      .execute();
+  }
+
+  /**
    * `excludeUserId` keeps a requester out of their own approval chain — requirements §10
    * forbids approving your own requisition, and the Inventory Manager stage is an approval
    * stage like any other.
@@ -312,6 +325,11 @@ export class RequisitionsRepository {
       .innerJoin('users as requester', 'requester.id', 'requisitions.requester_id')
       .leftJoin('departments', 'departments.id', 'requisitions.department_id')
       .leftJoin('projects', 'projects.id', 'requisitions.project_id')
+      .leftJoin(
+        'stored_files as supporting_document',
+        'supporting_document.id',
+        'requisitions.supporting_document_file_id',
+      )
       .select([
         'requisitions.id',
         'requisitions.requisition_no',
@@ -331,6 +349,11 @@ export class RequisitionsRepository {
         'requisitions.status',
         'requisitions.submitted_at',
         'requisitions.decided_at',
+        'requisitions.supporting_document_file_id',
+        'supporting_document.original_name as supporting_document_original_name',
+        'supporting_document.mime_type as supporting_document_mime_type',
+        'supporting_document.size_bytes as supporting_document_size_bytes',
+        'supporting_document.created_at as supporting_document_uploaded_at',
         'requisitions.created_at',
         'requisitions.updated_at',
       ]);
@@ -346,7 +369,27 @@ export class RequisitionsRepository {
       this.listEvents(id),
     ]);
 
-    return { ...toRequisition(row), items, approvals, events };
+    const base = toRequisition(row);
+    const supportingDocument =
+      row.supporting_document_file_id && row.supporting_document_original_name
+        ? {
+            fileId: row.supporting_document_file_id,
+            originalName: row.supporting_document_original_name,
+            mimeType: row.supporting_document_mime_type!,
+            sizeBytes: row.supporting_document_size_bytes!,
+            uploadedAt: row.supporting_document_uploaded_at!.toISOString(),
+          }
+        : null;
+
+    return {
+      ...base,
+      items,
+      approvals,
+      events,
+      supportingDocument,
+      // URL is built by the controller so the repo stays HTTP-free.
+      supportingDocumentUrl: null,
+    };
   }
 
   async listItems(requisitionId: string): Promise<RequisitionItem[]> {
@@ -551,6 +594,12 @@ interface RequisitionRow {
   status: string;
   submitted_at: Date | null;
   decided_at: Date | null;
+  supporting_document_file_id: string | null;
+  /** Joined from `stored_files`. Null when no document is attached. */
+  supporting_document_original_name: string | null;
+  supporting_document_mime_type: string | null;
+  supporting_document_size_bytes: number | null;
+  supporting_document_uploaded_at: Date | null;
   created_at: Date;
   updated_at: Date;
 }

@@ -18,6 +18,7 @@ import { ROUTES } from '@/routes/paths';
 import { useAuth } from '@/features/auth/auth-context';
 import { ApprovalTracker } from '../components/ApprovalTracker';
 import { LifecycleTracker } from '../components/LifecycleTracker';
+import { SupportingDocumentCard } from '../components/SupportingDocumentCard';
 import { FundsPanel } from '@/features/funds/components/FundsPanel';
 import { DecisionDialog } from '../components/DecisionDialog';
 import {
@@ -217,6 +218,17 @@ export function RequisitionDetailPage() {
 
             <div className="grid gap-6 lg:grid-cols-3">
               <div className="flex flex-col gap-6 lg:col-span-2">
+                {/* The paper thumbnail sits above the status panel when a document was
+                    attached — absence (rendering null) is the signal "nothing to look at". */}
+                {detail.supportingDocument ? (
+                  <div className="flex">
+                    <SupportingDocumentCard
+                      document={detail.supportingDocument}
+                      url={detail.supportingDocumentUrl}
+                    />
+                  </div>
+                ) : null}
+
                 <Panel className="p-5">
                   <div className="mb-4 flex flex-wrap items-center gap-2">
                     <Badge tone={STATUS_TONE[detail.status] ?? 'info'}>

@@ -9,6 +9,7 @@ import type {
   Requisition,
   RequisitionDetail,
   SaveRequisitionInput,
+  SupportingDocument,
   WithdrawApprovalInput,
 } from '@ims/shared';
 import { api } from '@/api/client';
@@ -140,5 +141,42 @@ export function useRevokeDelegation() {
   return useMutation({
     mutationFn: ({ id }: { id: string }) => api.del<void>(`/requisitions/delegations/${id}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.delegations.mine() }),
+  });
+}
+
+/* ----------------------------------------------------------- supporting doc */
+
+/**
+ * Replace is modeled as "post a fresh file" — the server inserts a new `stored_files` row
+ * and repoints the FK. The old row stays in place. On the wire this is identical to upload.
+ */
+export function useUploadSupportingDocument(requisitionId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) => {
+      const form = new FormData();
+      form.append('file', file);
+      return api.upload<SupportingDocument>(
+        `/requisitions/${requisitionId}/supporting-document`,
+        form,
+      );
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.requisitions.detail(requisitionId),
+      });
+    },
+  });
+}
+
+export function useRemoveSupportingDocument(requisitionId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.del<void>(`/requisitions/${requisitionId}/supporting-document`),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.requisitions.detail(requisitionId),
+      });
+    },
   });
 }

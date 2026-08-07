@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Plus, Send } from 'lucide-react';
 import {
+  RequisitionStatus,
   RequisitionUrgency,
   saveRequisitionSchema,
   type Product,
@@ -22,6 +23,7 @@ import { useDepartments } from '@/features/admin/api';
 import { useProjects } from '@/features/projects/api';
 import { useProducts } from '@/features/inventory/api';
 import { ItemRow } from '../components/ItemRow';
+import { SupportingDocumentField } from '../components/SupportingDocumentField';
 import {
   useCreateRequisition,
   useRequisition,
@@ -217,6 +219,28 @@ export function RequisitionFormPage() {
                 {...form.register('reason')}
               />
             </div>
+          </div>
+        </Panel>
+
+        {/* ------------------------------------ zone 1b: supporting document */}
+        {/* The field is upload-only: the requester can attach/replace/remove from here, and the
+            pointer is auto-saved the moment the upload returns. Rendered for brand-new drafts
+            too — but disabled until the first save gives the request a stable id. */}
+        <Panel className="shadow-[--shadow-panel]">
+          <header className="border-b border-border px-5 py-4">
+            <h2 className="text-base font-semibold text-ink">
+              {t.requisitions.supportingDocument.fieldHeading}
+            </h2>
+            <p className="mt-0.5 text-sm text-ink-muted">
+              {t.requisitions.supportingDocument.fieldHint}
+            </p>
+          </header>
+          <div className="p-5">
+            <SupportingDocumentField
+              requisitionId={requisitionId ?? ''}
+              document={existing.data?.supportingDocument ?? null}
+              canEdit={Boolean(requisitionId) && existing.data?.status === RequisitionStatus.DRAFT}
+            />
           </div>
         </Panel>
 

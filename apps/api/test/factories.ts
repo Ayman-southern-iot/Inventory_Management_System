@@ -184,6 +184,10 @@ export async function resetData(db: Db): Promise<void> {
     .set({ signature_file_id: null, signed_with_signature: false })
     .execute();
   await db.updateTable('users').set({ signature_file_id: null }).execute();
+  // `requisitions.supporting_document_file_id` is ON DELETE RESTRICT, so a surviving
+  // requisition with a doc attached would block the `stored_files` delete below. Clear the
+  // pointer first, exactly the same surgery the signature reset does above.
+  await db.updateTable('requisitions').set({ supporting_document_file_id: null }).execute();
   await db.deleteFrom('stored_files').execute();
 
   await db.deleteFrom('approver_slots').execute();
