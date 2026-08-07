@@ -29,7 +29,7 @@ import { Button } from '@/components/ui/Button';
 import { UserIdentity } from '@/components/UserIdentity';
 import { ROUTES } from '@/routes/paths';
 import { AwaitingApprovalBadge, PendingBorrowBadge } from './NavBadge';
-import { NotificationBell } from '@/features/notifications/NotificationBell';
+import { NotificationBell } from '@/features/notifications/components/NotificationBell';
 
 interface NavItem {
   label: string;
