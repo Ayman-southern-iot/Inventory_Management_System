@@ -82,30 +82,6 @@ function PlacementChip({
   );
 }
 
-function Figure({
-  label,
-  value,
-  muted,
-  hint,
-}: {
-  label: string;
-  value: number;
-  muted?: boolean;
-  hint?: string;
-}) {
-  return (
-    <div className="min-w-[7rem]">
-      <dt className="text-xs font-medium uppercase tracking-wide text-ink-subtle">{label}</dt>
-      <dd
-        className={cn('mt-0.5 text-2xl font-semibold tabular-nums', muted && 'text-ink-muted')}
-      >
-        {value.toLocaleString()}
-      </dd>
-      {hint ? <p className="mt-1 text-xs text-ink-subtle">{hint}</p> : null}
-    </div>
-  );
-}
-
 type FigureTone = 'success' | 'info' | 'pending' | 'danger' | 'empty';
 
 const FIGURE_TONE_CLASSES: Record<FigureTone, string> = {

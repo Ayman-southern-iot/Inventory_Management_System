@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { BorrowStatus, ReturnCondition, Role } from '@ims/shared';
+import { ReturnCondition, Role } from '@ims/shared';
 import { createTestApp, httpClient, type HttpClient, type TestApp } from './app';
 import { createUser, login, resetData } from './factories';
 import { createStockFixture, type StockFixture } from './stock-factories';

@@ -22,7 +22,7 @@
  */
 import { sql } from 'kysely';
 import { describe, it } from 'vitest';
-import { INestApplication } from '@nestjs/common';
+import type { INestApplication } from '@nestjs/common';
 import {
   ApprovalStage,
   BorrowStatus,
