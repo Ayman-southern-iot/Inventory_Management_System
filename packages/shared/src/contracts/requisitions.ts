@@ -168,6 +168,8 @@ export type WithdrawApprovalInput = z.infer<typeof withdrawApprovalSchema>;
 export const listRequisitionsQuerySchema = paginationQuerySchema.extend({
   status: requisitionStatusSchema.optional(),
   search: z.string().trim().max(160).optional(),
+  /** Scopes the list to one project — powers the Project Hub's requisitions section. */
+  projectId: z.string().uuid().optional(),
   /** The requester's own list. Forced on for callers with no approval role. */
   mine: queryBoolean(false),
   /** The approver/IM queue: things waiting on *me* right now. */
