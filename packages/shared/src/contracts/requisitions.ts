@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { paginationQuerySchema, queryBoolean } from './common.js';
+import { type SupportingDocument } from './files.js';
 
 /* ---------------------------------------------------------------- statuses */
 
@@ -238,6 +239,18 @@ export interface RequisitionDetail extends Requisition {
   items: RequisitionItem[];
   approvals: Approval[];
   events: RequisitionEvent[];
+  /**
+   * Optional document the requester attached (quote, vendor proposal, spec sheet).
+   * Absent when the requester attached nothing, or replaced — current value only;
+   * historical attachments are preserved as `stored_files` rows but not surfaced.
+   */
+  supportingDocument: SupportingDocument | null;
+  /**
+   * Download URL for the bytes, computed by the controller so the client can render
+   * a paper-thumbnail link without building the URL itself. `null` when there is no
+   * document — the card is then absent from the page.
+   */
+  supportingDocumentUrl: string | null;
 }
 
 /* -------------------------------------------------------------- delegation */

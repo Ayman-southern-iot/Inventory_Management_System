@@ -55,6 +55,8 @@ function requisition(overrides: Partial<RequisitionDetail> = {}): RequisitionDet
     items: [],
     approvals: [],
     events: [],
+    supportingDocument: null,
+    supportingDocumentUrl: null,
     ...overrides,
   };
 }

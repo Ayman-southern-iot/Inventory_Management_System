@@ -106,6 +106,13 @@ export const AUDIT_ACTIONS = [
   'requisition.funds_received',
   'requisition.purchased',
   'requisition.invoice_attached',
+  /**
+   * Recorded on a requester-attach and a requester-remove. The whole flow is requester-only
+   * (DRAFT) so the audit trail is naturally the requester's own. Replace is modelled as a
+   * remove + attach pair, not a single action — same shape as the file model itself.
+   */
+  'requisition.supporting_document_attached',
+  'requisition.supporting_document_removed',
   'requisition.funds_returned',
   'requisition.purchase_verified',
   'requisition.stocked',

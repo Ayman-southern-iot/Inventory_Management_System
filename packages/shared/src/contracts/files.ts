@@ -8,7 +8,7 @@ import { uuidSchema } from './common.js';
  * caller who wants the content asks for a short-lived signed URL, the same way BOM PDFs work.
  */
 
-export const STORED_FILE_KINDS = ['SIGNATURE', 'INVOICE'] as const;
+export const STORED_FILE_KINDS = ['SIGNATURE', 'INVOICE', 'SUPPORTING_DOCUMENT'] as const;
 export type StoredFileKind = (typeof STORED_FILE_KINDS)[number];
 export const storedFileKindSchema = z.enum(
   STORED_FILE_KINDS as readonly [StoredFileKind, ...StoredFileKind[]],
@@ -44,3 +44,16 @@ export const fileDownloadUrlSchema = z.object({
   expiresAt: z.string(),
 });
 export type FileDownloadUrl = z.infer<typeof fileDownloadUrlSchema>;
+
+/**
+ * The metadata an approver sees on the requisition detail page about a requester-attached
+ * document. The bytes themselves are pulled separately by clicking the paper thumbnail.
+ */
+export const supportingDocumentSchema = z.object({
+  fileId: uuidSchema,
+  originalName: z.string(),
+  mimeType: z.string(),
+  sizeBytes: z.number().int().positive(),
+  uploadedAt: z.string(),
+});
+export type SupportingDocument = z.infer<typeof supportingDocumentSchema>;

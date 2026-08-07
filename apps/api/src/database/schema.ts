@@ -329,6 +329,12 @@ export interface RequisitionsTable {
   status: Generated<string>;
   submitted_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
   decided_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
+  /**
+   * Optional supporting document the requester attached while in DRAFT (quote sheet,
+   * vendor proposal, spec sheet). Frozen at submit, like the amount figures —
+   * same rule, same column shape as `purchases.invoice_file_id`.
+   */
+  supporting_document_file_id: string | null;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }
