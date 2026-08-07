@@ -17,7 +17,8 @@
     "db:make": "tsx scripts/migrate.ts make",
     "db:seed": "tsx scripts/seed.ts",
     "db:seed:scenarios": "vitest run --config vitest.scenarios.config.ts",
-    "migration:run": "node dist/scripts/migrate.js up"
+    "migration:run": "node dist/scripts/migrate.js up",
+    "seed:run": "node dist/scripts/seed.js"
   },
   "dependencies": {
     "@ims/shared": "workspace:*",

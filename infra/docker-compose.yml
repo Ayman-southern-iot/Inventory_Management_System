@@ -50,7 +50,12 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    command: ["npm", "run", "migration:run"]
+    # Migrate, then seed. Without the seed step a fresh install comes up with an empty
+    # database and no account to sign in with, so `docker compose up -d` produces a stack
+    # nobody can use — which is not what §21.4 of the playbook promises. The seed is
+    # idempotent (ON CONFLICT DO NOTHING), so running it on every start is safe and a
+    # restart never resets a value an admin has since changed.
+    command: ["sh", "-c", "npm run migration:run && npm run seed:run"]
 
   api:
     <<: *logging

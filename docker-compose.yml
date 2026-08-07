@@ -1,0 +1,69 @@
+# Inventory Management System — whole stack, one command.
+#
+#   docker compose up -d          starts db, migrations, api, web and the proxy
+#   docker compose ps             check everything is up
+#   docker compose logs -f api    follow the API
+#   docker compose stop           stop without destroying anything
+#
+# Then open  http://localhost:5173
+#
+# NEVER run `docker compose down -v`. The `pgdata` and `files` volumes are the database
+# and every uploaded signature, invoice and generated BOM PDF. There is no reason to run it.
+#
+# ---------------------------------------------------------------------------------------
+# This file deliberately contains no service definitions of its own. The stack is defined
+# once, in infra/docker-compose.yml, and included here so the two can never drift apart.
+# All this file does is publish the proxy on 5173 instead of 80/443.
+#
+# Why the proxy and not the web container: the SPA calls same-origin `/api/v1` and
+# `/socket.io` (see the comment in apps/web/Dockerfile). apps/web/nginx.conf serves the
+# built SPA and nothing else — it does not proxy the API. Caddy is what routes /api/* to
+# api:3000. Publishing the web container directly would give a UI that loads and then
+# fails every request, so port 5173 belongs to the proxy.
+# ---------------------------------------------------------------------------------------
+
+name: ims
+
+include:
+  - path: infra/docker-compose.yml
+
+services:
+  # Postgres and the API must agree on the password or nothing else matters.
+  #
+  # infra/docker-compose.yml sets the database's credentials by interpolation
+  # (`POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}`), which Compose resolves from the .env beside
+  # the file it was invoked on — the ROOT .env when you run from here. That is the host dev
+  # config, whose password is not the deployment one. The API meanwhile reads infra/.env
+  # literally through `env_file`. The two then disagree and every connection fails with
+  # "password authentication failed for user", after the volume has already initialised
+  # itself with the wrong password.
+  #
+  # Reading the same file the API reads removes the interpolation from the path entirely.
+  db:
+    # `!reset` drops the included `environment:` mapping entirely. It has to go, not merge:
+    # Compose gives `environment` precedence over `env_file`, so while that mapping exists
+    # the interpolated (wrong) password keeps winning no matter what env_file says.
+    # POSTGRES_DB/USER/PASSWORD and TZ all come from infra/.env below instead.
+    environment: !reset null
+    env_file: infra/.env
+    healthcheck:
+      # `$$` escapes Compose interpolation so the container's own shell expands these,
+      # against the env_file above rather than whatever the host happens to define.
+      test: ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  proxy:
+    # `!override` replaces the included port list rather than appending to it. Without it
+    # Compose would merge, and the stack would also try to bind 80 and 443 — which is how
+    # you collide with whatever else is on the machine.
+    ports: !override
+      - '${WEB_PORT:-5173}:80'
+    environment:
+      # A bare `:80` tells Caddy to serve plain HTTP on that port and skip certificate
+      # provisioning, which is what you want for localhost and LAN. Set IMS_DOMAIN to a
+      # real hostname that resolves to this machine and Caddy will get a certificate
+      # automatically — but then publish 80 and 443, not 5173, or ACME cannot reach it.
+      IMS_DOMAIN: ${IMS_DOMAIN:-:80}
