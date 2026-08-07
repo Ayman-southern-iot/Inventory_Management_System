@@ -5,6 +5,14 @@
 
 ## Current position
 
+- **Project Hub (2026-08-07):** Tasks 1–7 complete. Every role can open `/projects`, create a
+  project, and inspect `/projects/:projectId`; the detail page shows one row per issued borrow with
+  IN_USE/RETURNED tags, server-side usage filtering, pagination, and requisitions charged to that
+  project. IM/Admin may detach project attribution without touching the borrow or stock ledger. The
+  requisition form also received its premium visual pass. Verified: typecheck/lint/web tests green;
+  integration suite at the documented baseline (**400 pass / 8 pre-existing failures** in
+  `demo-accounts`, `login-backoff`, `reports`, `throttling`).
+
 - **Phase:** 05 complete. Phase 06 in progress — 6.1 (audit log UI) effectively done, 6.2–6.7 open.
 - **Next task:** **6.2, the nightly invariant job** (`SUM(stock_ledger) = stock_placements.quantity`
   per product). Extend it to `reserved_qty` at the same time, per G-14 — it currently cannot see a
