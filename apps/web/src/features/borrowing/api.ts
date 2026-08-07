@@ -1,5 +1,6 @@
 import { randomId } from '@/lib/random-id';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { PAGINATION_MAX_LIMIT } from '@ims/shared';
 import type {
   BorrowRequest,
   CreateBorrowRequestInput,
@@ -42,17 +43,26 @@ export function usePendingBorrowCount(enabled: boolean) {
   });
 }
 
+/**
+ * Every project, for the pickers in the borrow dialog and the requisition form.
+ *
+ * `limit` is not decoration: `GET /projects` is paginated and defaults to 25, so without it
+ * the picker would silently offer only the first 25 projects alphabetically and a user would
+ * conclude their project does not exist. `select` unwraps the page so both consumers keep
+ * receiving a plain `Project[]`.
+ */
 export function useProjects() {
   return useQuery({
     queryKey: queryKeys.projects.all(),
-    queryFn: ({ signal }) => api.get<Project[]>('/borrowing/projects', signal),
+    queryFn: ({ signal }) => api.get<Paginated<Project>>(`/projects?limit=${PAGINATION_MAX_LIMIT}`, signal),
+    select: (page) => page.items,
   });
 }
 
 export function useCreateProject() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: CreateProjectInput) => api.post<Project>('/borrowing/projects', input),
+    mutationFn: (input: CreateProjectInput) => api.post<Project>('/projects', input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.projects.all() }),
   });
 }

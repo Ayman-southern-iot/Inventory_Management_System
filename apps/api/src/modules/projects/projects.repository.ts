@@ -3,6 +3,7 @@ import {
   BorrowStatus,
   ProjectUsage,
   type ListProjectItemsQuery,
+  type PaginationQuery,
   type ProjectItem,
 } from '@ims/shared';
 import { DB } from '../../database/database.module';
@@ -130,6 +131,11 @@ export class ProjectsRepository {
   /**
    * Conditional on the current project, not read-then-write: two IMs on the same screen is the
    * normal case, and zero rows updated is how the loser finds out instead of both "succeeding".
+   *
+   * The status predicate is the same `VISIBLE_STATUSES` the item list derives from, so detach
+   * and the derivation agree on what a project item is. Without it a PENDING or CANCELLED
+   * borrow — a row the hub never showed — is still a valid target and answers 204 for something
+   * that was never there; with it, the invisible row 404s like any other unknown item.
    */
   async detachItem(projectId: string, borrowRequestId: string, tx?: Tx): Promise<number> {
     const writer: Db | Tx = tx ?? this.db;
@@ -138,11 +144,12 @@ export class ProjectsRepository {
       .set({ project_id: null })
       .where('id', '=', borrowRequestId)
       .where('project_id', '=', projectId)
+      .where('status', 'in', [...VISIBLE_STATUSES])
       .executeTakeFirst();
     return Number(result.numUpdatedRows ?? 0n);
   }
 
-  async listProjects(query: { page: number; limit: number }) {
+  async listProjects(query: PaginationQuery) {
     const offset = (query.page - 1) * query.limit;
     const rows = await this.db
       .selectFrom('projects')

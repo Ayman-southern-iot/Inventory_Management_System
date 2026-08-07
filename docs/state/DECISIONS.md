@@ -461,3 +461,15 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   from the borrow that actually moved the stock. `ProjectsService` moved out of `borrowing/` into
   its own module and `GET`/`POST /borrowing/projects` were removed in favour of `/projects` —
   two routes for one resource is how the next person calls the wrong one.
+- 2026-08-07 — `AUDIT_ENABLED_ACTIONS` is **unioned with `AUDIT_ACTIONS` on every boot**, the only
+  setting not left alone once seeded. Its stored value is a materialised snapshot of a code-level
+  list (the empty env seed expands to `[...AUDIT_ACTIONS]`), and `AuditService` reads that array
+  as an explicit allow-list — so an action added by a later release is missing from the snapshot
+  and is silently never recorded on every database except one that has never booted. That is how
+  `project.item.detach` would have shipped with its audit row dropped while being documented as
+  the only trace of an item leaving a project. Chosen over a migration (the plan forbids one) and
+  over widening the "record everything" fallback (which would ignore the admin's list entirely).
+  Accepted cost: the stored array cannot distinguish "did not exist yet" from "an admin removed
+  this", so a deliberately disabled action is re-enabled on the next boot that finds it missing.
+  Over-recording is the safe direction for an audit log, and is already what `isRecorded` falls
+  back to when the setting cannot be read.

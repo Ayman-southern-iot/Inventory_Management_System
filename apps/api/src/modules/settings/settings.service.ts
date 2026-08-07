@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import {
+  AUDIT_ACTIONS,
   AUDIT_ALWAYS_ON_ACTIONS,
   SETTING_DEFINITIONS,
   SETTING_KEYS,
@@ -65,6 +66,47 @@ export class SettingsService implements OnModuleInit {
       const inserted = await this.repo.insertIfAbsent(key, parsed.data);
       if (inserted) this.logger.log(`Seeded setting ${key} = ${JSON.stringify(parsed.data)}`);
     }
+
+    await this.unionNewAuditActions();
+  }
+
+  /**
+   * The one setting that is reconciled on every boot rather than seeded once.
+   *
+   * Every other key is seed-once-never-overwrite: the row owns the value and an admin's choice
+   * survives restarts (rules/10-no-hardcoding.md). `AUDIT_ENABLED_ACTIONS` cannot follow that
+   * rule, because its stored value is a *materialised snapshot of a code-level list* — the empty
+   * env seed expands to `[...AUDIT_ACTIONS]` as it stood on the day the row was first written.
+   * `AuditService` then reads that array as an explicit allow-list, so an action introduced by a
+   * later release is absent from the snapshot and is silently never recorded. The "record
+   * everything" fallback only fires when the row is missing entirely, which is true only on an
+   * install that has never booted.
+   *
+   * Appending the missing members is therefore the difference between a new audited action
+   * working everywhere and working nowhere except a fresh database. The trade-off, stated
+   * plainly: the stored array cannot distinguish "did not exist yet" from "an admin removed
+   * this", so an action deliberately disabled is re-enabled on the next boot that finds it
+   * missing. That is the safe direction of failure for an audit log, and it is the same call
+   * `AuditService.isRecorded` already makes when the setting cannot be read at all.
+   */
+  private async unionNewAuditActions(): Promise<void> {
+    const key = SettingKey.AUDIT_ENABLED_ACTIONS;
+    const rows = await this.repo.findAll();
+    const stored = rows.find((row) => row.key === key)?.value;
+    // Absent or malformed: `AuditRepository.readEnabledActions` reads both as null, which
+    // already means "record everything". Writing a list here would narrow that, not widen it.
+    if (!Array.isArray(stored)) return;
+
+    const known = new Set<string>(stored as string[]);
+    const added = AUDIT_ACTIONS.filter((action) => !known.has(action));
+    if (added.length === 0) return;
+
+    // `updated_by` stays null: the system is reconciling its own list, and naming a person in
+    // the settings audit trail for a change they did not make would be a lie.
+    await this.repo.upsert(key, [...(stored as AuditAction[]), ...added], null);
+    this.cache.delete(key);
+    this.audit.clearEnabledActionsCache();
+    this.logger.log(`Enabled ${added.length} newly introduced audit action(s): ${added.join(', ')}`);
   }
 
   /** Typed read. Returns the setting's own value type, not `unknown`. */

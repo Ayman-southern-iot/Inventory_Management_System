@@ -1,19 +1,30 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { ErrorCode, Role, SettingKey, type ApproverSlot, type Setting } from '@ims/shared';
+import {
+  AUDIT_ACTIONS,
+  ErrorCode,
+  Role,
+  SettingKey,
+  type ApproverSlot,
+  type AuditAction,
+  type Setting,
+} from '@ims/shared';
 import { createTestApp, httpClient, type HttpClient, type TestApp } from './app';
 import { createDepartment, createUser, login, resetData } from './factories';
 import { ApproverSlotsService } from '../src/modules/settings/approver-slots.service';
 import { SettingsService } from '../src/modules/settings/settings.service';
+import { AuditService } from '../src/modules/audit/audit.service';
 
 describe('settings', () => {
   let ctx: TestApp;
   let settings: SettingsService;
   let approverSlots: ApproverSlotsService;
+  let audit: AuditService;
 
   beforeAll(async () => {
     ctx = await createTestApp();
     settings = ctx.app.get(SettingsService);
     approverSlots = ctx.app.get(ApproverSlotsService);
+    audit = ctx.app.get(AuditService);
   });
 
   afterAll(async () => {
@@ -275,6 +286,99 @@ describe('settings', () => {
       await expect(approverSlots.resolveForDepartment(null, 1)).rejects.toMatchObject({
         code: ErrorCode.CONFLICT,
       });
+    });
+  });
+  /**
+   * AUDIT_ENABLED_ACTIONS is stored as a materialised copy of the code-level AUDIT_ACTIONS list,
+   * so a release that introduces an action finds it missing from every already-booted database
+   * and silently stops recording it. Boot reconciles the two.
+   */
+  describe('audit action reconciliation on boot', () => {
+    // Stands in for "the stored list already knew about this one" — always-on, so no admin
+    // could have removed it, which makes "still there afterwards" an unambiguous assertion.
+    const ALREADY_KNOWN: AuditAction = 'auth.login.success';
+    // Introduced by the projects hub, long after the earliest snapshots were written.
+    const NEWLY_INTRODUCED: AuditAction = 'project.item.detach';
+    const SNAPSHOT: AuditAction[] = [ALREADY_KNOWN, 'category.create'];
+
+    /** Writes the row behind the application's back, the way an older release left it. */
+    async function storeSnapshot(actions: readonly AuditAction[]): Promise<void> {
+      await ctx.db
+        .updateTable('app_settings')
+        .set({ value: JSON.stringify(actions) })
+        .where('key', '=', SettingKey.AUDIT_ENABLED_ACTIONS)
+        .execute();
+      settings.clearCache();
+      audit.clearEnabledActionsCache();
+    }
+
+    async function storedActions(): Promise<string[]> {
+      const row = await ctx.db
+        .selectFrom('app_settings')
+        .select('value')
+        .where('key', '=', SettingKey.AUDIT_ENABLED_ACTIONS)
+        .executeTakeFirstOrThrow();
+      return row.value as string[];
+    }
+
+    async function countRowsFor(action: AuditAction): Promise<number> {
+      const rows = await ctx.db
+        .selectFrom('audit_log')
+        .select('id')
+        .where('action', '=', action)
+        .execute();
+      return rows.length;
+    }
+
+    it('appends the actions the stored list has never seen, and only those', async () => {
+      await storeSnapshot(SNAPSHOT);
+
+      await settings.seedMissing();
+
+      const stored = await storedActions();
+      expect(stored).toContain(NEWLY_INTRODUCED);
+      // The snapshot survives intact and in place: this is an append, not a replacement, so an
+      // admin's list is never rewritten out from under them.
+      expect(stored.slice(0, SNAPSHOT.length)).toEqual(SNAPSHOT);
+      // Nothing is added twice, and nothing outside the code-level list creeps in.
+      expect(new Set(stored).size).toBe(stored.length);
+      expect(stored.every((action) => (AUDIT_ACTIONS as readonly string[]).includes(action))).toBe(
+        true,
+      );
+    });
+
+    it('leaves an already-complete list alone on the next boot', async () => {
+      await storeSnapshot(SNAPSHOT);
+      await settings.seedMissing();
+      const afterFirst = await storedActions();
+
+      await settings.seedMissing();
+
+      expect(await storedActions()).toEqual(afterFirst);
+    });
+
+    /**
+     * The behaviour the union exists for. Before reconciliation the stored array is an explicit
+     * allow-list that does not mention the action, so AuditService drops the row and a detach
+     * leaves no trace at all; afterwards the identical call records.
+     */
+    it('turns a silently dropped audit row into a recorded one', async () => {
+      await storeSnapshot(SNAPSHOT);
+      const entry = {
+        action: NEWLY_INTRODUCED,
+        entityType: 'project',
+        entityId: null,
+        entityRef: 'Reconciliation probe',
+        summary: 'Removed a borrow from a project',
+      } as const;
+
+      await audit.record(entry);
+      expect(await countRowsFor(NEWLY_INTRODUCED)).toBe(0);
+
+      await settings.seedMissing();
+      await audit.record(entry);
+
+      expect(await countRowsFor(NEWLY_INTRODUCED)).toBe(1);
     });
   });
 });

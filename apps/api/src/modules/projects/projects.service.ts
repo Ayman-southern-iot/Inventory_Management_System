@@ -4,6 +4,7 @@ import type {
   CreateProjectInput,
   ListProjectItemsQuery,
   Paginated,
+  PaginationQuery,
   Project,
   ProjectDetail,
   ProjectItem,
@@ -29,22 +30,6 @@ export class ProjectsService {
     private readonly repo: ProjectsRepository,
     private readonly audit: AuditService,
   ) {}
-
-  async list(includeInactive = false): Promise<Project[]> {
-    const rows = await this.db
-      .selectFrom('projects')
-      .select(['id', 'name', 'is_active', 'created_at'])
-      .$if(!includeInactive, (qb) => qb.where('is_active', '=', true))
-      .orderBy('name')
-      .execute();
-
-    return rows.map((row) => ({
-      id: row.id,
-      name: row.name,
-      isActive: row.is_active,
-      createdAt: row.created_at.toISOString(),
-    }));
-  }
 
   /**
    * A duplicate name is a *warning*, not a block (OQ-09): two teams may legitimately run a
@@ -93,61 +78,9 @@ export class ProjectsService {
     };
   }
 
-  async setActive(
-    id: string,
-    isActive: boolean,
-    context: AuditContext,
-  ): Promise<Project> {
-    const existing = await this.db
-      .selectFrom('projects')
-      .select(['id', 'name', 'is_active'])
-      .where('id', '=', id)
-      .executeTakeFirst();
-    if (!existing) throw new NotFoundError('Project');
-
-    // If status did not change, skip the mutation and the audit row — there's nothing to
-    // record. This matches the diffSafeFields guard in departments/products updates.
-    const result = await this.db.transaction().execute(async (tx) => {
-      const updated = await tx
-        .updateTable('projects')
-        .set({ is_active: isActive })
-        .where('id', '=', id)
-        .returning(['id', 'name', 'is_active', 'created_at'])
-        .executeTakeFirst();
-      if (!updated) throw new NotFoundError('Project');
-      // Only the columns the domain owns.
-      if (existing.is_active !== isActive) {
-        await this.audit.record(
-          {
-            action: 'project.update',
-            entityType: 'project',
-            entityId: id,
-            entityRef: existing.name,
-            summary: `${isActive ? 'Activated' : 'Deactivated'} project ${existing.name}`,
-            metadata: {
-              changes: {
-                isActive: { before: existing.is_active, after: isActive },
-              },
-            },
-          },
-          context,
-          tx,
-        );
-      }
-      return updated;
-    });
-
-    return {
-      id: result.id,
-      name: result.name,
-      isActive: result.is_active,
-      createdAt: result.created_at.toISOString(),
-    };
-  }
-
   /* ------------------------------------------------------------------ the hub */
 
-  async listPaged(query: { page: number; limit: number }): Promise<Paginated<Project>> {
+  async listPaged(query: PaginationQuery): Promise<Paginated<Project>> {
     const { rows, total } = await this.repo.listProjects(query);
     return {
       items: rows.map((row) => ({

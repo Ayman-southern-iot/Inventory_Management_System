@@ -216,6 +216,28 @@ describe('projects hub', () => {
     });
   });
 
+  /**
+   * Detach and the item derivation have to agree on what a project item is. A PENDING borrow is
+   * excluded from the hub, so answering 204 for one would report success for a row the caller
+   * never saw and could not see afterwards either.
+   */
+  it('404s on detaching a borrow the hub never showed', async () => {
+    const project = await general.client.post('/projects').send({ name: `Unseen ${Date.now()}` });
+    const pending = await createPendingBorrow(project.body.id, 1);
+
+    expect((await im.client.delete(`/projects/${project.body.id}/items/${pending.id}`)).status).toBe(
+      404,
+    );
+
+    // And it is left attached, so the borrow can still be approved against its project.
+    const row = await ctx.db
+      .selectFrom('borrow_requests')
+      .select(['project_id', 'status'])
+      .where('id', '=', pending.id)
+      .executeTakeFirstOrThrow();
+    expect(row).toMatchObject({ project_id: project.body.id, status: BorrowStatus.PENDING });
+  });
+
   it('404s when the borrow belongs to a different project', async () => {
     const a = await general.client.post('/projects').send({ name: `A ${Date.now()}` });
     const b = await general.client.post('/projects').send({ name: `B ${Date.now()}` });
