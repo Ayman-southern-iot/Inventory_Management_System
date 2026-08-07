@@ -2,14 +2,17 @@ import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import {
   AUDIT_ACTIONS,
   AUDIT_ALWAYS_ON_ACTIONS,
+  InternalSettingKey,
   SETTING_DEFINITIONS,
   SETTING_KEYS,
   SettingKey,
   getSettingDefinition,
   isSettingKey,
+  storedAuditActionsSchema,
   type AuditAction,
   type Setting,
   type SettingValue,
+  type StoredAuditActions,
 } from '@ims/shared';
 import { CONFIG, type AppConfig } from '../../config';
 import { UnknownSettingError, ConflictError, ValidationFailedError } from '../../common/errors';
@@ -83,30 +86,75 @@ export class SettingsService implements OnModuleInit {
    * install that has never booted.
    *
    * Appending the missing members is therefore the difference between a new audited action
-   * working everywhere and working nowhere except a fresh database. The trade-off, stated
-   * plainly: the stored array cannot distinguish "did not exist yet" from "an admin removed
-   * this", so an action deliberately disabled is re-enabled on the next boot that finds it
-   * missing. That is the safe direction of failure for an audit log, and it is the same call
-   * `AuditService.isRecorded` already makes when the setting cannot be read at all.
+   * working everywhere and working nowhere except a fresh database.
+   *
+   * What makes the append safe is `AUDIT_KNOWN_ACTIONS`. The enabled list on its own cannot say
+   * *why* an action is missing from it, so a second row records the action set the code knew
+   * about when the two were last reconciled. Missing **and** unknown means this release
+   * introduced it: enable it. Missing but known means an admin switched it off: leave it off,
+   * on this restart and every restart after it — a restart never resets a value an admin has
+   * since changed (rules/10-no-hardcoding.md).
+   *
+   * The upgrade case is the subtle one. A database written before `AUDIT_KNOWN_ACTIONS` existed
+   * has no such row, and seeding it from `AUDIT_ACTIONS` would declare every action already
+   * known and leave the actions this mechanism exists to enable switched off forever. It is
+   * seeded from the stored *enabled* list instead, because that array is precisely what the code
+   * knew when it was written. The cost is one-off and unavoidable: on that single boot an action
+   * an admin disabled before the upgrade still cannot be told apart from one that did not exist
+   * yet, so it comes back. From the next boot onwards the distinction is on record.
    */
   private async unionNewAuditActions(): Promise<void> {
-    const key = SettingKey.AUDIT_ENABLED_ACTIONS;
+    const enabledKey = SettingKey.AUDIT_ENABLED_ACTIONS;
     const rows = await this.repo.findAll();
-    const stored = rows.find((row) => row.key === key)?.value;
-    // Absent or malformed: `AuditRepository.readEnabledActions` reads both as null, which
-    // already means "record everything". Writing a list here would narrow that, not widen it.
-    if (!Array.isArray(stored)) return;
+    const enabled = storedAuditActionsSchema.safeParse(
+      rows.find((row) => row.key === enabledKey)?.value,
+    );
+    const known = storedAuditActionsSchema.safeParse(
+      rows.find((row) => row.key === InternalSettingKey.AUDIT_KNOWN_ACTIONS)?.value,
+    );
 
-    const known = new Set<string>(stored as string[]);
-    const added = AUDIT_ACTIONS.filter((action) => !known.has(action));
-    if (added.length === 0) return;
+    // An absent or malformed enabled list is read as null by `AuditRepository.readEnabledActions`,
+    // which already means "record everything"; writing a list here would narrow that, not widen
+    // it. The known set is still recorded below, so the first explicit list an admin saves after
+    // this is not mistaken for a pre-upgrade snapshot on the next boot.
+    if (enabled.success) {
+      const knownActions = new Set(known.success ? known.data : enabled.data);
+      const enabledActions = new Set(enabled.data);
+      const added = AUDIT_ACTIONS.filter(
+        (action) => !knownActions.has(action) && !enabledActions.has(action),
+      );
 
-    // `updated_by` stays null: the system is reconciling its own list, and naming a person in
-    // the settings audit trail for a change they did not make would be a lie.
-    await this.repo.upsert(key, [...(stored as AuditAction[]), ...added], null);
-    this.cache.delete(key);
-    this.audit.clearEnabledActionsCache();
-    this.logger.log(`Enabled ${added.length} newly introduced audit action(s): ${added.join(', ')}`);
+      if (added.length > 0) {
+        // `updated_by` stays null: the system is reconciling its own list, and naming a person in
+        // the settings audit trail for a change they did not make would be a lie.
+        await this.repo.upsert(enabledKey, [...enabled.data, ...added], null);
+        this.cache.delete(enabledKey);
+        this.audit.clearEnabledActionsCache();
+        this.logger.log(
+          `Enabled ${added.length} newly introduced audit action(s): ${added.join(', ')}`,
+        );
+      }
+    }
+
+    await this.rememberKnownAuditActions(known.success ? known.data : null);
+  }
+
+  /**
+   * Records the action set this build ships with, so the next boot can tell a new action from a
+   * deliberately disabled one. Written unconditionally after reconciliation — including when
+   * nothing was added — because "known" is a property of the code, not of what changed.
+   */
+  private async rememberKnownAuditActions(stored: StoredAuditActions | null): Promise<void> {
+    const storedActions = new Set(stored ?? []);
+    const unchanged =
+      stored !== null &&
+      stored.length === AUDIT_ACTIONS.length &&
+      AUDIT_ACTIONS.every((action) => storedActions.has(action));
+    // A boot that changes nothing must not touch `updated_at`, or the settings history starts
+    // reporting a restart as an event.
+    if (unchanged) return;
+
+    await this.repo.upsert(InternalSettingKey.AUDIT_KNOWN_ACTIONS, [...AUDIT_ACTIONS], null);
   }
 
   /** Typed read. Returns the setting's own value type, not `unknown`. */

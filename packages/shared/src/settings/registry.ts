@@ -27,7 +27,9 @@ export const SettingKey = {
   SUBTHRESHOLD_APPROVER_USER_ID: 'SUBTHRESHOLD_APPROVER_USER_ID',
   /**
    * Phase 06: which actions the audit log actually records. Everything in
-   * `AUDIT_ALWAYS_ON_ACTIONS` is recorded regardless of what this contains.
+   * `AUDIT_ALWAYS_ON_ACTIONS` is recorded regardless of what this contains. Reconciled at boot
+   * against `InternalSettingKey.AUDIT_KNOWN_ACTIONS`, which is what lets a newly shipped action
+   * turn itself on without also resurrecting one an admin turned off.
    */
   AUDIT_ENABLED_ACTIONS: 'AUDIT_ENABLED_ACTIONS',
   /**
@@ -38,6 +40,42 @@ export const SettingKey = {
 } as const;
 
 export type SettingKey = (typeof SettingKey)[keyof typeof SettingKey];
+
+/**
+ * Rows the system writes to `app_settings` for its own bookkeeping.
+ *
+ * Deliberately **not** members of `SettingKey`: nobody administers these. Keeping them out of
+ * the registry is what makes them invisible without a special case anywhere — `isSettingKey`
+ * is false, so `SettingsService.list()` skips the row, `PUT /admin/settings` answers
+ * `UNKNOWN_SETTING`, and the admin panel (which renders whatever `list()` returns) cannot
+ * offer one as a toggle. They also have no `seedEnvVar`, because they describe what the
+ * *code* knew, which env has nothing to say about.
+ */
+export const InternalSettingKey = {
+  /**
+   * The `AUDIT_ACTIONS` members the system knew about the last time `AUDIT_ENABLED_ACTIONS`
+   * was reconciled. Without it, "absent from the enabled list because this release introduced
+   * it" and "absent because an admin switched it off" are the same stored state, and boot
+   * would have to guess — which meant undoing the admin's choice on every restart.
+   */
+  AUDIT_KNOWN_ACTIONS: 'AUDIT_KNOWN_ACTIONS',
+} as const;
+
+export type InternalSettingKey = (typeof InternalSettingKey)[keyof typeof InternalSettingKey];
+
+/** Anything that may legitimately appear in `app_settings.key`. */
+export type AppSettingKey = SettingKey | InternalSettingKey;
+
+/**
+ * How the two audit action lists are read back out of `app_settings.value`.
+ *
+ * `z.string()` rather than `auditActionSchema` on purpose: a release that *retires* an action
+ * leaves the retired member sitting in the stored row, and rejecting the whole array over it
+ * would turn boot reconciliation into a boot crash. An unrecognised member is harmless — it
+ * can only ever fail to match a current action.
+ */
+export const storedAuditActionsSchema = z.array(z.string());
+export type StoredAuditActions = z.infer<typeof storedAuditActionsSchema>;
 
 export type SettingKind = 'currency_bdt' | 'integer' | 'uuid' | 'audit_actions' | 'days';
 

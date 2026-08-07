@@ -105,7 +105,14 @@ describe('SettingsService', () => {
 
   beforeEach(async () => {
     repo = new FakeSettingsRepository();
-    const fakeAudit = { record: async () => undefined, recordFailure: async () => undefined } as never;
+    // `clearEnabledActionsCache` is not optional: both `set()` and the boot reconciliation call
+    // it, and a fake missing it fails with a TypeError rather than a useful assertion the first
+    // time a test drives AUDIT_ENABLED_ACTIONS through either path.
+    const fakeAudit = {
+      record: async () => undefined,
+      recordFailure: async () => undefined,
+      clearEnabledActionsCache: () => undefined,
+    } as never;
     service = new SettingsService(
       repo as unknown as SettingsRepository,
       configWithSeeds(),

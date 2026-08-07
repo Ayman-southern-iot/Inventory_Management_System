@@ -1,7 +1,8 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   AUDIT_ACTIONS,
   ErrorCode,
+  InternalSettingKey,
   Role,
   SettingKey,
   type ApproverSlot,
@@ -288,10 +289,12 @@ describe('settings', () => {
       });
     });
   });
+
   /**
    * AUDIT_ENABLED_ACTIONS is stored as a materialised copy of the code-level AUDIT_ACTIONS list,
    * so a release that introduces an action finds it missing from every already-booted database
-   * and silently stops recording it. Boot reconciles the two.
+   * and silently stops recording it. Boot reconciles the two against AUDIT_KNOWN_ACTIONS, which
+   * is what tells "this release introduced it" apart from "an admin switched it off".
    */
   describe('audit action reconciliation on boot', () => {
     // Stands in for "the stored list already knew about this one" — always-on, so no admin
@@ -299,18 +302,48 @@ describe('settings', () => {
     const ALREADY_KNOWN: AuditAction = 'auth.login.success';
     // Introduced by the projects hub, long after the earliest snapshots were written.
     const NEWLY_INTRODUCED: AuditAction = 'project.item.detach';
-    const SNAPSHOT: AuditAction[] = [ALREADY_KNOWN, 'category.create'];
+    // Deliberately *not* always-on: an admin is genuinely allowed to switch this one off, which
+    // is what makes the opt-out test an assertion about the union rather than about the
+    // always-on guard in set().
+    const ADMIN_DISABLED: AuditAction = 'category.create';
+    const SNAPSHOT: AuditAction[] = [ALREADY_KNOWN, ADMIN_DISABLED];
 
-    /** Writes the row behind the application's back, the way an older release left it. */
-    async function storeSnapshot(actions: readonly AuditAction[]): Promise<void> {
+    /**
+     * Writes both rows behind the application's back, the way a previous release left them.
+     * `known: null` reproduces a database that has never seen the bookkeeping row at all —
+     * i.e. every database deployed before this change.
+     */
+    async function storeState(
+      enabled: readonly AuditAction[],
+      known: readonly AuditAction[] | null,
+    ): Promise<void> {
       await ctx.db
         .updateTable('app_settings')
-        .set({ value: JSON.stringify(actions) })
+        .set({ value: JSON.stringify(enabled) })
         .where('key', '=', SettingKey.AUDIT_ENABLED_ACTIONS)
         .execute();
+      await ctx.db
+        .deleteFrom('app_settings')
+        .where('key', '=', InternalSettingKey.AUDIT_KNOWN_ACTIONS)
+        .execute();
+      if (known !== null) {
+        await ctx.db
+          .insertInto('app_settings')
+          .values({ key: InternalSettingKey.AUDIT_KNOWN_ACTIONS, value: JSON.stringify(known) })
+          .execute();
+      }
       settings.clearCache();
       audit.clearEnabledActionsCache();
     }
+
+    /**
+     * The integration suite shares one database across spec files, so a narrowed allow-list left
+     * behind here would follow every file that boots after this one — and boot deliberately no
+     * longer repairs it, which is the whole point of the change.
+     */
+    afterEach(async () => {
+      await storeState([...AUDIT_ACTIONS], [...AUDIT_ACTIONS]);
+    });
 
     async function storedActions(): Promise<string[]> {
       const row = await ctx.db
@@ -319,6 +352,15 @@ describe('settings', () => {
         .where('key', '=', SettingKey.AUDIT_ENABLED_ACTIONS)
         .executeTakeFirstOrThrow();
       return row.value as string[];
+    }
+
+    async function knownActions(): Promise<string[] | null> {
+      const row = await ctx.db
+        .selectFrom('app_settings')
+        .select('value')
+        .where('key', '=', InternalSettingKey.AUDIT_KNOWN_ACTIONS)
+        .executeTakeFirst();
+      return row ? (row.value as string[]) : null;
     }
 
     async function countRowsFor(action: AuditAction): Promise<number> {
@@ -330,8 +372,8 @@ describe('settings', () => {
       return rows.length;
     }
 
-    it('appends the actions the stored list has never seen, and only those', async () => {
-      await storeSnapshot(SNAPSHOT);
+    it('enables an action the known set has never seen, and only that one', async () => {
+      await storeState(SNAPSHOT, SNAPSHOT);
 
       await settings.seedMissing();
 
@@ -345,10 +387,12 @@ describe('settings', () => {
       expect(stored.every((action) => (AUDIT_ACTIONS as readonly string[]).includes(action))).toBe(
         true,
       );
+      // And the reconciliation records what it now knows, so the next boot has a baseline.
+      expect(new Set(await knownActions())).toEqual(new Set(AUDIT_ACTIONS));
     });
 
     it('leaves an already-complete list alone on the next boot', async () => {
-      await storeSnapshot(SNAPSHOT);
+      await storeState(SNAPSHOT, SNAPSHOT);
       await settings.seedMissing();
       const afterFirst = await storedActions();
 
@@ -358,12 +402,56 @@ describe('settings', () => {
     });
 
     /**
+     * The regression test for the flaw this design corrects. An action the admin removed is
+     * missing from the enabled list exactly like a brand-new one is; the only thing that tells
+     * them apart is that this one is in the known set. Re-enabling it would be a restart
+     * overwriting a value an admin changed, which rules/10-no-hardcoding.md forbids outright.
+     */
+    it('keeps an action the admin disabled disabled, across any number of restarts', async () => {
+      const adminsChoice = AUDIT_ACTIONS.filter((action) => action !== ADMIN_DISABLED);
+      // The admin edited the list while the system already knew about every current action.
+      await storeState(adminsChoice, [...AUDIT_ACTIONS]);
+
+      await settings.seedMissing();
+      await settings.seedMissing();
+      await settings.seedMissing();
+
+      expect(await storedActions()).not.toContain(ADMIN_DISABLED);
+      // Not just the row: the behaviour the row controls. The action is still not recorded.
+      await audit.record({
+        action: ADMIN_DISABLED,
+        entityType: 'category',
+        entityId: null,
+        entityRef: 'Opt-out probe',
+        summary: 'Created a category',
+      });
+      expect(await countRowsFor(ADMIN_DISABLED)).toBe(0);
+    });
+
+    /**
+     * The first boot after this change on a database that predates the known set. Seeding it
+     * from AUDIT_ACTIONS would declare everything already known and leave the newer action off
+     * forever, which is the bug being fixed; it is seeded from the stored enabled list instead,
+     * because that array is what the code knew when it was written.
+     */
+    it('treats a missing known set as "what was enabled at the time", not as "everything"', async () => {
+      await storeState(SNAPSHOT, null);
+      expect(await knownActions()).toBeNull();
+
+      await settings.seedMissing();
+
+      expect(await storedActions()).toContain(NEWLY_INTRODUCED);
+      expect(await storedActions()).toContain(ALREADY_KNOWN);
+      expect(new Set(await knownActions())).toEqual(new Set(AUDIT_ACTIONS));
+    });
+
+    /**
      * The behaviour the union exists for. Before reconciliation the stored array is an explicit
      * allow-list that does not mention the action, so AuditService drops the row and a detach
      * leaves no trace at all; afterwards the identical call records.
      */
     it('turns a silently dropped audit row into a recorded one', async () => {
-      await storeSnapshot(SNAPSHOT);
+      await storeState(SNAPSHOT, SNAPSHOT);
       const entry = {
         action: NEWLY_INTRODUCED,
         entityType: 'project',

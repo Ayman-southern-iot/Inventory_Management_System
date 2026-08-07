@@ -1,11 +1,16 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { SettingKey } from '@ims/shared';
+import type { AppSettingKey, SettingKey } from '@ims/shared';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
 import type { Tx } from '../audit/audit.repository';
 
 export interface SettingRow {
-  key: SettingKey;
+  /**
+   * Widened beyond `SettingKey` because `app_settings` also holds the system's own bookkeeping
+   * rows (`InternalSettingKey`). Callers that mean "an administered setting" narrow with
+   * `isSettingKey` — the compiler makes them.
+   */
+  key: AppSettingKey;
   value: unknown;
   updatedAt: Date;
   updatedByName: string | null;
@@ -29,7 +34,7 @@ export class SettingsRepository {
       .execute();
 
     return rows.map((r) => ({
-      key: r.key as SettingKey,
+      key: r.key as AppSettingKey,
       value: r.value,
       updatedAt: r.updated_at,
       updatedByName: r.updated_by_name,
@@ -55,7 +60,7 @@ export class SettingsRepository {
    * commit together. Defaults to the pool when there is nothing to join.
    */
   async upsert(
-    key: SettingKey,
+    key: AppSettingKey,
     value: unknown,
     updatedBy: string | null,
     executor: Db | Tx = this.db,
