@@ -13,6 +13,12 @@
   integration suite at the documented baseline (**400 pass / 8 pre-existing failures** in
   `demo-accounts`, `login-backoff`, `reports`, `throttling`).
 
+- **Supporting document on a requisition (2026-08-08):** a requester can attach one PDF/PNG/JPEG
+  to a DRAFT (auto-saved on pick), and the requester / IM / Admin / any approver assigned to that
+  requisition can open it. Approver sees a paper thumbnail card above the status panel on the
+  detail page; clicking opens the file in a new tab. Migration 0023, `SUPPORTING_DOCUMENT` enum
+  value, insert-only file model preserved on replace. 17 new integration tests cover attach /
+  replace / remove / oversized / magic-byte / missing / read-authorisation matrix / audit rows.
 - **Phase:** 05 complete. Phase 06 in progress — 6.1 (audit log UI) effectively done, 6.2–6.7 open.
 - **Next task:** **6.2, the nightly invariant job** (`SUM(stock_ledger) = stock_placements.quantity`
   per product). Extend it to `reserved_qty` at the same time, per G-14 — it currently cannot see a
@@ -20,7 +26,7 @@
   restore drill**, which is the highest-value remaining task given the no-data-loss requirement.
 - **Working tree:** clean. Everything is committed and verified green: `pnpm typecheck`,
   `pnpm lint`, `pnpm test`, and `pnpm --filter @ims/api test:int` (**20 files, 341 integration
-  tests**). Migrations 0001–0018 applied; 0014–0018 each rollback-verified.
+  tests**). Migrations 0001–0023 applied; 0014–0023 each rollback-verified.
 - **Blocked by:** nothing. OQ-18 and OQ-19 are answered. OQ-14, OQ-15, OQ-16, OQ-20 and OQ-22 are
   recorded assumptions, not hard blocks.
 - **Operator action outstanding:** Settings → Sub-threshold approver is unset, so requisitions

@@ -591,7 +591,7 @@ src/modules/<feature>/
 
 ## 10. Database — schema, constraints, locking recipe
 
-### 10.1 Tables (33 tables, 19 migrations)
+### 10.1 Tables (33 tables, 23 migrations)
 
 **Identity & admin** — `app_settings`, `departments`, `users`, `user_roles`, `refresh_tokens`,
 `login_attempts`, `approver_slots`, `delegations`, `projects`, and the `user_role` /
@@ -606,9 +606,11 @@ tracking via `is_trackable` on **category**).
 **Borrow** — `borrow_requests` (status: `PENDING|REJECTED|ISSUED|PARTIALLY_RETURNED|RETURNED|CANCELLED`),
 `borrow_returns` (partial returns supported).
 
-**Requisitions** — `requisitions` (status enum: full lifecycle, see §5.3),
-`requisition_items`, `requisition_approvals` (stage `INVENTORY_MANAGER|APPROVER`, slot 1 or 2,
-action `PENDING|APPROVED|REJECTED|WITHDRAWN`), `requisition_events` (append-only by trigger).
+**Requisitions** — `requisitions` (status enum: full lifecycle, see §5.3; a single
+nullable `supporting_document_file_id` FK for the requester-attached quote / proposal /
+spec sheet, DRAFT-only edit, insert-only), `requisition_items`, `requisition_approvals`
+(stage `INVENTORY_MANAGER|APPROVER`, slot 1 or 2, action `PENDING|APPROVED|REJECTED|WITHDRAWN`),
+`requisition_events` (append-only by trigger).
 
 **BOM** — `boms`, `bom_requisitions` (carries the `approval_snapshot` JSON), `bom_lines`
 (units costed by the IM at generation, total GENERATED).
@@ -618,8 +620,9 @@ receipts), `purchases`, `purchase_lines` (carry `stocked_to_compartment_id` — 
 to-stock step).
 
 **Cross-cutting** — `notifications` (in-app bell, no email per OQ-10), `audit_log`
-(append-only by trigger), `stored_files` (uploads — signatures, invoices; a new row per
-upload so a BOM printed in July keeps the signature that was actually used).
+(append-only by trigger), `stored_files` (uploads — signatures, invoices, supporting
+documents; kinds `SIGNATURE`, `INVOICE`, `SUPPORTING_DOCUMENT`; a new row per upload so a
+BOM printed in July keeps the signature that was actually used).
 
 ### 10.2 Money fields
 

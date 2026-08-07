@@ -479,3 +479,19 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   action already known and leave `project.item.detach` unaudited forever, which is the bug being
   fixed. Residual cost, one boot only: on that first upgrade an action disabled before the upgrade
   is still indistinguishable from one that did not exist, so it comes back once.
+- 2026-08-08 — Supporting document on a requisition is a single nullable FK column on
+  `requisitions` (`supporting_document_file_id`), not a join table. Mirrors the
+  `purchases.invoice_file_id` precedent set on 2026-07-30, but skips the join-table reasoning
+  that decision cites for invoices — invoices have a 1-to-many shape (one purchase, multiple
+  vendors), whereas the supporting document is a fixed 1-to-1 by user choice. The
+  `stored_file_kind` enum gains one value, `SUPPORTING_DOCUMENT`; the `stored_files` row is
+  insert-only, so replacing an attachment inserts a new row and repoints the FK (the old row
+  survives for the audit trail). Edit window tracks the amount-freeze rule: only the requester
+  can attach, replace, or remove, and only while the requisition is DRAFT — the same row lock
+  the submit path uses guards the status check against a racing submit. The document is
+  deliberate reference material for the **decision**, not part of the **payable document**, so
+  it is not frozen into `bom_requisitions.approval_snapshot` and is not rendered on the BOM PDF.
+  Read authorization is requester + IM + Admin + any approver assigned to this requisition —
+  distinct from the funds-module predicate (which is requester + IM + Admin only) because the
+  document can swing a decision, so an approver acting on this requisition must be able to read
+  it.
