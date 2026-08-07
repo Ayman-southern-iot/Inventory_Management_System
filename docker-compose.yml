@@ -73,6 +73,15 @@ x-api-env: &api-env
   # without this the api container has no Chrome for puppeteer to launch.
   PDF_BROWSER_EXECUTABLE_PATH: ${PDF_BROWSER_EXECUTABLE_PATH:-/usr/bin/chromium-browser}
 
+  # Both upload and PDF storage live under the persistent `files` volume (mounted at
+  # /app/storage below). The api defaults are ./storage/files and ./storage/pdf, which
+  # resolve inside the container to /app/apps/api/storage/... — that path is ephemeral and
+  # is wiped on the next image rebuild, so signatures uploaded today would not survive a
+  # restart and rendered BOMs would show a blank cell where the signature image should be.
+  # Pinning both to /app/storage/* keeps them inside the named volume.
+  FILE_STORAGE_DIR: ${FILE_STORAGE_DIR:-/app/storage/files}
+  PDF_STORAGE_DIR: ${PDF_STORAGE_DIR:-/app/storage/pdf}
+
 services:
   db:
     <<: *logging
