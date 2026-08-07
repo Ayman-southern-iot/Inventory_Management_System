@@ -25,6 +25,7 @@ import { BomsPage } from '@/features/boms/pages/BomsPage';
 import { BomGeneratePage } from '@/features/boms/pages/BomGeneratePage';
 import { BomDetailPage } from '@/features/boms/pages/BomDetailPage';
 import { ProjectsPage } from '@/features/projects/pages/ProjectsPage';
+import { ProjectDetailPage } from '@/features/projects/pages/ProjectDetailPage';
 import { SettingsPage } from '@/features/admin/pages/SettingsPage';
 import { UsersPage } from '@/features/admin/pages/UsersPage';
 import { AuditLogPage } from '@/features/admin/pages/AuditLogPage';
@@ -75,6 +76,7 @@ export function App() {
 
                     {/* The project hub is shared context — every role sees it, so no guard. */}
                     <Route path={ROUTES.projects.all} element={<ProjectsPage />} />
+                    <Route path={ROUTES.projects.detailPattern} element={<ProjectDetailPage />} />
 
                     {/* Anyone may raise a requisition and follow their own. The API decides
                         what each caller sees, so these are not role-gated. New before the

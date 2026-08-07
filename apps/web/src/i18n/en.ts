@@ -686,6 +686,7 @@ export const t = {
     removed: 'Removed from this project',
     removeHint: 'Removes it from this project. The borrowing record itself is kept.',
     outstanding: (out: number, total: number) => `${out} of ${total} still out`,
+    counts: (inUse: number, returned: number) => `${inUse} in use · ${returned} returned`,
   },
 
   requisitions: {
