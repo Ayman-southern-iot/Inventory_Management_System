@@ -14,18 +14,15 @@ import {
   IDEMPOTENCY_HEADER,
   Role,
   createBorrowRequestSchema,
-  createProjectSchema,
   decideBorrowSchema,
   listBorrowsQuerySchema,
   returnBorrowSchema,
   revertBorrowSchema,
   type BorrowRequest,
   type CreateBorrowRequestInput,
-  type CreateProjectInput,
   type DecideBorrowInput,
   type ListBorrowsQuery,
   type Paginated,
-  type Project,
   type ReturnBorrowInput,
   type RevertBorrowInput,
 } from '@ims/shared';
@@ -39,7 +36,6 @@ import { CurrentAuditContext } from '../audit/audit.decorators';
 import type { AuditContext } from '../audit/audit-context';
 import { BorrowingRepository } from './borrowing.repository';
 import { BorrowingService } from './borrowing.service';
-import { ProjectsService } from './projects.service';
 
 /** Roles that may see and act on everyone's borrows. */
 const STOCK_ROLES = [Role.INVENTORY_MANAGER, Role.ADMIN] as const;
@@ -50,26 +46,8 @@ export class BorrowingController {
   constructor(
     private readonly borrowing: BorrowingService,
     private readonly repo: BorrowingRepository,
-    private readonly projects: ProjectsService,
     private readonly idempotency: IdempotencyService,
   ) {}
-
-  /* ------------------------------------------------------------- projects */
-
-  @Get('projects')
-  async listProjects(): Promise<Project[]> {
-    return this.projects.list();
-  }
-
-  /** Anyone raising a borrow may create the project it is charged to (task 2.1). */
-  @Post('projects')
-  async createProject(
-    @Body(zodPipe(createProjectSchema)) body: CreateProjectInput,
-    @CurrentUser() actor: RequestUser,
-    @CurrentAuditContext() ctx: AuditContext,
-  ): Promise<Project> {
-    return this.projects.create(body, actor.id, ctx);
-  }
 
   /* --------------------------------------------------------------- borrows */
 

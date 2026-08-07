@@ -15,6 +15,7 @@ import { CategoriesModule } from './modules/categories/categories.module';
 import { ProductsModule } from './modules/products/products.module';
 import { LocationsModule } from './modules/locations/locations.module';
 import { BorrowingModule } from './modules/borrowing/borrowing.module';
+import { ProjectsModule } from './modules/projects/projects.module';
 import { RequisitionsModule } from './modules/requisitions/requisitions.module';
 import { BomsModule } from './modules/boms/boms.module';
 import { MaintenanceModule } from './modules/maintenance/maintenance.module';
@@ -80,6 +81,7 @@ const throttlerOptions = [
     ProductsModule,
     LocationsModule,
     BorrowingModule,
+    ProjectsModule,
     RequisitionsModule,
     BomsModule,
     MaintenanceModule,

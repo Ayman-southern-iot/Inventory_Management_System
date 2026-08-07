@@ -452,3 +452,12 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   database, so the admin panel stays the one place users are managed.
 - 2026-07-31 — The `migrate` one-shot now runs the seed after the migrations. The seed is
   idempotent by design, so a fresh machine needs exactly one command to get a working stack.
+- 2026-08-07 — Removing an item from a project **detaches** it (`borrow_requests.project_id = NULL`)
+  rather than deleting the borrow. The borrow drives stock issue and return, so deleting it would
+  orphan `stock_ledger` rows and break `SUM(ledger) == SUM(placements)` — the one invariant the
+  nightly job exists to catch. Detach writes no ledger row, because no stock moved.
+- 2026-08-07 — The Project Hub's item list is **derived from `borrow_requests`**, not stored: a
+  `project_items` table would be a second copy of quantity and returned quantity, free to drift
+  from the borrow that actually moved the stock. `ProjectsService` moved out of `borrowing/` into
+  its own module and `GET`/`POST /borrowing/projects` were removed in favour of `/projects` —
+  two routes for one resource is how the next person calls the wrong one.

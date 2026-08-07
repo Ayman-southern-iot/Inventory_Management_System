@@ -62,6 +62,12 @@ export const AUDIT_ACTIONS = [
   // Projects
   'project.create',
   'project.update',
+  /**
+   * Removing a borrow from a project. Deliberately its own action rather than a
+   * `project.update`: it changes what a *borrow* is attributed to, not the project row, and it
+   * is the only way an outstanding item silently leaves a project's list.
+   */
+  'project.item.detach',
   // Stock
   'stock.receive',
   'stock.move',

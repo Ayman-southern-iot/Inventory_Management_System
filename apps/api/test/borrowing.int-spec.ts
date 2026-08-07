@@ -417,16 +417,16 @@ describe('borrowing', () => {
 
   describe('projects (task 2.1)', () => {
     it('warns on a duplicate name but lets the user proceed deliberately', async () => {
-      const first = await requester.client.post('/borrowing/projects').send({ name: 'Falcon' });
+      const first = await requester.client.post('/projects').send({ name: 'Falcon' });
       expect(first.status).toBe(201);
 
       // Case-insensitive: "falcon" is the same project to a human.
-      const warned = await requester.client.post('/borrowing/projects').send({ name: 'falcon' });
+      const warned = await requester.client.post('/projects').send({ name: 'falcon' });
       expect(warned.status).toBe(409);
       expect(warned.body.code).toBe(ErrorCode.DUPLICATE_PROJECT_NAME);
 
       const forced = await requester.client
-        .post('/borrowing/projects')
+        .post('/projects')
         .send({ name: 'falcon', allowDuplicateName: true });
       expect(forced.status).toBe(201);
     });
