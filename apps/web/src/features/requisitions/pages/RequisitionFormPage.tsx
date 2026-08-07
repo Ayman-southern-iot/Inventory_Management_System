@@ -28,6 +28,13 @@ import {
   useUpdateRequisition,
 } from '../api';
 
+/**
+ * A `<select>` cannot hold null, so its "none" option carries `''`. The shared schema is the
+ * API contract and correctly rejects that — `''` is neither a uuid nor null, and `.default(null)`
+ * only fires for `undefined`. Coerce at the boundary where the empty string is produced.
+ */
+const emptyToNull = { setValueAs: (value: string) => (value === '' ? null : value) };
+
 const EMPTY_ITEM = {
   productId: null,
   itemName: '',
@@ -161,7 +168,10 @@ export function RequisitionFormPage() {
           </header>
 
           <div className="grid gap-4 p-4 sm:grid-cols-2">
-            <SelectField label={t.requisitions.department} {...form.register('departmentId')}>
+            <SelectField
+              label={t.requisitions.department}
+              {...form.register('departmentId', emptyToNull)}
+            >
               <option value="">{t.users.noDepartment}</option>
               {(departments.data?.items ?? []).map((department) => (
                 <option key={department.id} value={department.id}>
@@ -170,7 +180,10 @@ export function RequisitionFormPage() {
               ))}
             </SelectField>
 
-            <SelectField label={t.requisitions.project} {...form.register('projectId')}>
+            <SelectField
+              label={t.requisitions.project}
+              {...form.register('projectId', emptyToNull)}
+            >
               <option value="">{t.requisitions.noProject}</option>
               {(projects.data ?? []).map((project) => (
                 <option key={project.id} value={project.id}>
