@@ -16,6 +16,7 @@ import { LoadingState } from '@/components/ui/states';
 import { useToast } from '@/components/ui/Toast';
 import { t } from '@/i18n/en';
 import { messageForError } from '@/lib/error-message';
+import { formatBdt } from '@/lib/format';
 import { ROUTES } from '@/routes/paths';
 import { useDepartments } from '@/features/admin/api';
 import { useProjects } from '@/features/projects/api';
@@ -161,13 +162,13 @@ export function RequisitionFormPage() {
 
       <form noValidate className="flex flex-col gap-6">
         {/* ---------------------------------------------- zone 1: the request */}
-        <Panel>
-          <header className="border-b border-border px-4 py-3">
-            <h2 className="text-sm font-semibold text-ink">{t.requisitions.detailsHeading}</h2>
-            <p className="text-xs text-ink-subtle">{t.requisitions.detailsHint}</p>
+        <Panel className="shadow-[--shadow-panel]">
+          <header className="border-b border-border px-5 py-4">
+            <h2 className="text-base font-semibold text-ink">{t.requisitions.detailsHeading}</h2>
+            <p className="mt-0.5 text-sm text-ink-muted">{t.requisitions.detailsHint}</p>
           </header>
 
-          <div className="grid gap-4 p-4 sm:grid-cols-2">
+          <div className="grid gap-5 p-5 sm:grid-cols-2">
             <SelectField
               label={t.requisitions.department}
               {...form.register('departmentId', emptyToNull)}
@@ -220,11 +221,11 @@ export function RequisitionFormPage() {
         </Panel>
 
         {/* ------------------------------------------------ zone 2: the items */}
-        <Panel>
-          <header className="flex items-center justify-between border-b border-border px-4 py-3">
+        <Panel className="shadow-[--shadow-panel]">
+          <header className="flex items-center justify-between border-b border-border px-5 py-4">
             <div>
-              <h2 className="text-sm font-semibold text-ink">{t.requisitions.itemsHeading}</h2>
-              <p className="text-xs text-ink-subtle">{t.requisitions.itemsHint}</p>
+              <h2 className="text-base font-semibold text-ink">{t.requisitions.itemsHeading}</h2>
+              <p className="mt-0.5 text-sm text-ink-muted">{t.requisitions.itemsHint}</p>
             </div>
             <Button
               type="button"
@@ -261,32 +262,34 @@ export function RequisitionFormPage() {
             </p>
           ) : null}
 
-          <footer className="flex items-center justify-end gap-3 border-t border-border px-4 py-3">
-            <span className="text-sm text-ink-muted">{t.requisitions.total}</span>
-            <span className="text-lg font-semibold tabular-nums text-ink">
-              {total.toLocaleString()}
+          <footer className="flex items-baseline justify-between border-t border-border bg-surface-muted px-5 py-4">
+            <span className="text-sm font-medium text-ink-muted">{t.requisitions.total}</span>
+            <span className="text-2xl font-semibold tabular-nums text-ink">
+              {formatBdt(total)}
             </span>
           </footer>
         </Panel>
 
-        <div className="flex flex-wrap items-center justify-end gap-3">
-          <p className="mr-auto text-xs text-ink-subtle">{t.requisitions.submitHint}</p>
-          <Button
-            type="button"
-            variant="secondary"
-            isLoading={isSubmitting}
-            onClick={form.handleSubmit(onSaveDraft)}
-          >
-            {t.requisitions.saveDraft}
-          </Button>
-          <Button
-            type="button"
-            icon={<Send aria-hidden className="size-4" />}
-            isLoading={isSubmitting}
-            onClick={form.handleSubmit(onSubmitForApproval)}
-          >
-            {t.requisitions.submit}
-          </Button>
+        <div className="sticky bottom-0 z-10 mt-6 flex items-center justify-between gap-3 rounded-[--radius-panel] border border-border bg-surface px-5 py-4 shadow-[--shadow-panel]">
+          <p className="text-xs text-ink-subtle">{t.requisitions.submitHint}</p>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              isLoading={isSubmitting}
+              onClick={form.handleSubmit(onSaveDraft)}
+            >
+              {t.requisitions.saveDraft}
+            </Button>
+            <Button
+              type="button"
+              icon={<Send aria-hidden className="size-4" />}
+              isLoading={isSubmitting}
+              onClick={form.handleSubmit(onSubmitForApproval)}
+            >
+              {t.requisitions.submit}
+            </Button>
+          </div>
         </div>
       </form>
     </div>
