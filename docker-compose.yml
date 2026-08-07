@@ -1,69 +1,167 @@
-# Inventory Management System — whole stack, one command.
+# Inventory Management System — the whole system, one file, one command.
 #
-#   docker compose up -d          starts db, migrations, api, web and the proxy
-#   docker compose ps             check everything is up
-#   docker compose logs -f api    follow the API
-#   docker compose stop           stop without destroying anything
+#     docker compose up -d
 #
-# Then open  http://localhost:5173
+# Then open  http://localhost:5173  and click any of the five people on the login page.
+# Every one of them signs in with the password `demo`.
 #
-# NEVER run `docker compose down -v`. The `pgdata` and `files` volumes are the database
-# and every uploaded signature, invoice and generated BOM PDF. There is no reason to run it.
+#     docker compose ps              see what is running
+#     docker compose logs -f api     follow the backend
+#     docker compose stop            stop everything, keep the data
+#
+# NEVER run `docker compose down -v`. The `pgdata` volume is the database and `files` holds
+# every uploaded signature, invoice and generated BOM PDF. There is no reason to run it.
 #
 # ---------------------------------------------------------------------------------------
-# This file deliberately contains no service definitions of its own. The stack is defined
-# once, in infra/docker-compose.yml, and included here so the two can never drift apart.
-# All this file does is publish the proxy on 5173 instead of 80/443.
-#
-# Why the proxy and not the web container: the SPA calls same-origin `/api/v1` and
-# `/socket.io` (see the comment in apps/web/Dockerfile). apps/web/nginx.conf serves the
-# built SPA and nothing else — it does not proxy the API. Caddy is what routes /api/* to
-# api:3000. Publishing the web container directly would give a UI that loads and then
-# fails every request, so port 5173 belongs to the proxy.
+# DEMO MODE IS ON in this file. Anyone who can reach the login page can sign in as the
+# administrator. That is the point of a demo stack and it must never be how you run this
+# for real — for a real deployment use infra/docker-compose.yml, which defaults demo mode
+# off and takes its secrets from infra/.env.
 # ---------------------------------------------------------------------------------------
 
 name: ims
 
-include:
-  - path: infra/docker-compose.yml
+# Without a cap the json-file driver grows until the disk is full and takes the host down.
+x-logging: &logging
+  logging:
+    driver: json-file
+    options:
+      max-size: '10m'
+      max-file: '5'
+
+# The database credentials, written once and shared by the server and its clients. If these
+# ever disagree the stack comes up looking healthy and then fails every query with
+# "password authentication failed" — so they are defined in exactly one place.
+x-db-credentials: &db-credentials
+  POSTGRES_DB: ${POSTGRES_DB:-ims}
+  POSTGRES_USER: ${POSTGRES_USER:-ims}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ims_demo_password}
+
+# Everything the API and the migrate/seed job need. Anchored so the two can never drift.
+x-api-env: &api-env
+  <<: *db-credentials
+  # Facts about this network, not configuration: inside the compose network the database is
+  # always the host `db` on 5432. Deliberately NOT interpolated — a root .env written for
+  # running the app on the host would otherwise point the container at 127.0.0.1:5433.
+  POSTGRES_HOST: db
+  POSTGRES_PORT: '5432'
+  NODE_ENV: production
+  TZ: Asia/Dhaka
+
+  # The three keys must all differ from each other or the API refuses to boot: identical
+  # access and refresh secrets would let a refresh token verify as an access token, and a
+  # leaked PDF download URL must not verify as a session.
+  # These are throwaway demo values. Generate real ones with `openssl rand -hex 32`.
+  JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-demo_access_0f8c1d2e3a4b5c6d7e8f9a0b1c2d3e4f}
+  JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-demo_refresh_9b8a7c6d5e4f3a2b1c0d9e8f7a6b5c4d}
+  PDF_SIGNING_SECRET: ${PDF_SIGNING_SECRET:-demo_pdfsign_1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d}
+
+  # The first ADMIN, so a fresh database is reachable. Password minimum is 12 characters.
+  SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@ims.local}
+  SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-DemoAdminPassword123}
+
+  # The five clickable personas. With demo mode on the seed creates them, resets all of them
+  # to the shared password, and clears the force-a-password-change flag — a demo whose
+  # accounts all demand a password change on first use is not a demo.
+  DEMO_ACCOUNTS_ENABLED: 'true'
+  DEMO_ACCOUNT_PASSWORD: demo
+  # Listed explicitly so the login page shows exactly these five and nothing a later user
+  # adds. A persona that fails on click is worse than one that is absent.
+  DEMO_ACCOUNT_EMAILS: ${SEED_ADMIN_EMAIL:-admin@ims.local},im@ims.local,approver1@ims.local,approver2@ims.local,general@ims.local
 
 services:
-  # Postgres and the API must agree on the password or nothing else matters.
-  #
-  # infra/docker-compose.yml sets the database's credentials by interpolation
-  # (`POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}`), which Compose resolves from the .env beside
-  # the file it was invoked on — the ROOT .env when you run from here. That is the host dev
-  # config, whose password is not the deployment one. The API meanwhile reads infra/.env
-  # literally through `env_file`. The two then disagree and every connection fails with
-  # "password authentication failed for user", after the volume has already initialised
-  # itself with the wrong password.
-  #
-  # Reading the same file the API reads removes the interpolation from the path entirely.
   db:
-    # `!reset` drops the included `environment:` mapping entirely. It has to go, not merge:
-    # Compose gives `environment` precedence over `env_file`, so while that mapping exists
-    # the interpolated (wrong) password keeps winning no matter what env_file says.
-    # POSTGRES_DB/USER/PASSWORD and TZ all come from infra/.env below instead.
-    environment: !reset null
-    env_file: infra/.env
+    <<: *logging
+    # PIN THE MAJOR VERSION. `postgres:latest` will one day silently become a new major and
+    # refuse to read your data directory.
+    image: postgres:16.4-alpine
+    restart: unless-stopped
+    environment:
+      <<: *db-credentials
+      TZ: Asia/Dhaka
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # Deliberately not published to the host: nothing outside this network needs it, and the
+    # dev databases already hold 5433 and 5434.
     healthcheck:
-      # `$$` escapes Compose interpolation so the container's own shell expands these,
-      # against the env_file above rather than whatever the host happens to define.
+      # `$$` escapes Compose interpolation so the container's own shell expands these.
       test: ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
       interval: 10s
       timeout: 5s
       retries: 12
       start_period: 20s
 
+  # One-shot: migrate, then seed, then exit. `api` waits for it to succeed, so you can never
+  # end up serving traffic against a half-migrated database. The seed is idempotent, so a
+  # restart never resets a value an admin has since changed.
+  migrate:
+    <<: *logging
+    image: ims-api:local
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: 'no'
+    environment: *api-env
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ['sh', '-c', 'npm run migration:run && npm run seed:run']
+
+  api:
+    <<: *logging
+    image: ims-api:local
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    environment: *api-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - files:/app/storage
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:3000/health']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  web:
+    <<: *logging
+    image: ims-web:local
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+
+  # This is what you open. The SPA calls same-origin `/api/v1` and `/socket.io`, and the web
+  # container's nginx only serves the built assets — it does not proxy the API. Caddy is what
+  # routes /api/* to the backend, so port 5173 belongs here and not to `web`.
   proxy:
-    # `!override` replaces the included port list rather than appending to it. Without it
-    # Compose would merge, and the stack would also try to bind 80 and 443 — which is how
-    # you collide with whatever else is on the machine.
-    ports: !override
+    <<: *logging
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
       - '${WEB_PORT:-5173}:80'
     environment:
-      # A bare `:80` tells Caddy to serve plain HTTP on that port and skip certificate
-      # provisioning, which is what you want for localhost and LAN. Set IMS_DOMAIN to a
-      # real hostname that resolves to this machine and Caddy will get a certificate
-      # automatically — but then publish 80 and 443, not 5173, or ACME cannot reach it.
+      # A bare `:80` tells Caddy to serve plain HTTP and skip certificate provisioning, which
+      # is what you want on localhost and a LAN. Point IMS_DOMAIN at a real hostname and it
+      # will fetch a certificate — but then publish 80 and 443, or ACME cannot reach it.
       IMS_DOMAIN: ${IMS_DOMAIN:-:80}
+    volumes:
+      - ./infra/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+      - api
+
+volumes:
+  pgdata: # the database. Losing this is losing everything.
+  files: # uploaded signatures and invoices, generated BOM PDFs
+  caddy_data:
+  caddy_config:
