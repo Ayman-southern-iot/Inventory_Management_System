@@ -16,6 +16,7 @@
     "typecheck": "pnpm -r --sequential typecheck",
     "db:migrate": "pnpm --filter @ims/api db:migrate",
     "db:rollback": "pnpm --filter @ims/api db:rollback",
+    "db:status": "pnpm --filter @ims/api db:status",
     "db:make": "pnpm --filter @ims/api db:make",
     "db:seed": "pnpm --filter @ims/api db:seed",
     "db:up": "docker compose -f infra/docker-compose.dev.yml up -d",

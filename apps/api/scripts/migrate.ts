@@ -4,7 +4,7 @@
  *   pnpm db:migrate            apply everything outstanding
  *   pnpm db:rollback           undo the most recent migration
  *   pnpm db:make <name>        write an empty timestamp-ordered migration file
- *   pnpm db:migrate status     list what is applied and what is not
+ *   pnpm db:status             list what is applied and what is not (read-only)
  *
  * Exit code is non-zero on any failure so the compose `migrate` service stops the deploy
  * rather than letting the API boot against a half-migrated database (rules/60-infra.md).
@@ -105,6 +105,16 @@ async function main(): Promise<void> {
   }
   if (command !== 'up' && command !== 'down' && command !== 'status') {
     throw new Error(`Unknown command "${command}". Expected up | down | make | status.`);
+  }
+
+  // `pnpm db:migrate` hardcodes `up`, so `pnpm db:migrate status` used to arrive here as
+  // ('up', ['status']) and silently APPLY migrations while the operator believed they were
+  // reading one. Refuse rather than guess: on a production stack that mistake is a deploy.
+  if (rest.length > 0) {
+    throw new Error(
+      `"${command}" takes no arguments, got "${rest.join(' ')}". ` +
+        `Did you mean \`pnpm db:${command === 'up' ? 'status' : command}\`?`,
+    );
   }
 
   console.log(`Migrating ${config.db.database}@${config.db.host}:${config.db.port} (${command})`);
