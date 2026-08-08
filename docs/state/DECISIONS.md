@@ -495,3 +495,29 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   distinct from the funds-module predicate (which is requester + IM + Admin only) because the
   document can swing a decision, so an approver acting on this requisition must be able to read
   it.
+- 2026-08-08 — Pre-draft supporting document (orphan upload + claim on create). The
+  DRAFT-only edit window on the existing endpoint means the requester had to save a draft
+  first, then attach — but the user wants to pick a file on the empty Make Requisition
+  form, before any requisition row exists, and have it become the requisition's supporting
+  document when the draft is saved. The new flow is additive (the existing endpoint is
+  unchanged): `POST /uploads/supporting-document` writes a `stored_files` row immediately
+  with `kind = 'SUPPORTING_DOCUMENT'`, `uploaded_by = actor.id`, and
+  `pending_claim_by = actor.id`; `POST /requisitions` accepts an optional
+  `pendingSupportingDocumentId` and claims the orphan **in the same transaction** as the
+  row insert (lookup, ownership check, FK repoint, `pending_claim_by = null`, audit row with
+  `via: 'claim-on-create'`). The two-row audit chain (`requisition.supporting_document_pending`
+  on upload, `requisition.supporting_document_attached` on claim) lets you follow a
+  supporting document from "user picked a file" to "draft saved". A `@Cron` daily job
+  (`PendingUploadSweepJob` at 04:00) deletes SUPPORTING_DOCUMENT rows where
+  `pending_claim_by IS NOT NULL`, `created_at < now() - 24h`, and no requisition points at
+  them — row delete first, then bytes (best-effort, `unlink` swallows ENOENT). The 24h
+  window is generous so a user who opens the form, picks a file, and walks away has plenty
+  of time to come back. The atomic claim prevents two concurrent creates from both
+  pointing at the same orphan; the ownership gate (`pending_claim_by === actor.id`)
+  prevents one user from attaching another's orphan. The `stored_files.pending_claim_by`
+  column is the orphan flag and the sweep predicate. The partial index that would make
+  the sweep index-only is intentionally **not** added by migration 0024 — Kysely's
+  migrator runs every migration in a single outer Postgres tx, and Postgres refuses to
+  evaluate a partial-index predicate against a new enum value in the same tx that added
+  it. The index is added in a follow-up migration after the outer tx commits. The runtime
+  WHERE filter is fine at this scale (`stored_files` has tens of rows in production).

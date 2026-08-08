@@ -19,14 +19,24 @@
   detail page; clicking opens the file in a new tab. Migration 0023, `SUPPORTING_DOCUMENT` enum
   value, insert-only file model preserved on replace. 17 new integration tests cover attach /
   replace / remove / oversized / magic-byte / missing / read-authorisation matrix / audit rows.
+- **Pre-draft supporting document (orphan upload + claim on create, 2026-08-08):** the
+  requester can pick a file on the empty Make Requisition form, **before** the draft row
+  exists — the file uploads immediately to `POST /uploads/supporting-document` and is
+  claimed atomically when the draft is saved (`POST /requisitions` reads the new
+  optional `pendingSupportingDocumentId` field and claims the orphan in the same
+  transaction). A `@Cron` daily sweep deletes orphans older than 24h. Migration 0024,
+  `stored_files.pending_claim_by` column, 10 new integration tests cover orphan row,
+  ownership gate, atomic claim, sweep. The existing DRAFT-only endpoint is unchanged.
 - **Phase:** 05 complete. Phase 06 in progress — 6.1 (audit log UI) effectively done, 6.2–6.7 open.
 - **Next task:** **6.2, the nightly invariant job** (`SUM(stock_ledger) = stock_placements.quantity`
   per product). Extend it to `reserved_qty` at the same time, per G-14 — it currently cannot see a
   stranded reservation, which is the whole failure mode G-14 describes. Then **6.3, the backup and
   restore drill**, which is the highest-value remaining task given the no-data-loss requirement.
 - **Working tree:** clean. Everything is committed and verified green: `pnpm typecheck`,
-  `pnpm lint`, `pnpm test`, and `pnpm --filter @ims/api test:int` (**20 files, 341 integration
-  tests**). Migrations 0001–0023 applied; 0014–0023 each rollback-verified.
+  `pnpm lint`, `pnpm test`, and `pnpm --filter @ims/api test:int` (**21 files, 351 integration
+  tests**; 27 new on top of the baseline, 17 for the supporting-doc endpoint and 10 for
+  the pre-draft orphan flow). Migrations 0001–0024 applied; 0014–0024 each
+  rollback-verified.
 - **Blocked by:** nothing. OQ-18 and OQ-19 are answered. OQ-14, OQ-15, OQ-16, OQ-20 and OQ-22 are
   recorded assumptions, not hard blocks.
 - **Operator action outstanding:** Settings → Sub-threshold approver is unset, so requisitions
@@ -52,7 +62,7 @@
 | 02 | Borrowing — request, approve, issue, return | ✅ done and verified | 7 migrations, 236 tests |
 | 03 | Requisitions — form, approvals, tracker, notifications | ✅ done and verified | 9 migrations, 277 tests |
 | 04 | BOM — generation, snapshot, letterhead PDF | ✅ done and verified | 10 migrations |
-| 05 | Funds, purchasing, signatures, finished BOM | done and verified | 18 migrations, 341 int tests |
+| 05 | Funds, purchasing, signatures, finished BOM | done and verified | 19 migrations, 351 int tests |
 | 06 | Hardening — invariant job, backups, monitoring, runbook | 6.1 done; 6.2-6.7 open | |
 
 Legend: ⬜ not started · 🟡 in progress · ✅ done and verified

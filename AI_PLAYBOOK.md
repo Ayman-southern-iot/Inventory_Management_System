@@ -100,7 +100,10 @@ This is the canonical scenario. Every domain rule in this document serves one of
 6. While still a DRAFT he may also **attach one supporting document** — a quote, vendor
    proposal, or spec sheet (PDF/PNG/JPEG, ≤10 MB). It is reference material for the
    decision, not part of the BOM; approvers see it as a paper thumbnail on the detail
-   page. He can replace or remove it until the requisition is submitted.
+   page. He can replace or remove it until the requisition is submitted. He can also
+   **pick the file on the empty form, before the draft row exists** — the file is uploaded
+   immediately and claimed atomically when he saves the draft. Orphans that never get
+   claimed are swept at 04:00 daily.
 7. **Proceed.** The **IM approves first** — their approval means *"confirmed, we really
    don't have this, go ahead"*.
 8. Then approvers act (2 above the expense threshold, no fixed order; 1 below — see
@@ -451,6 +454,42 @@ their own DRAFT. The rule is deliberately narrow — it is reference material fo
   `accept=".pdf,.png,.jpg,.jpeg"`, auto-saved on pick, replace/remove buttons when present.
   Detail: small paper thumbnail card above the status panel; the card wraps an `<a target="_blank">`
   so the file opens in a new tab. The card renders nothing if the requisition has no document.
+- **Pre-draft attach (orphan upload + claim on create).** Equally important: the requester
+  can pick a file on the *empty* Make Requisition form, **before** the draft row exists.
+  This is a separate flow from the DRAFT-only attach:
+  - `POST /uploads/supporting-document` writes a `stored_files` row immediately with
+    `kind = 'SUPPORTING_DOCUMENT'`, `uploaded_by = actor.id`, and `pending_claim_by = actor.id`.
+    The file is staged, not linked. The endpoint returns the new `{ fileId, originalName, … }`.
+  - The field component holds the file id in local state and lifts it to the form via
+    `onPendingChange`. The form includes it in the save body as `pendingSupportingDocumentId`.
+  - `POST /requisitions` (the create path) claims the orphan **in the same transaction** as
+    the requisition insert: row lookup, ownership check (`pending_claim_by === actor.id`),
+    `setSupportingDocumentFileId`, `pending_claim_by = null`, and an audit row with
+    `via: 'claim-on-create'`. The atomic claim prevents two concurrent creates from both
+    pointing at the same orphan.
+  - The existing DRAFT-only `POST /requisitions/:id/supporting-document` is **unchanged**.
+    The two routes are not redundant: one bridges the "no draft yet" gap, the other is
+    the post-save replace/remove path.
+  - `stored_files.pending_claim_by` is the orphan flag. It also gates the sweep.
+  - **Sweep.** `PendingUploadSweepJob` runs daily at 04:00 and deletes SUPPORTING_DOCUMENT
+    rows where `pending_claim_by IS NOT NULL`, `created_at < now() - 24h`, and no
+    `requisitions.supporting_document_file_id` points at the row. Row delete first, then
+    bytes (best-effort — `unlink` swallows ENOENT). The 24h window is generous so a user
+    who opens the form, picks a file, and walks away has plenty of time to come back.
+  - **Audit.** The pre-draft upload writes `requisition.supporting_document_pending`
+    (action code, attached or stored_file entity); the claim writes
+    `requisition.supporting_document_attached` with `via: 'claim-on-create'` in metadata.
+    The two-row audit chain lets you follow a supporting document from "user picked a file"
+    to "draft saved" to "subsequent replaces/removes".
+  - **Why a partial index was not added in the same migration.** A partial index on
+    `stored_files(created_at) WHERE kind = 'SUPPORTING_DOCUMENT' AND pending_claim_by IS NOT NULL`
+    would be the right shape, but it references the `SUPPORTING_DOCUMENT` enum value that
+    migration 0023 added. Kysely's migrator runs every migration inside a single outer
+    Postgres transaction (the Postgres adapter advertises transactional DDL), and Postgres
+    refuses to evaluate a partial-index predicate against a new enum value in the same
+    transaction that added it ("unsafe use of new value"). The index is added in a
+    follow-up migration after the outer tx commits. The runtime sweep WHERE filter is
+    fine at this scale (`stored_files` has tens of rows in production today).
 
 ---
 
@@ -630,7 +669,7 @@ src/modules/<feature>/
 
 ## 10. Database — schema, constraints, locking recipe
 
-### 10.1 Tables (33 tables, 23 migrations)
+### 10.1 Tables (33 tables, 24 migrations)
 
 **Identity & admin** — `app_settings`, `departments`, `users`, `user_roles`, `refresh_tokens`,
 `login_attempts`, `approver_slots`, `delegations`, `projects`, and the `user_role` /
@@ -661,7 +700,9 @@ to-stock step).
 **Cross-cutting** — `notifications` (in-app bell, no email per OQ-10), `audit_log`
 (append-only by trigger), `stored_files` (uploads — signatures, invoices, supporting
 documents; kinds `SIGNATURE`, `INVOICE`, `SUPPORTING_DOCUMENT`; a new row per upload so a
-BOM printed in July keeps the signature that was actually used).
+BOM printed in July keeps the signature that was actually used; carries
+`pending_claim_by` for pre-draft orphan uploads — the sweep job deletes SUPPORTING_DOCUMENT
+orphans older than 24h).
 
 ### 10.2 Money fields
 
@@ -1201,6 +1242,13 @@ essentials above and adds the on-call playbook).
   playbook (§5.x), audit rows for attach / remove / replace, integration tests for
   every status + role combination, and a live-stack smoke run before the last commit.
   Anything less and the next session will redo your work.
+- **If you added an upload feature that can precede the parent row** (the file must exist
+  before its owner does — pre-draft attach, profile picture before user row, etc.):
+  orphan row in `stored_files` with `pending_claim_by` set to the actor, ownership gate
+  on the claim (only the uploader can attach their orphan), atomic claim on parent
+  create in the same transaction, and a `@Cron` sweep that deletes orphans older than
+  the TTL. Mirror §5.7 — the pattern is documented there end-to-end. Anything less and
+  the orphan upload is a side-channel leak.
 
 ---
 
