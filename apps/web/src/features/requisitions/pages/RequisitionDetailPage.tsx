@@ -218,62 +218,71 @@ export function RequisitionDetailPage() {
 
             <div className="grid gap-6 lg:grid-cols-3">
               <div className="flex flex-col gap-6 lg:col-span-2">
-                {/* The paper thumbnail sits above the status panel when a document was
-                    attached — absence (rendering null) is the signal "nothing to look at". */}
-                {detail.supportingDocument ? (
-                  <div className="flex">
-                    <SupportingDocumentCard
-                      document={detail.supportingDocument}
-                      url={detail.supportingDocumentUrl}
-                    />
-                  </div>
-                ) : null}
-
+                {/* Status box + (optional) supporting-document card on the right. When no
+                    document is attached, the card column collapses and the status content
+                    fills the full width. */}
                 <Panel className="p-5">
-                  <div className="mb-4 flex flex-wrap items-center gap-2">
-                    <Badge tone={STATUS_TONE[detail.status] ?? 'info'}>
-                      {t.requisitions.status[detail.status]}
-                    </Badge>
-                    <Badge tone="neutral">
-                      {t.requisitions.urgencyLabel[detail.urgency]}
-                    </Badge>
-                    {detail.isOverdue ? (
-                      <Badge tone="danger">{t.borrowing.overdue}</Badge>
+                  <div
+                    className={`flex flex-col gap-5 ${
+                      detail.supportingDocument ? 'md:flex-row md:items-start' : ''
+                    }`}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="mb-4 flex flex-wrap items-center gap-2">
+                        <Badge tone={STATUS_TONE[detail.status] ?? 'info'}>
+                          {t.requisitions.status[detail.status]}
+                        </Badge>
+                        <Badge tone="neutral">
+                          {t.requisitions.urgencyLabel[detail.urgency]}
+                        </Badge>
+                        {detail.isOverdue ? (
+                          <Badge tone="danger">{t.borrowing.overdue}</Badge>
+                        ) : null}
+                      </div>
+
+                      <dl className="flex flex-wrap gap-10">
+                        <Figure
+                          label={t.requisitions.requested}
+                          value={(detail.requestedAmount ?? 0).toLocaleString()}
+                        />
+                        <Figure
+                          label={t.requisitions.sanctioned}
+                          value={(detail.approvedAmount ?? 0).toLocaleString()}
+                          hint={
+                            // Until at least one approver has acted, the sanctioned figure is just
+                            // a copy of the requested one — say so explicitly so the label "Sanctioned"
+                            // doesn't mislead in the same way "Approved" did.
+                            detail.approvals.every((a) => a.action !== ApprovalAction.APPROVED)
+                              ? t.requisitions.sanctionedHintPending
+                              : t.requisitions.sanctionedHintRevised
+                          }
+                        />
+                        {detail.requiredApproverCount !== null ? (
+                          <Figure
+                            label={t.requisitions.approverCount}
+                            value={String(detail.requiredApproverCount)}
+                            // Shows *why* it needed that many, even after the setting has moved on.
+                            hint={`${t.requisitions.thresholdNote}: ${(detail.thresholdAtSubmit ?? 0).toLocaleString()}`}
+                          />
+                        ) : null}
+                      </dl>
+
+                      {detail.reason ? (
+                        <p className="mt-4 whitespace-pre-wrap text-sm text-ink-muted">
+                          {detail.reason}
+                        </p>
+                      ) : null}
+                    </div>
+
+                    {detail.supportingDocument ? (
+                      <div className="flex shrink-0 justify-center md:justify-end">
+                        <SupportingDocumentCard
+                          document={detail.supportingDocument}
+                          url={detail.supportingDocumentUrl}
+                        />
+                      </div>
                     ) : null}
                   </div>
-
-                  <dl className="flex flex-wrap gap-10">
-                    <Figure
-                      label={t.requisitions.requested}
-                      value={(detail.requestedAmount ?? 0).toLocaleString()}
-                    />
-                    <Figure
-                      label={t.requisitions.sanctioned}
-                      value={(detail.approvedAmount ?? 0).toLocaleString()}
-                      hint={
-                        // Until at least one approver has acted, the sanctioned figure is just
-                        // a copy of the requested one — say so explicitly so the label "Sanctioned"
-                        // doesn't mislead in the same way "Approved" did.
-                        detail.approvals.every((a) => a.action !== ApprovalAction.APPROVED)
-                          ? t.requisitions.sanctionedHintPending
-                          : t.requisitions.sanctionedHintRevised
-                      }
-                    />
-                    {detail.requiredApproverCount !== null ? (
-                      <Figure
-                        label={t.requisitions.approverCount}
-                        value={String(detail.requiredApproverCount)}
-                        // Shows *why* it needed that many, even after the setting has moved on.
-                        hint={`${t.requisitions.thresholdNote}: ${(detail.thresholdAtSubmit ?? 0).toLocaleString()}`}
-                      />
-                    ) : null}
-                  </dl>
-
-                  {detail.reason ? (
-                    <p className="mt-4 whitespace-pre-wrap text-sm text-ink-muted">
-                      {detail.reason}
-                    </p>
-                  ) : null}
                 </Panel>
 
                 <Panel>

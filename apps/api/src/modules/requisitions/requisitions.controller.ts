@@ -88,11 +88,13 @@ export class RequisitionsController {
       throw new ForbiddenError('That requisition is not yours');
     }
     // The repo leaves the URL null so HTTP stays out of the repository layer. Build it here so
-    // the detail page can hand the card a single click target.
+    // the detail page can hand the card a single click target. Path is relative to the api
+    // base (`/api/v1`), not absolute — the web client prepends its own `apiBaseUrl`, so a
+    // fully-qualified path would be doubled in the dev proxy and the same-origin deploy.
     return {
       ...detail,
       supportingDocumentUrl: detail.supportingDocument
-        ? `/api/v1/requisitions/${id}/supporting-document`
+        ? `/requisitions/${id}/supporting-document`
         : null,
     };
   }

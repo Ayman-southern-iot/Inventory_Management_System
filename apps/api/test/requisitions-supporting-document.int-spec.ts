@@ -142,7 +142,7 @@ describe('requisition supporting document', () => {
       originalName: 'quote.pdf',
       mimeType: 'application/pdf',
     });
-    expect(detail.body.supportingDocumentUrl).toBe(`/api/v1/requisitions/${id}/supporting-document`);
+    expect(detail.body.supportingDocumentUrl).toBe(`/requisitions/${id}/supporting-document`);
 
     // And the requester can download the bytes back.
     const download = await requester.client.get(`/requisitions/${id}/supporting-document`);

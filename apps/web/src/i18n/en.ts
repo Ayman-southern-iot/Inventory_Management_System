@@ -864,6 +864,7 @@ export const t = {
     },
     supportingDocumentCard: {
       label: 'Supporting document',
+      openFailed: 'Could not open the document. Try again.',
     },
   },
 

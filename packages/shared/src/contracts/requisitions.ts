@@ -258,8 +258,9 @@ export interface RequisitionDetail extends Requisition {
   supportingDocument: SupportingDocument | null;
   /**
    * Download URL for the bytes, computed by the controller so the client can render
-   * a paper-thumbnail link without building the URL itself. `null` when there is no
-   * document — the card is then absent from the page.
+   * a paper-thumbnail link without building the URL itself. Path is relative to the api
+   * base (`/api/v1`) — not absolute — so the web client's `apiBaseUrl` prefix doesn't
+   * double up. `null` when there is no document — the card is then absent from the page.
    */
   supportingDocumentUrl: string | null;
 }
