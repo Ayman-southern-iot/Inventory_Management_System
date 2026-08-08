@@ -19,7 +19,7 @@
 2. [Roles & permissions matrix](#2-roles--permissions-matrix)
 3. [The five non-negotiables](#3-the-five-non-negotiables)
 4. [Stack & architecture](#4-stack--architecture)
-5. [The six concepts you must know](#5-the-six-concepts-you-must-know)
+5. [The seven concepts you must know](#5-the-seven-concepts-you-must-know)
 6. [Layout — where to find things](#6-layout--where-to-find-things)
 7. [Commands, ports, dev users](#7-commands-ports-dev-users)
 8. [Backend conventions (NestJS)](#8-backend-conventions-nestjs)
@@ -97,16 +97,20 @@ This is the canonical scenario. Every domain rule in this document serves one of
 3. If the product doesn't exist, he types a free-text name.
 4. Per line: **quantity** and **unit amount (BDT)**; line total and request total computed.
 5. Request-level: urgency, approval deadline, reason, department, project.
-6. **Proceed.** The **IM approves first** — their approval means *"confirmed, we really
+6. While still a DRAFT he may also **attach one supporting document** — a quote, vendor
+   proposal, or spec sheet (PDF/PNG/JPEG, ≤10 MB). It is reference material for the
+   decision, not part of the BOM; approvers see it as a paper thumbnail on the detail
+   page. He can replace or remove it until the requisition is submitted.
+7. **Proceed.** The **IM approves first** — their approval means *"confirmed, we really
    don't have this, go ahead"*.
-7. Then approvers act (2 above the expense threshold, no fixed order; 1 below — see
+8. Then approvers act (2 above the expense threshold, no fixed order; 1 below — see
    §5.3 for the exact rule).
-8. **My Requisitions** shows the live tracker:
+9. **My Requisitions** shows the live tracker:
    `Requisition made ✓ → IM Approved ✓ → Approver 1 ✓ → Approver 2 ⏳ → BOM created ⏳ →
    Sent to Accounts ⏳ → Money Received ⏳ → Products Bought ⏳`
    Green = done, ash = pending, red ✗ = rejected. On a rejection, **"See why"** reveals
    the rejection note.
-9. An approver who clicks by mistake can **withdraw** their approval (until BOM generated).
+10. An approver who clicks by mistake can **withdraw** their approval (until BOM generated).
 
 ### 1.3 Inventory Manager (IM)
 
@@ -134,6 +138,7 @@ changes the expense threshold and other business settings **without a code chang
 | G7 | Withdraw approval after BOM printed? | **Blocked after BOM generation** |
 | G8 | Approvers 1/2 — fixed or per-department? | **Global default, per-department override** |
 | G9 | Laptops: track *which* laptop Saad has? | **Optional serial tracking** (`asset_units` dormant in schema, on/off via `is_trackable` on **category**, not hard-coded) |
+| G10 | Requester wants to show the approver the vendor's quote | **Single supporting document on DRAFT** (§5.7): one PDF/PNG/JPEG, optional, DRAFT-only, insert-only file, not frozen onto the BOM |
 
 ---
 
@@ -274,7 +279,7 @@ Postgres itself stays well under 1 GB for years.
 
 ---
 
-## 5. The six concepts you must know
+## 5. The seven concepts you must know
 
 ### 5.1 Product ≠ Placement (the shape of stock)
 
@@ -412,6 +417,40 @@ pre-filled in the IM's allocation dialog.
   re-attaching it per controller would force every feature module to import `JwtModule` to
   satisfy the injector.
 - **The actor is always `req.user.id`.** Never trust a client-supplied user id.
+
+### 5.7 Supporting document on a requisition
+
+The requester may attach **one** PDF, PNG, or JPEG (quote, vendor proposal, spec sheet) to
+their own DRAFT. The rule is deliberately narrow — it is reference material for the
+**decision**, not part of the **payable document**, and not part of the **BOM**.
+
+- **Single nullable FK on `requisitions.supporting_document_file_id`** — column-over-join-table
+  because the user picks exactly one document (mirrors `purchases.invoice_file_id`; DECISIONS.md
+  2026-08-08). The `stored_file_kind` enum gained `SUPPORTING_DOCUMENT`.
+- **DRAFT-only edit window.** Only the requester may attach, replace, or remove, and only while
+  the requisition is DRAFT — the same `lockRequisition` row lock that `submit` takes guards
+  against a racing submit between status check and FK repoint. Submit commits? Attach fails with
+  a 409. Attach in flight? Submit waits. The race is symmetric.
+- **Insert-only file model.** Replace inserts a new `stored_files` row and repoints the FK;
+  the old row stays for the audit trail. Never UPDATE `stored_files.bytes`. Never mutate in
+  place. The same rule as `SIGNATURE` and `INVOICE`.
+- **Read authorization.** Requester, IM, Admin (always), **plus** any approver with an
+  assigned row on this requisition (`requisition_approvals.assigned_user_id = actor.id`).
+  Distinct from the funds-module predicate (requester + IM + Admin only) because the document
+  can swing a decision — an approver acting on this requisition must be able to read it.
+- **Not in the BOM snapshot.** `bom_requisitions.approval_snapshot` is who/when/role, not the
+  supporting material. The supporting file is not frozen onto the BOM PDF.
+- **Magic bytes + size.** The interceptor enforces `config.uploads.maxDocumentBytes` (default
+  10 MB) **and** a magic-byte sniff — extension alone is not enough; `foo.exe.pdf` is still
+  rejected. Read returns `Content-Disposition: inline` so the browser preview opens in a new
+  tab rather than downloading.
+- **Audit.** `requisition.supporting_document_attached` on attach or replace,
+  `requisition.supporting_document_removed` on delete, both carrying the new file id (or null
+  on remove) in metadata.
+- **UI shape.** Form: third panel between *Request details* and *Items*, file picker with
+  `accept=".pdf,.png,.jpg,.jpeg"`, auto-saved on pick, replace/remove buttons when present.
+  Detail: small paper thumbnail card above the status panel; the card wraps an `<a target="_blank">`
+  so the file opens in a new tab. The card renders nothing if the requisition has no document.
 
 ---
 
@@ -1000,9 +1039,9 @@ does not serve.
 
 | Role | Screens |
 |------|---------|
-| **General** | Inventory (browse/search/borrow) · Projects → Project Detail (borrowed items with in-use/returned tags + project requisitions) · Make Requisition · My Requisitions (tracker) · My Borrowings · Notifications |
+| **General** | Inventory (browse/search/borrow) · Projects → Project Detail (borrowed items with in-use/returned tags + project requisitions) · Make Requisition (with **supporting document panel** on DRAFT, §5.7) · My Requisitions (tracker) · My Borrowings · Notifications |
 | **Inventory Manager** | Inventory (full CRUD, categories, zones/compartments, moves) · Projects (may detach a borrow from project attribution; borrow + stock history remain) · Pending Approvals ⁽ᵇᵃᵈᵍᵉ⁾ · Accepted Approvals · Product Borrowing Approvals · BOM workspace · Funds & Purchases · + all General screens |
-| **Approver** | Projects → Project Detail · Pending Approvals ⁽ᵇᵃᵈᵍᵉ⁾ · Accepted Approvals · Delegate settings · + all General screens |
+| **Approver** | Projects → Project Detail · Pending Approvals ⁽ᵇᵃᵈᵍᵉ⁾ · Accepted Approvals (sees **supporting document card** on the requisition detail page when the requester attached one) · Delegate settings · + all General screens |
 | **Admin** | Projects (same detach permission as IM) · Users · Roles & Approvers · Departments · Settings · Audit log |
 
 For the **per-screen click-by-click walkthrough**, open `docs/reference/05-user-flows.md`.
@@ -1156,6 +1195,12 @@ essentials above and adds the on-call playbook).
 - One logical commit with conventional message.
 - If you touched stock, approvals, or schema: state out loud which invariant you are
   protecting and how.
+- **If you added an upload feature:** DRAFT-only edit window (or whatever the domain's
+  freeze rule is), insert-only `stored_files` row model (replace inserts a new row),
+  magic-byte sniff + interceptor size guard, read-authorization matrix stated in the
+  playbook (§5.x), audit rows for attach / remove / replace, integration tests for
+  every status + role combination, and a live-stack smoke run before the last commit.
+  Anything less and the next session will redo your work.
 
 ---
 
@@ -1166,6 +1211,21 @@ This file is updated by the AI itself after every meaningful edit, per the
 `.claude/rules/05-ai-playbook.md`. The reminder is **advisory** — when you change
 schema, modules, commands, landmines, decisions, or workflow, refresh the relevant
 section here. **Do not rewrite the whole file on every edit** — touch only what changed.
+
+**Update in the same PR as the feature, not at session-end.** A fresh agent reading
+the playbook to load context will not know the feature exists if it lives only in
+PROGRESS.md. Minimum set for a shipped feature:
+
+- §5.x — one new concept subsection per new domain object or rule (auth shape, freeze
+  rules, file model, audit actions).
+- §1.5 — append a gap row (`G{n}`) so the decision is traceable from the story.
+- §10.1 — table, column, migration count, and `stored_file_kind` enum value (if a new one).
+- §19 — touch the screen map row if any new UI shipped.
+- §22 — extend the "done" definition when the new feature introduces a new shape of risk
+  (e.g. uploads).
+
+PROGRESS.md and DECISIONS.md are session-tracking; the playbook is the load-the-context
+file. Both matter; this one is what a cold-start agent reads first.
 
 This playbook is a **derivative summary**, not a source of truth. If something here
 conflicts with `CLAUDE.md`, `docs/reference/`, `docs/state/`, or the actual code, **the
