@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { sql } from 'kysely';
 import { ErrorCode, Role } from '@ims/shared';
 import { createTestApp, httpClient, type HttpClient, type TestApp } from './app';
 import { createUser, login, resetData } from './factories';
@@ -221,13 +222,14 @@ describe('orphan supporting document upload', () => {
     const uploaded = await uploadOrphan(requester);
     const fileId = uploaded.body.fileId as string;
 
-    // Simulate "older than the TTL": backdate `created_at` to 25 hours ago.
+    // Simulate "older than the TTL": backdate `created_at` to 25 hours ago. The
+    // schema intentionally types `created_at` as `never`-updatable on the Kysely
+    // table so production code can't backdate a row, so the test path goes
+    // through a raw SQL update.
     const twentyFiveHoursAgo = new Date(Date.now() - 25 * 60 * 60 * 1000);
-    await ctx.db
-      .updateTable('stored_files')
-      .set({ created_at: twentyFiveHoursAgo })
-      .where('id', '=', fileId)
-      .execute();
+    await sql`UPDATE stored_files SET created_at = ${twentyFiveHoursAgo} WHERE id = ${fileId}`.execute(
+      ctx.db,
+    );
 
     // Run the sweep directly. The job is registered on @Cron; the test path
     // exercises the same method body.
