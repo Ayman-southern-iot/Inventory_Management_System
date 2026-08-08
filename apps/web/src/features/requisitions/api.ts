@@ -180,3 +180,24 @@ export function useRemoveSupportingDocument(requisitionId: string) {
     },
   });
 }
+
+/**
+ * Pre-draft attach (orphan upload). Used by the SupportingDocumentField on the empty
+ * Make Requisition form, before any requisition row exists. The returned id is then
+ * lifted into the save body as `pendingSupportingDocumentId`; the create service claims
+ * it in the same transaction.
+ *
+ * There is no query invalidation on success — no requisition exists yet, so there is
+ * nothing to invalidate. The form is the resume UI; refreshing it loses the local
+ * `pendingFile` state and the user has to re-pick. That is the cost of not having a
+ * "drafts gallery" yet (out of scope; see the plan's follow-ups).
+ */
+export function useUploadOrphanSupportingDocument() {
+  return useMutation({
+    mutationFn: (file: File) => {
+      const form = new FormData();
+      form.append('file', file);
+      return api.upload<SupportingDocument>('/uploads/supporting-document', form);
+    },
+  });
+}

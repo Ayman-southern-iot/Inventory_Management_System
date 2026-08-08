@@ -15,6 +15,14 @@ export interface StoredFileInsert {
   mime_type: string;
   size_bytes: number;
   uploaded_by: string;
+  /**
+   * Set by `POST /uploads/supporting-document` to flag the row as an orphan.
+   * Cleared atomically by the parent-create transaction. The daily sweep job
+   * deletes rows that have been pending for >24h. Null for every other kind
+   * (signatures, invoices) — those are uploaded into rows whose parent already
+   * exists, so the orphan state never applies.
+   */
+  pending_claim_by: string | null;
 }
 
 export function toStoredFile(

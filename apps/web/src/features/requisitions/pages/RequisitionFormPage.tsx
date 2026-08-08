@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -69,6 +69,15 @@ export function RequisitionFormPage() {
   const updateRequisition = useUpdateRequisition();
   const submitRequisition = useSubmitRequisition();
 
+  /**
+   * Pre-draft attach. Lifted from `SupportingDocumentField` when the form has no
+   * requisition id yet (the user picked a file on the empty form, before saving).
+   * Sent to the server as `pendingSupportingDocumentId`; the create service claims
+   * the file in the same transaction. Cleared after a successful save so a refresh
+   * does not resend a stale id.
+   */
+  const [pendingSupportingDocumentId, setPendingSupportingDocumentId] = useState<string | null>(null);
+
   const form = useForm<SaveRequisitionInput>({
     resolver: zodResolver(saveRequisitionSchema),
     defaultValues: {
@@ -121,7 +130,14 @@ export function RequisitionFormPage() {
       await updateRequisition.mutateAsync({ id: requisitionId, input: values });
       return requisitionId;
     }
-    const created = await createRequisition.mutateAsync(values);
+    // Pre-draft attach: include the orphan file id only when creating. Updating a
+    // draft goes through `updateRequisition` (no field change) and ignores this.
+    const created = await createRequisition.mutateAsync({
+      ...values,
+      pendingSupportingDocumentId,
+    });
+    // The id is consumed; clear so a refresh doesn't reuse it for a different save.
+    setPendingSupportingDocumentId(null);
     return created.id;
   }
 
@@ -237,9 +253,13 @@ export function RequisitionFormPage() {
           </header>
           <div className="p-5">
             <SupportingDocumentField
-              requisitionId={requisitionId ?? ''}
+              requisitionId={requisitionId}
               document={existing.data?.supportingDocument ?? null}
-              canEdit={Boolean(requisitionId) && existing.data?.status === RequisitionStatus.DRAFT}
+              canEdit={
+                // New (no id yet): always editable — orphan-mode. Editing: only DRAFT.
+                !requisitionId || existing.data?.status === RequisitionStatus.DRAFT
+              }
+              onPendingChange={setPendingSupportingDocumentId}
             />
           </div>
         </Panel>

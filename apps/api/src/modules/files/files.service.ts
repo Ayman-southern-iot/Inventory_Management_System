@@ -9,6 +9,16 @@ export interface UploadInput {
   contents: Buffer;
   originalName: string;
   uploadedBy: string;
+  /**
+   * Optional. When set, the row is created in the orphan state — uploaded but
+   * not yet linked to a parent row. The owning user's id. The parent-create
+   * transaction must clear this atomically; the daily sweep deletes rows that
+   * have been pending for >24h.
+   *
+   * Default null — every existing call site uploads into a row whose parent
+   * already exists, so it stays the same shape for signatures and invoices.
+   */
+  pendingClaimBy?: string | null;
 }
 
 /**
@@ -48,6 +58,7 @@ export class FilesService {
       mime_type: stored.mimeType,
       size_bytes: stored.sizeBytes,
       uploaded_by: input.uploadedBy,
+      pending_claim_by: input.pendingClaimBy ?? null,
     });
   }
 

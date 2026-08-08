@@ -18,6 +18,7 @@ import {
   ConflictError,
   ForbiddenError,
   NotFoundError,
+  ValidationFailedError,
 } from '../../common/errors';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -58,7 +59,42 @@ export class RequisitionsService {
       const requisitionNo = await this.nextRequisitionNo(tx);
       const created = await this.repo.insertDraft(tx, requisitionNo, input, requesterId);
       await this.repo.replaceItems(tx, created, input.items);
-      await this.repo.appendEvent(tx, created, RequisitionEventType.CREATED, requesterId, {});
+
+      // Pre-draft attach (orphan-upload flow). If the requester picked a file on the empty form,
+      // claim it now — same transaction as the row insert, same `lockRequisition`-equivalent
+      // ownership check the existing attach path uses. The FK repoint and the `pending_claim_by`
+      // null commit together; if either fails, the orphan is still pending and the sweep will
+      // catch it.
+      let claimedFileId: string | null = null;
+      if (input.pendingSupportingDocumentId) {
+        const orphan = await tx
+          .selectFrom('stored_files')
+          .select(['id', 'pending_claim_by', 'kind', 'original_name'])
+          .where('id', '=', input.pendingSupportingDocumentId)
+          .executeTakeFirst();
+        if (!orphan || orphan.kind !== 'SUPPORTING_DOCUMENT') {
+          throw new ValidationFailedError({
+            path: 'pendingSupportingDocumentId',
+            message: 'Unknown supporting document.',
+          });
+        }
+        if (orphan.pending_claim_by !== requesterId) {
+          // Either another user's orphan (the audit row says who picked it) or already claimed.
+          // We never leak which one — both are "you cannot claim this" from the caller's view.
+          throw new ForbiddenError('You cannot claim this supporting document.');
+        }
+        await this.repo.setSupportingDocumentFileId(created, orphan.id, tx);
+        await tx
+          .updateTable('stored_files')
+          .set({ pending_claim_by: null })
+          .where('id', '=', orphan.id)
+          .execute();
+        claimedFileId = orphan.id;
+      }
+
+      await this.repo.appendEvent(tx, created, RequisitionEventType.CREATED, requesterId, {
+        ...(claimedFileId ? { claimedSupportingDocumentId: claimedFileId } : {}),
+      });
       await this.audit.record(
         {
           action: 'requisition.create',
@@ -66,11 +102,29 @@ export class RequisitionsService {
           entityId: created,
           entityRef: requisitionNo,
           summary: `Drafted requisition ${requisitionNo}`,
-          metadata: { urgency: input.urgency, itemCount: input.items.length },
+          metadata: {
+            urgency: input.urgency,
+            itemCount: input.items.length,
+            ...(claimedFileId ? { claimedSupportingDocumentId: claimedFileId } : {}),
+          },
         },
         { actorId: requesterId, actorName: null, actorEmail: null, actorRoles: [], requestMethod: null, requestPath: null, requestIp: null, userAgent: null },
         tx,
       );
+      if (claimedFileId) {
+        await this.audit.record(
+          {
+            action: 'requisition.supporting_document_attached',
+            entityType: 'requisition',
+            entityId: created,
+            entityRef: requisitionNo,
+            summary: `Claimed a pre-draft supporting document on ${requisitionNo}`,
+            metadata: { fileId: claimedFileId, via: 'claim-on-create' },
+          },
+          { actorId: requesterId, actorName: null, actorEmail: null, actorRoles: [], requestMethod: null, requestPath: null, requestIp: null, userAgent: null },
+          tx,
+        );
+      }
       return created;
     });
 

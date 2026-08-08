@@ -167,6 +167,13 @@ export const AUDIT_ENTITY_TYPES = [
   'delegation',
   'bom',
   'system',
+  /**
+   * Used by `POST /uploads/supporting-document` (orphan upload) so the audit row
+   * can be filtered by `entity_type = 'stored_file'` to find every file that was
+   * uploaded but never claimed. The follow-up `requisition.supporting_document_attached`
+   * row uses `entity_type = 'requisition'` because by then the file has a parent.
+   */
+  'stored_file',
 ] as const;
 
 /**
