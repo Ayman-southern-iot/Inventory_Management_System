@@ -449,6 +449,13 @@ export interface StoredFilesTable {
   mime_type: string;
   size_bytes: number;
   uploaded_by: string;
+  /**
+   * Non-null while the file has been uploaded but not yet linked to a parent
+   * row (a `requisitions` row, in the orphan-upload flow). The owning user's id.
+   * Cleared atomically by the parent-create transaction. The daily sweep job
+   * deletes rows that have been pending for >24h.
+   */
+  pending_claim_by: string | null;
   created_at: CreatedAt;
 }
 

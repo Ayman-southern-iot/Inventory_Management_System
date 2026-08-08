@@ -113,6 +113,15 @@ export const AUDIT_ACTIONS = [
    */
   'requisition.supporting_document_attached',
   'requisition.supporting_document_removed',
+  /**
+   * Recorded by `POST /uploads/supporting-document` when the requester picks a
+   * file on the empty form, before any requisition row exists. The companion
+   * `requisition.supporting_document_attached` row is written when the draft is
+   * saved and the orphan is claimed. A `_pending` row without a follow-up
+   * `_attached` row means the user abandoned the form and the sweep deleted the
+   * orphan >24h later.
+   */
+  'requisition.supporting_document_pending',
   'requisition.funds_returned',
   'requisition.purchase_verified',
   'requisition.stocked',

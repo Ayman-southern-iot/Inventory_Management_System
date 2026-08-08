@@ -139,6 +139,17 @@ export const saveRequisitionSchema = z.object({
     .default(null),
   reason: z.string().trim().max(2000).nullable().default(null),
   items: z.array(requisitionItemInputSchema).min(1, 'Add at least one item').max(200),
+  /**
+   * Optional id of a `stored_files` row created by `POST /uploads/supporting-document`
+   * (the pre-draft attach flow). On draft create, the service claims the file in the
+   * same transaction: sets `requisitions.supporting_document_file_id` and clears
+   * `stored_files.pending_claim_by`. The file must be `kind = 'SUPPORTING_DOCUMENT'`
+   * and `pending_claim_by = actor.id`; otherwise the service returns 403.
+   *
+   * Optional: existing clients (which don't send this field) keep working — Zod
+   * strips unknown keys, and the existing post-save attach endpoint is unchanged.
+   */
+  pendingSupportingDocumentId: z.string().uuid().nullable().optional(),
 });
 export type SaveRequisitionInput = z.infer<typeof saveRequisitionSchema>;
 
