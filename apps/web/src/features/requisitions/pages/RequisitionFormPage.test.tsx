@@ -19,6 +19,9 @@ vi.mock('../api', () => ({
   }),
   useUpdateRequisition: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useSubmitRequisition: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useUploadOrphanSupportingDocument: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useUploadSupportingDocument: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useRemoveSupportingDocument: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
 vi.mock('@/features/admin/api', () => ({
@@ -69,5 +72,22 @@ describe('RequisitionFormPage', () => {
 
     expect(createSpy).toHaveBeenCalledTimes(1);
     expect(createSpy.mock.calls[0]?.[0]).toMatchObject({ projectId: null, departmentId: null });
+  });
+
+  it('updates the items Total as the user types quantity and unit price', async () => {
+    // The line total inside the row was already correct (it reads from the watched single-row
+    // path), but the bottom-of-form Total was stuck at 0.00. This test pins the fix: typing
+    // 4 × 399.99 in the empty row must produce "1,599.96" in the panel footer.
+    const user = userEvent.setup();
+    renderForm();
+
+    const total = screen.getByText(t.requisitions.total).parentElement!.querySelector('span:last-child')!;
+    expect(total.textContent).toBe('0.00');
+
+    await user.type(screen.getByLabelText(t.requisitions.itemName), 'test widget');
+    await user.type(screen.getByLabelText(t.requisitions.quantity), '4');
+    await user.type(screen.getByLabelText(t.requisitions.unitPrice), '399.99');
+
+    expect(total.textContent).toBe('1,599.96');
   });
 });

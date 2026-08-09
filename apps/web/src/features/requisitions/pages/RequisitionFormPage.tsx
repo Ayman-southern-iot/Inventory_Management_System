@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useFieldArray, useForm } from 'react-hook-form';
+import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Plus, Send } from 'lucide-react';
@@ -97,7 +97,16 @@ export function RequisitionFormPage() {
     name: 'items',
   });
 
-  const items = form.watch('items');
+  /**
+   * The bottom-of-form Total uses `useWatch('items')` rather than `form.watch('items')`.
+   * `form.watch` reaches into the form-state proxy, but Controller-wrapped inputs (the
+   * `QuantityField` and the `estimatedUnitPrice` controller inside `ItemRow`) update state
+   * through `setValue`, and the watch proxy can lag by one render in that path — the
+   * per-row `Line total` (which reads through a single indexed `watch`) stays fresh, but
+   * the array-level `watch` does not. `useWatch` subscribes through the same callback
+   * `useFieldArray` uses, so it re-renders in step with the rows.
+   */
+  const items = useWatch({ control: form.control, name: 'items' }) as SaveRequisitionInput['items'] | undefined;
   const products: Product[] = useMemo(() => catalogue.data?.items ?? [], [catalogue.data]);
 
   const itemsTotal = useMemo(
