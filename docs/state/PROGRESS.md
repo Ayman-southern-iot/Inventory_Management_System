@@ -5,6 +5,18 @@
 
 ## Current position
 
+- **BOM over-budget ceiling retired (2026-08-09):** a unit cost going up between approval and
+  BOM generation is a normal slowdown, not a policy violation. The generation gate that
+  bounced BOMs and flipped sources back to AWAITING_APPROVAL is gone — over-budget BOMs
+  now generate cleanly, and the variance is visible on the PDF. The
+  `BOM_OVER_BUDGET_TOLERANCE_PCT` setting and `over_budget_bounced` column are kept for
+  historical rows and audit vocabulary; the service no longer reads either. 3 tests
+  rewritten (`boms.int-spec.ts`, `boms-pdf.int-spec.ts`, `e2e-requisition-to-bom.int-spec.ts`).
+- **Requisition form Total fix (2026-08-09):** the bottom-of-form Total was stuck at 0.00
+  while the per-row line totals worked. Cause: Controller-wrapped inputs update form state
+  through `setValue`, which `form.watch('items')` (the array-level proxy) lagged on by one
+  render. Switching to `useWatch({ control, name: 'items' })` makes the Total re-render in
+  step with the rows. 1 new regression test pins the user flow (4 × 399.99 → 1,599.96).
 - **Transportation cost on a requisition (2026-08-09):** a requester can attach a single
   rolled-up transportation cost (e.g. "pickup truck to Gazipur") to a DRAFT requisition.
   The cost is part of `requested_amount` at submit, frozen alongside the items total, and
@@ -44,10 +56,10 @@
   stranded reservation, which is the whole failure mode G-14 describes. Then **6.3, the backup and
   restore drill**, which is the highest-value remaining task given the no-data-loss requirement.
 - **Working tree:** clean. Everything is committed and verified green: `pnpm typecheck`,
-  `pnpm lint`, `pnpm test`, and `pnpm --filter @ims/api test:int` (**21 files, 351 integration
-  tests**; 27 new on top of the baseline, 17 for the supporting-doc endpoint and 10 for
-  the pre-draft orphan flow). Migrations 0001–0024 applied; 0014–0024 each
-  rollback-verified.
+  `pnpm lint`, `pnpm test`, and `pnpm --filter @ims/api test:int` (**32 files, 458
+  integration tests**; 450 pass, 8 pre-existing failures unchanged in `demo-accounts`,
+  `login-backoff`, `reports`, `throttling`). Migrations 0001–0025 applied; 0014–0025
+  each rollback-verified.
 - **Blocked by:** nothing. OQ-18 and OQ-19 are answered. OQ-14, OQ-15, OQ-16, OQ-20 and OQ-22 are
   recorded assumptions, not hard blocks.
 - **Operator action outstanding:** Settings → Sub-threshold approver is unset, so requisitions
