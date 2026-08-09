@@ -21,14 +21,15 @@ interface Actor {
 }
 
 /**
- * BOM generation, frozen approval snapshot, over-budget bounce, voiding.
+ * BOM generation, frozen approval snapshot, voiding.
  *
- * The five invariants from the 4.2 plan, each pinned by an individual `it`:
+ * The invariants from the 4.2 plan, each pinned by an individual `it`:
  *
  *   1. snapshot is genuinely frozen (a user rename does not change it)
  *   2. one live BOM per requisition (the unique index surfaces as 409)
  *   3. voiding a BOM frees the requisition (the trigger flips is_void)
- *   4. over-budget bounces to AWAITING_APPROVAL with `decided_at` cleared
+ *   4. the over-budget ceiling is no longer a generation gate — a BOM whose subtotal
+ *      exceeds the approved amount is still generated (see boms.service.ts header)
  *   5. a line that does not belong to a source requisition is a 400
  *
  * Plus role gates: only INVENTORY_MANAGER / ADMIN can generate or void.
@@ -370,36 +371,35 @@ describe('BOMs', () => {
     });
   });
 
-  describe('over-budget tolerance (OQ-05)', () => {
-    it('bounces: subtotal above tolerance flips sources back to AWAITING_APPROVAL (invariant 4)', async () => {
-      // Approved total per requisition is 5000; tolerance is 10% → ceiling 5500.
-      // Subtotal = 6000 (1 unit at 6000), so we bounce.
-      const req = await approveRequisition(5000, 'Bouncer');
+  describe('over-budget tolerance (OQ-05, retired 2026-08-09)', () => {
+    // The over-budget ceiling used to bounce the BOM and flip sources back to
+    // AWAITING_APPROVAL. That gate was removed: a unit cost going up between approval and
+    // BOM generation is a normal slowdown, not a policy violation. The setting
+    // (BOM_OVER_BUDGET_TOLERANCE_PCT) and the `over_budget_bounced` column are kept for
+    // historical rows, but no BOM generated today will carry the bounced flag, and no
+    // generation will throw BOM_OVER_BUDGET.
+    it('over-budget is generated: subtotal above approved no longer bounces (invariant 4 retired)', async () => {
+      // Approved total per requisition is 5000. Subtotal = 6000 (one unit at 6000). Under
+      // the old gate this would bounce; today it generates cleanly.
+      const req = await approveRequisition(5000, 'OverBudget');
 
       const response = await im.client
         .post('/boms')
         .send(generatePayload(req.id, req.items, { unitCost: 6000 }));
-      expect(response.status).toBe(409);
-      expect(response.body.code).toBe(ErrorCode.BOM_OVER_BUDGET);
+      expect(response.status).toBe(201);
+      expect(response.body.overBudgetBounced).toBe(false);
+      expect(response.body.subtotal).toBe(6000);
 
-      // Source went back to AWAITING_APPROVAL with decided_at cleared.
+      // The source moves forward to BOM_GENERATED, the same as a within-budget case.
       const detail = (await requester.client.get(`/requisitions/${req.id}`)).body;
-      expect(detail.status).toBe(RequisitionStatus.AWAITING_APPROVAL);
-      expect(detail.decidedAt).toBeNull();
+      expect(detail.status).toBe(RequisitionStatus.BOM_GENERATED);
       const events = detail.events.map((e: { eventType: string }) => e.eventType);
-      expect(events).toContain(RequisitionEventType.BOM_BOUNCED);
-
-      // The BOM row still exists and is marked bounced.
-      const bomRows = await ctx.db
-        .selectFrom('boms')
-        .where('over_budget_bounced', '=', true)
-        .execute();
-      expect(bomRows.length).toBeGreaterThan(0);
+      expect(events).toContain(RequisitionEventType.BOM_GENERATED);
+      expect(events).not.toContain(RequisitionEventType.BOM_BOUNCED);
     });
 
-    it('within tolerance: subtotal at-or-under the ceiling is honoured normally', async () => {
-      // Approved total 5000, tolerance 10% → ceiling 5500. Subtotal 5000 (one line at 5000) is
-      // under the ceiling, so the BOM is generated normally.
+    it('within approved: subtotal at-or-under approved is honoured normally', async () => {
+      // Approved total 5000. Subtotal 5000 (one line at 5000) is at the approved amount.
       const req = await approveRequisition(5000, 'WithinTolerance');
       const response = await im.client
         .post('/boms')

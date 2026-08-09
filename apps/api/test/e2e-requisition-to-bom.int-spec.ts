@@ -12,8 +12,11 @@
  *      signed URL → download → list shows live row with hasPdf=true → BOM
  *      detail's frozen footprints match the live approvers.
  *
- *   B. Bounce — unit cost > approved × 1.10 → API bounces with
- *      BOM_OVER_BUDGET → requisition returns to AWAITING_APPROVAL.
+ *   B. Over-budget (reformed 2026-08-09) — unit cost > approved → API
+ *      generates the BOM anyway, the requisition moves to BOM_GENERATED,
+ *      and no BOM_BOUNCED event is recorded. The old bounce was retired
+ *      because a unit cost going up between approval and BOM generation is
+ *      a normal slowdown, not a policy violation.
  *
  *   C. Void after render — render PDF; then void with a reason; the row
  *      flips to isVoid, voidReason recorded, hasPdf=false (controller clears
@@ -231,31 +234,37 @@ describe('e2e: requisition → BOM pipeline (data flow)', () => {
     expect(eventTypes).toContain(RequisitionEventType.BOM_GENERATED);
   });
 
-  /* ------------------------------------------------------------ B. bounce path */
+  /* ------------------------------------------------ B. over-budget (reformed) */
 
-  it('bounce path: subtotal > ceiling returns 409 and resets the chain', async () => {
+  it('over-budget: subtotal > approved generates anyway (no bounce, retired 2026-08-09)', async () => {
+    // The over-budget bounce was retired on 2026-08-09: a unit cost going up between
+    // approval and BOM generation is a normal slowdown, not a policy violation. The
+    // same input that used to bounce now generates a BOM, the requisition moves to
+    // BOM_GENERATED, and no BOM_BOUNCED event is recorded.
     const req = await approveRequisition(2_500);
 
-    // unitCost 3_000 > 2_500 × 1.10 = 2_750 → bounces.
-    const response = await im.client.post('/boms').send({
-      requisitionIds: [req.id],
-      lines: req.items.map((item) => ({
-        requisitionItemId: item.id,
-        unitCost: 3_000,
-        vendor: null,
-      })),
-    });
+    // unitCost 3_000 > 2_500. Under the old gate this would have bounced off the
+    // 10% tolerance ceiling; under the new gate it generates cleanly.
+    const generated = (
+      await im.client.post('/boms').send({
+        requisitionIds: [req.id],
+        lines: req.items.map((item) => ({
+          requisitionItemId: item.id,
+          unitCost: 3_000,
+          vendor: null,
+        })),
+      })
+    ).body;
 
-    expect(response.status).toBe(409);
-    expect(response.body.code).toBe(ErrorCode.BOM_OVER_BUDGET);
+    expect(generated.overBudgetBounced).toBe(false);
+    expect(generated.subtotal).toBe(3_000);
 
-    // The requisition was returned to the approver queue with its decisions
-    // cleared — the IM would see it on their approvals screen next time.
     const after = (await requester.client.get(`/requisitions/${req.id}`).send())
       .body;
-    expect(after.status).toBe(RequisitionStatus.AWAITING_APPROVAL);
+    expect(after.status).toBe(RequisitionStatus.BOM_GENERATED);
     const eventTypes = after.events.map((e: { eventType: string }) => e.eventType);
-    expect(eventTypes).toContain(RequisitionEventType.BOM_BOUNCED);
+    expect(eventTypes).toContain(RequisitionEventType.BOM_GENERATED);
+    expect(eventTypes).not.toContain(RequisitionEventType.BOM_BOUNCED);
   });
 
   /* --------------------------------------------------- C. void after render */

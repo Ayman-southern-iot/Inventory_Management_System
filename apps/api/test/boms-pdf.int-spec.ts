@@ -307,11 +307,11 @@ describe('BOMs PDF', () => {
       expect(stub.renderCalls.length).toBe(secondCallCountBefore); // no new render call
     });
 
-    it('refuses to render a bounced BOM (Accounts must never see it)', async () => {
-      // Build a BOM whose subtotal exceeds the 10% tolerance. approved=5000, subtotal=6000.
-      // `POST /boms` writes the row, commits, then throws BOM_OVER_BUDGET — so the BOM id
-      // we got from the create attempt is exactly the one to render-request.
-      const req = await approveRequisition(5000, 'Bouncer');
+    it('renders an over-budget BOM (the generation gate was retired 2026-08-09)', async () => {
+      // The over-budget ceiling no longer bounces a BOM. Approved 5000, subtotal 6000
+      // creates a BOM cleanly and the IM can render it — the PDF is the document the
+      // Accounts team sees, and a slow-down on the cost line is not a reason to deny it.
+      const req = await approveRequisition(5000, 'OverBudget');
       const create = await im.client.post('/boms').send({
         requisitionIds: [req.id],
         lines: req.items.map((item) => ({
@@ -320,22 +320,13 @@ describe('BOMs PDF', () => {
           vendor: 'Acme',
         })),
       });
-      // The generation path itself rejects over-budget BOMs at create time.
-      expect(create.status).toBe(409);
-      expect(create.body.code).toBe(ErrorCode.BOM_OVER_BUDGET);
-      // No row, no render — but if a row *does* land under some future code path, the
-      // render endpoint must also refuse. List & try any that slip through:
-      const list = await im.client.get('/boms').send();
-      expect(list.status).toBe(200);
-      const bounced = list.body.items.find(
-        (b: { id: string; overBudgetBounced: boolean }) => b.overBudgetBounced === true,
-      );
-      if (bounced) {
-        const render = await im.client.post(`/boms/${bounced.id}/render`).send();
-        expect(render.status).toBe(409);
-        expect(render.body.code).toBe(ErrorCode.BOM_OVER_BUDGET);
-        expect(stub.renderCalls).toHaveLength(0);
-      }
+      expect(create.status).toBe(201);
+      expect(create.body.overBudgetBounced).toBe(false);
+      expect(create.body.subtotal).toBe(6000);
+
+      const render = await im.client.post(`/boms/${create.body.id}/render`).send();
+      expect(render.status).toBe(200);
+      expect(stub.renderCalls).toHaveLength(1);
     });
 
     it('forbids anyone but IM / Admin', async () => {

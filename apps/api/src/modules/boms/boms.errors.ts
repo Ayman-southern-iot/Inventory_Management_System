@@ -53,12 +53,11 @@ export class BomAlreadyVoidError extends DomainError {
 }
 
 /**
- * The BOM subtotal exceeds the approved total by more than the configured tolerance.
- *
- * In the normal HTTP path the service catches this and routes the request to the bounce
- * path (sources go back for re-approval, BOM row records `over_budget_bounced = true`).
- * This error remains for direct callers — tests, and the rare code path that wants the
- * bounce to surface as a failure rather than a state change.
+ * The BOM subtotal exceeded the configured tolerance. Retired as a generation gate on
+ * 2026-08-09 — see the docstring at the top of `boms.service.ts`. The class is kept
+ * exported (with its stable `BOM_OVER_BUDGET` error code) so historical audit rows that
+ * referenced it still resolve, and so a future "soft warning" path that wants to surface
+ * the bounce as a failure rather than a state change has a typed shape to throw.
  */
 export class BomOverBudgetError extends DomainError {
   constructor(values: { subtotal: number; approved: number; tolerancePct: number }) {

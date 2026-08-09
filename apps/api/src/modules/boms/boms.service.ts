@@ -6,7 +6,6 @@ import {
   RequisitionEventType,
   RequisitionStatus,
   Role,
-  SettingKey,
   type ApprovalFootprint,
   type Bom,
   type BomCandidate,
@@ -21,7 +20,6 @@ import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
 import type { Database } from '../../database/schema';
 import { ForbiddenError, NotFoundError, ValidationFailedError } from '../../common/errors';
-import { SettingsService } from '../settings/settings.service';
 import { RequisitionsRepository } from '../requisitions/requisitions.repository';
 import { PdfRendererService } from '../pdf/pdf-renderer.service';
 import { PdfSigningService } from '../pdf/pdf-signing.service';
@@ -35,7 +33,6 @@ import { BomsRepository } from './boms.repository';
 import { renderBomHtml } from './bom-pdf.template';
 import {
   BomAlreadyVoidError,
-  BomOverBudgetError,
   BomRequisitionAlreadyOnLiveBomError,
   BomRequisitionNotApprovedError,
 } from './boms.errors';
@@ -79,10 +76,13 @@ interface LoadedSource {
  *      that snapshot, so renaming an approver tomorrow cannot rewrite a BOM Accounts
  *      has already paid against.
  *
- *   2. The over-budget tolerance lives in `BOM_OVER_BUDGET_TOLERANCE_PCT`. Going past
- *      it does not turn the BOM into a payable document — the sources flip back to
- *      `AWAITING_APPROVAL` with `decided_at` cleared, and the BOM row records
- *      `over_budget_bounced = true`. The IM can re-batch after approvers re-decide.
+ *   2. The over-budget tolerance setting (`BOM_OVER_BUDGET_TOLERANCE_PCT`) is no longer a
+ *      generation gate. An IM dropping a unit cost from the wholesale price to the street
+ *      price is the common case where the line goes over budget; bouncing the BOM blocks
+ *      legitimate work for what is effectively a normal slowdown. The `over_budget_bounced`
+ *      column is kept on the row for historical records (and to keep the audit vocabulary
+ *      stable), but the generator never sets it to `true` and a bounced row is never
+ *      created. The PDF may still show a variance line for visibility — see the template.
  */
 @Injectable()
 export class BomsService {
@@ -91,7 +91,6 @@ export class BomsService {
   constructor(
     @Inject(DB) private readonly db: Db,
     private readonly repo: BomsRepository,
-    private readonly settings: SettingsService,
     private readonly requisitions: RequisitionsRepository,
     private readonly pdfRenderer: PdfRendererService,
     private readonly files: FilesService,
@@ -132,9 +131,13 @@ export class BomsService {
     const approvedTotal = round2(
       sources.reduce((sum, source) => sum + source.approvedAmount, 0),
     );
-    const tolerancePct = await this.settings.get(SettingKey.BOM_OVER_BUDGET_TOLERANCE_PCT);
-    const ceiling = round2(approvedTotal * (1 + tolerancePct / 100));
-    const overBudget = approvedTotal > 0 && subtotal > ceiling;
+    // The over-budget ceiling used to bounce the BOM and flip the sources back to
+    // AWAITING_APPROVAL. Removed: the common case where a unit cost goes up between
+    // approval and BOM generation is a normal slowdown, not a policy violation. The
+    // setting is kept for the audit vocabulary and so future soft-warning hooks have
+    // a knob to read.
+    const overBudget = false;
+    void approvedTotal;
 
     const lineCount = input.lines.length;
     const sourceNos = sources.map((source) => source.requisitionNo);
@@ -205,94 +208,56 @@ export class BomsService {
       });
       await this.repo.insertBomLines(tx, { bomId: bom.id, lines: bomLineRows });
 
-      if (overBudget) {
-        // The IM sees a loud refusal rather than a silently inflated BOM. Sources
-        // return to the approver queue; the BOM row stays as a record of the attempt.
-        for (const source of sources) {
-          await sql`
-            UPDATE requisitions
-            SET status = ${RequisitionStatus.AWAITING_APPROVAL}::requisition_status,
-                decided_at = NULL
-            WHERE id = ${source.requisitionId}::uuid
-          `.execute(tx);
-          await this.requisitions.appendEvent(
-            tx,
-            source.requisitionId,
-            RequisitionEventType.BOM_BOUNCED,
-            actorId,
-            { bomNo, subtotal, approved: approvedTotal, tolerancePct },
-          );
-        }
-      } else {
-        // Approved sources advance to the next lifecycle stage. The freeze-for-history
-        // principle says we never re-decide; we just record that the BOM now owns them.
-        for (const source of sources) {
-          // Predicated on APPROVED even though the row is locked above: the predicate is what
-          // makes the intent reviewable, and it costs nothing.
-          await sql`
-            UPDATE requisitions
-            SET status = ${RequisitionStatus.BOM_GENERATED}::requisition_status
-            WHERE id = ${source.requisitionId}::uuid
-              AND status = ${RequisitionStatus.APPROVED}::requisition_status
-          `.execute(tx);
-          await this.requisitions.appendEvent(
-            tx,
-            source.requisitionId,
-            RequisitionEventType.BOM_GENERATED,
-            actorId,
-            { bomNo },
-          );
-        }
+      // Approved sources advance to the next lifecycle stage. The freeze-for-history
+      // principle says we never re-decide; we just record that the BOM now owns them.
+      // The over-budget path used to flip these back to AWAITING_APPROVAL with
+      // decided_at cleared — that gate is gone (see the docstring at the top of the
+      // class), so this branch runs unconditionally.
+      for (const source of sources) {
+        // Predicated on APPROVED even though the row is locked above: the predicate is what
+        // makes the intent reviewable, and it costs nothing.
+        await sql`
+          UPDATE requisitions
+          SET status = ${RequisitionStatus.BOM_GENERATED}::requisition_status
+          WHERE id = ${source.requisitionId}::uuid
+            AND status = ${RequisitionStatus.APPROVED}::requisition_status
+        `.execute(tx);
+        await this.requisitions.appendEvent(
+          tx,
+          source.requisitionId,
+          RequisitionEventType.BOM_GENERATED,
+          actorId,
+          { bomNo },
+        );
       }
 
       // Audit inside the transaction: a successful BOM creation cannot lack its audit row.
-      // The bounce path records its own action so the admin feed distinguishes "generated"
-      // from "rejected at generation" without re-reading the `over_budget_bounced` column.
-      if (overBudget) {
-        await this.audit.record(
-          {
-            action: 'bom.over_budget_bounce',
-            entityType: 'bom',
-            entityId: bom.id,
-            entityRef: bomNo,
-            summary: `BOM ${bomNo} bounced: subtotal ${subtotal} exceeds approved ${approvedTotal} by more than ${tolerancePct}%`,
-            metadata: {
-              bomNo,
-              subtotal,
-              approved: approvedTotal,
-              tolerancePct,
-              lineCount,
-              requisitionNos: sourceNos,
-            },
-            outcome: 'denied',
+      // The over-budget bounce used to land here too, with its own action name; that
+      // path no longer exists (see the docstring at the top of the class), so this is
+      // the only audit row written by `create`.
+      await this.audit.record(
+        {
+          action: 'bom.generate',
+          entityType: 'bom',
+          entityId: bom.id,
+          entityRef: bomNo,
+          summary: `Generated BOM ${bomNo}`,
+          metadata: {
+            bomNo,
+            subtotal,
+            approved: approvedTotal,
+            lineCount,
+            requisitionNos: sourceNos,
           },
-          { ...context, actorId, actorName: context.actorName ?? null },
-          tx,
-        );
-      } else {
-        await this.audit.record(
-          {
-            action: 'bom.generate',
-            entityType: 'bom',
-            entityId: bom.id,
-            entityRef: bomNo,
-            summary: `Generated BOM ${bomNo}`,
-            metadata: {
-              bomNo,
-              subtotal,
-              approved: approvedTotal,
-              lineCount,
-              requisitionNos: sourceNos,
-            },
-          },
-          { ...context, actorId, actorName: context.actorName ?? null },
-          tx,
-        );
-      }
+        },
+        { ...context, actorId, actorName: context.actorName ?? null },
+        tx,
+      );
 
-      // Who cares about a BOM depends entirely on which way it went. A bounce puts the sources
-      // back in front of their approvers and is the requesters' problem again; a clean
-      // generation is news for the requesters and for Admin, who take it to Accounts.
+      // Who cares about a BOM: the requesters whose source just landed on a payable document,
+// and Admin who take it to Accounts. The over-budget bounce path used to also notify the
+// pending approvers — that path no longer exists (see the docstring at the top of the
+// class).
       const requesterIds = await tx
         .selectFrom('requisitions')
         .where(
@@ -304,20 +269,14 @@ export class BomsService {
         .execute()
         .then((rows) => rows.map((row) => row.requester_id));
 
-      const audience = overBudget
-        ? [
-            ...requesterIds,
-            ...(await Promise.all(
-              sources.map((source) =>
-                this.notifications.pendingApproversFor(source.requisitionId, tx),
-              ),
-            ).then((lists) => lists.flat())),
-          ]
-        : [...requesterIds, ...(await this.notifications.usersWithRole(Role.ADMIN, tx))];
+      const audience = [
+        ...requesterIds,
+        ...(await this.notifications.usersWithRole(Role.ADMIN, tx)),
+      ];
 
       await this.notifications.notify(
         {
-          type: overBudget ? 'bom.over_budget_bounced' : 'bom.generated',
+          type: 'bom.generated',
           userIds: audience,
           ref: bomNo,
           link: NOTIFICATION_LINKS.bom(bom.id),
@@ -335,15 +294,8 @@ export class BomsService {
 
     this.logger.log(
       `BOM ${result} generated by ${actorId}: subtotal=${subtotal}, approved=${approvedTotal}, ` +
-        `tolerancePct=${tolerancePct}, overBudget=${overBudget}`,
+        `overBudget=${overBudget}`,
     );
-
-    if (overBudget) {
-      // Surface the bounce through the typed error so callers can branch on it. The
-      // BOM row exists (so the IM can find the attempt later) but the source
-      // requisitions have already been routed back to the approver queue above.
-      throw new BomOverBudgetError({ subtotal, approved: approvedTotal, tolerancePct });
-    }
 
     const detail = await this.repo.findDetail(result);
     if (!detail) throw new NotFoundError('Bom');
@@ -366,16 +318,8 @@ export class BomsService {
 
     const detail = await this.repo.findDetail(id);
     if (!detail) throw new NotFoundError('Bom');
-    if (detail.overBudgetBounced) {
-      // The bounce path 4.2 set up writes a BOM row for audit. Telling the IM "render this"
-      // here would emit a PDF for a BOM the sources have already disputed — that is the
-      // paper trail we do not want.
-      throw new BomOverBudgetError({
-        subtotal: detail.subtotal,
-        approved: detail.sources.reduce((sum, s) => sum + (s.approvedAmount ?? 0), 0),
-        tolerancePct: 0,
-      });
-    }
+    // The over-budget bounce gate used to live here — see the docstring at the top of the
+    // class for why it is gone.
 
     const cached = await this.repo.findPdfPath(id);
     if (cached && cached.pdfPath !== null) {
