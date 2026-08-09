@@ -190,27 +190,36 @@ function BomDetailView({
 }
 
 function TotalsBlock({ detail }: { detail: BomDetail }) {
-  // The approvedTotal is the *requested* sanctioned figure summed across
-  // sources — the same number the IM saw on the generate screen. The
-  // subtotal is what the IM entered; variance is the gap between them.
-  // For a voided or bounced BOM the same labels still apply; we never hide
-  // the math because the IM needs to see what they submitted.
+  // The header carries four (or five, when transportation is non-zero) figures so the
+  // IM/Accounts can reconcile on one screen:
+  //   Approved total   — sanctioned across all sources (includes transportation).
+  //   Items subtotal   — items-only sum (what `POST /boms` line totals wrote).
+  //   Transportation   — rolled-up travel cost per source. Hidden when zero.
+  //   BOM subtotal     — items + transportation, matching the printed PDF's Grand total.
+  //   Variance         — BOM subtotal − Approved total. Zero on a clean BOM.
+  // For a voided or bounced BOM the same labels still apply; we never hide the math
+  // because the IM needs to see what they submitted.
   const approvedTotal = (detail.sources ?? []).reduce(
     (sum, source) => sum + (source.approvedAmount ?? 0),
     0,
   );
-  const variance = detail.subtotal - approvedTotal;
+  const transportationTotal = (detail.sources ?? []).reduce(
+    (sum, source) => sum + (source.transportationCost ?? 0),
+    0,
+  );
+  const itemsSubtotal = detail.subtotal;
+  const bomSubtotal = itemsSubtotal + transportationTotal;
+  const variance = bomSubtotal - approvedTotal;
 
   return (
-    <div className="grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-4">
+    <div className="grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-5">
       <Cell label={t.boms.approvedTotal} value={approvedTotal.toLocaleString()} />
-      <Cell label={t.boms.bomSubtotal} value={detail.subtotal.toLocaleString()} emphasis />
+      <Cell label={t.boms.itemsSubtotal} value={itemsSubtotal.toLocaleString()} />
+      {transportationTotal > 0 ? (
+        <Cell label={t.boms.transportation} value={transportationTotal.toLocaleString()} />
+      ) : null}
+      <Cell label={t.boms.bomSubtotal} value={bomSubtotal.toLocaleString()} emphasis />
       <Cell label={t.boms.variance} value={variance.toLocaleString()} />
-      <Cell
-        label={t.boms.generatedAt}
-        value={detail.generatedAt}
-        mono
-      />
     </div>
   );
 }

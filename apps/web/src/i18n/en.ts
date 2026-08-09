@@ -901,9 +901,11 @@ export const t = {
 
     // detail
     approvedTotal: 'Approved total',
+    itemsSubtotal: 'Items subtotal',
+    transportation: 'Transportation',
     bomSubtotal: 'BOM subtotal',
+    totalAmount: 'Total amount',
     variance: 'Variance',
-    ceiling: 'Ceiling (+{pct}%)',
     voidBanner: 'Voided',
     voidedAt: 'Voided at',
     voidedBy: 'By',

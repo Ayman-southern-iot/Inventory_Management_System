@@ -82,6 +82,13 @@ export function BomSourceSection({
         )}
       </Table>
 
+      {/* Per-source breakdown mirrors the printed PDF so IM/Accounts see the same numbers
+          online as in the document they sign: items subtotal, transportation (only when
+          non-zero), and total amount. The Transportation row carries the description as a
+          right-aligned hint so the IM can read what the cost covered without leaving the
+          table. */}
+      <SourceTotals source={source} lines={lines} />
+
       <div className="mt-4">
         <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">
           {t.boms.approvalChainHeading}
@@ -89,5 +96,74 @@ export function BomSourceSection({
         <FrozenFootprints source={source} />
       </div>
     </section>
+  );
+}
+
+/**
+ * Per-source totals. The component exists so the breakdown can be tested in isolation —
+ * the table above has too many cells to assert against, but the totals block has a small
+ * fixed surface.
+ */
+function SourceTotals({
+  source,
+  lines,
+}: {
+  source: RequisitionFootprints;
+  lines: BomLine[];
+}) {
+  const itemsSubtotal = lines.reduce((sum, line) => sum + line.totalCost, 0);
+  const transportation = source.transportationCost ?? 0;
+  const total = itemsSubtotal + transportation;
+  const hasTransport = transportation > 0;
+
+  return (
+    <div className="mt-2 flex flex-col gap-1 border-t border-border pt-2 text-sm">
+      <TotalsRow label={t.boms.itemsSubtotal} value={itemsSubtotal} muted />
+      {hasTransport ? (
+        <TotalsRow
+          label={t.boms.transportation}
+          value={transportation}
+          hint={source.transportationDescription ?? null}
+          muted
+        />
+      ) : null}
+      <TotalsRow label={t.boms.totalAmount} value={total} emphasis />
+    </div>
+  );
+}
+
+function TotalsRow({
+  label,
+  value,
+  hint = null,
+  muted = false,
+  emphasis = false,
+}: {
+  label: string;
+  value: number;
+  hint?: string | null;
+  muted?: boolean;
+  emphasis?: boolean;
+}) {
+  return (
+    <div className="flex items-baseline justify-between">
+      <span className={muted ? 'text-ink-muted' : 'text-ink'}>
+        {label}
+        {hint ? (
+          <span className="ml-2 text-xs italic text-ink-subtle">— {hint}</span>
+        ) : null}
+      </span>
+      <span
+        className={
+          emphasis
+            ? 'font-semibold tabular-nums text-ink'
+            : muted
+              ? 'tabular-nums text-ink-muted'
+              : 'tabular-nums text-ink'
+        }
+      >
+        {value.toLocaleString()}
+      </span>
+    </div>
   );
 }
