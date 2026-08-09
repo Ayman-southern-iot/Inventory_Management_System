@@ -3,6 +3,9 @@
 #     docker compose up -d
 #
 # Then open  http://localhost:5173  and click any of the five people on the login page.
+# 5173 is the ONLY port this stack publishes to the host. Every other port (api:3000,
+# web:80, db:5432) is internal container wiring — Caddy routes /api/* to api:3000 and
+# the SPA to web:80.
 # Every one of them signs in with the password `demo`.
 #
 #     docker compose ps              see what is running
@@ -158,13 +161,16 @@ services:
     <<: *logging
     image: caddy:2-alpine
     restart: unless-stopped
+    # Only host port. The api (3000), web (80) and db (5432) are internal container
+    # ports — they're how Caddy reaches the api/web and how the api reaches the db.
     ports:
-      - '${WEB_PORT:-5173}:80'
+      - '5173:80'
+    # The Caddyfile is templated with `{$IMS_DOMAIN}`. With this empty, the placeholder
+    # collapses and Caddy rejects the file (`unrecognized global option: encode`). Pinned
+    # to bare `:80` (plain HTTP) because the stack has no TLS termination and no public
+    # hostname — Caddy will not try to fetch a certificate.
     environment:
-      # A bare `:80` tells Caddy to serve plain HTTP and skip certificate provisioning, which
-      # is what you want on localhost and a LAN. Point IMS_DOMAIN at a real hostname and it
-      # will fetch a certificate — but then publish 80 and 443, or ACME cannot reach it.
-      IMS_DOMAIN: ${IMS_DOMAIN:-:80}
+      IMS_DOMAIN: ':80'
     volumes:
       - ./infra/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
