@@ -536,3 +536,12 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   test + i18n; BomGeneratePage cleanup; PDF template + integration test). Verified:
   typecheck green, web suite 81/81, integration suite at the documented baseline
   (450 pass / 8 pre-existing failures unchanged).
+- 2026-08-10 — Dev compose stack publishes only 5173. The proxy's `ports:` mapping is
+  hard-coded to `5173:80` (no `$WEB_PORT` override) and `IMS_DOMAIN` is pinned to `:80`
+  so the Caddyfile template renders consistently — without it the `{$IMS_DOMAIN}`
+  placeholder collapses and Caddy rejects the file as `unrecognized global option:
+  encode`. The api (3000), web (80) and db (5432) mentions elsewhere are internal
+  container ports, never published to the host. Three other compose files exist with
+  their own port choices for their own reasons: `infra/docker-compose.yml` (prod, 80+
+  443 for real HTTPS), `infra/docker-compose.dev.yml` (host dev workflow, 5433+5434 to
+  dodge host port conflicts), and the now-pinned root dev compose.

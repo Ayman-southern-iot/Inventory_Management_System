@@ -5,6 +5,17 @@
 
 ## Current position
 
+- **Dev compose pinned to a single host port (2026-08-10):** `docker-compose.yml` at the
+  repo root only ever served on 5173 via the Caddy proxy, but the ports mapping was
+  parameterised by `$WEB_PORT` (so anyone could quietly change the host-facing port) and the
+  `proxy` service took `IMS_DOMAIN` from the host env (which would silently push Caddy into
+  HTTPS mode if set). Hard-code `5173:80` and pin `IMS_DOMAIN: ':80'` so the host port is
+  unambiguous and the Caddyfile template renders consistently. The api (3000), web (80) and
+  db (5432) mentioned elsewhere are internal container ports — Caddy routes `/api/*` to
+  `api:3000` and the SPA to `web:80`. `infra/docker-compose.yml` (prod, 80+443 for real
+  HTTPS) and `infra/docker-compose.dev.yml` (host dev workflow, 5433+5434 to dodge host
+  port conflicts) are intentionally untouched. Verified: `docker compose config` shows
+  one port mapping (`5173:80`); `curl http://localhost:5173/` and `/health` return 200.
 - **BOM header + per-source breakdown carry transportation (2026-08-10):** the BOM-detail
   header's `BOM subtotal` cell was items-only while `approvedAmount` on every source row
   was items + transportation — the page showed a variance that was structurally wrong by
