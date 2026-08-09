@@ -866,6 +866,21 @@ export const t = {
       label: 'Supporting document',
       openFailed: 'Could not open the document. Try again.',
     },
+    // transportation cost (request details + BOM footer)
+    transportation: {
+      heading: 'Transportation cost',
+      hint:
+        'Optional. Add the cost of getting to the market — fuel, vehicle hire, porter, etc. Rolls up into the requested amount.',
+      amount: 'Amount (BDT)',
+      description: 'Description',
+      descriptionPlaceholder: 'e.g. Pickup truck to Gazipur',
+      missingDescription: 'Add a short description so approvers know what this covers.',
+      detailHeading: 'Transportation',
+      none: 'No transportation cost.',
+      itemsTotal: 'Items total',
+      transportationTotal: 'Transportation',
+      requested: 'Requested amount',
+    },
   },
 
   boms: {

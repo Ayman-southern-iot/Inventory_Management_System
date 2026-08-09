@@ -61,6 +61,8 @@ export function sourceFootprints(
     approvedAmount: 3000,
     // OQ-18: requested minus approved.
     remainingAmount: 1000,
+    transportationCost: null,
+    transportationDescription: null,
     footprints: [footprint()],
     ...overrides,
   };

@@ -187,7 +187,13 @@ export class RequisitionsService {
     const items = await this.repo.findItems(id);
     if (items.length === 0) throw new ConflictError('Add at least one item before submitting');
 
-    const requestedAmount = items.reduce((sum, item) => sum + Number(item.estimated_line_total), 0);
+    // Frozen at submit: items total + transportation cost. The cost is what the requester
+    // entered (or 0 / null when they did not need any). The DB has already enforced the
+    // both-or-neither constraint via Zod + a CHECK, so a non-null cost here is paired with
+    // a non-null description.
+    const itemsTotal = items.reduce((sum, item) => sum + Number(item.estimated_line_total), 0);
+    const transportationCost = Number(existing.transportation_cost ?? 0);
+    const requestedAmount = itemsTotal + transportationCost;
 
     const threshold = await this.settings.get(SettingKey.EXPENSE_THRESHOLD_BDT);
 

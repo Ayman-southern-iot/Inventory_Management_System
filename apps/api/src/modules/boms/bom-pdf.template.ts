@@ -107,6 +107,24 @@ function renderItems(detail: BomDetail): string {
     return '<p class="muted">No items on this BOM.</p>';
   }
 
+  // Per-source transportation line above the subtotal. Only sources that actually carry a
+  // transportation cost get a row; otherwise the PDF keeps the same compact subtotal block.
+  // The description is truncated to 60 chars in the PDF — the full text is in the snapshot
+  // and on the requisition detail.
+  const transportationRows = detail.sources
+    .filter((source) => source.transportationCost !== null && source.transportationCost > 0)
+    .map((source) => {
+      const description = (source.transportationDescription ?? '').trim();
+      const truncated = description.length > 60 ? `${description.slice(0, 57)}…` : description;
+      return [
+        '    <tr class="transportation">',
+        `      <td colspan="3" class="transportation-source">${escape(source.requisitionNo)} — Transportation</td>`,
+        `      <td colspan="1" class="transportation-description">${escape(truncated)}</td>`,
+        `      <td class="num">${escape(money(source.transportationCost))}</td>`,
+        '    </tr>',
+      ].join('\n');
+    });
+
   return [
     '<table class="items">',
     '  <thead><tr>',
@@ -116,10 +134,22 @@ function renderItems(detail: BomDetail): string {
     '  <tbody>',
     ...detail.lines.map((line, index) => renderItemRow(line, index)),
     '  </tbody>',
-    '  <tfoot><tr>',
-    '    <td colspan="4" class="total-label">Subtotal</td>',
-    `    <td class="num total">${escape(money(detail.subtotal))}</td>`,
-    '  </tr></tfoot>',
+    ...(transportationRows.length > 0
+      ? [
+          '  <tfoot>',
+          ...transportationRows,
+          '    <tr>',
+          '      <td colspan="4" class="total-label">Subtotal</td>',
+          `      <td class="num total">${escape(money(detail.subtotal))}</td>`,
+          '    </tr>',
+          '  </tfoot>',
+        ]
+      : [
+          '  <tfoot><tr>',
+          '    <td colspan="4" class="total-label">Subtotal</td>',
+          `    <td class="num total">${escape(money(detail.subtotal))}</td>`,
+          '  </tr></tfoot>',
+        ]),
     '</table>',
   ].join('\n');
 }
@@ -290,6 +320,13 @@ function bomStyles(): string {
     table.items .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
     table.items tfoot td { border-bottom: none; border-top: 1pt solid #1a1a1a; font-weight: 700; }
     table.items .total-label { text-align: right; }
+
+    /* Transportation: a line between the items and the Subtotal that itemizes the rolled-up
+       travel cost on a per-source basis. Distinct from the items so it does not look like one
+       of them. */
+    table.items tr.transportation td { font-size: 9.5pt; color: #555; border-bottom: 0.5pt solid #ddd; }
+    table.items tr.transportation .transportation-source { font-weight: 600; }
+    table.items tr.transportation .transportation-description { font-style: italic; color: #777; }
 
     /* Signatures must never be split across a page break — half a signature block reads as a
        document that was tampered with. */

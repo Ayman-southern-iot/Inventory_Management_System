@@ -24,6 +24,27 @@ type Tx = Transaction<Database> | Db;
 /** NUMERIC arrives from pg as a string so it never passes through a float. */
 const money = (value: string | null): number | null => (value === null ? null : Number(value));
 
+/**
+ * The DB CHECK constraint requires both `transportation_cost` and `transportation_description`
+ * to be null or both non-null. The web form treats `0` as "not set" and clears the description;
+ * a client that sends `cost: 0` with `description: null` would otherwise hit the constraint
+ * and surface as a 500. Map both `null` and `0` to `null` here so the DB rule stays in sync
+ * with what the form promises.
+ */
+function normalizeTransportation(input: SaveRequisitionInput): {
+  transportationCost: string | null;
+  transportationDescription: string | null;
+} {
+  const cost = input.transportationCost;
+  if (cost === null || cost === undefined || cost === 0) {
+    return { transportationCost: null, transportationDescription: null };
+  }
+  return {
+    transportationCost: String(cost),
+    transportationDescription: input.transportationDescription ?? null,
+  };
+}
+
 @Injectable()
 export class RequisitionsRepository {
   constructor(@Inject(DB) private readonly db: Db) {}
@@ -116,6 +137,7 @@ export class RequisitionsRepository {
     input: SaveRequisitionInput,
     requesterId: string,
   ): Promise<string> {
+    const { transportationCost, transportationDescription } = normalizeTransportation(input);
     const row = await tx
       .insertInto('requisitions')
       .values({
@@ -126,6 +148,10 @@ export class RequisitionsRepository {
         urgency: input.urgency,
         approval_deadline: input.approvalDeadline,
         reason: input.reason,
+        // Money columns accept `string | null`; null clears them. The CHECK constraints reject a
+        // cost without a description and vice-versa, which Zod also enforces upstream.
+        transportation_cost: transportationCost,
+        transportation_description: transportationDescription,
       })
       .returning('id')
       .executeTakeFirstOrThrow();
@@ -133,6 +159,7 @@ export class RequisitionsRepository {
   }
 
   async updateDraft(tx: Tx, id: string, input: SaveRequisitionInput): Promise<void> {
+    const { transportationCost, transportationDescription } = normalizeTransportation(input);
     await tx
       .updateTable('requisitions')
       .set({
@@ -141,6 +168,8 @@ export class RequisitionsRepository {
         urgency: input.urgency,
         approval_deadline: input.approvalDeadline,
         reason: input.reason,
+        transportation_cost: transportationCost,
+        transportation_description: transportationDescription,
       })
       .where('id', '=', id)
       .execute();
@@ -354,6 +383,8 @@ export class RequisitionsRepository {
         'supporting_document.mime_type as supporting_document_mime_type',
         'supporting_document.size_bytes as supporting_document_size_bytes',
         'supporting_document.created_at as supporting_document_uploaded_at',
+        'requisitions.transportation_cost',
+        'requisitions.transportation_description',
         'requisitions.created_at',
         'requisitions.updated_at',
       ]);
@@ -600,6 +631,8 @@ interface RequisitionRow {
   supporting_document_mime_type: string | null;
   supporting_document_size_bytes: number | null;
   supporting_document_uploaded_at: Date | null;
+  transportation_cost: string | null;
+  transportation_description: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -635,6 +668,8 @@ function toRequisition(row: RequisitionRow): Requisition {
     status: row.status as Requisition['status'],
     submittedAt: row.submitted_at ? row.submitted_at.toISOString() : null,
     decidedAt: row.decided_at ? row.decided_at.toISOString() : null,
+    transportationCost: money(row.transportation_cost),
+    transportationDescription: row.transportation_description,
     // Derived, never stored: a persisted flag is wrong the moment the date rolls over.
     isOverdue:
       awaitingDecision.includes(row.status) &&

@@ -87,6 +87,8 @@ export function RequisitionFormPage() {
       approvalDeadline: null,
       reason: null,
       items: [{ ...EMPTY_ITEM }],
+      transportationCost: null,
+      transportationDescription: null,
     },
   });
 
@@ -98,7 +100,7 @@ export function RequisitionFormPage() {
   const items = form.watch('items');
   const products: Product[] = useMemo(() => catalogue.data?.items ?? [], [catalogue.data]);
 
-  const total = useMemo(
+  const itemsTotal = useMemo(
     () =>
       (items ?? []).reduce(
         (sum, item) => sum + (item?.quantity ?? 0) * (item?.estimatedUnitPrice ?? 0),
@@ -106,6 +108,26 @@ export function RequisitionFormPage() {
       ),
     [items],
   );
+
+  const transportationCost = form.watch('transportationCost');
+  const transportationDescription = form.watch('transportationDescription');
+
+  // Treat 0 / empty as "not set" so the total bar and the description-required rule agree
+  // with what the API will store. The Zod refinement rejects non-zero cost without a
+  // description, but the web clears them client-side to keep the form honest.
+  const effectiveTransportation =
+    typeof transportationCost === 'number' && transportationCost > 0
+      ? transportationCost
+      : 0;
+  const requestedTotal = itemsTotal + effectiveTransportation;
+
+  // When the cost drops to 0, the description should follow — the Zod refinement allows
+  // either both-or-null, but a stale description on a 0 cost is a confusing leftover.
+  useEffect(() => {
+    if (effectiveTransportation === 0 && transportationDescription) {
+      form.setValue('transportationDescription', null, { shouldValidate: true });
+    }
+  }, [effectiveTransportation, transportationDescription, form]);
 
   useEffect(() => {
     if (!isEditing || !existing.data) return;
@@ -122,6 +144,8 @@ export function RequisitionFormPage() {
         estimatedUnitPrice: item.estimatedUnitPrice,
         note: item.note,
       })),
+      transportationCost: existing.data.transportationCost ?? null,
+      transportationDescription: existing.data.transportationDescription ?? null,
     });
   }, [isEditing, existing.data, form]);
 
@@ -309,10 +333,78 @@ export function RequisitionFormPage() {
           <footer className="flex items-baseline justify-between border-t border-border bg-surface-muted px-5 py-4">
             <span className="text-sm font-medium text-ink-muted">{t.requisitions.total}</span>
             <span className="text-2xl font-semibold tabular-nums text-ink">
-              {formatBdt(total)}
+              {formatBdt(itemsTotal)}
             </span>
           </footer>
         </Panel>
+
+        {/* ----------------------------------------- zone 3: transportation cost */}
+        {/* Two-field panel below the items: amount + description. The description is required
+            only when the amount is non-zero — Zod's cross-field refinement catches it, and
+            the form clears the description when the amount drops to 0 so the totals stay
+            honest. */}
+        <Panel className="shadow-[--shadow-panel]">
+          <header className="border-b border-border px-5 py-4">
+            <h2 className="text-base font-semibold text-ink">
+              {t.requisitions.transportation.heading}
+            </h2>
+            <p className="mt-0.5 text-sm text-ink-muted">
+              {t.requisitions.transportation.hint}
+            </p>
+          </header>
+
+          <div className="grid gap-5 p-5 sm:grid-cols-3">
+            <TextField
+              label={t.requisitions.transportation.amount}
+              type="number"
+              inputMode="decimal"
+              min={0}
+              step={0.01}
+              placeholder="0"
+              error={errors.transportationCost?.message}
+              {...form.register('transportationCost', {
+                setValueAs: (value) => {
+                  if (value === '' || value === null || value === undefined) return null;
+                  const parsed = Number(value);
+                  return Number.isFinite(parsed) ? parsed : null;
+                },
+              })}
+            />
+
+            <div className="sm:col-span-2">
+              <TextField
+                label={t.requisitions.transportation.description}
+                placeholder={t.requisitions.transportation.descriptionPlaceholder}
+                error={errors.transportationDescription?.message}
+                disabled={effectiveTransportation === 0}
+                {...form.register('transportationDescription', {
+                  setValueAs: (value) => (value === '' ? null : value),
+                })}
+              />
+            </div>
+          </div>
+        </Panel>
+
+        {/* Final total bar — items + transportation + grand total. Replaces the old single-line
+            total once transportation became part of the requested amount. */}
+        <div className="rounded-[--radius-panel] border border-border bg-surface px-5 py-4 shadow-[--shadow-panel]">
+          <dl className="flex flex-col gap-1.5 text-sm">
+            <div className="flex items-baseline justify-between">
+              <dt className="text-ink-muted">{t.requisitions.transportation.itemsTotal}</dt>
+              <dd className="tabular-nums text-ink-muted">{formatBdt(itemsTotal)}</dd>
+            </div>
+            <div className="flex items-baseline justify-between">
+              <dt className="text-ink-muted">{t.requisitions.transportation.transportationTotal}</dt>
+              <dd className="tabular-nums text-ink-muted">{formatBdt(effectiveTransportation)}</dd>
+            </div>
+            <div className="mt-1 flex items-baseline justify-between border-t border-border pt-2">
+              <dt className="font-medium text-ink">{t.requisitions.transportation.requested}</dt>
+              <dd className="text-2xl font-semibold tabular-nums text-ink">
+                {formatBdt(requestedTotal)}
+              </dd>
+            </div>
+          </dl>
+        </div>
 
         <div className="sticky bottom-0 z-10 mt-6 flex items-center justify-between gap-3 rounded-[--radius-panel] border border-border bg-surface px-5 py-4 shadow-[--shadow-panel]">
           <p className="text-xs text-ink-subtle">{t.requisitions.submitHint}</p>

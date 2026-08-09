@@ -368,6 +368,13 @@ export class BomsRepository {
           'requisitions.reason',
           'requisitions.requested_amount',
           'requisitions.approved_amount',
+          // Transportation rolls up into `requested_amount`, but the PDF prints it as its own
+          // line so Accounts can see what was goods vs travel. Read live from the source row —
+          // the snapshot would only carry the value as of generation, and editing the
+          // requisition later is the user's privilege (this read path is on the *current* row,
+          // not the snapshot).
+          'requisitions.transportation_cost',
+          'requisitions.transportation_description',
           'bom_requisitions.approval_snapshot',
         ])
         .execute(),
@@ -392,6 +399,8 @@ export class BomsRepository {
           requestedAmount === null || approvedAmount === null
             ? null
             : Math.round((requestedAmount - approvedAmount) * 100) / 100,
+        transportationCost: money(sourceRow.transportation_cost),
+        transportationDescription: sourceRow.transportation_description,
         footprints: parseSnapshot(sourceRow.approval_snapshot),
       };
     });

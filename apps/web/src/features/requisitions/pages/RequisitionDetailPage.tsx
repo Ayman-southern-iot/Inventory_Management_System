@@ -318,6 +318,30 @@ export function RequisitionDetailPage() {
                     ))}
                   </Table>
                 </Panel>
+
+                {/* Transportation card — only when the requester added one. The amount is
+                    already part of the REQUESTED figure above; this card just shows the
+                    breakdown so the approver can see what they were paying for. Description
+                    is always present when the row exists (DB enforces both-or-neither). */}
+                {detail.transportationCost !== null && detail.transportationCost > 0 ? (
+                  <Panel className="p-5">
+                    <div className="flex items-baseline justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-medium text-ink">
+                          {t.requisitions.transportation.detailHeading}
+                        </p>
+                        {detail.transportationDescription ? (
+                          <p className="mt-0.5 text-xs text-ink-subtle">
+                            {detail.transportationDescription}
+                          </p>
+                        ) : null}
+                      </div>
+                      <p className="text-lg font-semibold tabular-nums text-ink">
+                        {(detail.transportationCost ?? 0).toLocaleString()}
+                      </p>
+                    </div>
+                  </Panel>
+                ) : null}
               </div>
 
               <Panel className="p-5">
