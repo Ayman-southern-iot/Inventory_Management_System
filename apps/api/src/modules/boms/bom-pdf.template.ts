@@ -111,19 +111,30 @@ function renderItems(detail: BomDetail): string {
   // transportation cost get a row; otherwise the PDF keeps the same compact subtotal block.
   // The description is truncated to 60 chars in the PDF — the full text is in the snapshot
   // and on the requisition detail.
-  const transportationRows = detail.sources
-    .filter((source) => source.transportationCost !== null && source.transportationCost > 0)
-    .map((source) => {
-      const description = (source.transportationDescription ?? '').trim();
-      const truncated = description.length > 60 ? `${description.slice(0, 57)}…` : description;
-      return [
-        '    <tr class="transportation">',
-        `      <td colspan="3" class="transportation-source">${escape(source.requisitionNo)} — Transportation</td>`,
-        `      <td colspan="1" class="transportation-description">${escape(truncated)}</td>`,
-        `      <td class="num">${escape(money(source.transportationCost))}</td>`,
-        '    </tr>',
-      ].join('\n');
-    });
+  //
+  // The subtotal must reconcile against the header's "Total Money Requested / Approved" —
+  // both already include transportation, so the bottom number has to as well. `detail.subtotal`
+  // is the items-only sum (what `POST /boms` line totals write), so we add the per-source
+  // transportation on top.
+  const transportationSources = detail.sources.filter(
+    (source) => source.transportationCost !== null && source.transportationCost > 0,
+  );
+  const transportationRows = transportationSources.map((source) => {
+    const description = (source.transportationDescription ?? '').trim();
+    const truncated = description.length > 60 ? `${description.slice(0, 57)}…` : description;
+    return [
+      '    <tr class="transportation">',
+      `      <td colspan="3" class="transportation-source">${escape(source.requisitionNo)} — Transportation</td>`,
+      `      <td colspan="1" class="transportation-description">${escape(truncated)}</td>`,
+      `      <td class="num">${escape(money(source.transportationCost))}</td>`,
+      '    </tr>',
+    ].join('\n');
+  });
+  const transportationTotal = transportationSources.reduce(
+    (sum, source) => sum + (source.transportationCost ?? 0),
+    0,
+  );
+  const grandSubtotal = detail.subtotal + transportationTotal;
 
   return [
     '<table class="items">',
@@ -140,7 +151,7 @@ function renderItems(detail: BomDetail): string {
           ...transportationRows,
           '    <tr>',
           '      <td colspan="4" class="total-label">Subtotal</td>',
-          `      <td class="num total">${escape(money(detail.subtotal))}</td>`,
+          `      <td class="num total">${escape(money(grandSubtotal))}</td>`,
           '    </tr>',
           '  </tfoot>',
         ]

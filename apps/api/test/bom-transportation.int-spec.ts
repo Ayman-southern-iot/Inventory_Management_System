@@ -242,6 +242,26 @@ describe('BOM transportation cost', () => {
     expect(html).toContain(req.requisitionNo);
   });
 
+  it('PDF subtotal reconciles against the header (items + transportation)', async () => {
+    // itemsTotal 1,000 + transportation 200 → both the header "Total Money Requested" and the
+    // bottom Subtotal must read 1,200.00. A previous build showed the header right and the
+    // bottom wrong because `detail.subtotal` is items-only; this pins the fix.
+    const req = await approveRequisition({
+      itemsTotal: 1000,
+      transportationCost: 200,
+      transportationDescription: 'CNG',
+    });
+    const bom = await generateBom(req.id, req.items);
+
+    const html = renderBomHtml(bom, CONTEXT);
+
+    // The header field is rendered as `Total Money Requested ... BDT 1,200.00`. The bottom
+    // Subtotal sits in the tfoot and must carry the same figure — proven by an anchored
+    // match around the Subtotal label, so the assertion cannot pass by catching the header
+    // figure by accident.
+    expect(html).toMatch(/Subtotal[\s\S]{0,80}1,200\.00/);
+  });
+
   it('PDF omits the Transportation row when no cost was set', async () => {
     const req = await approveRequisition({ itemsTotal: 1000 });
     const bom = await generateBom(req.id, req.items);
