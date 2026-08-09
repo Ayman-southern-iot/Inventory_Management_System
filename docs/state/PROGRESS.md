@@ -5,6 +5,17 @@
 
 ## Current position
 
+- **Transportation cost on a requisition (2026-08-09):** a requester can attach a single
+  rolled-up transportation cost (e.g. "pickup truck to Gazipur") to a DRAFT requisition.
+  The cost is part of `requested_amount` at submit, frozen alongside the items total, and
+  the BOM PDF renders a per-source "Transportation" line above the subtotal so Accounts
+  can see what was transportation vs. goods. Description is required when the cost is
+  non-zero; the form clears the description when the cost drops to 0; a DB CHECK
+  enforces the both-or-neither invariant as a structural guard. Migration 0025 (two
+  columns + three CHECK constraints), 22 new integration tests across
+  `requisitions-transportation` (16) and `bom-transportation` (6). Verified: typecheck
+  green; integration suite at the documented baseline (**400 pass / 8 pre-existing
+  failures** unchanged in `demo-accounts`, `login-backoff`, `reports`, `throttling`).
 - **Project Hub (2026-08-07):** Tasks 1–7 complete. Every role can open `/projects`, create a
   project, and inspect `/projects/:projectId`; the detail page shows one row per issued borrow with
   IN_USE/RETURNED tags, server-side usage filtering, pagination, and requisitions charged to that
