@@ -95,14 +95,11 @@ export function BomGeneratePage() {
     [candidates.data, pickedIds],
   );
 
-  // The plan does not call for fetching the tolerance from the API here — the API itself
-  // enforces it. The UI shows a static 10% (the product default) so the IM gets a
-  // visual heads-up before submitting. A future setting-aware banner can read this
-  // from the settings page.
-  const TOLERANCE_PCT = 10;
-  const ceiling = round2(approvedTotal * (1 + TOLERANCE_PCT / 100));
-  const overTolerance =
-    approvedTotal > 0 && round2(subtotal) > ceiling;
+  // The 10% over-budget ceiling was retired on 2026-08-09 — a unit cost going up between
+  // approval and BOM generation is a normal slowdown, not a policy violation. The footer
+  // is now three cells: Approved total, BOM subtotal, Variance. Variance is items-only
+  // because the editor never sees transportation (it is rolled into `approvedAmount` on
+  // the source requisition, not into any value the IM types here).
 
   function toggleCandidate(candidate: BomCandidate, checked: boolean) {
     setPickedIds((current) => {
@@ -232,7 +229,7 @@ export function BomGeneratePage() {
                     </tbody>
                   </table>
                 </div>
-                <footer className="grid grid-cols-2 gap-x-6 gap-y-1 border-t border-border px-4 py-3 sm:grid-cols-4">
+                <footer className="grid grid-cols-2 gap-x-6 gap-y-1 border-t border-border px-4 py-3 sm:grid-cols-3">
                   <TotalsCell
                     label={t.boms.approvedTotal}
                     value={approvedTotal.toLocaleString()}
@@ -243,27 +240,14 @@ export function BomGeneratePage() {
                     emphasis
                   />
                   <TotalsCell
-                    label={t.boms.ceiling.replace('{pct}', String(TOLERANCE_PCT))}
-                    value={ceiling.toLocaleString()}
-                  />
-                  <TotalsCell
                     label={t.boms.variance}
                     value={`${(round2(subtotal) - approvedTotal).toLocaleString()} (${
                       approvedTotal === 0
                         ? 'n/a'
                         : `${(((round2(subtotal) - approvedTotal) / approvedTotal) * 100).toFixed(1)}%`
                     })`}
-                    danger={overTolerance}
                   />
                 </footer>
-                {overTolerance ? (
-                  <p
-                    role="alert"
-                    className="border-t border-border bg-danger-subtle px-4 py-2 text-xs text-danger"
-                  >
-                    {t.boms.bounceWarning}
-                  </p>
-                ) : null}
               </Panel>
             ) : null}
 
@@ -387,12 +371,10 @@ function TotalsCell({
   label,
   value,
   emphasis = false,
-  danger = false,
 }: {
   label: string;
   value: string;
   emphasis?: boolean;
-  danger?: boolean;
 }) {
   return (
     <div>
@@ -403,9 +385,7 @@ function TotalsCell({
         className={
           emphasis
             ? 'text-lg font-semibold tabular-nums text-ink'
-            : danger
-              ? 'text-base font-semibold tabular-nums text-danger'
-              : 'text-base tabular-nums text-ink'
+            : 'text-base tabular-nums text-ink'
         }
       >
         {value}
