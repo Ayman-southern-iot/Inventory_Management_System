@@ -5,6 +5,21 @@
 
 ## Current position
 
+- **BOM header + per-source breakdown carry transportation (2026-08-10):** the BOM-detail
+  header's `BOM subtotal` cell was items-only while `approvedAmount` on every source row
+  was items + transportation — the page showed a variance that was structurally wrong by
+  the transportation delta. Header now splits into Approved total · Items subtotal ·
+  Transportation (conditional) · BOM subtotal (items + transport) · Variance. Each
+  per-source card mirrors the PDF: item subtotal, transportation (only when > 0), total
+  amount. `BomGeneratePage` drops the Ceiling cell / bounce banner / `TOLERANCE_PCT`
+  constants (the over-budget gate was retired 2026-08-09; those were dead UI). The PDF
+  items table, when transportation exists, now prints three tfoot rows: Transportation
+  per source (dropped the `REQ-XXXX — ` prefix — the source is already in the header
+  block above), Items subtotal, Grand total; with no transportation it stays a single
+  Subtotal row. 1 new web component test (`BomSourceSection.test.tsx`, 3 cases) and
+  updated assertions in `bom-transportation.int-spec.ts` (8 cases). Verified: typecheck
+  green, lint clean for the changed files, web suite 81/81, integration suite at the
+  documented baseline (**450 pass / 8 pre-existing failures** unchanged).
 - **BOM over-budget ceiling retired (2026-08-09):** a unit cost going up between approval and
   BOM generation is a normal slowdown, not a policy violation. The generation gate that
   bounced BOMs and flipped sources back to AWAITING_APPROVAL is gone — over-budget BOMs

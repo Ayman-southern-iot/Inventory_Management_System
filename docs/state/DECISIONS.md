@@ -521,3 +521,18 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   evaluate a partial-index predicate against a new enum value in the same tx that added
   it. The index is added in a follow-up migration after the outer tx commits. The runtime
   WHERE filter is fine at this scale (`stored_files` has tens of rows in production).
+- 2026-08-10 — BOM header + per-source breakdown carry transportation into the on-screen
+  numbers; the `BOM subtotal` cell was items-only and contradicted the per-source
+  `approvedAmount` (items + transportation) shown elsewhere. The header now splits into
+  Approved total · Items subtotal · Transportation (conditional) · BOM subtotal (items +
+  transport) · Variance, and each per-source card mirrors the PDF (item subtotal,
+  transportation only when > 0, total amount). The PDF items table, when transportation
+  exists, prints three tfoot rows: Transportation per source (the `REQ-XXXX — ` prefix
+  was dropped — the source is already in the header block immediately above), Items
+  subtotal, Grand total; with no transportation the single `Subtotal` row is kept. The
+  `BomGeneratePage` Ceiling cell, bounce banner and `TOLERANCE_PCT` / `ceiling` /
+  `overTolerance` constants are removed — the over-budget gate was retired 2026-08-09
+  (commit 5435fac) and these were dead UI. Three commits (web header + per-source +
+  test + i18n; BomGeneratePage cleanup; PDF template + integration test). Verified:
+  typecheck green, web suite 81/81, integration suite at the documented baseline
+  (450 pass / 8 pre-existing failures unchanged).
