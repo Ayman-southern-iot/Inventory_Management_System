@@ -50,6 +50,13 @@ export const requisitionFootprintsSchema = z.object({
    * decision alone, so it is fixed once the chain completes and never moves with spending.
    */
   remainingAmount: z.number().nullable(),
+  /**
+   * Rolled-up transportation cost the requester added. Null when the requisition did not
+   * include one. Already baked into `requestedAmount`; the PDF prints the line separately
+   * so Accounts can see what was transportation and what was goods.
+   */
+  transportationCost: z.number().nullable(),
+  transportationDescription: z.string().nullable(),
   footprints: z.array(approvalFootprintSchema),
 });
 export type RequisitionFootprints = z.infer<typeof requisitionFootprintsSchema>;

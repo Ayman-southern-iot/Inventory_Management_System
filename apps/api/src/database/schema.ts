@@ -335,6 +335,14 @@ export interface RequisitionsTable {
    * same rule, same column shape as `purchases.invoice_file_id`.
    */
   supporting_document_file_id: string | null;
+  /**
+   * Optional rolled-up transportation cost (fuel, vehicle hire, porter, etc.) the requester
+   * is adding to this requisition. Part of `requested_amount` at submit; frozen in the BOM
+   * snapshot. The pair is enforced both-or-neither at the DB level — a cost without a
+   * description is rejected, and so is a description without a cost.
+   */
+  transportation_cost: Money | null;
+  transportation_description: string | null;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }

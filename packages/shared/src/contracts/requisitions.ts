@@ -128,29 +128,54 @@ export type RequisitionItem = z.infer<typeof requisitionItemSchema>;
 
 /* ------------------------------------------------------------ requisitions */
 
-export const saveRequisitionSchema = z.object({
-  departmentId: z.string().uuid().nullable().default(null),
-  projectId: z.string().uuid().nullable().default(null),
-  urgency: requisitionUrgencySchema.default(RequisitionUrgency.NORMAL),
-  approvalDeadline: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD')
-    .nullable()
-    .default(null),
-  reason: z.string().trim().max(2000).nullable().default(null),
-  items: z.array(requisitionItemInputSchema).min(1, 'Add at least one item').max(200),
-  /**
-   * Optional id of a `stored_files` row created by `POST /uploads/supporting-document`
-   * (the pre-draft attach flow). On draft create, the service claims the file in the
-   * same transaction: sets `requisitions.supporting_document_file_id` and clears
-   * `stored_files.pending_claim_by`. The file must be `kind = 'SUPPORTING_DOCUMENT'`
-   * and `pending_claim_by = actor.id`; otherwise the service returns 403.
-   *
-   * Optional: existing clients (which don't send this field) keep working — Zod
-   * strips unknown keys, and the existing post-save attach endpoint is unchanged.
-   */
-  pendingSupportingDocumentId: z.string().uuid().nullable().optional(),
-});
+export const saveRequisitionSchema = z
+  .object({
+    departmentId: z.string().uuid().nullable().default(null),
+    projectId: z.string().uuid().nullable().default(null),
+    urgency: requisitionUrgencySchema.default(RequisitionUrgency.NORMAL),
+    approvalDeadline: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD')
+      .nullable()
+      .default(null),
+    reason: z.string().trim().max(2000).nullable().default(null),
+    items: z.array(requisitionItemInputSchema).min(1, 'Add at least one item').max(200),
+    /**
+     * Optional id of a `stored_files` row created by `POST /uploads/supporting-document`
+     * (the pre-draft attach flow). On draft create, the service claims the file in the
+     * same transaction: sets `requisitions.supporting_document_file_id` and clears
+     * `stored_files.pending_claim_by`. The file must be `kind = 'SUPPORTING_DOCUMENT'`
+     * and `pending_claim_by = actor.id`; otherwise the service returns 403.
+     *
+     * Optional: existing clients (which don't send this field) keep working — Zod
+     * strips unknown keys, and the existing post-save attach endpoint is unchanged.
+     */
+    pendingSupportingDocumentId: z.string().uuid().nullable().optional(),
+    /**
+     * Optional rolled-up transportation cost (fuel, vehicle hire, porter, etc.).
+     * Part of `requested_amount` at submit. Description is required when the cost
+     * is non-zero (so the approver knows what they're paying for); the DB enforces
+     * the same both-or-neither rule as a structural guard.
+     */
+    transportationCost: z.number().nonnegative().max(1_000_000_000).nullable().default(null),
+    transportationDescription: z
+      .string()
+      .trim()
+      .max(500)
+      .nullable()
+      .default(null),
+  })
+  .refine(
+    (v) =>
+      // Zero / null / undefined cost → description is optional; otherwise it must be present.
+      v.transportationCost == null || v.transportationCost === 0
+        ? true
+        : (v.transportationDescription?.trim().length ?? 0) > 0,
+    {
+      path: ['transportationDescription'],
+      message: 'Add a short description when the transportation cost is non-zero.',
+    },
+  );
 export type SaveRequisitionInput = z.infer<typeof saveRequisitionSchema>;
 
 export const decideRequisitionSchema = z.object({
@@ -240,6 +265,12 @@ export const requisitionSchema = z.object({
   status: requisitionStatusSchema,
   submittedAt: z.string().nullable(),
   decidedAt: z.string().nullable(),
+  /**
+   * Optional rolled-up transportation cost. Already baked into `requestedAmount`; the
+   * detail page surfaces the figure and description so approvers see the breakdown.
+   */
+  transportationCost: z.number().nullable(),
+  transportationDescription: z.string().nullable(),
   isOverdue: z.boolean(),
   createdAt: z.string(),
   updatedAt: z.string(),
