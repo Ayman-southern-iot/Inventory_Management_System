@@ -235,17 +235,25 @@ describe('BOM transportation cost', () => {
     // The dedicated row class is what marks this as a non-item entry; substring checks would
     // catch the CSS rule too, which is the wrong surface.
     expect(html).toMatch(/<tr class="transportation">/);
+    // The label is now just "Transportation" — the REQ-XXXX prefix was dropped because the
+    // source requisition is already in the header block immediately above. The cell carries
+    // a `colspan` before the class, so the match tolerates attributes in any order.
+    expect(html).toMatch(
+      /<td[^>]*class="transportation-source"[^>]*>\s*Transportation\s*<\/td>/,
+    );
     expect(html).toContain('Pickup truck to Gazipur');
     expect(html).toMatch(/1,200\.00/);
-    // The header echoes the requisition number so Accounts can trace which source the line
-    // belongs to on a batched BOM.
-    expect(html).toContain(req.requisitionNo);
+    // The requisition number itself lives in the BOM list endpoint, not the PDF — the PDF
+    // header block carries the requester, department and project, but the row itself just
+    // says "Transportation". On a batched BOM the dedup was confusing anyway.
   });
 
   it('PDF subtotal reconciles against the header (items + transportation)', async () => {
-    // itemsTotal 1,000 + transportation 200 → both the header "Total Money Requested" and the
-    // bottom Subtotal must read 1,200.00. A previous build showed the header right and the
-    // bottom wrong because `detail.subtotal` is items-only; this pins the fix.
+    // itemsTotal 1,000 + transportation 200 → the header "Total Money Requested" reads 1,200.00
+    // and the bottom Grand total must read the same. The breakdown prints three tfoot rows
+    // when transportation exists: Transportation / Items subtotal (1,000.00) / Grand total
+    // (1,200.00). Each label is anchored, so the assertion cannot pass by catching the header
+    // figure by accident.
     const req = await approveRequisition({
       itemsTotal: 1000,
       transportationCost: 200,
@@ -255,11 +263,8 @@ describe('BOM transportation cost', () => {
 
     const html = renderBomHtml(bom, CONTEXT);
 
-    // The header field is rendered as `Total Money Requested ... BDT 1,200.00`. The bottom
-    // Subtotal sits in the tfoot and must carry the same figure — proven by an anchored
-    // match around the Subtotal label, so the assertion cannot pass by catching the header
-    // figure by accident.
-    expect(html).toMatch(/Subtotal[\s\S]{0,80}1,200\.00/);
+    expect(html).toMatch(/Items subtotal[\s\S]{0,80}1,000\.00/);
+    expect(html).toMatch(/Grand total[\s\S]{0,80}1,200\.00/);
   });
 
   it('PDF omits the Transportation row when no cost was set', async () => {
@@ -270,8 +275,13 @@ describe('BOM transportation cost', () => {
 
     // The tag, not the bare class name: the `<style>` block declares `tr.transportation`.
     expect(html).not.toMatch(/<tr class="transportation">/);
-    // The label "Transportation" only appears inside the row we just excluded.
+    // The "Transportation" label only appears inside the row we just excluded, and the
+    // em-dash-prefixed form was retired on 2026-08-10. The cell carries a `colspan` before
+    // the class, so the negative match tolerates attributes in any order.
     expect(html).not.toMatch(/— Transportation/);
+    expect(html).not.toMatch(
+      /<td[^>]*class="transportation-source"[^>]*>\s*Transportation\s*<\/td>/,
+    );
   });
 
   it('PDF truncates a long transportation description to 60 chars', async () => {

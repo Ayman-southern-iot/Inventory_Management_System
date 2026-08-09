@@ -107,15 +107,16 @@ function renderItems(detail: BomDetail): string {
     return '<p class="muted">No items on this BOM.</p>';
   }
 
-  // Per-source transportation line above the subtotal. Only sources that actually carry a
-  // transportation cost get a row; otherwise the PDF keeps the same compact subtotal block.
-  // The description is truncated to 60 chars in the PDF — the full text is in the snapshot
-  // and on the requisition detail.
+  // Per-source transportation line above the totals. Only sources that actually carry a
+  // transportation cost get a row; otherwise the PDF keeps the same compact single-Subtotal
+  // block. The description is truncated to 60 chars in the PDF — the full text is in the
+  // snapshot and on the requisition detail.
   //
-  // The subtotal must reconcile against the header's "Total Money Requested / Approved" —
+  // The grand total must reconcile against the header's "Total Money Requested / Approved" —
   // both already include transportation, so the bottom number has to as well. `detail.subtotal`
   // is the items-only sum (what `POST /boms` line totals write), so we add the per-source
-  // transportation on top.
+  // transportation on top. The breakdown prints three rows when transportation exists
+  // (Transportation / Items subtotal / Grand total) and one row when it does not (Subtotal).
   const transportationSources = detail.sources.filter(
     (source) => source.transportationCost !== null && source.transportationCost > 0,
   );
@@ -124,7 +125,7 @@ function renderItems(detail: BomDetail): string {
     const truncated = description.length > 60 ? `${description.slice(0, 57)}…` : description;
     return [
       '    <tr class="transportation">',
-      `      <td colspan="3" class="transportation-source">${escape(source.requisitionNo)} — Transportation</td>`,
+      `      <td colspan="3" class="transportation-source">Transportation</td>`,
       `      <td colspan="1" class="transportation-description">${escape(truncated)}</td>`,
       `      <td class="num">${escape(money(source.transportationCost))}</td>`,
       '    </tr>',
@@ -134,7 +135,7 @@ function renderItems(detail: BomDetail): string {
     (sum, source) => sum + (source.transportationCost ?? 0),
     0,
   );
-  const grandSubtotal = detail.subtotal + transportationTotal;
+  const grandTotal = detail.subtotal + transportationTotal;
 
   return [
     '<table class="items">',
@@ -150,8 +151,12 @@ function renderItems(detail: BomDetail): string {
           '  <tfoot>',
           ...transportationRows,
           '    <tr>',
-          '      <td colspan="4" class="total-label">Subtotal</td>',
-          `      <td class="num total">${escape(money(grandSubtotal))}</td>`,
+          '      <td colspan="4" class="total-label">Items subtotal</td>',
+          `      <td class="num total-subtotal">${escape(money(detail.subtotal))}</td>`,
+          '    </tr>',
+          '    <tr>',
+          '      <td colspan="4" class="total-label">Grand total</td>',
+          `      <td class="num total-grand">${escape(money(grandTotal))}</td>`,
           '    </tr>',
           '  </tfoot>',
         ]
@@ -331,8 +336,11 @@ function bomStyles(): string {
     table.items .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
     table.items tfoot td { border-bottom: none; border-top: 1pt solid #1a1a1a; font-weight: 700; }
     table.items .total-label { text-align: right; }
+    /* Grand total sits beneath Items subtotal with a heavier top border — Accounts reads the
+       bottom number, so the visual weight signals "this is the figure that matters". */
+    table.items tfoot tr td.total-grand { border-top: 1.5pt double #1a1a1a; }
 
-    /* Transportation: a line between the items and the Subtotal that itemizes the rolled-up
+    /* Transportation: a line between the items and the totals that itemizes the rolled-up
        travel cost on a per-source basis. Distinct from the items so it does not look like one
        of them. */
     table.items tr.transportation td { font-size: 9.5pt; color: #555; border-bottom: 0.5pt solid #ddd; }
