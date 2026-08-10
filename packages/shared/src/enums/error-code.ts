@@ -65,9 +65,28 @@ export const ErrorCode = {
   BOM_ALREADY_ON_LIVE_BOM: 'BOM_ALREADY_ON_LIVE_BOM',
   BOM_ALREADY_VOID: 'BOM_ALREADY_VOID',
   BOM_OVER_BUDGET: 'BOM_OVER_BUDGET',
+  /**
+   * The IM asked for a `quantity` larger than the source requisition item permits. The IM
+   * is allowed to *shrink* a BOM line down (or drop it) — but they cannot conjure stock.
+   */
+  BOM_QUANTITY_EXCEEDS_SOURCE: 'BOM_QUANTITY_EXCEEDS_SOURCE',
+  /**
+   * The IM removed every line on the BOM. The BOM must have at least one line; if the IM
+   * genuinely cannot afford anything, the right action is send-back-for-revision on the
+   * requisition, not an empty BOM.
+   */
+  ALL_BOM_LINES_REMOVED: 'ALL_BOM_LINES_REMOVED',
   PDF_RENDER_FAILED: 'PDF_RENDER_FAILED',
   /** Download URL token failed to verify — wrong BOM, expired, malformed, or wrong secret. */
   PDF_DOWNLOAD_TOKEN_INVALID: 'PDF_DOWNLOAD_TOKEN_INVALID',
+
+  /**
+   * The IM tried to send back a requisition that is not in `APPROVED`. The send-back
+   * path is the single-item + over-budget branch (plan D2/D3); a multi-item requisition
+   * cannot be sent back because the BOM-customise path is the legitimate way to handle
+   * it. Below the IM_REVIEW decision, the requester can simply edit the draft.
+   */
+  CANNOT_SEND_BACK_FOR_REVISION: 'CANNOT_SEND_BACK_FOR_REVISION',
 
   INTERNAL: 'INTERNAL',
 } as const;

@@ -31,6 +31,7 @@ import { DelegationsService } from './delegations.service';
 import {
   ApprovalAlreadyActedError,
   ApproverSlotUnassignedError,
+  CannotSendBackForRevisionError,
   InvalidRequisitionTransitionError,
   NotYourApprovalError,
   SelfApprovalForbiddenError,
@@ -38,6 +39,7 @@ import {
   SignatureNotUploadedError,
   SubthresholdApproverUnassignedError,
 } from './requisitions.errors';
+import type { SendBackForRevisionInput } from '@ims/shared';
 
 @Injectable()
 export class RequisitionsService {
@@ -635,6 +637,127 @@ export class RequisitionsService {
     });
 
     return this.requireDetail(approval.requisition_id);
+  }
+
+  /**
+   * Single-item + over-budget branch (plan D2/D3).
+   *
+   * The IM is at the BOM-generate step and the variance is unbridgeable — the line cannot
+   * shrink enough to fit, yet there is exactly one item so the BOM-customise path (shrink
+   * qty / drop a line) offers nothing. The IM sends the requisition back to the requester
+   * for budget revision. Status flips to DRAFT, the requester is notified, and the
+   * "for revise" tag becomes visible on the detail page. The chain replays when the
+   * requester re-submits.
+   *
+   * Pre-conditions:
+   *   - status === APPROVED (else the requester can just edit the draft, or the BOM already
+   *     moved forward).
+   *   - items.length === 1 (the multi-item case has its own handle — the BOM-customise
+   *     flow — and silently bouncing a multi-item requisition would be a worse failure
+   *     mode than a 409 the IM can read).
+   *
+   * The existing approved `requisition_approvals` rows are kept (immutable audit history).
+   * When the requester re-submits, `submit` inserts a fresh chain — that is the existing
+   * path, exercised by every fresh requisition submit; we are not reimplementing it here.
+   *
+   * The `requisition_approvals.action` is not flipped to WITHDRAWN, mirroring the
+   * "leave the audit trail intact" pattern rather than the "mask old decisions" approach:
+   * a downstream reader can see the original approvers thought this was fine and the
+   * IM later reconsidered. The `requiresRevisionTag` view-layer flag is what the UI
+   * uses to surface the "for revise" pill.
+   */
+  async sendBackForRevision(
+    id: string,
+    input: SendBackForRevisionInput,
+    actorId: string,
+  ) {
+    const existing = await this.repo.findById(id);
+    if (!existing) throw new NotFoundError('Requisition');
+
+    if (existing.status !== RequisitionStatus.APPROVED) {
+      throw new CannotSendBackForRevisionError('not_approved');
+    }
+
+    const items = await this.repo.findItems(id);
+    if (items.length !== 1) {
+      throw new CannotSendBackForRevisionError('multi_item');
+    }
+
+    const actor = await this.users.findAuthRecordById(actorId);
+
+    await this.db.transaction().execute(async (tx) => {
+      // Re-read under the lock so a status flip that landed between the initial read and
+      // the transaction open cannot be silently overwritten. Same pattern as withdraw.
+      const requisition = await this.repo.lockRequisition(tx, id);
+      if (!requisition) throw new NotFoundError('Requisition');
+      if (requisition.status !== RequisitionStatus.APPROVED) {
+        throw new CannotSendBackForRevisionError('not_approved');
+      }
+
+      // DRAFT is the land here. The `requisition_approvals` rows are deleted so the
+      // requester's re-submit can seed a fresh chain — the `UNIQUE (requisition_id,
+      // stage, slot)` constraint would otherwise reject the new rows. The audit history
+      // is preserved on the `requisition_events` table: the original approvals show up
+      // here as `IM_APPROVED` / `APPROVER_APPROVED` events with the actor and timestamp,
+      // which is what the audit feed renders anyway. Also clear the approved_amount so
+      // the requester sees a blank field again — the IM's previous figure was a one-shot
+      // sanction, not a permanent cap.
+      await tx
+        .deleteFrom('requisition_approvals')
+        .where('requisition_id', '=', id)
+        .execute();
+      await sql`
+        UPDATE requisitions
+        SET status = ${RequisitionStatus.DRAFT}::requisition_status,
+            approved_amount = NULL,
+            decided_at = NULL,
+            submitted_at = NULL,
+            required_approver_count = NULL,
+            threshold_at_submit = NULL
+        WHERE id = ${id}::uuid
+      `.execute(tx);
+
+      await this.repo.appendEvent(
+        tx,
+        id,
+        RequisitionEventType.SEND_BACK_FOR_REVISION,
+        actorId,
+        { reason: input.reason, itemCount: items.length },
+      );
+      await this.audit.record(
+        {
+          action: 'requisition.send_back_for_revision',
+          entityType: 'requisition',
+          entityId: id,
+          entityRef: existing.requisition_no,
+          summary: `Sent back ${existing.requisition_no} for budget revision`,
+          metadata: { reason: input.reason, itemCount: items.length },
+        },
+        { actorId, actorName: actor?.full_name ?? null, actorEmail: null, actorRoles: [], requestMethod: null, requestPath: null, requestIp: null, userAgent: null },
+        tx,
+      );
+
+      // The requester must see this — the requisition is back on their desk. The original
+      // approvers get a heads-up too: their decision has been thrown out, and they may be
+      // asked to act again if the requester re-submits at the same amount.
+      const originalActorName = actor?.full_name ?? null;
+      await this.notifications.notify(
+        {
+          type: 'requisition.sent_back_for_revision',
+          userIds: [existing.requester_id],
+          ref: existing.requisition_no,
+          link: NOTIFICATION_LINKS.requisition(id),
+          entityType: 'requisition',
+          entityId: id,
+          actorId,
+          actorName: originalActorName,
+          context: { note: input.reason },
+        },
+        tx,
+      );
+    });
+
+    return this.requireDetail(id);
   }
 
   async cancel(id: string, actorId: string) {

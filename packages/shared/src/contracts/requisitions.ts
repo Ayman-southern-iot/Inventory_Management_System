@@ -97,6 +97,13 @@ export const RequisitionEventType = {
    * and receipts rows stay — they are evidence of what was bought — only the status flips.
    */
   UNVERIFIED_PURCHASE: 'UNVERIFIED_PURCHASE',
+  /**
+   * On a single-item over-budget requisition, the IM sent it back to the requester for
+   * budget revision. The status flips to DRAFT; the requester re-submits and the chain
+   * replays. The "for revise" / "revised" pill on the detail page is computed from this
+   * event in the events view (see `requiresRevisionTag` / `revisedAfterSendBack`).
+   */
+  SEND_BACK_FOR_REVISION: 'SEND_BACK_FOR_REVISION',
   STOCKED: 'STOCKED',
   /** Goods went straight out to a person instead of onto a shelf (task 5.7). */
   BORROWED_OUT: 'BORROWED_OUT',
@@ -207,6 +214,17 @@ export const withdrawApprovalSchema = z.object({
 });
 export type WithdrawApprovalInput = z.infer<typeof withdrawApprovalSchema>;
 
+/**
+ * Single-item + over-budget branch (see plan D2/D3). The IM bounces the approved
+ * requisition back to the requester; status flips to DRAFT and the chain replays.
+ * Refused if the requisition is multi-item (the BOM-customise flow is the
+ * legitimate path) or not in APPROVED.
+ */
+export const sendBackForRevisionSchema = z.object({
+  reason: z.string().trim().min(3).max(500),
+});
+export type SendBackForRevisionInput = z.infer<typeof sendBackForRevisionSchema>;
+
 export const listRequisitionsQuerySchema = paginationQuerySchema.extend({
   status: requisitionStatusSchema.optional(),
   search: z.string().trim().max(160).optional(),
@@ -299,6 +317,20 @@ export interface RequisitionDetail extends Requisition {
    * double up. `null` when there is no document — the card is then absent from the page.
    */
   supportingDocumentUrl: string | null;
+  /**
+   * The detail page renders a secondary "For revise" pill next to the status badge when
+   * this is true. Set on a DRAFT requisition that was bounced by the IM via
+   * `POST /requisitions/:id/send-back-for-revision` and has not yet been re-submitted.
+   * Derived from the events log in `findDetail` — a row is in this state when the most
+   * recent `SEND_BACK_FOR_REVISION` event is followed by no `SUBMITTED`.
+   */
+  requiresRevisionTag: boolean;
+  /**
+   * The "Revised" pill is shown when the requester has re-submitted after a send-back.
+   * Stays true until the chain reaches APPROVED (or any terminal state) — viewers later
+   * in the lifecycle see a normal status, not "still under revision".
+   */
+  revisedAfterSendBack: boolean;
 }
 
 /* -------------------------------------------------------------- delegation */

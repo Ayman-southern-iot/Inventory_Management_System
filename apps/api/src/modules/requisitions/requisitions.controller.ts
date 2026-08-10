@@ -19,6 +19,7 @@ import {
   decideRequisitionSchema,
   listRequisitionsQuerySchema,
   saveRequisitionSchema,
+  sendBackForRevisionSchema,
   withdrawApprovalSchema,
   type CreateDelegationInput,
   type DecideRequisitionInput,
@@ -28,6 +29,7 @@ import {
   type Requisition,
   type RequisitionDetail,
   type SaveRequisitionInput,
+  type SendBackForRevisionInput,
   type WithdrawApprovalInput,
 } from '@ims/shared';
 import { ConflictError, ForbiddenError } from '../../common/errors';
@@ -164,6 +166,28 @@ export class RequisitionsController {
     @CurrentUser() actor: RequestUser,
   ): Promise<RequisitionDetail> {
     return this.requisitions.withdraw(approvalId, body, actor.id);
+  }
+
+  /**
+   * Single-item + over-budget branch (plan D2/D3). IM/Admin only. The IM is at the BOM
+   * generate step, sees the variance is unbridgeable, and sends the requisition back to
+   * the requester for budget revision. Status flips to DRAFT; re-submit replays the chain.
+   *
+   * Idempotent on retry: a double-click resolves to the same SEND_BACK_FOR_REVISION event
+   * without leaving the requester to act on a phantom duplicate.
+   */
+  @Roles(Role.INVENTORY_MANAGER, Role.ADMIN)
+  @Post(':id/send-back-for-revision')
+  @HttpCode(HttpStatus.OK)
+  async sendBackForRevision(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(zodPipe(sendBackForRevisionSchema)) body: SendBackForRevisionInput,
+    @CurrentUser() actor: RequestUser,
+    @Headers(IDEMPOTENCY_HEADER) idempotencyKey?: string,
+  ): Promise<RequisitionDetail> {
+    return this.runOnce(idempotencyKey, actor.id, `requisition:send-back:${id}`, () =>
+      this.requisitions.sendBackForRevision(id, body, actor.id),
+    );
   }
 
   /* ------------------------------------------------------------ delegation */

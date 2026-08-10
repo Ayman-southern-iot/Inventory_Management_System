@@ -30,6 +30,13 @@ export const NOTIFICATION_TYPES = [
   'requisition.rejected',
   'requisition.withdrawn',
   'requisition.cancelled',
+  /**
+   * Sent to the requester on a single-item + over-budget send-back. The requisition is now
+   * back in DRAFT with a "for revise" tag; the requester edits the budget, re-submits, and
+   * the chain replays. Original approvers get a heads-up separately so they know their
+   * decision has been thrown out.
+   */
+  'requisition.sent_back_for_revision',
   // Requisitions — the approver's side
   'requisition.awaiting_your_approval',
   'requisition.approval_reminder',

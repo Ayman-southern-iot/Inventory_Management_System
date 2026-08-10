@@ -130,6 +130,12 @@ export const AUDIT_ACTIONS = [
    * can re-record. Only legal before any money has been returned to Accounts.
    */
   'requisition.unverify_purchase',
+  /**
+   * Recorded on a single-item + over-budget approved requisition when the IM bounces it back
+   * to the requester for budget revision. The status flips to DRAFT; the requester re-submits
+   * and the chain replays. Multi-item requisitions must use the BOM-customise path instead.
+   */
+  'requisition.send_back_for_revision',
   'requisition.stocked',
   'requisition.borrowed_out',
   'requisition.cancel',

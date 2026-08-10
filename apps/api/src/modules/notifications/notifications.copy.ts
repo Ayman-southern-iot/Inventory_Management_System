@@ -64,6 +64,12 @@ export const NOTIFICATION_COPY: Record<NotificationType, NotificationTemplate> =
     severity: 'info',
     title: (ref, actor) => `Requisition ${ref} was cancelled${by(actor)}`,
   },
+  'requisition.sent_back_for_revision': {
+    severity: 'action_required',
+    title: (ref, actor) =>
+      `Requisition ${ref} was sent back${actor ? ` by ${actor}` : ''} for budget revision`,
+    body: (c) => (c.note ? `Reason: ${c.note}` : null),
+  },
 
   /* ------------------------------------------------- requisitions: approver */
   'requisition.awaiting_your_approval': {

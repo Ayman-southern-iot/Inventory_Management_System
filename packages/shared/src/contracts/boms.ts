@@ -63,11 +63,38 @@ export type RequisitionFootprints = z.infer<typeof requisitionFootprintsSchema>;
 
 /* ---------------------------------------------------------------- generation */
 
+/**
+ * One row of a BOM line. The IM may shrink the line down (or drop it entirely) when the
+ * `approvedAmount` they got from Approvers came in below `requestedAmount` — a common case
+ * for multi-item requisitions where the IM simply couldn't afford everything. The
+ * `quantity` override is **local to the BOM line**: the source `requisition_items.quantity`
+ * is left alone. For single-item over-budget cases the IM sends the requisition back for
+ * revision instead (see `POST /requisitions/:id/send-back-for-revision`).
+ *
+ * `removed: true` drops the line entirely — it is preserved on the wire (so the form
+ * remembers the IM's choice on re-open) but excluded from the generated BOM. The
+ * submit-time filter in `BomGeneratePage.tsx` keeps these out of the request body for
+ * clients that don't need them; the API also tolerates a mix where the same line is
+ * declared both removed and visible (it honours the `removed` flag).
+ */
 export const bomLineInputSchema = z.object({
   requisitionItemId: z.string().uuid(),
   /** The two figures the IM supplies; everything else is inherited from the requisition. */
   unitCost: z.number().nonnegative().max(1_000_000_000),
   vendor: z.string().trim().max(200).nullable().default(null),
+  /**
+   * Optional override. Omit (or send `undefined`) to keep the source requisition's
+   * quantity — this is the historical behaviour. When sent, must be `>= 1` and
+   * `<= source.quantity`. A BOM that drops every line below 1 is rejected — the IM
+   * has to either keep at least one line or use send-back-for-revision on the requisition.
+   */
+  quantity: z.number().int().min(1).max(1_000_000).optional(),
+  /**
+   * Drop this line entirely from the BOM. A 0-quantity line is *also* dropped by the
+   * service, so the flag exists for client-side clarity (the user "removed" the line)
+   * rather than as a separate wire path. Default false.
+   */
+  removed: z.boolean().optional().default(false),
 });
 export type BomLineInput = z.infer<typeof bomLineInputSchema>;
 

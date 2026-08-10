@@ -32,7 +32,9 @@ import type { AuditContext } from '../audit/audit-context';
 import { BomsRepository } from './boms.repository';
 import { renderBomHtml } from './bom-pdf.template';
 import {
+  AllBomLinesRemovedError,
   BomAlreadyVoidError,
+  BomQuantityExceedsSourceError,
   BomRequisitionAlreadyOnLiveBomError,
   BomRequisitionNotApprovedError,
 } from './boms.errors';
@@ -122,12 +124,36 @@ export class BomsService {
       }
     }
 
-    const subtotal = round2(
-      input.lines.reduce((sum, line) => {
-        const owner = lineIndex.get(line.requisitionItemId)!;
-        return sum + line.unitCost * owner.quantity;
-      }, 0),
-    );
+    /**
+     * Resolve each input line to its effective `(itemName, quantity)`. Lines marked
+     * `removed` contribute nothing — they exist on the wire so the form can remember the
+     * IM's choice on re-open, but they leave the BOM. Lines without an explicit `quantity`
+     * inherit the source quantity (the historical behaviour). `quantity > source.quantity`
+     * is a 409: the IM may shrink or drop, but cannot conjure stock.
+     *
+     * `live` and `removed` are partitioned up-front so the subtotal / lineCount / BOM-row
+     * builders below can treat `live` as the canonical set. The "all removed" guard sits
+     * here because, by the time the transaction opens, the IM could already have wasted a
+     * row lock — and an empty BOM is a much worse failure mode than a fast 409.
+     */
+    const live: Array<{ index: number; quantity: number; unitCost: number }> = [];
+    for (let index = 0; index < input.lines.length; index += 1) {
+      const line = input.lines[index]!;
+      const owner = lineIndex.get(line.requisitionItemId)!;
+      if (line.removed) continue;
+      const requested = line.quantity ?? owner.quantity;
+      if (requested > owner.quantity) {
+        throw new BomQuantityExceedsSourceError({
+          itemName: owner.itemName,
+          requested,
+          max: owner.quantity,
+        });
+      }
+      live.push({ index, quantity: requested, unitCost: line.unitCost });
+    }
+    if (live.length === 0) throw new AllBomLinesRemovedError();
+
+    const subtotal = round2(live.reduce((sum, line) => sum + line.unitCost * line.quantity, 0));
     const approvedTotal = round2(
       sources.reduce((sum, source) => sum + source.approvedAmount, 0),
     );
@@ -190,22 +216,37 @@ export class BomsService {
 
       // Preserve input order so the same request always renders the same line order —
       // Accounts' workflow depends on lines not shuffling between regenerations. Within
-      // equal keys we fall back to the source order captured in `lineIndex`.
+      // equal keys we fall back to the source order captured in `lineIndex`. Removed
+      // lines are filtered out here; the IM's `quantity` override wins over the source.
       const sortedLines = [...input.lines];
-      const bomLineRows = sortedLines.map((line, index) => {
+      const bomLineRows: Array<{
+        requisitionItemId: string;
+        productId: string | null;
+        itemName: string;
+        quantity: number;
+        unitCost: number;
+        vendor: string | null;
+        purpose: string | null;
+        projectId: string | null;
+        sortOrder: number;
+      }> = [];
+      let sortOrder = 0;
+      for (const line of sortedLines) {
+        if (line.removed) continue;
         const owner = lineIndex.get(line.requisitionItemId)!;
-        return {
+        bomLineRows.push({
           requisitionItemId: line.requisitionItemId,
           productId: owner.productId,
           itemName: owner.itemName,
-          quantity: owner.quantity,
+          quantity: line.quantity ?? owner.quantity,
           unitCost: line.unitCost,
           vendor: line.vendor,
           purpose: owner.purpose,
           projectId: owner.projectId,
-          sortOrder: index,
-        };
-      });
+          sortOrder,
+        });
+        sortOrder += 1;
+      }
       await this.repo.insertBomLines(tx, { bomId: bom.id, lines: bomLineRows });
 
       // Approved sources advance to the next lifecycle stage. The freeze-for-history

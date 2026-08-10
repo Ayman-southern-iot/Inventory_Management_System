@@ -4,6 +4,7 @@ import {
   ApprovalAction,
   Role,
   ApprovalStage,
+  RequisitionEventType,
   RequisitionStatus,
   type Approval,
   type ListRequisitionsQuery,
@@ -412,6 +413,29 @@ export class RequisitionsRepository {
           }
         : null;
 
+    /**
+     * The two send-back-derived flags are computed from the events log rather than stored on
+     * the row. The events are append-only and ordered ascending by id, so the latest event
+     * type in the timeline tells us exactly which side of the bounce the requisition is on:
+     *
+     *   - latest SEND_BACK_FOR_REVISION > latest SUBMITTED → "for revise" pill on a DRAFT
+     *     requisition that has not been re-submitted yet.
+     *   - latest SUBMITTED > latest SEND_BACK_FOR_REVISION → "revised" pill once the
+     *     requester re-submitted. Stays true through APPROVED — the pill is historical.
+     */
+    let latestSendBackIndex = -1;
+    let latestSubmittedIndex = -1;
+    events.forEach((event, index) => {
+      if (event.eventType === RequisitionEventType.SEND_BACK_FOR_REVISION) {
+        latestSendBackIndex = index;
+      } else if (event.eventType === RequisitionEventType.SUBMITTED) {
+        latestSubmittedIndex = index;
+      }
+    });
+    const requiresRevisionTag =
+      base.status === RequisitionStatus.DRAFT && latestSendBackIndex > latestSubmittedIndex;
+    const revisedAfterSendBack = latestSendBackIndex >= 0 && latestSubmittedIndex > latestSendBackIndex;
+
     return {
       ...base,
       items,
@@ -420,6 +444,8 @@ export class RequisitionsRepository {
       supportingDocument,
       // URL is built by the controller so the repo stays HTTP-free.
       supportingDocumentUrl: null,
+      requiresRevisionTag,
+      revisedAfterSendBack,
     };
   }
 

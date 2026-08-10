@@ -69,3 +69,35 @@ export class BomOverBudgetError extends DomainError {
     );
   }
 }
+
+/**
+ * The IM asked for a `quantity` larger than the source requisition item permits. The IM is
+ * allowed to *shrink* a BOM line down (or drop it) — but they cannot conjure stock. This
+ * 409 is the precise reason; the error payload names the line so the form can highlight it.
+ */
+export class BomQuantityExceedsSourceError extends DomainError {
+  constructor(values: { itemName: string; requested: number; max: number }) {
+    super(
+      ErrorCode.BOM_QUANTITY_EXCEEDS_SOURCE,
+      `Cannot put ${values.requested} of ${values.itemName} on the BOM — the source requisition only sanctions ${values.max}`,
+      HttpStatus.CONFLICT,
+      values,
+    );
+  }
+}
+
+/**
+ * The IM removed every line on the BOM. The BOM must have at least one line; if the IM
+ * genuinely cannot afford anything, the right action is send-back-for-revision on the
+ * requisition, not an empty BOM.
+ */
+export class AllBomLinesRemovedError extends DomainError {
+  constructor() {
+    super(
+      ErrorCode.ALL_BOM_LINES_REMOVED,
+      'Every line was removed — the BOM must have at least one line. Use send-back-for-revision if the requester needs to revise the budget.',
+      HttpStatus.CONFLICT,
+      {},
+    );
+  }
+}

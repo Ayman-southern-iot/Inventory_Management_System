@@ -120,3 +120,27 @@ export class SignatureNotUploadedError extends DomainError {
     );
   }
 }
+
+/**
+ * The IM tried to send back a requisition for budget revision outside the supported
+ * conditions. The path is the single-item + over-budget branch (plan D2/D3): the IM
+ * looks at the BOM-generate page, sees the variance is unbridgeable, and bounces the
+ * requisition to the requester. Multi-item requisitions must use the BOM-customise
+ * path instead — the requester is asked to revise the budget via DRAFT → submit, not
+ * via send-back. Below the IM_REVIEW decision, the requester can simply edit the draft.
+ *
+ * The 409 carries a `reason` field so the web app can say "this is multi-item —
+ * use the BOM-customise path" vs "this is not in APPROVED" without parsing the message.
+ */
+export class CannotSendBackForRevisionError extends DomainError {
+  constructor(reason: 'not_approved' | 'multi_item') {
+    super(
+      ErrorCode.CANNOT_SEND_BACK_FOR_REVISION,
+      reason === 'multi_item'
+        ? 'Multi-item requisitions use the BOM-customise path, not send-back. Adjust the per-line quantity or remove a line on the BOM generate page.'
+        : 'A requisition that is not approved cannot be sent back for revision.',
+      HttpStatus.CONFLICT,
+      { reason },
+    );
+  }
+}
