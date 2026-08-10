@@ -20,6 +20,7 @@ import {
   Role,
   recordFundReceiptSchema,
   recordPurchaseSchema,
+  unverifyPurchaseSchema,
   verifyPurchaseSchema,
   sendToAccountsSchema,
   receiveIntoStockSchema,
@@ -27,6 +28,7 @@ import {
   type RecordFundReceiptInput,
   type RecordPurchaseInput,
   type RequisitionFunding,
+  type UnverifyPurchaseInput,
   type VerifyPurchaseInput,
   type SendToAccountsInput,
   type ReceiveIntoStockInput,
@@ -185,6 +187,26 @@ export class FundsController {
     return this.runOnce(idempotencyKey, actor.id, `funds:verify:${id}`, async () => {
       await this.funds.verifyPurchase(id, body, actor.id, ctx);
       return this.funds.funding(id);
+    });
+  }
+
+  /**
+   * The "Back" button at verify-purchase: flip the requisition back to PURCHASED so the IM can
+   * re-record. Idempotency-keyed — a double-click is the precise failure mode this guard exists
+   * for. Refused if any money has been returned to Accounts (corrective return, not status flip).
+   */
+  @Post('unverify-purchase')
+  @Roles(Role.INVENTORY_MANAGER, Role.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async unverifyPurchase(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(zodPipe(unverifyPurchaseSchema)) body: UnverifyPurchaseInput,
+    @CurrentUser() actor: RequestUser,
+    @CurrentAuditContext() ctx: AuditContext,
+    @Headers(IDEMPOTENCY_HEADER) idempotencyKey?: string,
+  ): Promise<RequisitionFunding> {
+    return this.runOnce(idempotencyKey, actor.id, `funds:unverify:${id}`, async () => {
+      return this.funds.unverifyPurchase(id, body, actor.id, ctx);
     });
   }
 

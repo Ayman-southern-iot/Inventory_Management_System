@@ -7,6 +7,7 @@ import type {
   RecordPurchaseInput,
   RequisitionFunding,
   SendToAccountsInput,
+  UnverifyPurchaseInput,
   VerifyPurchaseInput,
 } from '@ims/shared';
 import { api } from '@/api/client';
@@ -67,6 +68,16 @@ export function useRecordPurchase(id: string) {
 export function useVerifyPurchase(id: string) {
   return useFundsMutation<VerifyPurchaseInput>(id, (input) =>
     api.post<RequisitionFunding>(`/requisitions/${id}/verify-purchase`, input, {
+      idempotencyKey: randomId(),
+    }),
+  );
+}
+
+export function useUnverifyPurchase(id: string) {
+  return useFundsMutation<UnverifyPurchaseInput>(id, (input) =>
+    // Idempotency-keyed: the only failure mode this guard exists for is a double-click on the
+    // Back button — without it, two appends would race the audit log.
+    api.post<RequisitionFunding>(`/requisitions/${id}/unverify-purchase`, input, {
       idempotencyKey: randomId(),
     }),
   );

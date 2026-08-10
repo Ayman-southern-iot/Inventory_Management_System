@@ -88,6 +88,7 @@ export const AUDIT_ACTIONS = [
   'borrowing.revert',
   'borrowing.cancel',
   'borrowing.return',
+  'borrowing.return_reversed',
   'borrowing.issue_on_behalf',
   // Requisitions
   'requisition.create',
@@ -124,6 +125,11 @@ export const AUDIT_ACTIONS = [
   'requisition.supporting_document_pending',
   'requisition.funds_returned',
   'requisition.purchase_verified',
+  /**
+   * Recorded when the IM un-verifies a purchase — the requisition is back at PURCHASED so they
+   * can re-record. Only legal before any money has been returned to Accounts.
+   */
+  'requisition.unverify_purchase',
   'requisition.stocked',
   'requisition.borrowed_out',
   'requisition.cancel',

@@ -76,3 +76,19 @@ export class ReceiveExceedsPurchasedError extends DomainError {
     );
   }
 }
+
+/**
+ * Reversing a verify-purchase once money has already been returned to Accounts is not a status
+ * flip — it is a new transaction. The right way to undo a refund is a corrective refund, not a
+ * rewind, and the IM has to deal with the existing `fund_returns` rows out-of-band.
+ */
+export class CannotUnverifyWithReturnsError extends DomainError {
+  constructor(returnedAmount: number) {
+    super(
+      ErrorCode.VALIDATION_FAILED,
+      `This requisition has ${returnedAmount} returned to Accounts already. Un-verifying is not the right way to undo a refund — record a corrective return instead.`,
+      HttpStatus.CONFLICT,
+      { returnedAmount },
+    );
+  }
+}

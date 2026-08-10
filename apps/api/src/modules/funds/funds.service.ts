@@ -5,6 +5,7 @@ import {
   Role,
   type RecordFundReceiptInput,
   type RecordPurchaseInput,
+  type UnverifyPurchaseInput,
   type VerifyPurchaseInput,
   type SendToAccountsInput,
   type ReceiveIntoStockInput,
@@ -25,6 +26,7 @@ import { ProductsService } from '../products/products.service';
 import { BorrowingService } from '../borrowing/borrowing.service';
 import { FundsRepository, type Tx } from './funds.repository';
 import {
+  CannotUnverifyWithReturnsError,
   FundingExceedsApprovedError,
   InvalidFundingTransitionError,
   InvoiceMissingError,
@@ -447,6 +449,13 @@ export class FundsService {
       if (missing > 0) throw new InvoiceMissingError(missing);
 
       const returned = round2(input.returnedAmount);
+      // Transportation is part of `approved_amount` at submit time but never reaches purchases
+      // (it isn't a stock movement), so without this fold the verify-purchase dialog still
+      // shows it as unspent and the IM is asked to hand back money that was already spent on
+      // getting the goods here. Treat it as spent for unspent math; `transportation_cost`
+      // stays null when the IM never declared any.
+      const transportation =
+        requisition.transportation_cost === null ? 0 : round2(Number(requisition.transportation_cost));
       if (returned > 0) {
         // All three sums read under the lock that will write the status, so the ceiling cannot
         // move underneath a concurrent return.
@@ -455,7 +464,7 @@ export class FundsService {
           this.repo.sumPurchases(requisitionId, tx),
           this.repo.sumReturns(requisitionId, tx),
         ]);
-        const unspent = round2(funded - spent - alreadyReturned);
+        const unspent = round2(funded - spent - transportation - alreadyReturned);
         if (returned > unspent) throw new ReturnExceedsUnspentError(unspent, returned);
 
         await this.repo.insertReturn(tx, {
@@ -530,6 +539,60 @@ export class FundsService {
       );
 
       return requisitionId;
+    });
+  }
+
+  /**
+   * Reverse a verify-purchase. The IM needs to fix something they recorded wrong, so the
+   * requisition is back at PURCHASED and the next verify will write a fresh PURCHASE_VERIFIED
+   * event. Refused if any money has been returned to Accounts — the right way to undo a refund
+   * is a corrective refund, not a status flip.
+   *
+   * Purchases and `fund_returns` rows stay in place — they are evidence of what was bought and
+   * handed back. Only the status flips; the next verify reads the same purchases again.
+   */
+  async unverifyPurchase(
+    requisitionId: string,
+    input: UnverifyPurchaseInput,
+    actorId: string,
+    context: AuditContext,
+  ): Promise<RequisitionFunding> {
+    return this.db.transaction().execute(async (tx) => {
+      const requisition = await this.lock(tx, requisitionId);
+      this.assertStatus(requisition.status, 'unverified', [RequisitionStatus.PURCHASE_VERIFIED]);
+
+      const alreadyReturned = await this.repo.sumReturns(requisitionId, tx);
+      if (alreadyReturned > 0) {
+        throw new CannotUnverifyWithReturnsError(alreadyReturned);
+      }
+
+      await this.requisitions.setStatus(
+        tx,
+        requisitionId,
+        RequisitionStatus.PURCHASED,
+        false,
+      );
+      await this.requisitions.appendEvent(
+        tx,
+        requisitionId,
+        RequisitionEventType.UNVERIFIED_PURCHASE,
+        actorId,
+        { reason: input.reason },
+      );
+      await this.audit.record(
+        {
+          action: 'requisition.unverify_purchase',
+          entityType: 'requisition',
+          entityId: requisitionId,
+          entityRef: requisition.requisition_no,
+          summary: `Unverified the purchase on ${requisition.requisition_no}`,
+          metadata: { reason: input.reason },
+        },
+        context,
+        tx,
+      );
+
+      return this.funding(requisitionId);
     });
   }
 
@@ -822,6 +885,8 @@ export class FundsService {
     const approved = requisition.approved_amount === null ? null : Number(requisition.approved_amount);
     const requested =
       requisition.requested_amount === null ? null : Number(requisition.requested_amount);
+    const transportation =
+      requisition.transportation_cost === null ? 0 : round2(Number(requisition.transportation_cost));
 
     return {
       requisitionId,
@@ -831,12 +896,16 @@ export class FundsService {
       spent: round2(spent),
       returned: round2(returned),
       netFunded: round2(funded - returned),
+      // Transportation is included for the same reason it is folded into verifyPurchase: it was
+      // already spent (getting the goods here) but never appears in `purchases`.
+      transportation,
+      spentInclTransportation: round2(spent + transportation),
       // Floored at zero: if Accounts released more than was approved, that is an overage to
       // investigate, not a negative amount still owed.
       outstanding: approved === null ? 0 : Math.max(0, round2(approved - funded)),
       // Also floored: spending past what was released is a real condition worth seeing on the
       // screen, but it is not "negative money available to hand back".
-      unspent: Math.max(0, round2(funded - spent - returned)),
+      unspent: Math.max(0, round2(funded - spent - transportation - returned)),
       isFullyFunded: approved !== null && approved > 0 && round2(funded) >= round2(approved),
       receipts,
       purchases,

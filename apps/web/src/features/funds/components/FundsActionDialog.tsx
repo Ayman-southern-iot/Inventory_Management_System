@@ -11,17 +11,25 @@ import {
   useRecordPurchase,
   useRecordReceipt,
   useSendToAccounts,
+  useUnverifyPurchase,
   useVerifyPurchase,
 } from '../api';
 import { ReceiveToStockForm } from './ReceiveToStockForm';
 
-export type FundsAction = 'send-to-accounts' | 'receipt' | 'purchase' | 'verify' | 'stock';
+export type FundsAction =
+  | 'send-to-accounts'
+  | 'receipt'
+  | 'purchase'
+  | 'verify'
+  | 'unverify'
+  | 'stock';
 
 const TITLES: Record<FundsAction, string> = {
   'send-to-accounts': t.funds.sendToAccounts,
   receipt: t.funds.recordReceipt,
   purchase: t.funds.recordPurchase,
   verify: t.funds.verifyPurchase,
+  unverify: t.funds.unverifyPurchase,
   stock: t.funds.receiveToStock,
 };
 
@@ -50,6 +58,7 @@ export function FundsActionDialog({
   const recordReceipt = useRecordReceipt(requisition.id);
   const recordPurchase = useRecordPurchase(requisition.id);
   const verify = useVerifyPurchase(requisition.id);
+  const unverify = useUnverifyPurchase(requisition.id);
 
   // Form state, reset whenever the dialog opens so a previous attempt never leaks into the next.
   const [note, setNote] = useState('');
@@ -79,7 +88,8 @@ export function FundsActionDialog({
     sendToAccounts.isPending ||
     recordReceipt.isPending ||
     recordPurchase.isPending ||
-    verify.isPending;
+    verify.isPending ||
+    unverify.isPending;
 
   async function onSubmit() {
     if (!action) return;
@@ -123,6 +133,12 @@ export function FundsActionDialog({
             returnNote: note.trim() || null,
           });
           toast.success(t.funds.purchaseVerified);
+          break;
+        case 'unverify':
+          await unverify.mutateAsync({
+            reason: note.trim(),
+          });
+          toast.success(t.funds.purchaseUnverified);
           break;
         default:
           return;
@@ -233,6 +249,14 @@ export function FundsActionDialog({
             {funding && (
               <p className="text-sm text-ink-muted">
                 {t.funds.unspent}: <strong>{formatBdt(funding.unspent)}</strong>
+                {funding.transportation > 0 ? (
+                  <>
+                    {' '}
+                    <span className="text-ink-subtle">
+                      ({t.funds.transportationNote}: {formatBdt(funding.transportation)})
+                    </span>
+                  </>
+                ) : null}
               </p>
             )}
             <TextField
@@ -247,8 +271,18 @@ export function FundsActionDialog({
           </>
         )}
 
+        {action === 'unverify' && (
+          <p className="text-sm text-ink-muted">{t.funds.unverifyPurchaseHint}</p>
+        )}
+
         <TextAreaField
-          label={action === 'verify' ? t.funds.returnNote : t.common.note}
+          label={
+            action === 'verify'
+              ? t.funds.returnNote
+              : action === 'unverify'
+                ? t.funds.unverifyReason
+                : t.common.note
+          }
           value={note}
           onChange={(event) => setNote(event.target.value)}
         />

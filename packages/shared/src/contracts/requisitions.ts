@@ -92,6 +92,11 @@ export const RequisitionEventType = {
   FUNDS_RETURNED: 'FUNDS_RETURNED',
   PURCHASED: 'PURCHASED',
   PURCHASE_VERIFIED: 'PURCHASE_VERIFIED',
+  /**
+   * The IM reversed a verify-purchase so the requisition is back at PURCHASED. The purchases
+   * and receipts rows stay — they are evidence of what was bought — only the status flips.
+   */
+  UNVERIFIED_PURCHASE: 'UNVERIFIED_PURCHASE',
   STOCKED: 'STOCKED',
   /** Goods went straight out to a person instead of onto a shelf (task 5.7). */
   BORROWED_OUT: 'BORROWED_OUT',

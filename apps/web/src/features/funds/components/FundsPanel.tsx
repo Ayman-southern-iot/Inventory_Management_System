@@ -30,6 +30,7 @@ export function FundsPanel({ requisition }: { requisition: RequisitionDetail }) 
   if (!reached) return null;
 
   const next = canAct ? nextAction(requisition.status as RequisitionStatus) : null;
+  const previous = canAct ? previousAction(requisition.status as RequisitionStatus) : null;
 
   return (
     <Panel className="p-5">
@@ -38,11 +39,18 @@ export function FundsPanel({ requisition }: { requisition: RequisitionDetail }) 
           <h2 className="text-base font-semibold text-ink">{t.funds.title}</h2>
           <p className="text-sm text-ink-muted">{t.funds.subtitle}</p>
         </div>
-        {next ? (
-          <Button onClick={() => setAction(next)}>{ACTION_LABEL[next]}</Button>
-        ) : (
-          <Badge tone="success">{t.funds.done}</Badge>
-        )}
+        <div className="flex flex-col items-end gap-2">
+          {next ? (
+            <Button onClick={() => setAction(next)}>{ACTION_LABEL[next]}</Button>
+          ) : (
+            <Badge tone="success">{t.funds.done}</Badge>
+          )}
+          {previous ? (
+            <Button variant="ghost" onClick={() => setAction(previous)}>
+              {ACTION_LABEL[previous]}
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       <QueryBoundary
@@ -53,10 +61,11 @@ export function FundsPanel({ requisition }: { requisition: RequisitionDetail }) 
       >
         {(data) => (
           <div className="flex flex-col gap-5">
-            <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
               <Figure label={t.funds.approved} value={data.approvedAmount} />
               <Figure label={t.funds.funded} value={data.funded} />
               <Figure label={t.funds.spent} value={data.spent} />
+              <Figure label={t.funds.transportation} value={data.transportation} />
               <Figure label={t.funds.returned} value={data.returned} />
               {/* The one figure that answers "can I still hand money back?". */}
               <Figure label={t.funds.unspent} value={data.unspent} emphasis />
@@ -140,6 +149,7 @@ const ACTION_LABEL: Record<FundsAction, string> = {
   receipt: t.funds.recordReceipt,
   purchase: t.funds.recordPurchase,
   verify: t.funds.verifyPurchase,
+  unverify: t.funds.unverifyPurchase,
   stock: t.funds.receiveToStock,
 };
 
@@ -163,6 +173,16 @@ function nextAction(status: RequisitionStatus): FundsAction | null {
     default:
       return null;
   }
+}
+
+/**
+ * The "Back" button. Only one step back — at PURCHASE_VERIFIED we let the IM return to PURCHASED
+ * so they can re-record. The server refuses if any money has been returned to Accounts, so this
+ * never silently rewinds a refund.
+ */
+function previousAction(status: RequisitionStatus): FundsAction | null {
+  if (status === RequisitionStatus.PURCHASE_VERIFIED) return 'unverify';
+  return null;
 }
 
 /* ------------------------------------------------------------ fragments */

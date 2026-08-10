@@ -326,6 +326,89 @@ describe('funds and purchasing', () => {
     expect(await statusOf(req.id)).toBe('PURCHASE_VERIFIED');
   });
 
+  /**
+   * Transportation is folded into `requested_amount` at submit time and never reaches a
+   * `purchases` row (it isn't a stock movement), so the verify-purchase dialog must treat it
+   * as spent-for-the-purpose-of-the-unspent-figure. Without the fold, the IM is told to hand
+   * `transportation_cost` back to Accounts, which is wrong — they already spent it.
+   */
+  it('folds transportation_cost into the unspent figure at verify-purchase', async () => {
+    const req = await requisitionWithTransportation(5000, 100, 'Hiring a van to the warehouse');
+    await im.client.post(`/requisitions/${req.id}/send-to-accounts`).send();
+    // Fund 5000 net — the IM has the requisition amount (5000 spent) covered.
+    await im.client
+      .post(`/requisitions/${req.id}/fund-receipts`)
+      .send({ amount: 5000, receivedAt: new Date().toISOString() });
+    const bought = await im.client.post(`/requisitions/${req.id}/purchases`).send({
+      vendor: 'Techshop BD',
+      invoiceNo: 'INV-1',
+      purchasedAt: new Date().toISOString(),
+      lines: [{ requisitionItemId: req.itemId, quantity: 1, unitCost: 5000 }],
+    });
+    expect(bought.status).toBe(201);
+    const purchaseId = (await fundingOf(req.id)).purchases[0]!.id;
+    await im.client
+      .post(`/requisitions/${req.id}/purchases/${purchaseId}/invoice`)
+      .attach('file', Buffer.from('%PDF-1.4 invoice'), 'invoice.pdf');
+
+    const funding = await fundingOf(req.id);
+    expect(funding.spent).toBe(5000);
+    expect(funding.transportation).toBe(100);
+    expect(funding.spentInclTransportation).toBe(5100);
+    // 5000 funded − 5000 purchased − 100 transportation = 100 returned to zero unspent.
+    // The IM already paid the 100 for the van; the fold keeps it from showing as unspent.
+    expect(funding.unspent).toBe(0);
+
+    const verified = await im.client.post(`/requisitions/${req.id}/verify-purchase`).send({});
+    expect(verified.status).toBe(200);
+    expect(await statusOf(req.id)).toBe('PURCHASE_VERIFIED');
+  });
+
+  /**
+   * An IM who clicked the wrong button at verify-purchase needs a way back. The new
+   * `unverify-purchase` endpoint flips the status back to PURCHASED so the IM can re-record.
+   * Refuses when any money has already been returned — the reverse of a refund is a new
+   * refund, not a status flip.
+   */
+  it('allows IM to unverify a purchase and re-verify it', async () => {
+    const req = await verifiable(5000, 4000);
+    // Verify first — `verifiable` only attaches the invoice.
+    const verifyFirst = await im.client.post(`/requisitions/${req.id}/verify-purchase`).send({});
+    expect(verifyFirst.status).toBe(200);
+    expect(await statusOf(req.id)).toBe('PURCHASE_VERIFIED');
+
+    const unverified = await im.client
+      .post(`/requisitions/${req.id}/unverify-purchase`)
+      .send({ reason: 'Recorded the wrong returned amount' });
+    expect(unverified.status).toBe(200);
+    expect(await statusOf(req.id)).toBe('PURCHASED');
+
+    // Re-verify with a different return — the previous attempt's PURCHASE_VERIFIED event and
+    // audit row are still there, but the status is fresh and a new event is appended.
+    const reVerified = await im.client.post(`/requisitions/${req.id}/verify-purchase`).send({
+      returnedAmount: 500,
+      returnNote: 'Vendor discount',
+    });
+    expect(reVerified.status).toBe(200);
+    expect(await statusOf(req.id)).toBe('PURCHASE_VERIFIED');
+  });
+
+  it('refuses to unverify when the purchase already has returned funds', async () => {
+    // Verify WITH a returned amount so `fund_returns` has a row to refuse on.
+    const req = await verifiable(5000, 4000);
+    const verified = await im.client.post(`/requisitions/${req.id}/verify-purchase`).send({
+      returnedAmount: 500,
+      returnNote: 'Vendor over-quoted',
+    });
+    expect(verified.status).toBe(200);
+
+    const refused = await im.client
+      .post(`/requisitions/${req.id}/unverify-purchase`)
+      .send({ reason: 'Trying to undo a refund' });
+    expect(refused.status).toBe(409);
+    expect(await statusOf(req.id)).toBe('PURCHASE_VERIFIED');
+  });
+
   it('rejects a file that is not really a document', async () => {
     const req = await purchased(5000, 4000);
     const purchaseId = (await fundingOf(req.id)).purchases[0]!.id;
@@ -797,6 +880,55 @@ describe('funds and purchasing', () => {
       items: [
         { itemName: 'Widget', quantity: 1, estimatedUnitPrice: amount, productId: null, note: null },
       ],
+    });
+    expect(created.status).toBe(201);
+    const id = created.body.id as string;
+
+    const submitted = (await requester.client.post(`/requisitions/${id}/submit`).send()).body;
+    const imApprovalId = submitted.approvals.find(
+      (a: { stage: string }) => a.stage === 'INVENTORY_MANAGER',
+    ).id;
+    const afterIm = (
+      await im.client.post(`/requisitions/approvals/${imApprovalId}/decision`).send({ approve: true })
+    ).body;
+    const approverApprovalId = afterIm.approvals.find(
+      (a: { stage: string }) => a.stage === 'APPROVER',
+    ).id;
+    await approver.client
+      .post(`/requisitions/approvals/${approverApprovalId}/decision`)
+      .send({ approve: true });
+
+    const detail = (await requester.client.get(`/requisitions/${id}`)).body;
+    const itemId = detail.items[0].id as string;
+
+    const bom = await im.client.post('/boms').send({
+      requisitionIds: [id],
+      lines: [{ requisitionItemId: itemId, unitCost: amount, vendor: 'Techshop BD' }],
+    });
+    expect(bom.status).toBe(201);
+
+    return { id, itemId };
+  }
+
+  /**
+   * Same as `requisitionOnBom` but the requisition carries a `transportation_cost`. The cost
+   * flows into `requested_amount` at submit and survives the approval chain; the verify-purchase
+   * flow then folds it into the `unspent` figure so the IM isn't asked to hand it back.
+   */
+  async function requisitionWithTransportation(
+    amount: number,
+    transportation: number,
+    transportationDescription: string,
+  ): Promise<{ id: string; itemId: string }> {
+    const created = await requester.client.post('/requisitions').send({
+      departmentId,
+      urgency: 'NORMAL',
+      reason: 'Funds lifecycle test',
+      items: [
+        { itemName: 'Widget', quantity: 1, estimatedUnitPrice: amount, productId: null, note: null },
+      ],
+      transportationCost: transportation,
+      transportationDescription,
     });
     expect(created.status).toBe(201);
     const id = created.body.id as string;

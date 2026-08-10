@@ -171,6 +171,17 @@ export const verifyPurchaseSchema = z
   );
 export type VerifyPurchaseInput = z.infer<typeof verifyPurchaseSchema>;
 
+/**
+ * Reversing a verify-purchase — the IM needs to fix something they recorded wrong, so the
+ * requisition goes back to `PURCHASED`. Refused if any money has already been returned to
+ * Accounts: the correct way to undo a refund is a new refund, not a status flip.
+ */
+export const unverifyPurchaseSchema = z.object({
+  /** Mandatory: un-verifying a purchase is an audit-worthy decision and the reason must travel. */
+  reason: z.string().trim().min(1).max(500),
+});
+export type UnverifyPurchaseInput = z.infer<typeof unverifyPurchaseSchema>;
+
 /* -------------------------------------------------------- add to inventory */
 
 /**
@@ -248,6 +259,14 @@ export const requisitionFundingSchema = z.object({
   funded: z.number(),
   /** Sum of purchase totals. */
   spent: z.number(),
+  /**
+   * Transportation cost declared on the requisition. Part of `approved_amount` at submit time but
+   * never reaches `purchases` (it is not a stock movement), so it has to be folded into spent
+   * manually when computing `unspent` and `spentInclTransportation`.
+   */
+  transportation: z.number(),
+  /** `spent + transportation`. The figure the verify-purchase dialog compares against funded. */
+  spentInclTransportation: z.number(),
   /** Sum of what went back to Accounts. */
   returned: z.number(),
   /**
