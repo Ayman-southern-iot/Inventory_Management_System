@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { PAGINATION_DEFAULT_LIMIT, type ListProductsQuery, type Product } from '@ims/shared';
+import { PAGINATION_DEFAULT_LIMIT, Role, type ListProductsQuery, type Product } from '@ims/shared';
 import { Button } from '@/components/ui/Button';
 import { Checkbox, SelectField, TextField } from '@/components/ui/Field';
 import { Badge, PageHeader, Pagination, Panel, Table } from '@/components/ui/primitives';
 import { EmptyState, QueryBoundary, SkeletonRows } from '@/components/ui/states';
+import { useAuth } from '@/features/auth/auth-context';
 import { t } from '@/i18n/en';
 import { ROUTES } from '@/routes/paths';
 import { useCategoryTree, useProducts } from '../api';
@@ -16,6 +17,10 @@ import { ProductFormDialog } from '../components/ProductFormDialog';
 
 export function InventoryPage() {
   const navigate = useNavigate();
+  const { hasRole } = useAuth();
+  // The catalogue list is open to every authenticated user; only IM/Admin can add a product.
+  // The server enforces this on POST too — hiding the button just removes a dead-end 403.
+  const canManageStock = hasRole(Role.INVENTORY_MANAGER, Role.ADMIN);
   const [search, setSearch] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [includeInactive, setIncludeInactive] = useState(false);
@@ -54,9 +59,11 @@ export function InventoryPage() {
         title={t.inventory.title}
         subtitle={t.inventory.subtitle}
         action={
-          <Button icon={<Plus aria-hidden className="size-4" />} onClick={() => setFormOpen(true)}>
-            {t.inventory.newProduct}
-          </Button>
+          canManageStock ? (
+            <Button icon={<Plus aria-hidden className="size-4" />} onClick={() => setFormOpen(true)}>
+              {t.inventory.newProduct}
+            </Button>
+          ) : undefined
         }
       />
 
