@@ -232,6 +232,20 @@ export function RequisitionDetailPage() {
                         <Badge tone={STATUS_TONE[detail.status] ?? 'info'}>
                           {t.requisitions.status[detail.status]}
                         </Badge>
+                        {/* Send-back tag — derived from the events log on the server. Stays
+                            on the DRAFT pill until the requester re-submits, at which point
+                            the badge flips to "Revised" so the IM knows a fresh chain is in
+                            play. */}
+                        {detail.requiresRevisionTag ? (
+                          <Badge tone="pending" title={t.requisitions.statusTags.draftForReviseHint}>
+                            {t.requisitions.statusTags.draftForRevise}
+                          </Badge>
+                        ) : null}
+                        {detail.revisedAfterSendBack ? (
+                          <Badge tone="info" title={t.requisitions.statusTags.draftRevisedHint}>
+                            {t.requisitions.statusTags.draftRevised}
+                          </Badge>
+                        ) : null}
                         <Badge tone="neutral">
                           {t.requisitions.urgencyLabel[detail.urgency]}
                         </Badge>

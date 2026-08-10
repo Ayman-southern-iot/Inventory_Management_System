@@ -8,6 +8,8 @@ import type {
   ListBomsQuery,
   Paginated,
   Bom,
+  RequisitionDetail,
+  SendBackForRevisionInput,
   VoidBomInput,
 } from '@ims/shared';
 import { api } from '@/api/client';
@@ -116,5 +118,30 @@ export function useBomSignedUrl(id: string, enabled: boolean) {
     // Always re-issue; the TTL is the whole point.
     staleTime: 0,
     retry: false,
+  });
+}
+
+/**
+ * 1-item + over-budget send-back. The IM sees a single approved line and a budget that
+ * doesn't fit any candidate unit price; the legitimate path is to bounce the requisition
+ * back to the requester for budget revision, not to translate-and-cancel. After success
+ * we drop the candidate from the picker cache so the page state stays consistent, and we
+ * eagerly invalidate the requisition detail / list queries so the requester lands on a
+ * refreshed view the moment the send-back hits the wire.
+ */
+export function useSendBackForRevision() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: SendBackForRevisionInput }) =>
+      api.post<RequisitionDetail>(`/requisitions/${id}/send-back-for-revision`, input, {
+        idempotencyKey: newIdempotencyKey(),
+      }),
+    onSuccess: async (detail) => {
+      // The detail shape updates: status flips to DRAFT, requiresRevisionTag true.
+      queryClient.setQueryData(queryKeys.requisitions.detail(detail.id), detail);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.requisitions.lists() });
+      // The candidate disappears from the picker too — a DRAFT requisition is not pickable.
+      await queryClient.invalidateQueries({ queryKey: queryKeys.boms.candidates() });
+    },
   });
 }

@@ -46,9 +46,19 @@ const BADGE_TONES: Record<BadgeTone, string> = {
   info: 'bg-info-subtle text-info',
 };
 
-export function Badge({ tone = 'neutral', children }: { tone?: BadgeTone; children: ReactNode }) {
+export function Badge({
+  tone = 'neutral',
+  title,
+  children,
+}: {
+  tone?: BadgeTone;
+  /** Optional tooltip text — rendered as a native `title` attribute. */
+  title?: string;
+  children: ReactNode;
+}) {
   return (
     <span
+      title={title}
       className={cn(
         // A wrapped badge reads as two badges — role names must stay on one line.
         'inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium',

@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send } from 'lucide-react';
+import { ArrowLeft, Send, Undo2 } from 'lucide-react';
 import {
   type BomCandidate,
   type GenerateBomInput,
 } from '@ims/shared';
 import { Button } from '@/components/ui/Button';
-import { Checkbox } from '@/components/ui/Field';
+import { Checkbox, TextAreaField } from '@/components/ui/Field';
 import { PageHeader, Panel } from '@/components/ui/primitives';
+import { Dialog } from '@/components/ui/Dialog';
 import {
   EmptyState,
   QueryBoundary,
@@ -17,7 +18,7 @@ import { useToast } from '@/components/ui/Toast';
 import { t } from '@/i18n/en';
 import { messageForError } from '@/lib/error-message';
 import { ROUTES } from '@/routes/paths';
-import { useGenerateBom, useBomCandidates } from '../api';
+import { useBomCandidates, useGenerateBom, useSendBackForRevision } from '../api';
 import { BomLineEditorRow } from '../components/BomLineEditorRow';
 import {
   type BomGenerateLine,
@@ -35,13 +36,18 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
  *
  *  1. The picker (zone 1) lists every approved requisition not on a live BOM. Ticking
  *     pulls its lines into the editor (zone 2).
- *  2. The editor (zone 2) shows one row per line, grouped by source. Two cells are
- *     editable — unit cost and vendor — everything else is inherited.
- *  3. The totals footer tracks approved / subtotal / variance live. If subtotal goes
- *     past the tolerance ceiling, the variance badge switches to danger and a one-
- *     line warning replaces the placeholder text. Submitting still sends the form —
- *     the API bounces it back with 409 BOM_OVER_BUDGET, and the screen stays so the
- *     IM can adjust.
+ *  2. The editor (zone 2) shows one row per line, grouped by source. Four cells are
+ *     editable — quantity (a shrink only, clamped to [1, sourceQuantity]), unit cost,
+ *     vendor, and a "Drop from BOM" checkbox. Removing a line filters it out of the
+ *     submit payload; source `requisition_items.quantity` is never modified.
+ *  3. The totals footer tracks approved / subtotal / variance live.
+ *  4. Submit sends the form. The API bounces it back with 409 BOM_OVER_BUDGET if the
+ *     subtotal still exceeds the budget, and the screen stays so the IM can adjust.
+ *
+ * 1-item + over-budget branches out of the normal flow: there is only one line and it
+ * cannot shrink, so the Generate button is replaced by "Send back for revision", which
+ * calls `POST /requisitions/:id/send-back-for-revision` to flip the requisition back to
+ * DRAFT for budget revision by the requester.
  *
  * After a successful generate, the response is the new BOM detail; we navigate to it
  * so the IM lands on the detail page where rendering + downloading the PDF live.
@@ -51,8 +57,11 @@ export function BomGeneratePage() {
   const toast = useToast();
   const candidates = useBomCandidates();
   const generate = useGenerateBom();
+  const sendBack = useSendBackForRevision();
 
   const [pickedIds, setPickedIds] = useState<Set<string>>(new Set());
+  const [sendBackFor, setSendBackFor] = useState<{ id: string; no: string } | null>(null);
+  const [sendBackReason, setSendBackReason] = useState('');
 
   const form = useForm<BomGenerateForm>({
     defaultValues: { lines: [] },
@@ -79,7 +88,9 @@ export function BomGeneratePage() {
   const subtotal = useMemo(
     () =>
       (lines ?? []).reduce(
-        (sum, line) => sum + (line?.unitCost ?? 0) * (line?.quantity ?? 0),
+        // Removed lines don't count — they don't enter the BOM. Quantity overrides do.
+        (sum, line) =>
+          line?.removed ? sum : sum + (line?.unitCost ?? 0) * (line?.quantity ?? 0),
         0,
       ),
     [lines],
@@ -95,11 +106,29 @@ export function BomGeneratePage() {
     [candidates.data, pickedIds],
   );
 
-  // The 10% over-budget ceiling was retired on 2026-08-09 — a unit cost going up between
-  // approval and BOM generation is a normal slowdown, not a policy violation. The footer
-  // is now three cells: Approved total, BOM subtotal, Variance. Variance is items-only
-  // because the editor never sees transportation (it is rolled into `approvedAmount` on
-  // the source requisition, not into any value the IM types here).
+  /**
+   * 1-item + over-budget detection, per picked candidate. A single-line requisition
+   * whose item subtotal exceeds its approved amount at any feasible unit price must
+   * bounce — there is no shrink to apply. Multi-item requisitions stay on the
+   * normal generate path; the IM can shrink qty or remove lines until it fits.
+   */
+  const singleOverBudget = useMemo(() => {
+    if (!candidates.data) return null;
+    for (const candidate of candidates.data) {
+      if (!pickedIds.has(candidate.requisitionId)) continue;
+      if (candidate.items.length !== 1) continue;
+      const item = candidate.items[0]!;
+      const requestedSubtotal = item.quantity * item.estimatedUnitPrice;
+      const approved = candidate.approvedAmount ?? 0;
+      if (requestedSubtotal > approved && approved > 0) {
+        return {
+          id: candidate.requisitionId,
+          no: candidate.requisitionNo,
+        };
+      }
+    }
+    return null;
+  }, [candidates.data, pickedIds]);
 
   function toggleCandidate(candidate: BomCandidate, checked: boolean) {
     setPickedIds((current) => {
@@ -111,15 +140,24 @@ export function BomGeneratePage() {
   }
 
   async function onSubmit() {
-    const present = (lines ?? []).filter((line) => line.unitCost !== null);
+    // Only live (non-removed) lines go on the wire. Removed lines are filtered out
+    // so the IM can drop a line entirely without leaving the payload shape ambiguous.
+    const present = (lines ?? []).filter((line) => !line.removed && line.unitCost !== null);
     if (present.length === 0) return;
 
     const payload: GenerateBomInput = {
       requisitionIds: Array.from(new Set(present.map((line) => line.requisitionId))),
       lines: present.map((line) => ({
         requisitionItemId: line.requisitionItemId,
+        // Quantity override is BOM-local: it ships on the wire as an integer ≥ 1 (or
+        // undefined when equal to source, which the server reads from the source
+        // requisition item — keeps the audit trail obvious).
+        quantity: line.quantity === line.sourceQuantity ? undefined : line.quantity,
         unitCost: line.unitCost ?? 0,
         vendor: line.vendor,
+        // Always send the explicit boolean so the wire shape is unambiguous; the
+        // server treats `false` the same as "not removed".
+        removed: false,
       })),
     };
 
@@ -127,6 +165,30 @@ export function BomGeneratePage() {
       const result = await generate.mutateAsync(payload);
       toast.success(t.boms.generatedToast);
       navigate(ROUTES.boms.detail(result.id));
+    } catch (error) {
+      toast.error(messageForError(error));
+    }
+  }
+
+  async function onConfirmSendBack() {
+    if (!sendBackFor) return;
+    if (sendBackReason.trim().length < 3) return;
+    try {
+      await sendBack.mutateAsync({
+        id: sendBackFor.id,
+        input: { reason: sendBackReason.trim() },
+      });
+      toast.success(t.boms.sendBackDialog.successToast);
+      // The candidate has flipped to DRAFT — remove it from the picker so the IM
+      // lands on a clean editor.
+      setPickedIds((current) => {
+        const next = new Set(current);
+        next.delete(sendBackFor.id);
+        return next;
+      });
+      setSendBackFor(null);
+      setSendBackReason('');
+      navigate(ROUTES.requisitions.detail(sendBackFor.id));
     } catch (error) {
       toast.error(messageForError(error));
     }
@@ -145,6 +207,8 @@ export function BomGeneratePage() {
     });
     return Array.from(out.entries());
   }, [lines]);
+
+  const showSendBack = singleOverBudget !== null;
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -223,7 +287,13 @@ export function BomGeneratePage() {
                           }
                           control={control}
                           register={register}
-                          errors={form.formState.errors.lines as Array<{ unitCost?: { message?: string }; vendor?: { message?: string } }> | undefined}
+                          errors={
+                            form.formState.errors.lines as Array<{
+                              quantity?: { message?: string };
+                              unitCost?: { message?: string };
+                              vendor?: { message?: string };
+                            }> | undefined
+                          }
                         />
                       ))}
                     </tbody>
@@ -251,20 +321,94 @@ export function BomGeneratePage() {
               </Panel>
             ) : null}
 
+            {showSendBack && singleOverBudget ? (
+              <div className="rounded-[--radius-panel] border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-ink">
+                <p className="font-medium">{t.boms.sendBackForRevision}</p>
+                <p className="mt-0.5 text-ink-muted">{t.boms.sendBackHint}</p>
+              </div>
+            ) : null}
+
             <div className="flex flex-wrap items-center justify-end gap-3">
-              <Button
-                type="button"
-                icon={<Send aria-hidden className="size-4" />}
-                isLoading={generate.isPending}
-                disabled={lines.length === 0}
-                onClick={onSubmit}
-              >
-                {t.boms.generate}
-              </Button>
+              {showSendBack && singleOverBudget ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  icon={<Undo2 aria-hidden className="size-4" />}
+                  isLoading={sendBack.isPending}
+                  onClick={() => {
+                    setSendBackFor({
+                      id: singleOverBudget.id,
+                      no: singleOverBudget.no,
+                    });
+                    setSendBackReason('');
+                  }}
+                >
+                  {t.boms.sendBackForRevision}
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  icon={<Send aria-hidden className="size-4" />}
+                  isLoading={generate.isPending}
+                  disabled={lines.length === 0}
+                  onClick={onSubmit}
+                >
+                  {t.boms.generate}
+                </Button>
+              )}
             </div>
           </div>
         )}
       </QueryBoundary>
+
+      <Dialog
+        open={sendBackFor !== null}
+        title={
+          sendBackFor
+            ? `${t.boms.sendBackDialog.title} · ${sendBackFor.no}`
+            : t.boms.sendBackDialog.title
+        }
+        onClose={() => {
+          if (sendBack.isPending) return;
+          setSendBackFor(null);
+          setSendBackReason('');
+        }}
+        footer={
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setSendBackFor(null);
+                setSendBackReason('');
+              }}
+              disabled={sendBack.isPending}
+            >
+              {t.common.cancel}
+            </Button>
+            <Button
+              type="button"
+              icon={<Undo2 aria-hidden className="size-4" />}
+              isLoading={sendBack.isPending}
+              disabled={sendBackReason.trim().length < 3}
+              onClick={onConfirmSendBack}
+            >
+              {t.boms.sendBackDialog.confirm}
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          <p className="text-sm text-ink-muted">{t.boms.sendBackDialog.body}</p>
+          <TextAreaField
+            label={t.boms.sendBackDialog.reasonLabel}
+            hint={t.boms.sendBackDialog.reasonHint}
+            value={sendBackReason}
+            onChange={(event) => setSendBackReason(event.target.value)}
+            rows={4}
+          />
+        </div>
+      </Dialog>
     </div>
   );
 }
@@ -332,14 +476,18 @@ function SourceGroup({
   control: ReturnType<typeof useForm<BomGenerateForm>>['control'];
   register: ReturnType<typeof useForm<BomGenerateForm>>['register'];
   errors:
-    | Array<{ unitCost?: { message?: string }; vendor?: { message?: string } }>
+    | Array<{
+        quantity?: { message?: string };
+        unitCost?: { message?: string };
+        vendor?: { message?: string };
+      }>
     | undefined;
 }) {
   return (
     <>
       <tr>
         <td
-          colSpan={4}
+          colSpan={5}
           className="bg-surface-muted/60 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-ink-muted"
         >
           {requisitionNo}
@@ -347,7 +495,11 @@ function SourceGroup({
       </tr>
       {rows.map((line) => {
         const idx = indexOf(line);
-        const lineTotal = (line.unitCost ?? 0) * line.quantity;
+        // The line total reflects the IM's quantity override. Removed lines total 0
+        // because they don't enter the BOM — they're listed only for clarity.
+        const lineTotal = line.removed
+          ? 0
+          : (line.unitCost ?? 0) * line.quantity;
         const rowErrors = errors?.[idx];
         return (
           <BomLineEditorRow
@@ -356,8 +508,10 @@ function SourceGroup({
             control={control as never}
             register={register}
             itemName={line.itemName}
-            quantity={line.quantity}
+            sourceQuantity={line.sourceQuantity}
+            removed={line.removed}
             lineTotal={lineTotal}
+            errorQuantity={rowErrors?.quantity?.message}
             errorUnitCost={rowErrors?.unitCost?.message}
             errorVendor={rowErrors?.vendor?.message}
           />
@@ -393,4 +547,3 @@ function TotalsCell({
     </div>
   );
 }
-

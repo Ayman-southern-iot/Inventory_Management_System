@@ -854,6 +854,19 @@ export const t = {
       HIGH: 'High',
       CRITICAL: 'Critical',
     },
+    /**
+     * Two tags the IM can stamp on a DRAFT requisition via the BOM generate page's
+     * "Send back for revision" flow. The `draftForRevise` tag appears next to the DRAFT
+     * pill while the requisition sits waiting for the requester; `draftRevised` appears
+     * once the requester has re-submitted, so the IM can see the chain has been
+     * replayed. Both are derived from the events log on the server — no new status enum.
+     */
+    statusTags: {
+      draftForRevise: 'For revise',
+      draftRevised: 'Revised',
+      draftForReviseHint: 'Sent back for budget revision. Edit the items and re-submit.',
+      draftRevisedHint: 'Re-submitted after a send-back. Approvers will see a fresh chain.',
+    },
     stage: {
       INVENTORY_MANAGER: 'Inventory Manager',
       APPROVER: 'Approver',
@@ -932,11 +945,27 @@ export const t = {
     unitCost: 'Unit cost (BDT)',
     vendor: 'Vendor',
     lineTotal: 'Line total',
+    lineQuantityLabel: 'Qty',
+    removeLineLabel: 'Drop from BOM',
     bounceWarning:
       'This BOM will bounce — its sources will return to the approver queue.',
     generate: 'Generate BOM',
     generatedToast: 'BOM created.',
     approved: 'Approved',
+    // Single-item + over-budget branch — IM bounces the requisition to the requester
+    // for budget revision rather than generating a BOM that cannot be approved.
+    sendBackForRevision: 'Send back for revision',
+    sendBackHint:
+      'A single-line BOM cannot shrink to fit. Bounce this requisition back to the requester — they edit the budget, re-submit, and the approval chain replays.',
+    sendBackDialog: {
+      title: 'Send requisition back for revision',
+      body:
+        'The requisition will go back to the requester as a draft. They edit the budget and re-submit — you will get a fresh approval row to decide.',
+      reasonLabel: 'Reason',
+      reasonHint: 'Recorded on the audit log and shown to the requester.',
+      confirm: 'Send back',
+      successToast: 'Requisition sent back for revision.',
+    },
 
     // render
     render: 'Render PDF',
@@ -1008,6 +1037,12 @@ export const t = {
     STOCK_RESERVED: 'Those units are reserved for a pending borrow and cannot be moved or removed.',
     BOM_OVER_BUDGET:
       'This BOM was over budget and bounced. Adjust the unit costs and try again.',
+    BOM_QUANTITY_EXCEEDS_SOURCE:
+      'That quantity is more than the requisition asks for. Shrink it to {max} or less.',
+    ALL_BOM_LINES_REMOVED:
+      'A BOM needs at least one line. Add a line back, or cancel out of the picker.',
+    CANNOT_SEND_BACK_FOR_REVISION:
+      'This requisition cannot be sent back — either it is no longer approved, or it has more than one item.',
     BOM_REQUISITION_NOT_APPROVED:
       'One of the selected requisitions is no longer approved. Refresh and try again.',
     BOM_REQUISITION_ALREADY_ON_LIVE_BOM:
