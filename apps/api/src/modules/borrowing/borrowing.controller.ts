@@ -18,13 +18,16 @@ import {
   listBorrowsQuerySchema,
   returnBorrowSchema,
   revertBorrowSchema,
+  reverseReturnSchema,
   type BorrowRequest,
+  type BorrowReturnView,
   type CreateBorrowRequestInput,
   type DecideBorrowInput,
   type ListBorrowsQuery,
   type Paginated,
   type ReturnBorrowInput,
   type RevertBorrowInput,
+  type ReverseReturnInput,
 } from '@ims/shared';
 import { ConflictError } from '../../common/errors';
 import { IdempotencyService } from '../../common/idempotency.service';
@@ -139,6 +142,38 @@ export class BorrowingController {
     @CurrentAuditContext() ctx: AuditContext,
   ): Promise<BorrowRequest> {
     return this.borrowing.cancel(id, actor.id, ctx);
+  }
+
+  /**
+   * Every return recorded against this borrow, oldest first. Drives the "Returns" panel on the
+   * borrow detail page. Stock-role only — the panel is the IM's correction surface.
+   */
+  @Roles(...STOCK_ROLES)
+  @Get(':id/returns')
+  async listReturns(@Param('id', ParseUUIDPipe) id: string): Promise<BorrowReturnView[]> {
+    return this.borrowing.listReturns(id);
+  }
+
+  /**
+   * Reverse a single return. The original `borrow_returns` row is NOT deleted — the ledger is
+   * append-only — but a compensating `ADJUST` stock movement is written, the borrow's
+   * `returned_qty` is decremented, and the status recomputed. Idempotency-keyed for the same
+   * reason as `recordReturn`.
+   */
+  @Roles(...STOCK_ROLES)
+  @Post(':id/returns/:returnId/reverse')
+  @HttpCode(HttpStatus.OK)
+  async reverseReturn(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('returnId', ParseUUIDPipe) returnId: string,
+    @Body(zodPipe(reverseReturnSchema)) body: ReverseReturnInput,
+    @CurrentUser() actor: RequestUser,
+    @CurrentAuditContext() ctx: AuditContext,
+    @Headers(IDEMPOTENCY_HEADER) idempotencyKey?: string,
+  ): Promise<BorrowRequest> {
+    return this.runOnce(idempotencyKey, actor.id, `borrow:return-reverse:${id}:${returnId}`, () =>
+      this.borrowing.reverseReturn(id, returnId, body, actor.id, ctx),
+    );
   }
 
   private async runOnce<T>(

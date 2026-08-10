@@ -185,6 +185,111 @@ export class BorrowingRepository {
       .execute();
   }
 
+  /** Read the single return row by id. Used by reverseReturn. */
+  async findReturnById(returnId: string, tx?: Tx): Promise<
+    | {
+        id: string;
+        borrow_request_id: string;
+        quantity: number;
+        compartment_id: string;
+        received_by: string | null;
+        condition: ReturnCondition;
+      }
+    | undefined
+  > {
+    const writer: Writer = tx ?? this.db;
+    return writer
+      .selectFrom('borrow_returns')
+      .where('id', '=', returnId)
+      .select([
+        'id',
+        'borrow_request_id',
+        'quantity',
+        'compartment_id',
+        'received_by',
+        'condition',
+      ])
+      .executeTakeFirst();
+  }
+
+  /**
+   * The returns recorded against a borrow, oldest first. The detail page renders this list and
+   * exposes a Reverse button per row — see `BorrowingService.reverseReturn` for the write path.
+   */
+  async listReturnsByBorrow(
+    borrowRequestId: string,
+  ): Promise<
+    Array<{
+      id: string;
+      quantity: number;
+      compartmentId: string;
+      condition: ReturnCondition;
+      receivedByName: string | null;
+      returnedAt: string;
+    }>
+  > {
+    const rows = await this.db
+      .selectFrom('borrow_returns')
+      .leftJoin('users', 'users.id', 'borrow_returns.received_by')
+      .where('borrow_returns.borrow_request_id', '=', borrowRequestId)
+      .orderBy('borrow_returns.returned_at', 'asc')
+      .orderBy('borrow_returns.id', 'asc')
+      .select([
+        'borrow_returns.id',
+        'borrow_returns.quantity',
+        'borrow_returns.compartment_id',
+        'borrow_returns.condition',
+        'users.full_name as received_by_name',
+        'borrow_returns.returned_at',
+      ])
+      .execute();
+    return rows.map((row) => ({
+      id: row.id,
+      quantity: row.quantity,
+      compartmentId: row.compartment_id,
+      condition: row.condition,
+      receivedByName: row.received_by_name,
+      returnedAt: row.returned_at.toISOString(),
+    }));
+  }
+
+  /**
+   * Conditional decrement of `returned_qty` against `expectedReturnedQty`. Same shape as
+   * `claimReturn` — two IMs racing to reverse the same row would otherwise both pass and
+   * subtract from the new total. The borrow must already be ISSUED / PARTIALLY_RETURNED (never
+   * RETURNED with `returned_qty > 0` is impossible, since this method only succeeds when
+   * `expectedReturnedQty = quantity` post-decrement, which a full RETURN already represents).
+   *
+   * Returns the new status to write: PENDING when fully reversed, ISSUED otherwise. The
+   * `returned_at` is cleared when going back to PENDING so the audit trail is honest.
+   */
+  async decrementReturnedQty(
+    id: string,
+    quantity: number,
+    expectedReturnedQty: number,
+    tx: Tx,
+  ): Promise<{ newStatus: BorrowStatus; newReturnedQty: number; clearReturnedAt: boolean }> {
+    const writer: Writer = tx ?? this.db;
+    const newReturnedQty = expectedReturnedQty - quantity;
+    // Two concurrent reversals are guarded by the WHERE on `returned_qty`; the new status is
+    // derived from the would-be quantity, not from a re-read of the row.
+    const newStatus =
+      newReturnedQty === 0
+        ? BorrowStatus.ISSUED
+        : BorrowStatus.PARTIALLY_RETURNED;
+    await writer
+      .updateTable('borrow_requests')
+      .set({
+        returned_qty: newReturnedQty,
+        status: newStatus,
+        returned_at: newReturnedQty === 0 ? null : undefined,
+      })
+      .where('id', '=', id)
+      .where('returned_qty', '=', expectedReturnedQty)
+      .executeTakeFirst();
+    return { newStatus, newReturnedQty, clearReturnedAt: newReturnedQty === 0 };
+  }
+
   /**
    * Increment quarantined_qty on a placement by `delta`. A no-op when delta is zero. Throws
    * `ConflictError` if the increment would push `quarantined + reserved > quantity`, which the
@@ -223,9 +328,43 @@ export class BorrowingRepository {
     }
   }
 
+  /**
+   * Reverse of `incrementQuarantine`. Floored at zero — taking a quarantine count below zero is
+   * nonsense. Used by `reverseReturn` when the original return was DAMAGED / NOT_WORKING.
+   */
+  async decrementQuarantine(
+    tx: Writer,
+    productId: string,
+    compartmentId: string,
+    delta: number,
+  ): Promise<void> {
+    if (delta === 0) return;
+    if (!Number.isInteger(delta) || delta < 0) {
+      throw new ConflictError('Quarantine decrement must be a non-negative whole number');
+    }
+    const result = await tx
+      .updateTable('stock_placements')
+      .set((eb) => ({
+        quarantined_qty: eb('quarantined_qty', '-', delta),
+        version: eb('version', '+', 1),
+      }))
+      .where('product_id', '=', productId)
+      .where('compartment_id', '=', compartmentId)
+      .returningAll()
+      .executeTakeFirst();
+    if (!result) {
+      throw new ConflictError('Placement has disappeared; cannot un-quarantine this return');
+    }
+    if (result.quarantined_qty < 0) {
+      throw new ConflictError(
+        'Cannot release more quarantined units than are held in quarantine',
+      );
+    }
+  }
+
   /** Everything a row needs, joined once. The log is the screen the IM lives on. */
-  private viewSelect() {
-    return this.db
+  private viewSelect(writer: Writer = this.db) {
+    return writer
       .selectFrom('borrow_requests')
       .innerJoin('users as requester', 'requester.id', 'borrow_requests.requester_id')
       .innerJoin('products', 'products.id', 'borrow_requests.product_id')
@@ -266,8 +405,11 @@ export class BorrowingRepository {
       ]);
   }
 
-  async findViewById(id: string): Promise<BorrowRequest | undefined> {
-    const row = await this.viewSelect().where('borrow_requests.id', '=', id).executeTakeFirst();
+  async findViewById(id: string, tx?: Tx): Promise<BorrowRequest | undefined> {
+    const writer: Writer = tx ?? this.db;
+    const row = await this.viewSelect(writer)
+      .where('borrow_requests.id', '=', id)
+      .executeTakeFirst();
     return row ? toBorrowRequest(row) : undefined;
   }
 

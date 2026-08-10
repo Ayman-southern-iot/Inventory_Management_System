@@ -35,3 +35,18 @@ export class DuplicateProjectNameError extends DomainError {
     );
   }
 }
+
+/**
+ * Returned ids are addressable by `GET /borrowing/:id/returns`. Surfacing a 404 lets the UI
+ * distinguish "stale URL" from "this return already has a compensating reverse" (which would be
+ * a different error code from the service).
+ */
+export class BorrowReturnNotFoundError extends DomainError {
+  constructor() {
+    super(
+      ErrorCode.NOT_FOUND,
+      'No such return on this borrow. It may already have been reversed.',
+      HttpStatus.NOT_FOUND,
+    );
+  }
+}

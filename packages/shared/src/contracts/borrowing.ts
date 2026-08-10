@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { paginationQuerySchema, queryBoolean } from './common.js';
+import { paginationQuerySchema, queryBoolean, uuidSchema } from './common.js';
 
 /* --------------------------------------------------------------------- projects */
 
@@ -123,6 +123,31 @@ export const returnBorrowSchema = z.object({
   condition: returnConditionSchema,
 });
 export type ReturnBorrowInput = z.infer<typeof returnBorrowSchema>;
+
+/**
+ * Reversing a recorded return. The original `borrow_returns` row is NOT deleted — the ledger is
+ * append-only, and the audit row must still find the return it explains. Instead the service
+ * writes a compensating `ADJUST` ledger row (negative quantity) and decrements `returned_qty`.
+ *
+ * For DAMAGED / NOT_WORKING returns, the quarantine is decremented too so a partial reversal
+ * doesn't leave quarantined units stranded.
+ */
+export const reverseReturnSchema = z.object({
+  /** Mandatory: a return reversal is an audit-worthy decision and the reason must travel. */
+  reason: z.string().trim().min(1).max(500),
+});
+export type ReverseReturnInput = z.infer<typeof reverseReturnSchema>;
+
+/** A single recorded return on a borrow, with the actor who received it back. */
+export const borrowReturnViewSchema = z.object({
+  id: uuidSchema,
+  quantity: z.number().int().positive(),
+  compartmentId: uuidSchema,
+  condition: returnConditionSchema,
+  receivedByName: z.string().nullable(),
+  returnedAt: z.string(),
+});
+export type BorrowReturnView = z.infer<typeof borrowReturnViewSchema>;
 
 /** OPEN QUESTION: OQ-04 — reverting to PENDING is only legal before physical issue. */
 export const revertBorrowSchema = z.object({

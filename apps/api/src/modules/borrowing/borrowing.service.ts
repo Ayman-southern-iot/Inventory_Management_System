@@ -4,10 +4,12 @@ import {
   BorrowStatus,
   ReturnCondition,
   Role,
+  type BorrowRequest,
   type CreateBorrowRequestInput,
   type DecideBorrowInput,
   type ReturnBorrowInput,
   type RevertBorrowInput,
+  type ReverseReturnInput,
 } from '@ims/shared';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
@@ -21,6 +23,7 @@ import { BorrowingRepository } from './borrowing.repository';
 import type { Tx } from '../audit/audit.repository';
 import {
   BorrowAlreadyDecidedError,
+  BorrowReturnNotFoundError,
   InvalidBorrowTransitionError,
 } from './borrowing.errors';
 
@@ -384,6 +387,102 @@ export class BorrowingService {
   }
 
   /**
+   * The IM needs to correct a return they recorded wrong. The original `borrow_returns` row
+   * stays — the ledger is append-only and the audit row that explains the return would
+   * otherwise point at nothing. Instead this writes a compensating `ADJUST` ledger row at the
+   * same placement (negative quantity) and decrements `returned_qty`. For DAMAGED /
+   * NOT_WORKING returns, the quarantine is decremented in lock-step so the placement's
+   * `quantity - reserved - quarantined` invariant stays consistent.
+   *
+   * Refused when the borrow is already REJECTED or CANCELLED — the return can't be reversed
+   * because there is no return to reverse. Re-reads the borrow inside the same transaction so
+   * the validation is against the live row, not the caller's snapshot.
+   */
+  async reverseReturn(
+    borrowId: string,
+    returnId: string,
+    input: ReverseReturnInput,
+    actorId: string,
+    context: AuditContext,
+  ): Promise<BorrowRequest> {
+    return this.db.transaction().execute(async (tx) => {
+      const borrow = await this.repo.findById(borrowId);
+      if (!borrow) throw new NotFoundError('Borrow request');
+      if (borrow.status === BorrowStatus.REJECTED || borrow.status === BorrowStatus.CANCELLED) {
+        throw new InvalidBorrowTransitionError(borrow.status as BorrowStatus, 'reverse a return');
+      }
+
+      const ret = await this.repo.findReturnById(returnId, tx);
+      if (!ret || ret.borrow_request_id !== borrowId) {
+        throw new BorrowReturnNotFoundError();
+      }
+
+      // Race protection: decrementReturnedQty uses a WHERE on `returned_qty` so two concurrent
+      // reversals cannot both subtract from the same row.
+      await this.repo.decrementReturnedQty(borrowId, ret.quantity, borrow.returned_qty, tx);
+
+      // Compensating stock movement. `adjust` writes the ADJUST ledger row and decrements
+      // placement.quantity; the reason is the entire point and goes into both the ledger's
+      // note column and the audit row.
+      await this.stock.adjust(
+        {
+          productId: borrow.product_id,
+          compartmentId: ret.compartment_id,
+          delta: -ret.quantity,
+          reason: `Reverse return ${returnId}: ${input.reason}`,
+        },
+        { performedBy: actorId, refType: BORROW_REF_TYPE, refId: borrowId, note: input.reason },
+        context,
+        tx,
+      );
+
+      // For DAMAGED / NOT_WORKING returns, the original put units in quarantine. Release them
+      // here so the placement's invariant holds without an explicit reconcile step.
+      if (
+        ret.condition === ReturnCondition.DAMAGED ||
+        ret.condition === ReturnCondition.NOT_WORKING
+      ) {
+        await this.repo.decrementQuarantine(
+          tx,
+          borrow.product_id,
+          ret.compartment_id,
+          ret.quantity,
+        );
+      }
+
+      await this.audit.record(
+        {
+          action: 'borrowing.return_reversed',
+          entityType: 'borrowing',
+          entityId: borrowId,
+          entityRef: borrow.borrow_no,
+          summary: `Reversed return of ${ret.quantity} unit(s) on borrow ${borrow.borrow_no}`,
+          metadata: {
+            borrowNo: borrow.borrow_no,
+            returnId,
+            productId: borrow.product_id,
+            compartmentId: ret.compartment_id,
+            quantity: ret.quantity,
+            condition: ret.condition,
+            reason: input.reason,
+          },
+        },
+        context,
+        tx,
+      );
+
+      return this.requireView(borrowId, tx);
+    });
+  }
+
+  /** List the returns recorded against a borrow. Used by the detail page's Returns panel. */
+  async listReturns(
+    borrowId: string,
+  ): Promise<Awaited<ReturnType<BorrowingRepository['listReturnsByBorrow']>>> {
+    return this.repo.listReturnsByBorrow(borrowId);
+  }
+
+  /**
    * OPEN QUESTION: OQ-04 — the IM's ✎ Edit on an approved borrow.
    *
    * Implemented as the recorded working assumption: revert to PENDING, and only before the
@@ -539,8 +638,8 @@ export class BorrowingService {
     return this.requireView(id);
   }
 
-  private async requireView(id: string) {
-    const view = await this.repo.findViewById(id);
+  private async requireView(id: string, tx?: Tx) {
+    const view = await this.repo.findViewById(id, tx);
     if (!view) throw new NotFoundError('Borrow request');
     return view;
   }
