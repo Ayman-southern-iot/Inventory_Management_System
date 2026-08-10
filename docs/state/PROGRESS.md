@@ -5,6 +5,32 @@
 
 ## Current position
 
+- **IMS UI/Backend fixes (2026-08-10):** nine user-facing fixes bundled into nine commits.
+  (1) Approval deadline disables past dates in the native picker (`min={todayLocal()}`).
+  (2) Quarantined items no longer count as available in `move` / `reserve` / `adjust` — a
+  long-standing bug where a DAMAGED return would leave the units physically counted as
+  available. (3) `InsufficientStockError` carries the quarantined count so the dialog can
+  say "Only 4 are available — 2 are in quarantine" once the popup lands in a follow-up.
+  (4) Transportation cost is folded into the verify-purchase unspent figure, so the IM
+  isn't handed back money they already spent on a van. (5) Verify-purchase gains a
+  server-side `unverify-purchase` endpoint (`POST /requisitions/:id/unverify-purchase`,
+  IM/Admin): flips `PURCHASE_VERIFIED → PURCHASED` for re-recording, refuses if any
+  `fund_returns` exist. (6) Return reversals: a `POST /borrowing/:id/returns/:returnId/
+  reverse` endpoint writes a compensating `ADJUST` ledger row, decrements `returned_qty`,
+  recomputes status, and decrements `quarantined_qty` for DAMAGED/NOT_WORKING returns —
+  the original `borrow_returns` row is preserved (append-only ledger). Plus a per-borrow
+  Returns list view. (7) General users no longer see "Add Product" on `/products` (the
+  server already returned 403 — the button was a dead end). (8) Recent Movements shows
+  a Condition column populated by `LEFT JOIN LATERAL borrow_returns` keyed on
+  `ref_id`/`ref_type='BORROW'`, pinned to the most recent return at-or-before the ledger
+  timestamp. (9) `findViewById` accepts a transaction handle so the reverse-return
+  response reflects the post-update state instead of the pre-transaction view (a real
+  bug surfaced by the new test). 11 new integration tests across
+  `borrowing-return-reverse` (3), `stock-quarantine` (3), `stock-ledger-condition` (2),
+  and 3 new cases in `funds.int-spec.ts` (transportation fold, unverify happy path,
+  refuses with returns). Verified: typecheck green on shared/api/web, lint clean for
+  the changed files, web suite 81/81, integration suite at the documented baseline
+  (**458 pass / 8 pre-existing failures** unchanged in `reports`, `throttling`).
 - **Dev compose pinned to a single host port (2026-08-10):** `docker-compose.yml` at the
   repo root only ever served on 5173 via the Caddy proxy, but the ports mapping was
   parameterised by `$WEB_PORT` (so anyone could quietly change the host-facing port) and the

@@ -536,6 +536,35 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   test + i18n; BomGeneratePage cleanup; PDF template + integration test). Verified:
   typecheck green, web suite 81/81, integration suite at the documented baseline
   (450 pass / 8 pre-existing failures unchanged).
+- 2026-08-10 — Bundled nine UI/backend fixes. Quarantined items no longer count as available in
+  the three write-path sites (`move` / `reserve` / `adjust`) — a long-standing bug where a
+  DAMAGED return left units physically counted as available, even though they were sitting in
+  quarantine. The DB CHECK (`quarantined + reserved <= quantity`) was the structural guarantee,
+  but the service calculated `available = quantity - reserved`, silently letting IM/Admin move
+  or borrow units that physically weren't usable. Fixed at three sites only; read paths were
+  already correct. `InsufficientStockError` carries the quarantine count now so the popup can
+  surface "Only N available — K in quarantine" — the popup UX itself is a follow-up. Verify-
+  purchase folds `transportation_cost` into the unspent figure (the cost is part of `approved
+  amount` but never reaches `purchases`, since it isn't a stock movement); without the fold
+  the IM was told to hand the transportation money back to Accounts, which was wrong. A new
+  `POST /requisitions/:id/unverify-purchase` endpoint flips `PURCHASE_VERIFIED → PURCHASED`
+  for re-recording — refuses if any `fund_returns` exist (the reverse of a refund is a new
+  refund, not a status flip). Borrow returns gained a reversing endpoint that writes a
+  compensating `ADJUST` stock movement and decrements `returned_qty` — the original
+  `borrow_returns` row stays because the ledger is append-only. For DAMAGED/NOT_WORKING
+  returns, `quarantined_qty` is decremented in lock-step so the placement's
+  `quantity - reserved - quarantined` invariant holds. The reverse-return flow surfaced a
+  real bug: `findViewById` used the pool-backed DB rather than the caller's transaction, so
+  the response always reflected the pre-transaction state. The repository now accepts an
+  optional `tx` (a kysely transaction handle) and threads it through. Recent Movements table
+  now has a Condition column populated by a `LEFT JOIN LATERAL borrow_returns` keyed on
+  `ref_id` and `ref_type='BORROW'`, pinned to the most recent return at-or-before the ledger
+  timestamp. Approval deadline disables past dates in the native picker (`min={todayLocal()}`);
+  no server guard, because the existing `approval-deadline` test deliberately submits past
+  dates to prove the reminder job fires. General users no longer see "Add Product" on
+  `/products` — the server already returned 403, the button was a dead end. Nine commits in
+  dependency order, all green at the documented baseline (458 pass / 8 pre-existing failures
+  unchanged in `reports`, `throttling`).
 - 2026-08-10 — Dev compose stack publishes only 5173. The proxy's `ports:` mapping is
   hard-coded to `5173:80` (no `$WEB_PORT` override) and `IMS_DOMAIN` is pinned to `:80`
   so the Caddyfile template renders consistently — without it the `{$IMS_DOMAIN}`
