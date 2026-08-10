@@ -440,7 +440,7 @@ function ProductDetailBody({
               error={ledger.error}
               data={ledger.data}
               onRetry={() => void ledger.refetch()}
-              loadingFallback={<SkeletonRows columns={4} rows={3} />}
+              loadingFallback={<SkeletonRows columns={5} rows={3} />}
               isEmpty={(data) => data.items.length === 0}
               emptyFallback={<EmptyState title={t.inventory.noMovements} />}
             >
@@ -451,6 +451,7 @@ function ProductDetailBody({
                     t.inventory.quantity,
                     t.inventory.locations,
                     t.common.note,
+                    t.borrowing.returnCondition,
                   ]}
                 >
                   {data.items.map((entry) => (
@@ -472,6 +473,11 @@ function ProductDetailBody({
                       </td>
                       <td className="px-4 py-2.5 text-sm text-ink-muted">
                         {entry.note ?? t.common.none}
+                      </td>
+                      <td className="px-4 py-2.5 text-sm text-ink-muted">
+                        {entry.condition
+                          ? t.borrowing.conditionLabels[entry.condition]
+                          : t.common.dash}
                       </td>
                     </tr>
                   ))}

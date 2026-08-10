@@ -34,6 +34,23 @@ export class StockLedgerRepository {
       .leftJoin('storage_compartments as to_comp', 'to_comp.id', 'stock_ledger.to_compartment_id')
       .leftJoin('storage_zones as to_zone', 'to_zone.id', 'to_comp.zone_id')
       .leftJoin('users', 'users.id', 'stock_ledger.performed_by')
+      // For BORROW-referencing rows, the latest `borrow_returns.condition` at-or-before the
+      // ledger timestamp is what the IM actually recorded about the returned unit's state. A
+      // LEFT JOIN LATERAL keeps it a single-row pick even when a borrow has multiple partial
+      // returns; non-borrow rows simply get NULL.
+      .leftJoinLateral(
+        (eb) =>
+          eb
+            .selectFrom('borrow_returns')
+            .whereRef('borrow_returns.borrow_request_id', '=', 'stock_ledger.ref_id')
+            .where('stock_ledger.ref_type', '=', 'BORROW')
+            .whereRef('borrow_returns.returned_at', '<=', 'stock_ledger.created_at')
+            .orderBy('borrow_returns.returned_at', 'desc')
+            .limit(1)
+            .select('borrow_returns.condition as condition')
+            .as('latest_return'),
+        (join) => join.onTrue(),
+      )
       .$if(query.productId !== undefined, (qb) =>
         qb.where('stock_ledger.product_id', '=', query.productId!),
       )
@@ -61,6 +78,7 @@ export class StockLedgerRepository {
           'from_zone.name as from_zone_name',
           'to_comp.code as to_code',
           'to_zone.name as to_zone_name',
+          'latest_return.condition as condition',
         ])
         // Newest first, and by id as the tiebreak: several movements can share a timestamp,
         // and an unstable sort would make pagination silently skip or repeat rows.
@@ -86,6 +104,7 @@ export class StockLedgerRepository {
         performedByName: row.performed_by_name,
         note: row.note,
         createdAt: row.created_at.toISOString(),
+        condition: row.condition ?? null,
       })),
       page: query.page,
       limit: query.limit,

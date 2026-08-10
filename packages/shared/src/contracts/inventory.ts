@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { paginationQuerySchema, queryBoolean } from './common.js';
+import { returnConditionSchema } from './borrowing.js';
 
 /* ------------------------------------------------------------------ shared bits */
 
@@ -293,5 +294,11 @@ export const ledgerEntrySchema = z.object({
   performedByName: z.string().nullable(),
   note: z.string().nullable(),
   createdAt: z.string(),
+  /**
+   * Condition of the borrow return that produced this ledger row, when applicable. Null for
+   * RECEIPT, ISSUE, MOVE, ADJUST, DISPOSE and similar — only BORROW-typed rows have a return
+   * row to look up.
+   */
+  condition: returnConditionSchema.nullable(),
 });
 export type LedgerEntry = z.infer<typeof ledgerEntrySchema>;
