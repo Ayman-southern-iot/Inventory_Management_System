@@ -195,13 +195,18 @@ export class StockService {
         throw new StockVersionConflictError();
       }
 
-      // Reserved units are spoken for by a pending borrow; only the free ones may leave.
-      const available = source.quantity - source.reserved_qty;
+      // Reserved units are spoken for by a pending borrow; quarantined units are held back
+      // pending an inspection decision — only the free ones may leave.
+      const available = source.quantity - source.reserved_qty - source.quarantined_qty;
       if (input.quantity > available) {
         if (source.reserved_qty > 0 && input.quantity <= source.quantity) {
           throw new ReservedStockError(source.reserved_qty, input.quantity);
         }
-        throw new InsufficientStockError(available, input.quantity);
+        throw new InsufficientStockError(
+          available,
+          input.quantity,
+          source.quarantined_qty,
+        );
       }
 
       const destination = locked.get(input.toCompartmentId);
@@ -314,9 +319,14 @@ export class StockService {
       const placement = await this.lockPlacement(tx, input.productId, input.compartmentId);
       if (!placement) throw new NotFoundError('Stock in that compartment');
 
-      const available = placement.quantity - placement.reserved_qty;
+      const available =
+        placement.quantity - placement.reserved_qty - placement.quarantined_qty;
       if (input.quantity > available) {
-        throw new InsufficientStockError(available, input.quantity);
+        throw new InsufficientStockError(
+          available,
+          input.quantity,
+          placement.quarantined_qty,
+        );
       }
 
       return this.applyDelta(tx, placement.id, 0, input.quantity);
@@ -557,11 +567,12 @@ export class StockService {
     input: AdjustInput,
     context: StockContext,
     auditContext?: AuditContext,
+    existingTx?: Tx,
   ): Promise<PlacementRow | null> {
     if (input.delta === 0) throw new ConflictError('An adjustment of zero changes nothing');
     if (!input.reason.trim()) throw new ConflictError('An adjustment requires a reason');
 
-    return this.db.transaction().execute(async (tx) => {
+    const run = async (tx: Tx): Promise<PlacementRow | null> => {
       await this.assertProductIsTrackable(tx, input.productId);
 
       const placement =
@@ -572,9 +583,14 @@ export class StockService {
       if (!placement) throw new NotFoundError('Stock in that compartment');
 
       if (input.delta < 0) {
-        const available = placement.quantity - placement.reserved_qty;
+        const available =
+          placement.quantity - placement.reserved_qty - placement.quarantined_qty;
         if (Math.abs(input.delta) > available) {
-          throw new InsufficientStockError(available, Math.abs(input.delta));
+          throw new InsufficientStockError(
+            available,
+            Math.abs(input.delta),
+            placement.quarantined_qty,
+          );
         }
       }
 
@@ -618,7 +634,8 @@ export class StockService {
       }
 
       return this.applyDelta(tx, placement.id, input.delta, 0);
-    });
+    };
+    return existingTx ? run(existingTx) : this.db.transaction().execute(run);
   }
 
   /* ------------------------------------------------------------------ reads */
