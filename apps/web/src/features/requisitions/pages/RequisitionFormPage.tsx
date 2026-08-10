@@ -257,6 +257,7 @@ export function RequisitionFormPage() {
               type="date"
               hint={t.requisitions.approvalDeadlineHint}
               error={errors.approvalDeadline?.message}
+              min={todayLocal()}
               {...form.register('approvalDeadline')}
             />
 
@@ -439,6 +440,12 @@ export function RequisitionFormPage() {
       </form>
     </div>
   );
+}
+
+/** Local-date YYYY-MM-DD so the native picker rejects past dates without a TZ round-trip. */
+function todayLocal(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 /** Keeps `RequisitionFormPage` readable by holding the per-row wiring in one place. */
