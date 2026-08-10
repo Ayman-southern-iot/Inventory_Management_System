@@ -59,6 +59,8 @@ function requisition(overrides: Partial<RequisitionDetail> = {}): RequisitionDet
     supportingDocumentUrl: null,
     transportationCost: null,
     transportationDescription: null,
+    requiresRevisionTag: false,
+    revisedAfterSendBack: false,
     ...overrides,
   };
 }
