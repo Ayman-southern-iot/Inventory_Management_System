@@ -565,6 +565,25 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   `/products` — the server already returned 403, the button was a dead end. Nine commits in
   dependency order, all green at the documented baseline (458 pass / 8 pre-existing failures
   unchanged in `reports`, `throttling`).
+- 2026-08-10 — IM-side BOM customisation + single-item over-budget send-back.
+  Multi-item requisitions at the BOM-generate step now allow the IM to shrink
+  quantity (clamped to `[1, sourceQuantity]`), change unit cost, or remove a line
+  entirely — three knobs for the same fix. Source `requisition_items.quantity` is
+  never modified; the override lives only on the BOM line. Single-item
+  over-budget requisitions cannot shrink, so the Generate button is replaced by
+  **Send back for revision** — a new endpoint `POST /requisitions/:id/send-back-
+  for-revision` (IM/Admin) flips `APPROVED → DRAFT`, clears the approved figures,
+  and asks the requester to revise their budget via the existing
+  draft-and-resubmit flow. Two pre-existing audit-event types
+  (`SEND_BACK_FOR_REVISION`, `SUBMITTED`) drive a derived `requiresRevisionTag`
+  / `revisedAfterSendBack` view — no new requisition_status enum value, no
+  schema migration. Two wire-level changes: `bomLineInputSchema.quantity` is
+  optional (omit = source), `removed` is explicit boolean. Locking
+  `requisition_approvals` rows are deleted on send-back so re-submit replays a
+  fresh chain under the existing
+  `requisition_approvals_unique_slot UNIQUE (requisition_id, stage, slot)`
+  constraint — audit history survives via the immutable
+  `requisition_events` log.
 - 2026-08-10 — Dev compose stack publishes only 5173. The proxy's `ports:` mapping is
   hard-coded to `5173:80` (no `$WEB_PORT` override) and `IMS_DOMAIN` is pinned to `:80`
   so the Caddyfile template renders consistently — without it the `{$IMS_DOMAIN}`

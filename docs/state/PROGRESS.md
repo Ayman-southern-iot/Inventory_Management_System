@@ -5,6 +5,28 @@
 
 ## Current position
 
+- **IM-side BOM customisation + 1-item over-budget send-back (2026-08-10):** the
+  IM at the BOM-generate step used to have only `unitCost` and `vendor` editable, so a
+  multi-item approved requisition where `approvedAmount < requestedAmount` had no
+  path back to fit. Two new affordances close the gap: (a) **multi-item** IM can
+  shrink `quantity` (clamped to `[1, sourceQuantity]`), toggle a `removed` checkbox
+  to drop the line, or change `unitCost` — the source `requisition_items.quantity` is
+  never modified, the override lives only on the BOM line (the office is small; the
+  IM coordinates budget changes verbally with the requester). (b) **single-item** the
+  IM cannot shrink, so the Generate button is replaced by **Send back for revision**:
+  a new `POST /requisitions/:id/send-back-for-revision` (IM/Admin only) flips the
+  requisition `APPROVED → DRAFT`, clears `approved_amount` / `decided_at`, and asks
+  the requester to revise. The detail page shows a **For revise** pill on the DRAFT
+  status; once the requester re-submits it flips to **Revised**. Two `requisitions_events`
+  rows (`SEND_BACK_FOR_REVISION`, `SUBMITTED`) drive the pill via a derived view field
+  (`requiresRevisionTag`, `revisedAfterSendBack`) — no status-enum pollution. New
+  audit action `requisition.send_back_for_revision`, new notification type
+  `requisition.sent_back_for_revision` for the requester. Migration-free:
+  `requisition_events.event_type` is `text`, not enum. 8 new integration tests
+  (`boms-customize-lines` 4, `requisitions-send-back` 4) and 4 new web tests
+  (`BomGeneratePage.test.tsx` 2, `RequisitionDetailPage.pills.test.tsx` 2) all green.
+  Web suite 85/85 (was 81). Integration suite 469 pass / 8 pre-existing failures
+  unchanged (the new test files all pass cleanly in isolation).
 - **IMS UI/Backend fixes (2026-08-10):** nine user-facing fixes bundled into nine commits.
   (1) Approval deadline disables past dates in the native picker (`min={todayLocal()}`).
   (2) Quarantined items no longer count as available in `move` / `reserve` / `adjust` — a
