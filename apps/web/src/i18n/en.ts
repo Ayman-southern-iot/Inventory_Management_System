@@ -323,9 +323,12 @@ export const t = {
     approved: 'Approved',
     funded: 'Funded',
     spent: 'Spent',
+    transportation: 'Transportation',
     returned: 'Returned to Accounts',
     outstanding: 'Still to come',
     unspent: 'Unspent',
+    // Shown next to unspent when transportation was folded into spent at verify-purchase.
+    transportationNote: 'already spent on transportation',
     // actions, in the order they happen
     sendToAccounts: 'Send to Accounts',
     sendToAccountsHint: 'Records that the BOM has left your desk. Nothing is emailed.',
@@ -335,6 +338,11 @@ export const t = {
     replaceInvoice: 'Replace invoice',
     downloadInvoice: 'Download invoice',
     verifyPurchase: 'Verify purchase',
+    unverifyPurchase: 'Back to purchased',
+    unverifyPurchaseHint:
+      'Returns this requisition to "Purchased" so the invoice and purchase rows can be re-recorded.',
+    unverifyReason: 'Why are you un-verifying?',
+    purchaseUnverified: 'Purchase un-verified',
     receiveToStock: 'Add to inventory',
     borrowToUser: 'Issue to a user',
     // fields
@@ -708,7 +716,7 @@ export const t = {
     noProject: 'No project',
     urgency: 'Urgency',
     approvalDeadline: 'Approval deadline',
-    approvalDeadlineHint: 'Approvers are reminded once this passes.',
+    approvalDeadlineHint: 'Approvers are reminded once this passes. Pick today or later.',
     reason: 'Reason',
     reasonHint: 'Why this is needed. The approvers read this first.',
     // items zone
@@ -992,6 +1000,8 @@ export const t = {
     RATE_LIMITED: 'Too many attempts. Wait a few minutes and try again.',
     UNKNOWN_SETTING: 'That setting does not exist.',
     INSUFFICIENT_STOCK: 'There is not enough stock in that compartment.',
+    INSUFFICIENT_STOCK_QUARANTINED:
+      'Only {available} are available at this location — {quarantined} are in quarantine.',
     STOCK_VERSION_CONFLICT:
       'This stock changed while the screen was open. The figures have been refreshed — check them and try again.',
     CATEGORY_NOT_TRACKABLE: 'That category does not track stock, so it cannot hold quantities.',

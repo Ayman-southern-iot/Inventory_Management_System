@@ -10,12 +10,17 @@ export class InsufficientStockError extends DomainError {
   constructor(
     readonly available: number,
     readonly requested: number,
+    /**
+     * Quarantined units at the same placement. Surfaced separately so the UI can tell the user
+     * why their borrow fell short (e.g. "only 4 available, 1 is in quarantine").
+     */
+    readonly quarantined: number = 0,
   ) {
     super(
       ErrorCode.INSUFFICIENT_STOCK,
       `Only ${available} available, ${requested} requested`,
       HttpStatus.CONFLICT,
-      { available, requested },
+      { available, requested, quarantined },
     );
   }
 }
