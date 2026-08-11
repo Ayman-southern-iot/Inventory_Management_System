@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { CommonModule } from '../../common/common.module';
 import { FilesModule } from '../files/files.module';
 import { StockModule } from '../stock/stock.module';
@@ -14,13 +14,15 @@ import { FundsService } from './funds.service';
 /**
  * Phase 05 — funds and purchasing. Owns the requisition lifecycle after the BOM exists.
  *
- * Imports `RequisitionsModule` for the repository's `lockRequisition`, `setStatus` and
- * `appendEvent`, so the status write and the tracker event stay in one place rather than being
- * reimplemented here with subtly different rules.
+ * Imports `RequisitionsModule` (forward-ref) for the repository's `lockRequisition`, `setStatus`
+ * and `appendEvent`, so the status write and the tracker event stay in one place rather than
+ * being reimplemented here with subtly different rules. The forwardRef pair exists because
+ * `RequisitionsService` also depends on `FundsRepository` for the snapshot writes — a straight
+ * circular import would fail at Nest's instantiation step.
  */
 @Module({
   imports: [
-    RequisitionsModule,
+    forwardRef(() => RequisitionsModule),
     AuditModule,
     NotificationsModule,
     CommonModule,

@@ -71,17 +71,34 @@ export function Badge({
 }
 
 /** Tables always carry a header row — the accessibility floor for a data-heavy tool. */
-export function Table({ headers, children }: { headers: string[]; children: ReactNode }) {
+export function Table({
+  headers,
+  headerAligns,
+  children,
+}: {
+  headers: string[];
+  /**
+   * Per-column header alignment. Use `end` for numeric columns so figures line up
+   * vertically with the right-aligned body cells. Defaults to start-aligned for
+   * everything (unchanged from when the primitive only supported text columns).
+   */
+  headerAligns?: Array<'start' | 'end'>;
+  children: ReactNode;
+}) {
+  const aligns = headerAligns ?? headers.map(() => 'start' as const);
   return (
     <div className="overflow-x-auto">
       <table className="w-full border-collapse text-sm">
         <thead>
           <tr className="border-b border-border bg-surface-muted/60">
-            {headers.map((header) => (
+            {headers.map((header, index) => (
               <th
                 key={header}
                 scope="col"
-                className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-ink-muted"
+                className={cn(
+                  'px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-ink-muted',
+                  aligns[index] === 'end' ? 'text-right' : 'text-left',
+                )}
               >
                 {header}
               </th>

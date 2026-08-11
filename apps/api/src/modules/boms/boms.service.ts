@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
 import { sql, type Transaction } from 'kysely';
 import { unlink } from 'node:fs/promises';
 import {
@@ -21,6 +21,7 @@ import type { Db } from '../../database/create-db';
 import type { Database } from '../../database/schema';
 import { ForbiddenError, NotFoundError, ValidationFailedError } from '../../common/errors';
 import { RequisitionsRepository } from '../requisitions/requisitions.repository';
+import { FundsRepository } from '../funds/funds.repository';
 import { PdfRendererService } from '../pdf/pdf-renderer.service';
 import { PdfSigningService } from '../pdf/pdf-signing.service';
 import { AuditService } from '../audit/audit.service';
@@ -94,6 +95,10 @@ export class BomsService {
     @Inject(DB) private readonly db: Db,
     private readonly repo: BomsRepository,
     private readonly requisitions: RequisitionsRepository,
+    // Forward-ref: FundsModule also imports RequisitionsModule (which BomsModule imports),
+    // so the funds repository can only be resolved after both sides register their providers.
+    @Inject(forwardRef(() => FundsRepository))
+    private readonly funds: FundsRepository,
     private readonly pdfRenderer: PdfRendererService,
     private readonly files: FilesService,
     @Inject(CONFIG) private readonly config: AppConfig,
@@ -270,6 +275,23 @@ export class BomsService {
           actorId,
           { bomNo },
         );
+        // Snapshot at the moment BOM is generated. No money has moved yet (Accounts has not
+        // been asked), so funded/spent/returned are all 0; the row's value is recording the
+        // *approved amount* at this stage so the pill selector can compare it to the BOM
+        // subtotal later. Uses the funds repo (not FundsService) to avoid a service-to-service
+        // call across module boundaries — the persistence-layer repo is fine to share.
+        const figures = await this.funds.computeCurrentFunding(tx, source.requisitionId);
+        await this.funds.insertSnapshot(tx, {
+          requisitionId: source.requisitionId,
+          status: RequisitionStatus.BOM_GENERATED,
+          requestedAmount: figures.requestedAmount,
+          approvedAmount: figures.approvedAmount,
+          transportation: figures.transportation,
+          funded: figures.funded,
+          spent: figures.spent,
+          returnedToAccounts: figures.returned,
+          unspent: figures.unspent,
+        });
       }
 
       // Audit inside the transaction: a successful BOM creation cannot lack its audit row.

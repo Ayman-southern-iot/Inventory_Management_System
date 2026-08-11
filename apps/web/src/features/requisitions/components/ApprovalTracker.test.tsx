@@ -61,6 +61,7 @@ function requisition(overrides: Partial<RequisitionDetail> = {}): RequisitionDet
     transportationDescription: null,
     requiresRevisionTag: false,
     revisedAfterSendBack: false,
+    fundingSnapshots: [],
     ...overrides,
   };
 }

@@ -397,6 +397,28 @@ export interface RequisitionEventsTable {
   created_at: CreatedAt;
 }
 
+/**
+ * Point-in-time snapshot of money figures at each forward-progress stage transition
+ * (migration 0025). Written by the funds/requisitions service hooks — never updated
+ * or deleted. The frontend pills on the Requisition Detail page read this table to
+ * show "what did Approved / BOM / Accounts / Funded / Purchased look like", which
+ * the live aggregates in `funds.service.ts.funding()` cannot reproduce.
+ */
+export interface FundingSnapshotsTable {
+  id: Generated<string>;
+  requisition_id: string;
+  /** The status the requisition entered when this snapshot was written. */
+  status: string;
+  requested_amount: Money | null;
+  approved_amount: Money | null;
+  transportation: Generated<string>;
+  funded: Generated<string>;
+  spent: Generated<string>;
+  returned_to_accounts: Generated<string>;
+  unspent: Generated<string>;
+  snapshotted_at: CreatedAt;
+}
+
 export interface DelegationsTable {
   id: Generated<string>;
   approver_user_id: string;
@@ -622,6 +644,7 @@ export interface Database {
   requisition_items: RequisitionItemsTable;
   requisition_approvals: RequisitionApprovalsTable;
   requisition_events: RequisitionEventsTable;
+  funding_snapshots: FundingSnapshotsTable;
   delegations: DelegationsTable;
   projects: ProjectsTable;
   borrow_requests: BorrowRequestsTable;

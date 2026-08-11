@@ -97,6 +97,7 @@ function detail(overrides: Partial<RequisitionDetail>): RequisitionDetail {
     events: [],
     requiresRevisionTag: false,
     revisedAfterSendBack: false,
+    fundingSnapshots: [],
     ...overrides,
   };
 }

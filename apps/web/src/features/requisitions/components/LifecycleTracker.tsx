@@ -76,6 +76,28 @@ const STAGES: readonly Stage[] = [
   },
 ] as const;
 
+/**
+ * The lifecycle stages for which a `fundingSnapshots` row exists or could exist. Used by
+ * the Money-and-purchasing stage selector to render the pill row. The selector never
+ * shows pills for REJECTED/CANCELLED/UNVERIFIED_PURCHASE — those are rewind/terminal
+ * paths the snapshot hooks deliberately do not write to (see `FundsService.recordFundingSnapshot`).
+ *
+ * `submitted` and `imReview`/`approved` are intentionally omitted here because the
+ * Money-and-purchasing panel itself only renders after BOM_GENERATED (the panel guards
+ * on `reached` below). Showing pills for stages the user can't see would be confusing.
+ */
+export const SNAPSHOT_STAGES: ReadonlyArray<{
+  key: keyof typeof t.requisitions.lifecycleStages;
+  statuses: readonly RequisitionStatus[];
+}> = [
+  { key: 'bom', statuses: [RequisitionStatus.BOM_GENERATED] },
+  { key: 'accounts', statuses: [RequisitionStatus.SENT_TO_ACCOUNTS] },
+  { key: 'funded', statuses: [RequisitionStatus.FUNDS_PARTIAL, RequisitionStatus.FUNDS_RECEIVED] },
+  { key: 'purchased', statuses: [RequisitionStatus.PURCHASED] },
+  { key: 'verified', statuses: [RequisitionStatus.PURCHASE_VERIFIED] },
+  { key: 'inStock', statuses: [RequisitionStatus.STOCKED, RequisitionStatus.CLOSED] },
+] as const;
+
 function eventsForStage(requisition: RequisitionDetail, stage: Stage): string | null {
   const matches = requisition.events
     // `eventType` arrives as a loose `string` from the wire schema; cast through the enum
@@ -92,6 +114,17 @@ function stateOfStage(requisition: RequisitionDetail, stage: Stage): StageState 
   // Terminal branches short-circuit the whole row.
   if (requisition.status === RequisitionStatus.REJECTED) return 'rejected';
   if (requisition.status === RequisitionStatus.CANCELLED) return 'cancelled';
+
+  // STOCKED and CLOSED are terminal-completed: every stage is done. Without this,
+  // the `inStock` row was rendering as amber/current (its own `currentStatuses` matched)
+  // which read as "still pending" — same colour as the "needs your approval" badge —
+  // when the requisition was actually finished.
+  if (
+    requisition.status === RequisitionStatus.STOCKED ||
+    requisition.status === RequisitionStatus.CLOSED
+  ) {
+    return 'done';
+  }
 
   if (stage.currentStatuses.includes(requisition.status)) return 'current';
   if (stage.doneEvents.some((e) => requisition.events.some((ev) => ev.eventType === e))) {

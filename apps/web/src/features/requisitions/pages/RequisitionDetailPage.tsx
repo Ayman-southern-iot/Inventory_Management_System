@@ -39,10 +39,12 @@ const STATUS_TONE: Partial<Record<RequisitionStatus, 'neutral' | 'success' | 'pe
 
 function Figure({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div>
+    // Numeric figures right-align to match the items-table Line Total below — visual
+    // // consistency across the card.
+    <div className="min-w-[8rem] text-right">
       <dt className="text-xs font-medium uppercase tracking-wide text-ink-subtle">{label}</dt>
       <dd className="mt-0.5 text-lg font-semibold tabular-nums text-ink">{value}</dd>
-      {hint ? <p className="text-xs text-ink-subtle">{hint}</p> : null}
+      {hint ? <p className="mt-0.5 text-xs text-ink-subtle">{hint}</p> : null}
     </div>
   );
 }
@@ -221,141 +223,166 @@ export function RequisitionDetailPage() {
                 {/* Status box + (optional) supporting-document card on the right. When no
                     document is attached, the card column collapses and the status content
                     fills the full width. */}
-                <Panel className="p-5">
-                  <div
-                    className={`flex flex-col gap-5 ${
-                      detail.supportingDocument ? 'md:flex-row md:items-start' : ''
-                    }`}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="mb-4 flex flex-wrap items-center gap-2">
-                        <Badge tone={STATUS_TONE[detail.status] ?? 'info'}>
-                          {t.requisitions.status[detail.status]}
-                        </Badge>
-                        {/* Send-back tag — derived from the events log on the server. Stays
-                            on the DRAFT pill until the requester re-submits, at which point
-                            the badge flips to "Revised" so the IM knows a fresh chain is in
-                            play. */}
-                        {detail.requiresRevisionTag ? (
-                          <Badge tone="pending" title={t.requisitions.statusTags.draftForReviseHint}>
-                            {t.requisitions.statusTags.draftForRevise}
+                <Panel>
+                  {/* Top zone: status pills, figures, note, supporting document. */}
+                  <div className="p-5">
+                    <div
+                      className={`flex flex-col gap-5 ${
+                        detail.supportingDocument ? 'md:flex-row md:items-start' : ''
+                      }`}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="mb-4 flex flex-wrap items-center gap-2">
+                          <Badge tone={STATUS_TONE[detail.status] ?? 'info'}>
+                            {t.requisitions.status[detail.status]}
                           </Badge>
-                        ) : null}
-                        {detail.revisedAfterSendBack ? (
-                          <Badge tone="info" title={t.requisitions.statusTags.draftRevisedHint}>
-                            {t.requisitions.statusTags.draftRevised}
+                          {/* Send-back tag — derived from the events log on the server. Stays
+                              on the DRAFT pill until the requester re-submits, at which point
+                              the badge flips to "Revised" so the IM knows a fresh chain is in
+                              play. */}
+                          {detail.requiresRevisionTag ? (
+                            <Badge tone="pending" title={t.requisitions.statusTags.draftForReviseHint}>
+                              {t.requisitions.statusTags.draftForRevise}
+                            </Badge>
+                          ) : null}
+                          {detail.revisedAfterSendBack ? (
+                            <Badge tone="info" title={t.requisitions.statusTags.draftRevisedHint}>
+                              {t.requisitions.statusTags.draftRevised}
+                            </Badge>
+                          ) : null}
+                          <Badge tone="neutral">
+                            {t.requisitions.urgencyLabel[detail.urgency]}
                           </Badge>
-                        ) : null}
-                        <Badge tone="neutral">
-                          {t.requisitions.urgencyLabel[detail.urgency]}
-                        </Badge>
-                        {detail.isOverdue ? (
-                          <Badge tone="danger">{t.borrowing.overdue}</Badge>
+                          {detail.isOverdue ? (
+                            <Badge tone="danger">{t.borrowing.overdue}</Badge>
+                          ) : null}
+                        </div>
+
+                        <dl className="flex flex-wrap justify-end gap-x-10 gap-y-3 sm:justify-start">
+                          <Figure
+                            label={t.requisitions.requested}
+                            value={(detail.requestedAmount ?? 0).toLocaleString()}
+                          />
+                          <Figure
+                            label={t.requisitions.sanctioned}
+                            value={(detail.approvedAmount ?? 0).toLocaleString()}
+                            hint={
+                              // Until at least one approver has acted, the sanctioned figure is just
+                              // a copy of the requested one — say so explicitly so the label "Sanctioned"
+                              // doesn't mislead in the same way "Approved" did.
+                              detail.approvals.every((a) => a.action !== ApprovalAction.APPROVED)
+                                ? t.requisitions.sanctionedHintPending
+                                : t.requisitions.sanctionedHintRevised
+                            }
+                          />
+                          {detail.requiredApproverCount !== null ? (
+                            <Figure
+                              label={t.requisitions.approverCount}
+                              value={String(detail.requiredApproverCount)}
+                              // Shows *why* it needed that many, even after the setting has moved on.
+                              hint={`${t.requisitions.thresholdNote}: ${(detail.thresholdAtSubmit ?? 0).toLocaleString()}`}
+                            />
+                          ) : null}
+                        </dl>
+
+                        {detail.reason ? (
+                          <div className="mt-4">
+                            <p className="text-xs font-medium uppercase tracking-wide text-ink-subtle">
+                              {t.requisitions.noteLabel}
+                            </p>
+                            <p className="mt-1 whitespace-pre-wrap text-sm text-ink-muted">
+                              {detail.reason}
+                            </p>
+                          </div>
                         ) : null}
                       </div>
 
-                      <dl className="flex flex-wrap gap-10">
-                        <Figure
-                          label={t.requisitions.requested}
-                          value={(detail.requestedAmount ?? 0).toLocaleString()}
-                        />
-                        <Figure
-                          label={t.requisitions.sanctioned}
-                          value={(detail.approvedAmount ?? 0).toLocaleString()}
-                          hint={
-                            // Until at least one approver has acted, the sanctioned figure is just
-                            // a copy of the requested one — say so explicitly so the label "Sanctioned"
-                            // doesn't mislead in the same way "Approved" did.
-                            detail.approvals.every((a) => a.action !== ApprovalAction.APPROVED)
-                              ? t.requisitions.sanctionedHintPending
-                              : t.requisitions.sanctionedHintRevised
-                          }
-                        />
-                        {detail.requiredApproverCount !== null ? (
-                          <Figure
-                            label={t.requisitions.approverCount}
-                            value={String(detail.requiredApproverCount)}
-                            // Shows *why* it needed that many, even after the setting has moved on.
-                            hint={`${t.requisitions.thresholdNote}: ${(detail.thresholdAtSubmit ?? 0).toLocaleString()}`}
+                      {detail.supportingDocument ? (
+                        <div className="flex shrink-0 justify-center md:justify-end">
+                          <SupportingDocumentCard
+                            document={detail.supportingDocument}
+                            url={detail.supportingDocumentUrl}
                           />
-                        ) : null}
-                      </dl>
-
-                      {detail.reason ? (
-                        <p className="mt-4 whitespace-pre-wrap text-sm text-ink-muted">
-                          {detail.reason}
-                        </p>
+                        </div>
                       ) : null}
                     </div>
-
-                    {detail.supportingDocument ? (
-                      <div className="flex shrink-0 justify-center md:justify-end">
-                        <SupportingDocumentCard
-                          document={detail.supportingDocument}
-                          url={detail.supportingDocumentUrl}
-                        />
-                      </div>
-                    ) : null}
                   </div>
-                </Panel>
 
-                <Panel>
-                  <Table
-                    headers={[
-                      t.requisitions.itemName,
-                      t.requisitions.quantity,
-                      t.requisitions.unitPrice,
-                      t.requisitions.lineTotal,
-                    ]}
-                  >
-                    {detail.items.map((item) => (
-                      <tr key={item.id}>
-                        <td className="px-4 py-2.5">
-                          <p className="font-medium text-ink">{item.itemName}</p>
-                          {item.inStockQtyAtSubmit !== null && item.inStockQtyAtSubmit > 0 ? (
-                            <p className="text-xs text-success">
-                              {t.requisitions.inStockHint.replace(
-                                '{n}',
-                                String(item.inStockQtyAtSubmit),
-                              )}
-                            </p>
-                          ) : null}
-                        </td>
-                        <td className="px-4 py-2.5 tabular-nums text-ink">{item.quantity}</td>
-                        <td className="px-4 py-2.5 tabular-nums text-ink-muted">
-                          {item.estimatedUnitPrice.toLocaleString()}
-                        </td>
-                        <td className="px-4 py-2.5 tabular-nums font-medium text-ink">
-                          {item.estimatedLineTotal.toLocaleString()}
-                        </td>
-                      </tr>
-                    ))}
-                  </Table>
-                </Panel>
+                  {/* Internal divider separates the stats zone from the items table so they
+                      read as one card without two outlines. The "Line items" heading gives
+                      the table a label that connects it to the figures above. */}
+                  <div className="border-t border-border px-5 py-4">
+                    <h2 className="mb-3 text-sm font-semibold text-ink">
+                      {t.requisitions.lineItemsHeading}
+                    </h2>
+                    <Table
+                      headers={[
+                        t.requisitions.itemName,
+                        t.requisitions.quantity,
+                        t.requisitions.unitPrice,
+                        t.requisitions.lineTotal,
+                      ]}
+                      // Right-align the numeric columns. Item name stays start-aligned so the
+                      // text anchors to the row data on the left.
+                      headerAligns={['start', 'end', 'end', 'end']}
+                    >
+                      {detail.items.map((item) => (
+                        <tr key={item.id}>
+                          <td className="px-4 py-2.5">
+                            <p className="font-medium text-ink">{item.itemName}</p>
+                            {item.inStockQtyAtSubmit !== null && item.inStockQtyAtSubmit > 0 ? (
+                              <p className="text-xs text-success">
+                                {t.requisitions.inStockHint.replace(
+                                  '{n}',
+                                  String(item.inStockQtyAtSubmit),
+                                )}
+                              </p>
+                            ) : null}
+                          </td>
+                          <td className="px-4 py-2.5 text-right tabular-nums text-ink">
+                            {item.quantity.toLocaleString()}
+                          </td>
+                          <td className="px-4 py-2.5 text-right tabular-nums text-ink-muted">
+                            {item.estimatedUnitPrice.toLocaleString()}
+                          </td>
+                          <td className="px-4 py-2.5 text-right tabular-nums font-medium text-ink">
+                            {item.estimatedLineTotal.toLocaleString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </Table>
+                  </div>
 
-                {/* Transportation card — only when the requester added one. The amount is
-                    already part of the REQUESTED figure above; this card just shows the
-                    breakdown so the approver can see what they were paying for. Description
-                    is always present when the row exists (DB enforces both-or-neither). */}
-                {detail.transportationCost !== null && detail.transportationCost > 0 ? (
-                  <Panel className="p-5">
-                    <div className="flex items-baseline justify-between gap-4">
-                      <div>
-                        <p className="text-sm font-medium text-ink">
-                          {t.requisitions.transportation.detailHeading}
-                        </p>
-                        {detail.transportationDescription ? (
-                          <p className="mt-0.5 text-xs text-ink-subtle">
-                            {detail.transportationDescription}
+                  {/* Transportation breakdown — only when the requester added one. The
+                      amount is already part of the REQUESTED figure above; this zone
+                      breaks it down so the approver can see what they were paying for.
+                      Description is always present when the row exists (DB enforces
+                      both-or-neither). */}
+                  {detail.transportationCost !== null && detail.transportationCost > 0 ? (
+                    <div className="border-t border-border px-5 py-4">
+                      <div className="flex items-baseline justify-between gap-4">
+                        <div>
+                          <p className="text-sm font-medium text-ink">
+                            {t.requisitions.transportation.detailHeading}
                           </p>
-                        ) : null}
+                          {detail.transportationDescription ? (
+                            <div className="mt-1">
+                              <p className="text-xs font-medium uppercase tracking-wide text-ink-subtle">
+                                {t.requisitions.transportationDescriptionLabel}
+                              </p>
+                              <p className="mt-0.5 text-sm text-ink-muted">
+                                {detail.transportationDescription}
+                              </p>
+                            </div>
+                          ) : null}
+                        </div>
+                        <p className="text-right text-lg font-semibold tabular-nums text-ink">
+                          {(detail.transportationCost ?? 0).toLocaleString()}
+                        </p>
                       </div>
-                      <p className="text-lg font-semibold tabular-nums text-ink">
-                        {(detail.transportationCost ?? 0).toLocaleString()}
-                      </p>
                     </div>
-                  </Panel>
-                ) : null}
+                  ) : null}
+                </Panel>
               </div>
 
               <Panel className="p-5">

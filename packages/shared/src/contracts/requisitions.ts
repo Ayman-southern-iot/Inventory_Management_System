@@ -331,6 +331,15 @@ export interface RequisitionDetail extends Requisition {
    * in the lifecycle see a normal status, not "still under revision".
    */
   revisedAfterSendBack: boolean;
+  /**
+   * Funding figures at every stage transition this requisition has reached so far, plus
+   * the figures as they stood at each transition. Powers the "Money and purchasing" stage
+   * selector on the Requisition Detail page. Empty array for requisitions that pre-date
+   * the migration or have not yet transitioned past submit.
+   *
+   * Imported type-only to avoid a circular import between `requisitions` and `funds`.
+   */
+  fundingSnapshots: import('./funds.js').RequisitionFundingSnapshot[];
 }
 
 /* -------------------------------------------------------------- delegation */

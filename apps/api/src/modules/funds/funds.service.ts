@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
 import {
   RequisitionEventType,
   RequisitionStatus,
@@ -69,6 +69,9 @@ export class FundsService {
   constructor(
     @Inject(DB) private readonly db: Db,
     private readonly repo: FundsRepository,
+    // Forward-ref: RequisitionsModule also imports FundsModule so RequisitionsService can
+    // call our snapshot hooks. A plain `@Inject` would resolve before the other side is ready.
+    @Inject(forwardRef(() => RequisitionsRepository))
     private readonly requisitions: RequisitionsRepository,
     private readonly audit: AuditService,
     private readonly notifications: NotificationsService,
@@ -98,6 +101,10 @@ export class FundsService {
         actorId,
         { note: input.note },
       );
+      // Snapshot the figures as they stood the moment money was handed off — funded/spent/
+      // returned are still zero at this point, which is correct: Accounts has not released
+      // anything yet. The pill selector uses this to confirm "BOM done, Accounts pending".
+      await this.recordFundingSnapshot(tx, requisitionId, RequisitionStatus.SENT_TO_ACCOUNTS);
       await this.audit.record(
         {
           action: 'requisition.sent_to_accounts',
@@ -180,6 +187,10 @@ export class FundsService {
         actorId,
         { amount, funded, approved, fullyFunded },
       );
+      // Snapshot the funded figure as of this receipt. If the requisition went through
+      // several partial receipts, the dedup-on-read keeps the latest snapshot alive and the
+      // earlier ones are never surfaced (appendix C of the migration).
+      await this.recordFundingSnapshot(tx, requisitionId, nextStatus);
       await this.audit.record(
         {
           action: 'requisition.funds_received',
@@ -283,6 +294,10 @@ export class FundsService {
         actorId,
         { purchaseId, vendor: input.vendor, totalAmount, lineCount: input.lines.length },
       );
+      // Split-vendor purchases are a real flow — a requisition can land on PURCHASED more
+      // than once. Each snapshot is appended; listSnapshotsForRequisition() dedups to the
+      // latest, which is the figure the pill selector renders.
+      await this.recordFundingSnapshot(tx, requisitionId, RequisitionStatus.PURCHASED);
       await this.audit.record(
         {
           action: 'requisition.purchased',
@@ -511,6 +526,10 @@ export class FundsService {
         actorId,
         { returnedAmount: returned },
       );
+      // `returned` may have grown if a refund was just recorded in the same verify call —
+      // snapshot captures the post-refund figure. UnverifyPurchase below does NOT snapshot:
+      // a rewind to PURCHASED is a correction, not a new money moment.
+      await this.recordFundingSnapshot(tx, requisitionId, RequisitionStatus.PURCHASE_VERIFIED);
       await this.audit.record(
         {
           action: 'requisition.purchase_verified',
@@ -691,6 +710,9 @@ export class FundsService {
 
       if (fullyStocked) {
         await this.requisitions.setStatus(tx, requisitionId, RequisitionStatus.STOCKED, false);
+        // Snapshot at the terminal stocked stage. Same figures the live endpoint would report;
+        // the row's value is the historical "what did the money look like when it shipped".
+        await this.recordFundingSnapshot(tx, requisitionId, RequisitionStatus.STOCKED);
       }
 
       await this.requisitions.appendEvent(
@@ -837,6 +859,10 @@ export class FundsService {
       const fullyHandled = outstandingLines === 0;
       if (fullyHandled) {
         await this.requisitions.setStatus(tx, requisitionId, RequisitionStatus.STOCKED, false);
+        // Snapshot at the terminal stocked stage via the borrow-out path. The figures are
+        // identical to receiveIntoStock's STOCKED snapshot — both paths converge on the same
+        // status with the same money state.
+        await this.recordFundingSnapshot(tx, requisitionId, RequisitionStatus.STOCKED);
       }
 
       await this.requisitions.appendEvent(
@@ -933,5 +959,40 @@ export class FundsService {
     if (!allowed.includes(current as RequisitionStatus)) {
       throw new InvalidFundingTransitionError(current as RequisitionStatus, attempted, allowed);
     }
+  }
+
+  /**
+   * Append a snapshot of the requisition's current money figures to `funding_snapshots`.
+   * Called by every forward-progress stage transition (submit, IM approve, final approve,
+   * BOM generate, send to accounts, funds received, purchased, purchase verified, stocked)
+   * *after* `setStatus` and `appendEvent` run, so the row's `status` field reflects the
+   * stage just entered.
+   *
+   * Reuses the same sum helpers as `funding()` — `sumReceipts`, `sumPurchases`,
+   * `sumReturns` — so a snapshot can never drift from what the live endpoint would have
+   * reported at the same instant. Reads inside the same transaction as the status flip
+   * are safe (the requisition row is locked); there is no race between "snapshot" and
+   * "funding endpoint called immediately after".
+   *
+   * The status set passed in is the "snapshot-eligible" subset — REJECTED, CANCELLED,
+   * and the rewinds (UNVERIFIED_PURCHASE) are filtered out by the callers, not here.
+   */
+  async recordFundingSnapshot(
+    tx: Tx,
+    requisitionId: string,
+    enteredStatus: RequisitionStatus,
+  ): Promise<void> {
+    const figures = await this.repo.computeCurrentFunding(tx, requisitionId);
+    await this.repo.insertSnapshot(tx, {
+      requisitionId,
+      status: enteredStatus,
+      requestedAmount: figures.requestedAmount,
+      approvedAmount: figures.approvedAmount,
+      transportation: figures.transportation,
+      funded: figures.funded,
+      spent: figures.spent,
+      returnedToAccounts: figures.returned,
+      unspent: figures.unspent,
+    });
   }
 }

@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, forwardRef } from '@nestjs/common';
 import { sql, type Transaction } from 'kysely';
 import {
   ApprovalAction,
@@ -19,6 +19,7 @@ import {
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
 import type { Database } from '../../database/schema';
+import { FundsRepository } from '../funds/funds.repository';
 
 type Tx = Transaction<Database> | Db;
 
@@ -48,10 +49,17 @@ function normalizeTransportation(input: SaveRequisitionInput): {
 
 @Injectable()
 export class RequisitionsRepository {
-  constructor(@Inject(DB) private readonly db: Db) {}
+  constructor(
+    @Inject(DB) private readonly db: Db,
+    // Forward-ref: RequisitionsModule and FundsModule are mutually dependent. The repository
+    // reads `funding_snapshots` for the detail endpoint, which is what made the circles
+    // necessary in the first place.
+    @Inject(forwardRef(() => FundsRepository))
+    private readonly fundsRepo: FundsRepository,
+  ) {}
 
-  async findById(id: string) {
-    return this.db.selectFrom('requisitions').selectAll().where('id', '=', id).executeTakeFirst();
+  async findById(id: string, executor: Db | Tx = this.db) {
+    return executor.selectFrom('requisitions').selectAll().where('id', '=', id).executeTakeFirst();
   }
 
   /**
@@ -395,10 +403,11 @@ export class RequisitionsRepository {
     const row = await this.baseSelect().where('requisitions.id', '=', id).executeTakeFirst();
     if (!row) return undefined;
 
-    const [items, approvals, events] = await Promise.all([
+    const [items, approvals, events, fundingSnapshots] = await Promise.all([
       this.listItems(id),
       this.listApprovals(id),
       this.listEvents(id),
+      this.fundsRepo.listSnapshotsForRequisition(id),
     ]);
 
     const base = toRequisition(row);
@@ -446,6 +455,7 @@ export class RequisitionsRepository {
       supportingDocumentUrl: null,
       requiresRevisionTag,
       revisedAfterSendBack,
+      fundingSnapshots,
     };
   }
 

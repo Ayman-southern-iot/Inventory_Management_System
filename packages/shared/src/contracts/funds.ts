@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { uuidSchema } from './common.js';
+import { requisitionStatusSchema } from './requisitions.js';
 
 /**
  * Phase 05 — the money half of a requisition's life: Accounts releases funds, the IM buys the
@@ -287,3 +288,32 @@ export const requisitionFundingSchema = z.object({
   returns: z.array(fundReturnSchema),
 });
 export type RequisitionFunding = z.infer<typeof requisitionFundingSchema>;
+
+/**
+ * Point-in-time capture of money figures at one lifecycle stage transition.
+ *
+ * Populated from the `funding_snapshots` table on every forward-progress transition
+ * (IM_REVIEW, AWAITING_APPROVAL, APPROVED, BOM_GENERATED, SENT_TO_ACCOUNTS,
+ * FUNDS_PARTIAL, FUNDS_RECEIVED, PURCHASED, PURCHASE_VERIFIED, STOCKED). When the same
+ * status is re-entered multiple times — e.g. partial receipts driving FUNDS_PARTIAL back
+ * and forth — the dedup-on-read keeps only the most recent row per status, so the UI
+ * can key one pill per stage without filtering.
+ *
+ * `requestedAmount` stays frozen across every snapshot for the requisition's life; an
+ * approver's revision to `approvedAmount` is visible from the APPROVED snapshot onward.
+ */
+export const requisitionFundingSnapshotSchema = z.object({
+  /** The status the requisition entered when this snapshot was written. */
+  status: requisitionStatusSchema,
+  /** Frozen at submit — never recomputed. */
+  requestedAmount: z.number().nullable(),
+  /** At each snapshot: whatever `requisitions.approved_amount` held at the moment of transition. */
+  approvedAmount: z.number().nullable(),
+  transportation: z.number(),
+  funded: z.number(),
+  spent: z.number(),
+  returnedToAccounts: z.number(),
+  unspent: z.number(),
+  snapshottedAt: z.string(),
+});
+export type RequisitionFundingSnapshot = z.infer<typeof requisitionFundingSnapshotSchema>;

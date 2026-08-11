@@ -1,5 +1,6 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { RequisitionsModule } from '../requisitions/requisitions.module';
+import { FundsModule } from '../funds/funds.module';
 import { SettingsModule } from '../settings/settings.module';
 import { CommonModule } from '../../common/common.module';
 import { PdfModule } from '../pdf/pdf.module';
@@ -18,10 +19,15 @@ import { BomsService } from './boms.service';
  * (OQ-05), `CommonModule` for the idempotency service on `POST /boms` and the render
  * endpoint, `PdfModule` (task 4.3) for the renderer + signed-URL signer, and `AuditModule`
  * (phase 06) so every BOM mutation writes a row to `audit_log` in the same transaction.
+ *
+ * `FundsModule` (forward-ref) is imported for `FundsRepository`, which the BOM-creation hook
+ * uses to write the BOM stage snapshot. The forwardRef is needed because `FundsModule`
+ * already imports `RequisitionsModule`.
  */
 @Module({
   imports: [
     RequisitionsModule,
+    forwardRef(() => FundsModule),
     SettingsModule,
     CommonModule,
     PdfModule,

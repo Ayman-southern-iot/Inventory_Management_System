@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
 import { sql } from 'kysely';
 import {
   ApprovalAction,
@@ -27,6 +27,7 @@ import { UsersService } from '../users/users.service';
 import { SettingsService } from '../settings/settings.service';
 import { ApproverSlotsService } from '../settings/approver-slots.service';
 import { RequisitionsRepository } from './requisitions.repository';
+import { FundsRepository } from '../funds/funds.repository';
 import { DelegationsService } from './delegations.service';
 import {
   ApprovalAlreadyActedError,
@@ -48,6 +49,10 @@ export class RequisitionsService {
   constructor(
     @Inject(DB) private readonly db: Db,
     private readonly repo: RequisitionsRepository,
+    // Forward-ref: pairs with the same import on `RequisitionsRepository` — the modules are
+    // mutually dependent now that `findDetail` reads `funding_snapshots` via the funds repo.
+    @Inject(forwardRef(() => FundsRepository))
+    private readonly fundsRepo: FundsRepository,
     private readonly settings: SettingsService,
     private readonly approverSlots: ApproverSlotsService,
     private readonly delegations: DelegationsService,
@@ -287,6 +292,22 @@ export class RequisitionsService {
         thresholdAtSubmit: threshold,
         requiredApproverCount: approverCount,
       });
+      // Snapshot at submit — captures the frozen requested_amount (and the default
+      // approved_amount, which mirrors requested until an approver revises it). No money
+      // activity exists yet, so the rest are zero. Lives on the funds repo, not on
+      // FundsService, to avoid a service-to-service import.
+      const submitFigures = await this.fundsRepo.computeCurrentFunding(tx, id);
+      await this.fundsRepo.insertSnapshot(tx, {
+        requisitionId: id,
+        status: RequisitionStatus.IM_REVIEW,
+        requestedAmount: submitFigures.requestedAmount,
+        approvedAmount: submitFigures.approvedAmount,
+        transportation: submitFigures.transportation,
+        funded: submitFigures.funded,
+        spent: submitFigures.spent,
+        returnedToAccounts: submitFigures.returned,
+        unspent: submitFigures.unspent,
+      });
       await this.audit.record(
         {
           action: 'requisition.submit',
@@ -472,6 +493,24 @@ export class RequisitionsService {
           actorId,
           { note: input.note },
         );
+        // Snapshot at IM-approve. `approved_amount` is still the default (= requested)
+        // because the IM stage does not revise the sanctioned amount; that's the
+        // approvers' job. So the snapshot's approvedAmount mirrors requestedAmount here.
+        const imFigures = await this.fundsRepo.computeCurrentFunding(
+          tx,
+          approval.requisition_id,
+        );
+        await this.fundsRepo.insertSnapshot(tx, {
+          requisitionId: approval.requisition_id,
+          status: RequisitionStatus.AWAITING_APPROVAL,
+          requestedAmount: imFigures.requestedAmount,
+          approvedAmount: imFigures.approvedAmount,
+          transportation: imFigures.transportation,
+          funded: imFigures.funded,
+          spent: imFigures.spent,
+          returnedToAccounts: imFigures.returned,
+          unspent: imFigures.unspent,
+        });
         await recordDecision();
         await notifyOn('requisition.im_approved', [requisition.requester_id]);
         // Now, and only now, the money approvers can act — so now is when they are told.
@@ -513,6 +552,25 @@ export class RequisitionsService {
           actorId,
           {},
         );
+        // Snapshot at final-approve. This is the canonical "Approved" stage figure: if any
+        // approver revised `approved_amount` (e.g. REQ-000018 — 4,178 requested, revised down
+        // to 3,000), `setApprovedAmount` has already run above, so the snapshot captures the
+        // revised figure. Requested_amount stays at its frozen value across every snapshot.
+        const finalFigures = await this.fundsRepo.computeCurrentFunding(
+          tx,
+          approval.requisition_id,
+        );
+        await this.fundsRepo.insertSnapshot(tx, {
+          requisitionId: approval.requisition_id,
+          status: RequisitionStatus.APPROVED,
+          requestedAmount: finalFigures.requestedAmount,
+          approvedAmount: finalFigures.approvedAmount,
+          transportation: finalFigures.transportation,
+          funded: finalFigures.funded,
+          spent: finalFigures.spent,
+          returnedToAccounts: finalFigures.returned,
+          unspent: finalFigures.unspent,
+        });
       }
 
       await recordDecision();

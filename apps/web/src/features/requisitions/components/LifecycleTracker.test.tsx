@@ -51,6 +51,7 @@ function requisition(overrides: Partial<RequisitionDetail> = {}): RequisitionDet
     transportationDescription: null,
     requiresRevisionTag: false,
     revisedAfterSendBack: false,
+    fundingSnapshots: [],
     ...overrides,
   };
 }
@@ -188,10 +189,30 @@ describe('LifecycleTracker', () => {
       />,
     );
 
-    // CLOSED is in the currentStatuses of 'inStock', so the last chip is current.
+    // CLOSED is a terminal-completed state. Every chip — including the last one — is
+    // done (green check), not current (amber). The previous behaviour rendered the
+    // final chip as amber/current which read as "still pending" when the requisition
+    // was actually finished.
     const items = chips();
-    expect(items[8]!.querySelector('[aria-current="step"]')).toBeInTheDocument();
-    // The earlier chips are done, not current.
-    expect(items[0]!.querySelector('[aria-current="step"]')).toBeNull();
+    for (const item of items) {
+      expect(item.querySelector('[aria-current="step"]')).toBeNull();
+    }
+  });
+
+  it('renders the final chip as done when the requisition is STOCKED (not amber/current)', () => {
+    render(
+      <LifecycleTracker
+        requisition={requisition({
+          status: RequisitionStatus.STOCKED,
+          events: [
+            event(RequisitionEventType.SUBMITTED, '2026-01-15T10:00:00.000Z'),
+            event(RequisitionEventType.STOCKED, '2026-01-17T16:00:00.000Z'),
+          ],
+        })}
+      />,
+    );
+    const items = chips();
+    // No chip is "current" because STOCKED is terminal-completed — the lifecycle has ended.
+    expect(items[8]!.querySelector('[aria-current="step"]')).toBeNull();
   });
 });

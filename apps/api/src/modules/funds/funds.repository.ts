@@ -1,6 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { Transaction } from 'kysely';
-import type { FundReceipt, FundReturn, Purchase, PurchaseLine } from '@ims/shared';
+import type {
+  FundReceipt,
+  FundReturn,
+  Purchase,
+  PurchaseLine,
+  RequisitionStatus,
+} from '@ims/shared';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
 import type { Database } from '../../database/schema';
@@ -439,5 +445,167 @@ export class FundsRepository {
       .select('id')
       .execute();
     return new Set(rows.map((row) => row.id));
+  }
+
+  /* ----------------------------------------------------------- snapshots */
+
+  /**
+   * Append one funding snapshot to the requisition's history. Called by the funds/requisitions
+   * service hooks at every forward-progress stage transition (migration 0025). The figures are
+   * computed inside the same transaction that flipped the status, so the snapshot's `unspent`
+   * matches what `funding()` would have returned to the API at that instant.
+   *
+   * `transportation` is read from `requisitions.transportation_cost` because it never appears
+   * in `purchases` — it was already "spent" when the goods physically arrived (vehicles, fuel,
+   * porter). See `funding()` for the same fold.
+   */
+  async insertSnapshot(
+    tx: Tx,
+    values: {
+      requisitionId: string;
+      status: string;
+      requestedAmount: number | null;
+      approvedAmount: number | null;
+      transportation: number;
+      funded: number;
+      spent: number;
+      returnedToAccounts: number;
+      unspent: number;
+    },
+  ): Promise<void> {
+    await tx
+      .insertInto('funding_snapshots')
+      .values({
+        requisition_id: values.requisitionId,
+        status: values.status,
+        requested_amount: values.requestedAmount === null ? null : values.requestedAmount.toFixed(2),
+        approved_amount: values.approvedAmount === null ? null : values.approvedAmount.toFixed(2),
+        transportation: values.transportation.toFixed(2),
+        funded: values.funded.toFixed(2),
+        spent: values.spent.toFixed(2),
+        returned_to_accounts: values.returnedToAccounts.toFixed(2),
+        unspent: values.unspent.toFixed(2),
+      })
+      .execute();
+  }
+
+  /**
+   * Compute the same five figures `FundsService.funding()` returns, but at a specific point in
+   * time inside a transaction — used to write funding_snapshots rows. Lives on the repo (not
+   * the service) so `BomsService` and `RequisitionsService` can both call it without dragging
+   * in the funds service module.
+   *
+   * Mirrors `funds.service.ts` line for line; if the live formula changes there, change here.
+   */
+  async computeCurrentFunding(
+    tx: Tx,
+    requisitionId: string,
+  ): Promise<{
+    requestedAmount: number | null;
+    approvedAmount: number | null;
+    transportation: number;
+    funded: number;
+    spent: number;
+    returned: number;
+    unspent: number;
+  }> {
+    const requisition = await tx
+      .selectFrom('requisitions')
+      .selectAll()
+      .where('id', '=', requisitionId)
+      .executeTakeFirst();
+    if (!requisition) {
+      return {
+        requestedAmount: null,
+        approvedAmount: null,
+        transportation: 0,
+        funded: 0,
+        spent: 0,
+        returned: 0,
+        unspent: 0,
+      };
+    }
+    const [funded, spent, returned] = await Promise.all([
+      this.sumReceipts(requisitionId, tx),
+      this.sumPurchases(requisitionId, tx),
+      this.sumReturns(requisitionId, tx),
+    ]);
+    const approved = requisition.approved_amount === null ? null : Number(requisition.approved_amount);
+    const requested = requisition.requested_amount === null ? null : Number(requisition.requested_amount);
+    const transportation =
+      requisition.transportation_cost === null ? 0 : Number(requisition.transportation_cost);
+    const unspent = Math.max(0, Math.round((funded - spent - transportation - returned) * 100) / 100);
+    return {
+      requestedAmount: requested,
+      approvedAmount: approved,
+      transportation,
+      funded: Math.round(funded * 100) / 100,
+      spent: Math.round(spent * 100) / 100,
+      returned: Math.round(returned * 100) / 100,
+      unspent,
+    };
+  }
+
+  /**
+   * Read all snapshots for one requisition, **deduped to the most recent row per status**.
+   *
+   * The table is append-only so a status re-entered multiple times (e.g. `PURCHASED` for a
+   * split-vendor purchase, `FUNDS_PARTIAL` after each partial receipt) will have several rows.
+   * The pill selector on the Requisition Detail page keys by status — one pill per stage — so
+   * the dedup belongs here, not on the client. `DISTINCT ON (status)` does it in one pass and
+   * keeps the index `(requisition_id, status)` usable.
+   *
+   * The order returned matches the lifecycle order so the frontend can iterate without
+   * re-sorting; the caller may rearrange if it needs to highlight the "current" stage.
+   */
+  async listSnapshotsForRequisition(
+    requisitionId: string,
+    executor: Db | Tx = this.db,
+  ): Promise<
+    Array<{
+      status: RequisitionStatus;
+      requestedAmount: number | null;
+      approvedAmount: number | null;
+      transportation: number;
+      funded: number;
+      spent: number;
+      returnedToAccounts: number;
+      unspent: number;
+      snapshottedAt: string;
+    }>
+  > {
+    const rows = await executor
+      .selectFrom('funding_snapshots')
+ .where('requisition_id', '=', requisitionId)
+      .distinctOn('status')
+      .select([
+        'status',
+        'requested_amount',
+        'approved_amount',
+        'transportation',
+        'funded',
+        'spent',
+        'returned_to_accounts',
+        'unspent',
+        'snapshotted_at',
+      ])
+      .orderBy('status')
+      .orderBy('snapshotted_at', 'desc')
+      .execute();
+
+    return rows.map((row) => ({
+      // The `status` column is `text`; only forward-progress enum values are ever written
+      // (the snapshot hooks enforce this) so the cast is safe — defensive parsing would
+      // just turn a future enum addition into a louder crash, which we don't want here.
+      status: row.status as RequisitionStatus,
+      requestedAmount: row.requested_amount === null ? null : Number(row.requested_amount),
+      approvedAmount: row.approved_amount === null ? null : Number(row.approved_amount),
+      transportation: money(row.transportation),
+      funded: money(row.funded),
+      spent: money(row.spent),
+      returnedToAccounts: money(row.returned_to_accounts),
+      unspent: money(row.unspent),
+      snapshottedAt: row.snapshotted_at.toISOString(),
+    }));
   }
 }

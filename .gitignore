@@ -1,8 +1,13 @@
 node_modules/
+**/node_modules/
 dist/
+**/dist/
 build/
+**/build/
 .turbo/
+**/.turbo/
 coverage/
+**/coverage/
 
 .env
 .env.*
@@ -17,6 +22,7 @@ infra/backups/
 !.vscode/extensions.json
 
 storage/
+**/storage/
 *.pdf
 !docs/**/*.pdf
 
@@ -25,6 +31,20 @@ storage/
 # Playwright MCP artefacts from local UI verification
 .playwright-mcp/
 *.png
+playwright-shots/
+
+# Puku CLI tooling cache (local agent state, projects, plans — not part of the repo)
+.puku-cli/
+
+# Claude / superpowers skills + agents caches
+.claude/skills/
+.superpowers/
+.superpowers-*.log
+
+# Stray test-run logs that some shells create with literal absolute paths as
+# filenames (e.g. C:UsersMSIbaseline-run.log). Pattern matches a leading drive
+# letter then anything up to .log.
+**/[A-Z]:*.log
 
 # Graphify knowledge graph (generated locally, large artifacts)
 graphify-out/

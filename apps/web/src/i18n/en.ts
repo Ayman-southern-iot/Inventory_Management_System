@@ -319,6 +319,13 @@ export const t = {
   funds: {
     title: 'Money and purchasing',
     subtitle: 'Where this requisition has got to after the BOM.',
+    // Stage selector above the figure row — pills match the Lifecycle stepper's stage
+    // labels. Disabled pills mean "this stage has no snapshot yet" (pre-migration or
+    // not yet reached), not "zero spend".
+    snapshotStageLabel: 'Figures at stage',
+    snapshotStageDisabledHint: '{stage} has not been reached yet — no snapshot to show.',
+    // Shown next to figures when the pill selector is on a historical snapshot.
+    snapshotStageSuffix: 'Figures as of {stage}',
     // summary figures
     approved: 'Approved',
     funded: 'Funded',
@@ -733,6 +740,13 @@ export const t = {
     inStockAdvisory: 'Advisory only — you can still request more.',
     fromCatalogue: 'From the catalogue',
     freeText: 'Not in the catalogue',
+    // detail page only — the items table subheading inside the merged stats+items card.
+    // The form-page itemsHeading is for the editor; this is for the read-only view.
+    lineItemsHeading: 'Line items',
+    // Field labels for the unlabelled grey text. Adds clarity to "why this requisition" and
+    // the transportation breakdown without a heavy redesign.
+    noteLabel: 'Note',
+    transportationDescriptionLabel: 'Description',
     // money
     requested: 'Requested',
     // Pre-approval, this column is seeded with the requested figure so the BOM has a number
