@@ -85,6 +85,10 @@ export function BomLineEditorRow({
               onBlur={field.onBlur}
               disabled={removed}
               error={errorQuantity}
+              // The IM edits quantity per line and routinely forgets what the requisition
+              // asked for. Read-only hint keeps the source figure visible next to the input
+              // so the IM never has to flip back to the requisition form to double-check.
+              hint={t.boms.lineSourceQuantityHint.replace('{qty}', String(sourceQuantity))}
             />
           )}
         />
