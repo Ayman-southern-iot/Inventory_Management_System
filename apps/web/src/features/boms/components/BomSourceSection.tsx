@@ -83,10 +83,10 @@ export function BomSourceSection({
       </Table>
 
       {/* Per-source breakdown mirrors the printed PDF so IM/Accounts see the same numbers
-          online as in the document they sign: items subtotal, transportation (only when
-          non-zero), and total amount. The Transportation row carries the description as a
-          right-aligned hint so the IM can read what the cost covered without leaving the
-          table. */}
+          online as in the document they sign: transportation first (only when non-zero),
+          then items subtotal, then total amount. The Transportation row carries the
+          description as a right-aligned hint so the IM can read what the cost covered
+          without leaving the table. */}
       <SourceTotals source={source} lines={lines} />
 
       <div className="mt-4">
@@ -118,7 +118,6 @@ function SourceTotals({
 
   return (
     <div className="mt-2 flex flex-col gap-1 border-t border-border pt-2 text-sm">
-      <TotalsRow label={t.boms.itemsSubtotal} value={itemsSubtotal} muted />
       {hasTransport ? (
         <TotalsRow
           label={t.boms.transportation}
@@ -127,6 +126,7 @@ function SourceTotals({
           muted
         />
       ) : null}
+      <TotalsRow label={t.boms.itemsSubtotal} value={itemsSubtotal} muted />
       <TotalsRow label={t.boms.totalAmount} value={total} emphasis />
     </div>
   );

@@ -116,7 +116,10 @@ function renderItems(detail: BomDetail): string {
   // both already include transportation, so the bottom number has to as well. `detail.subtotal`
   // is the items-only sum (what `POST /boms` line totals write), so we add the per-source
   // transportation on top. The breakdown prints three rows when transportation exists
-  // (Transportation / Items subtotal / Grand total) and one row when it does not (Subtotal).
+  // (Items subtotal / Transportation / Grand total) and one row when it does not (Subtotal).
+  // The transportation row sits *between* items subtotal and grand total so the eye travels
+  // from itemised cost → rolled-up travel → what Accounts pays — the order the operator
+  // asked for.
   const transportationSources = detail.sources.filter(
     (source) => source.transportationCost !== null && source.transportationCost > 0,
   );
@@ -149,11 +152,11 @@ function renderItems(detail: BomDetail): string {
     ...(transportationRows.length > 0
       ? [
           '  <tfoot>',
-          ...transportationRows,
           '    <tr>',
           '      <td colspan="4" class="total-label">Items subtotal</td>',
           `      <td class="num total-subtotal">${escape(money(detail.subtotal))}</td>`,
           '    </tr>',
+          ...transportationRows,
           '    <tr>',
           '      <td colspan="4" class="total-label">Grand total</td>',
           `      <td class="num total-grand">${escape(money(grandTotal))}</td>`,

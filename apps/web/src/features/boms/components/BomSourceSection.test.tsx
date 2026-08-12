@@ -75,6 +75,24 @@ describe('BomSourceSection — per-source breakdown', () => {
       document.querySelector('span.italic')?.textContent,
     ).toContain('Pickup truck to Gazipur');
     expect(rowValue(t.boms.totalAmount).textContent).toBe('2,400');
+
+    // The order matters: the breakdown reads Transportation → Items subtotal → Total
+    // amount so it mirrors the BOM PDF layout (operator, 2026-08-12). Compare the DOM
+    // order of the three breakdown labels against the rendered sequence.
+    const breakdownContainer = rowValue(t.boms.totalAmount).closest('div.border-t');
+    const breakdownLabels = breakdownContainer
+      ? Array.from(breakdownContainer.querySelectorAll('span')).map((s) => s.textContent ?? '')
+      : [];
+    const labelsByPos = breakdownLabels.filter((text) =>
+      [t.boms.transportation, t.boms.itemsSubtotal, t.boms.totalAmount].some((label) =>
+        text.includes(label),
+      ),
+    );
+    // Transportation appears with its description chip, so the label text is
+    // "Transportation — Pickup truck to Gazipur"; the other two are exact matches.
+    expect(labelsByPos[0]).toMatch(/^Transportation/);
+    expect(labelsByPos[1]).toContain(t.boms.itemsSubtotal);
+    expect(labelsByPos[2]).toContain(t.boms.totalAmount);
   });
 
   it('treats transportationCost === 0 the same as null (no row, total = items)', () => {
