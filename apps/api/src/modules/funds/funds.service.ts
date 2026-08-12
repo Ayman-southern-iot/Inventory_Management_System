@@ -258,8 +258,60 @@ export class FundsService {
         );
       }
 
+      // The BOM is the source of truth for purchase quantity *only when* the IM edited it.
+      // A BOM line whose quantity matches its source (`bom_lines.quantity === requisition_items.quantity`)
+      // carries no override, so the wire quantity stands — preserving the pre-customiser
+      // behaviour where the IM bought whatever they wanted up to what was approved.
+      //
+      // When the IM *did* shrink the line (50 → 30 in the customiser), the wire quantity
+      // usually reflects the stale dialog and must be capped to the BOM ceiling. The IM
+      // can still legitimately exceed it via the dialog's `overBomQuantity` flag — the
+      // server records the BOM quantity but flags the row so the audit trail shows why.
+      // A wire below the ceiling is a partial shipment — keep the wire quantity.
+      //
+      // When no live BOM exists at all (older requisitions pre-dating the BOM flow), the
+      // wire is trusted verbatim — same fallback the test fixtures exercise.
+      //
+      // The lookup joins both `bom_lines.quantity` and `requisition_items.quantity` so we
+      // can tell whether the IM actually shrunk the line vs. merely inheriting the source.
+      // If the two numbers agree, there is no override to enforce.
+      const bomMap = await this.repo.getLiveBomForRequisition(requisitionId, tx);
+
+      // `settled` is what actually gets persisted: every per-line `quantity` has been
+      // reconciled against the BOM (when the IM shrunk it), and the wire-supplied
+      // `overBomQuantity` flag is recomputed.
+      const settled = input.lines.map((line) => {
+        const bom = bomMap.get(line.requisitionItemId);
+        const bomQuantity = bom?.quantity;
+        const sourceQuantity = bom?.sourceQuantity;
+        // The BOM "ceiling" rule only fires when the IM *actually* shrunk the line. A line
+        // whose BOM quantity matches the source carries no override, so the wire wins.
+        const isShrunk =
+          bomQuantity !== undefined && sourceQuantity !== undefined && bomQuantity < sourceQuantity;
+        const quantity = isShrunk ? Math.min(line.quantity, bomQuantity) : line.quantity;
+        const overBomQuantity = isShrunk && line.quantity > bomQuantity;
+        // When the server flips `overBomQuantity` on (the wire thought the dialog still
+        // showed the source qty), the note stays as the IM typed it. If the IM did not
+        // type one — the common case — the server adds a default so the database
+        // constraint `purchase_lines_over_bom_needs_note` does not reject the row.
+        const overBomNote =
+          overBomQuantity && (line.overBomNote ?? '').trim().length === 0
+            ? `Wire quantity exceeded the BOM ceiling (${line.quantity} → ${quantity})`
+            : line.overBomNote;
+        return {
+          requisitionItemId: line.requisitionItemId,
+          bomLineId: isShrunk && bom ? bom.bomLineId : null,
+          quantity,
+          unitCost: line.unitCost,
+          overBomQuantity,
+          overBomNote,
+        };
+      });
+
+      // The purchase total uses the persisted `quantity` (not the wire), so the column stays
+      // consistent with `purchase_lines.quantity * unit_cost` for any auditor pulling receipts.
       const totalAmount = round2(
-        input.lines.reduce((sum, line) => sum + line.unitCost * line.quantity, 0),
+        settled.reduce((sum, line) => sum + line.unitCost * line.quantity, 0),
       );
 
       const purchaseId = await this.repo.insertPurchase(tx, {
@@ -272,19 +324,7 @@ export class FundsService {
         recordedBy: actorId,
       });
 
-      await this.repo.insertPurchaseLines(
-        tx,
-        purchaseId,
-        input.lines.map((line) => ({
-          requisitionItemId: line.requisitionItemId,
-          // Linking back to the BOM line is 5.6's concern; nothing reads it yet.
-          bomLineId: null,
-          quantity: line.quantity,
-          unitCost: line.unitCost,
-          overBomQuantity: line.overBomQuantity,
-          overBomNote: line.overBomNote,
-        })),
-      );
+      await this.repo.insertPurchaseLines(tx, purchaseId, settled);
 
       await this.requisitions.setStatus(tx, requisitionId, RequisitionStatus.PURCHASED, false);
       await this.requisitions.appendEvent(

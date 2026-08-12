@@ -447,6 +447,48 @@ export class FundsRepository {
     return new Set(rows.map((row) => row.id));
   }
 
+  /**
+   * The live BOM's authoritative quantity and bom_line_id for every requisition item it covers.
+   * Used by `recordPurchase` so a purchase line inherits the IM's quantity override instead of
+   * the original requisition quantity — without this, stock receives 50 units even though the
+   * IM bought 30. Returns an empty map if the requisition has no live BOM (the pre-customize
+   * flow), in which case the caller falls back to the wire quantity.
+   *
+   * A requisition with two live BOMs (theoretically impossible — `boms.subtotal` + a partial
+   * index on `bom_requisitions.is_void` enforces one-live-BOM — but defensive) would have the
+   * two lines collapsed by the inner `INNER JOIN DISTINCT ON`; in practice the query picks the
+   * newest line.
+   */
+  async getLiveBomForRequisition(
+    requisitionId: string,
+    executor: Db | Tx = this.db,
+  ): Promise<Map<string, { bomLineId: string; quantity: number; sourceQuantity: number }>> {
+    const rows = await executor
+      .selectFrom('bom_lines')
+      .innerJoin('boms', 'boms.id', 'bom_lines.bom_id')
+      .innerJoin('bom_requisitions', 'bom_requisitions.bom_id', 'boms.id')
+      .innerJoin('requisition_items', 'requisition_items.id', 'bom_lines.requisition_item_id')
+      .where('bom_requisitions.requisition_id', '=', requisitionId)
+      .where('bom_requisitions.is_void', '=', false)
+      .where('boms.is_void', '=', false)
+      .select([
+        'bom_lines.id as bom_line_id',
+        'bom_lines.requisition_item_id',
+        'bom_lines.quantity',
+        'requisition_items.quantity as source_quantity',
+      ])
+      .execute();
+    const map = new Map<string, { bomLineId: string; quantity: number; sourceQuantity: number }>();
+    for (const row of rows) {
+      map.set(row.requisition_item_id, {
+        bomLineId: row.bom_line_id,
+        quantity: row.quantity,
+        sourceQuantity: row.source_quantity,
+      });
+    }
+    return map;
+  }
+
   /* ----------------------------------------------------------- snapshots */
 
   /**
