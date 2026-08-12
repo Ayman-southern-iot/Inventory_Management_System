@@ -658,6 +658,17 @@ export class BomsService {
     return detail;
   }
 
+  /**
+   * The live BOM covering one requisition. Used by the funds panel to fetch the IM's quantity
+   * override (so the record-purchase dialog displays and submits the BOM quantity, not the
+   * original requisition quantity — see funds.service.ts recordPurchase). Returns `null`
+   * when no live BOM exists; the client falls back to wire quantity.
+   */
+  async findLiveByRequisition(requisitionId: string): Promise<BomDetail | null> {
+    const detail = await this.repo.findLiveBomByRequisition(requisitionId);
+    return detail ?? null;
+  }
+
   /* ----------------------------------------------------------- helpers */
 
   private async assertCanGenerate(actorId: string): Promise<void> {

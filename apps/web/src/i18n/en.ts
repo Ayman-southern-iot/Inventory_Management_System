@@ -319,13 +319,11 @@ export const t = {
   funds: {
     title: 'Money and purchasing',
     subtitle: 'Where this requisition has got to after the BOM.',
-    // Stage selector above the figure row — pills match the Lifecycle stepper's stage
-    // labels. Disabled pills mean "this stage has no snapshot yet" (pre-migration or
-    // not yet reached), not "zero spend".
-    snapshotStageLabel: 'Figures at stage',
-    snapshotStageDisabledHint: '{stage} has not been reached yet — no snapshot to show.',
-    // Shown next to figures when the pill selector is on a historical snapshot.
-    snapshotStageSuffix: 'Figures as of {stage}',
+    // Single back arrow that walks backwards through the IM lifecycle. No free-form
+    // stage selector — the lifecycle is strictly ordered and the server refuses
+    // anything out of turn, so a pill selector would let the user reach for a
+    // forbidden state.
+    back: 'Back',
     // summary figures
     approved: 'Approved',
     funded: 'Funded',
@@ -908,7 +906,7 @@ export const t = {
         'Optional. Add the cost of getting to the market — fuel, vehicle hire, porter, etc. Rolls up into the requested amount.',
       amount: 'Amount (BDT)',
       description: 'Description',
-      descriptionPlaceholder: 'e.g. Pickup truck to Gazipur',
+      descriptionPlaceholder: 'e.g. Pickup truck to Gazipur (optional)',
       missingDescription: 'Add a short description so approvers know what this covers.',
       detailHeading: 'Transportation',
       none: 'No transportation cost.',
@@ -960,6 +958,7 @@ export const t = {
     vendor: 'Vendor',
     lineTotal: 'Line total',
     lineQuantityLabel: 'Qty',
+    lineSourceQuantityHint: 'Originally {qty} on the requisition',
     removeLineLabel: 'Drop from BOM',
     bounceWarning:
       'This BOM will bounce — its sources will return to the approver queue.',

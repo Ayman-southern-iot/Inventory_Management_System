@@ -94,6 +94,20 @@ export class BomsController {
     return this.boms.requireDetail(id);
   }
 
+  /**
+   * Live BOM for a requisition — the IM's quantity override is what the funds panel renders
+   * in the record-purchase dialog. Returns `null` if the requisition has no live BOM (older
+   * requisitions, or pre-customize fixtures); the client falls back to the original quantity.
+   * Same role gate as `/boms/:id` so a general user cannot enumerate BOMs via this route.
+   */
+  @Get('by-requisition/:requisitionId')
+  @Roles(Role.INVENTORY_MANAGER, Role.ADMIN)
+  async findByRequisition(
+    @Param('requisitionId', ParseUUIDPipe) requisitionId: string,
+  ): Promise<BomDetail | null> {
+    return this.boms.findLiveByRequisition(requisitionId);
+  }
+
   @Post(':id/void')
   @HttpCode(HttpStatus.OK)
   async voidBom(

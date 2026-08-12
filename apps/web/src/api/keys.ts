@@ -91,6 +91,12 @@ export const queryKeys = {
     /** The picker that drives the generate page — short cache so the IM does not wait on a
      *  full list refetch while they tick candidates. */
     candidates: () => ['boms', 'candidates'] as const,
+    /**
+     * The live BOM covering one requisition. The funds panel needs the IM's quantity override
+     * to render the record-purchase dialog and submit it. Null when the requisition has no
+     * live BOM; the client falls back to wire quantity.
+     */
+    byRequisition: (requisitionId: string) => ['boms', 'by-requisition', requisitionId] as const,
   },
   auditLog: {
     all: () => ['audit-log'] as const,

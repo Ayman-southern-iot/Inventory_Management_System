@@ -52,6 +52,24 @@ export function useBom(id: string) {
 }
 
 /**
+ * The live BOM covering a requisition — null if no live BOM exists. The funds panel uses
+ * this to read the IM's quantity override per line (so the record-purchase dialog displays
+ * and submits the BOM quantity, not the original requisition quantity — see Issue 5). When
+ * the data is `null`, callers fall back to the wire quantity.
+ */
+export function useBomForRequisition(requisitionId: string) {
+  return useQuery({
+    queryKey: queryKeys.boms.byRequisition(requisitionId),
+    queryFn: ({ signal }) =>
+      api.get<BomDetail | null>(`/boms/by-requisition/${requisitionId}`, signal),
+    enabled: requisitionId.length > 0,
+    // A stale BOM can silently corrupt a purchase. Five-minute cache matches the live BOM's
+    // own read path; if the IM has just edited a quantity they will refresh first.
+    staleTime: 5 * 60_000,
+  });
+}
+
+/**
  * Every write invalidates the lists and, where it applies, the one detail that changed.
  * Generate / void both reshape a BOM, so the matching detail receives the new shape via
  * `setQueryData` — the next read does not pay for a refetch round-trip.

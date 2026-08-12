@@ -46,11 +46,22 @@ export function FundsActionDialog({
   action,
   requisition,
   funding,
+  bomQuantities,
   onClose,
 }: {
   action: FundsAction | null;
   requisition: RequisitionDetail;
   funding: RequisitionFunding | null;
+  /**
+   * Per-line quantity the IM set when generating the BOM. Indexed by `requisitionItemId`.
+   * Empty when the requisition has no live BOM (e.g. older requisitions pre-dating the
+   * BOM flow); the dialog falls back to `requisition.items[].quantity` in that case.
+   *
+   * The server still re-derives this defensively (see `FundsService.recordPurchase`),
+   * but mirroring it on the client means the label and the wire payload reflect what
+   * the IM actually planned.
+   */
+  bomQuantities?: Map<string, number>;
   onClose: () => void;
 }) {
   const toast = useToast();
@@ -117,13 +128,21 @@ export function FundsActionDialog({
             note: note.trim() || null,
             lines: requisition.items
               .filter((item) => Number(unitCosts[item.id] ?? '') > 0)
-              .map((item) => ({
-                requisitionItemId: item.id,
-                quantity: item.quantity,
-                unitCost: Number(unitCosts[item.id]),
-                overBomQuantity: false,
-                overBomNote: null,
-              })),
+              .map((item) => {
+                // Prefer the BOM-edited quantity. The IM may have shrunk a 50-unit line
+                // to 30 in the BOM customiser; the wire payload must reflect what was
+                // actually bought, not the original requisition quantity. The server
+                // also re-derives this as a ceiling defense-in-depth.
+                const bomQuantity = bomQuantities?.get(item.id);
+                const quantity = bomQuantity ?? item.quantity;
+                return {
+                  requisitionItemId: item.id,
+                  quantity,
+                  unitCost: Number(unitCosts[item.id]),
+                  overBomQuantity: bomQuantity !== undefined && item.quantity > bomQuantity,
+                  overBomNote: null,
+                };
+              }),
           });
           toast.success(t.funds.purchaseRecorded);
           break;
@@ -226,20 +245,27 @@ export function FundsActionDialog({
               onChange={(event) => setWhen(event.target.value)}
             />
             <div className="flex flex-col gap-2">
-              {requisition.items.map((item) => (
-                <TextField
-                  key={item.id}
-                  label={`${item.itemName} × ${item.quantity}`}
-                  hint={t.funds.unitCost}
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={unitCosts[item.id] ?? ''}
-                  onChange={(event) =>
-                    setUnitCosts((previous) => ({ ...previous, [item.id]: event.target.value }))
-                  }
-                />
-              ))}
+              {requisition.items.map((item) => {
+                // The label and the wire payload agree on the quantity — BOM-edited if
+                // a BOM exists, otherwise the original requisition quantity. Keeps the
+                // IM from typing a unit cost for 50 units when only 30 were planned.
+                const bomQuantity = bomQuantities?.get(item.id);
+                const quantity = bomQuantity ?? item.quantity;
+                return (
+                  <TextField
+                    key={item.id}
+                    label={`${item.itemName} × ${quantity}`}
+                    hint={t.funds.unitCost}
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={unitCosts[item.id] ?? ''}
+                    onChange={(event) =>
+                      setUnitCosts((previous) => ({ ...previous, [item.id]: event.target.value }))
+                    }
+                  />
+                );
+              })}
             </div>
           </>
         )}

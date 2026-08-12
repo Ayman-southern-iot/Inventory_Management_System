@@ -459,6 +459,30 @@ export class BomsRepository {
       .where('id', '=', id)
       .execute();
   }
+
+  /**
+   * The live BOM covering a requisition — the one whose IM quantity override the funds panel
+   * needs to display in the record-purchase dialog and which `recordPurchase` uses as the
+   * authoritative quantity. Returns `undefined` if the requisition has no live BOM (the
+   * pre-2026-08-09 flow path; callers fall back to wire quantity).
+   *
+   * Only one live BOM per requisition is allowed by the `one-live-bom` partial index; this
+   * orders by `generated_at DESC` defensively in case the index is ever weakened.
+   */
+  async findLiveBomByRequisition(requisitionId: string): Promise<BomDetail | undefined> {
+    const row = await this.db
+      .selectFrom('boms')
+      .innerJoin('bom_requisitions', 'bom_requisitions.bom_id', 'boms.id')
+      .where('bom_requisitions.requisition_id', '=', requisitionId)
+      .where('bom_requisitions.is_void', '=', false)
+      .where('boms.is_void', '=', false)
+      .select('boms.id')
+      .orderBy('boms.generated_at', 'desc')
+      .limit(1)
+      .executeTakeFirst();
+    if (!row) return undefined;
+    return this.findDetail(row.id);
+  }
 }
 
 interface BomRow {
