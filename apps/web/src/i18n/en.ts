@@ -1010,7 +1010,7 @@ export const t = {
   },
 
   errors: {
-    VALIDATION_FAILED: 'Please correct the highlighted fields.',
+    VALIDATION_FAILED: 'Some of those values are not valid. Check them and try again.',
     BORROW_INVALID_TRANSITION: 'That is no longer possible for this request. Refresh to see why.',
     BORROW_ALREADY_DECIDED: 'Someone already acted on this. Refresh to see the outcome.',
     DUPLICATE_PROJECT_NAME: 'A project with that name already exists.',

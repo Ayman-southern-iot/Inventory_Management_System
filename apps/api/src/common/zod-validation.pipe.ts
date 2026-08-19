@@ -1,11 +1,7 @@
 import { type ArgumentMetadata, type PipeTransform } from '@nestjs/common';
 import { ZodError, type ZodType } from 'zod';
+import { type FieldIssue } from '@ims/shared';
 import { ValidationFailedError } from './errors';
-
-export interface FieldIssue {
-  path: string;
-  message: string;
-}
 
 function toFieldIssues(error: ZodError): FieldIssue[] {
   return error.issues.map((issue) => ({

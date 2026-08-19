@@ -48,3 +48,15 @@ export interface ApiErrorBody {
   message: string;
   details?: unknown;
 }
+
+/**
+ * One field-level validation problem, sent in `ApiErrorBody.details` when the code is
+ * `VALIDATION_FAILED`. `path` is the dotted path to the offending field
+ * (`items.0.estimatedUnitPrice`) — which is also react-hook-form's field-name convention, so a
+ * caller can map an issue straight onto the control that caused it. Lives here rather than in
+ * the API's validation pipe because both sides of the wire depend on the shape.
+ */
+export interface FieldIssue {
+  path: string;
+  message: string;
+}
