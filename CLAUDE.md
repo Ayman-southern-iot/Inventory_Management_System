@@ -31,6 +31,18 @@ if it leaves `NOW.md` stale, it has actively misled the next one.
 **The `NOW.md` contract:** one snapshot, rewritten whole, **under ~60 lines**. It is injected into
 every session, so every line is a recurring cost. Growth is the failure mode — prune it.
 
+## Output is reviewed by a second engineer
+
+Output from any task is pasted to an assisting engineer (**Zai**) who has no shell, git, database
+or browser — only the characters you print. Follow `.claude/rules/70-assist-handoff.md`: one block
+per issue, verbatim evidence inline, `R`/`D` tags, red run before green, `NOTCHECKED` never empty.
+If it is not in the block, it did not happen.
+
+Every reported behaviour is classified `REQUIRED §n` / `DERIVED A-n·G-n·OQ-n` / `NO-BASIS` before
+it is fixed. Most of this build is an elaboration of a thin requirements document, not a statement
+in it — never "correct" the build toward a literal reading of that document, and never cite the
+playbook as the reason a behaviour is right. The rule file carries the authority order.
+
 ## Non-negotiable rules
 
 1. **No hardcoded values. Anywhere.** See `.claude/rules/10-no-hardcoding.md`. This is the single
@@ -57,6 +69,7 @@ every session, so every line is a recurring cost. Growth is the failure mode —
 | Unanswered product questions | `docs/state/OPEN-QUESTIONS.md` |
 | Full design detail | `docs/reference/README.md` — index first, then **one** file |
 | Domain vocabulary and invariants | the `domain-context` skill (Claude loads it automatically) |
+| Onboarding an assisting/debugging AI | `ASSIST.md` — how to run it, debug playbook, invariants it may not touch |
 
 `docs/reference/` is the specification. It is large on purpose and split on purpose. Open the index,
 pick the one file you need, and read that. Reading five reference files in one session is a mistake.

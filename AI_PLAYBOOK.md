@@ -8,7 +8,14 @@
 >
 > **Maintenance rule:** see `.claude/rules/05-ai-playbook.md`. A `PostToolUse` hook
 > (`.claude/hooks/playbook-reminder.sh`) reminds Claude to update this file after every
-> meaningful edit. Last updated: 2026-08-07 (Project Hub tasks 6 & 7 landed).
+> meaningful edit. Last updated: 2026-08-17 (added `ASSIST.md` to §6).
+>
+> **⚠ This file has known drift as of 2026-08-17** — §5.1 (`available` omits `quarantined_qty`),
+> §5.3 and §20 (the over-budget BOM gate was retired in `5435fac`), §5.3 (lifecycle list omits
+> `PURCHASE_VERIFIED` / `CANCELLED`), §10.1 (counts stale, `funding_snapshots` missing), and
+> nothing covers transportation cost, BOM customise, send-back-for-revision,
+> `unverify-purchase`, reverse-return, or demo mode. `ASSIST.md` §13 lists the drift in full.
+> **Where this file and the code disagree, the code wins.**
 
 ---
 
@@ -499,6 +506,9 @@ their own DRAFT. The rule is deliberately narrow — it is reference material fo
 /                                 repo root
 ├── CLAUDE.md                     operating rules, loaded every session (~100 lines)
 ├── AI_PLAYBOOK.md                THIS FILE — complete context, one read
+├── ASSIST.md                     operating manual for an assisting/debugging AI: how to run
+│                                 the stack, the debug playbook, symptom→cause table,
+│                                 invariants it may not touch, how to report back
 ├── START-HERE.md                 human onboarding
 ├── package.json                  root scripts (dev, build, test, typecheck, lint, db:*)
 ├── pnpm-workspace.yaml           apps/* + packages/*
