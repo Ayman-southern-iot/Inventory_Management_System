@@ -50,7 +50,7 @@ interface TextFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'id
 }
 
 export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function TextField(
-  { label, hint, error, className, ...rest },
+  { label, hint, error, className, onWheel, ...rest },
   ref,
 ) {
   const id = useId();
@@ -62,6 +62,20 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? `${id}-error` : hint ? `${id}-hint` : undefined}
         className={cn(CONTROL, 'h-10', className)}
+        onWheel={(event) => {
+          // A focused `type="number"` input treats the wheel as increment/decrement, so an
+          // ordinary page scroll silently rewrites whatever numeric field the cursor happens
+          // to be over — unit costs, approved amounts, stock quantities. Dropping focus stops
+          // the mutation and lets the page scroll on. `preventDefault` would also stop the
+          // value changing, but it freezes scrolling under the cursor: a worse surprise.
+          if (
+            event.currentTarget.type === 'number' &&
+            document.activeElement === event.currentTarget
+          ) {
+            event.currentTarget.blur();
+          }
+          onWheel?.(event);
+        }}
         {...rest}
       />
     </FieldShell>
