@@ -31,12 +31,17 @@ describe('login exponential backoff', () => {
   });
 
   it('reports 2^N × baseWindow at the first trip, with an integer Retry-After header', async () => {
-    // Three prior failures from this IP exist (the (LOGIN_MAX_ATTEMPTS - 1) wrong attempts
-    // that just happened). The next attempt's assertIpNotThrottled sees byIp=3 → 2^3 × 5 = 40s.
+    // assertIpNotThrottled trips on `byIp >= maxAttempts`, so the ceiling needs
+    // LOGIN_MAX_ATTEMPTS (3) prior failures — not one fewer. The loop below lays those down;
+    // the next attempt is the one that trips, and it reads byIp=3 → 2^3 × 5 = 40s.
+    //
+    // 40 is under LOGIN_THROTTLE_MAX_WINDOW_SECONDS (300), because computeBackoffSeconds is
+    // min(maxWindow, 2^n × base). Lowering that ceiling in test-env would break this assertion
+    // in a way that reads like a limiter bug rather than a config change.
     const http = httpClient(ctx.app);
     const email = uniqueEmail('nobody');
 
-    for (let i = 0; i < LOGIN_MAX_ATTEMPTS - 1; i += 1) {
+    for (let i = 0; i < LOGIN_MAX_ATTEMPTS; i += 1) {
       const attempt = await http.post('/auth/login').send({ email, password: WRONG_PASSWORD });
       expect(attempt.status).toBe(401);
     }

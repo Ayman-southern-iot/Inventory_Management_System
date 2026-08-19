@@ -99,7 +99,7 @@ Classify, then ask.
   pnpm typecheck
   pnpm lint
   pnpm test
-  pnpm --filter @ims/api test:int -- <the one spec for this area>
+  pnpm --filter @ims/api exec vitest run --config vitest.integration.config.ts <pattern>   # NOT `test:int -- <spec>`: that runs all 39 files
   bash .claude/hooks/guard-hardcoding.sh --scan-all   # if you added any literal
   ```
 - Integration suite: redirect, do not stream (it has blown a 600s timeout on a cold DB).

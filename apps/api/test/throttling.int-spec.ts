@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ErrorCode } from '@ims/shared';
-import { createTestApp, httpClient, type TestApp } from './app';
+import request from 'supertest';
+import { createTestApp, httpClient, nextClientIp, type TestApp } from './app';
 import { TEST_PASSWORD } from './config/test-env';
 import { createUser, login, resetData } from './factories';
 
@@ -59,8 +60,14 @@ describe('throttler tiers', () => {
   it('leaves /health reachable on the public tier', async () => {
     // /health uses the `public` ceiling (60 in test-env). One request must succeed to prove
     // the route is wired to the named throttler (and not misconfigured to block outright).
-    const http = httpClient(ctx.app);
-    const response = await http.get('/health');
+    //
+    // Deliberately NOT httpClient: that prefixes every path via `route()`, and /health is
+    // excluded from the global prefix (main.ts:14, app.ts:30), so it would ask for
+    // /api/v1/health and get a 404. Going direct still needs an explicit source address —
+    // both limiters count per IP and this spec's other cases exhaust them on purpose.
+    const response = await request(ctx.app.getHttpServer())
+      .get('/health')
+      .set('X-Forwarded-For', nextClientIp());
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ status: 'ok', database: 'up' });
   });

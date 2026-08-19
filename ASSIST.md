@@ -193,8 +193,10 @@ pnpm test                            # unit tests, all workspaces, sequential
 pnpm --filter @ims/api test:int
 
 # a single integration spec (do this while debugging, not the whole suite)
-pnpm --filter @ims/api test:int -- funds.int-spec.ts
-pnpm --filter @ims/api test:int -- -t "name of the test"
+# NOTE: `test:int -- <spec>` does NOT filter — it silently runs all 39 files for ~161s.
+# Go through `exec vitest` so the positional pattern reaches vitest.
+pnpm --filter @ims/api exec vitest run --config vitest.integration.config.ts funds
+pnpm --filter @ims/api exec vitest run --config vitest.integration.config.ts -t "name of the test"
 
 # database
 pnpm db:up / pnpm db:down            # start / stop dev+test Postgres
@@ -611,6 +613,7 @@ Check here before you start reading code. Every row is something that has actual
 | `SELF_APPROVAL_NO_SUBSTITUTE` on submit | Nobody may approve their own requisition, and there is no one else configured to stand in | Operator must appoint a second IM / third approver. Not a code bug. |
 | Server message is clearly right but the UI shows the wrong sentence | The web app picks copy by **`code`**, not message | A new failure mode needs a new `ErrorCode` member *and* a copy entry. |
 | Integration test 500s with no stack trace | `test/app.ts` sets `logger: false` | Flip the logger on for your local run. |
+| `pnpm typecheck` fails on a shared type that visibly exists in `packages/shared/src` | `@ims/shared` resolves to `dist/`, not source — a new export is invisible until it is built | `pnpm --filter @ims/shared build`. `pnpm build` orders shared first; `pnpm typecheck` alone does not build anything. |
 | A BOM PDF test fails on a method that exists | `boms-pdf.int-spec.ts` overrides `PdfRendererService` with a **local stub** | Add the new renderer method to the stub too. |
 | A test asserting "exactly one row" or "it's on page one" fails randomly | `resetData` cannot delete requisitions, departments or users (append-only triggers), so **the test DB accumulates them** | Never assert absolute counts or page position. Scope every assertion by an id you created. |
 | Date-range report misses yesterday's early-morning rows | Range resolved in **UTC** instead of Dhaka calendar days | Ranges must be calendar days in `REPORTING_TIME_ZONE`, resolved by Postgres via `AT TIME ZONE`. |
@@ -776,9 +779,9 @@ DIFF
 ```
 
 EVIDENCE
-  R $ pnpm --filter @ims/api test:int -- funds.int-spec.ts    # red run, before the fix
+  R $ pnpm --filter @ims/api exec vitest run --config vitest.integration.config.ts funds    # red run, before the fix
   (verbatim output)
-  R $ pnpm --filter @ims/api test:int -- funds.int-spec.ts    # green run, after
+  R $ pnpm --filter @ims/api exec vitest run --config vitest.integration.config.ts funds    # green run, after
   (verbatim output)
   R gate for this batch: see GATE block above
   D the same shape exists in purchases.repository.ts:88 — not exercised, see NOTCHECKED

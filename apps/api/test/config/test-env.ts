@@ -68,6 +68,22 @@ export const TEST_ENV: Record<string, string> = {
   SEED_ADMIN_PASSWORD: 'SeedAdminPass1',
   SEED_ADMIN_NAME: 'Integration Seed Admin',
   SEED_ADMIN_DESIGNATION: 'Integration Seed Admin',
+
+  /**
+   * Pinned because an unpinned key inherits the developer's root `.env`, which made the
+   * suite's result machine-dependent. All three were real failures:
+   *   - DEMO_ACCOUNTS_ENABLED=true in `.env` failed the two specs asserting demo mode is
+   *     off by default — the specs were right and the environment was leaking.
+   *   - PDF_BROWSER_EXECUTABLE_PATH=/usr/bin/chromium-browser is the Alpine container path.
+   *     A host run cannot launch it, so every unstubbed render failed. Empty means "use
+   *     whatever puppeteer ships with", which is correct off-container.
+   *   - REPORTING_TIME_ZONE was unset, so the reports specs passed only because this machine
+   *     happened to agree with the schema default. Pinned to the project timezone so a
+   *     calendar-day assertion cannot drift with the host.
+   */
+  DEMO_ACCOUNTS_ENABLED: 'false',
+  PDF_BROWSER_EXECUTABLE_PATH: '',
+  REPORTING_TIME_ZONE: 'Asia/Dhaka',
 };
 
 /**

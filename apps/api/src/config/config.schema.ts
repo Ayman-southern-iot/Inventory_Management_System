@@ -271,6 +271,17 @@ const validatedSchema = rawSchema.superRefine((env, ctx) => {
 
 export type RawConfig = z.infer<typeof rawSchema>;
 
+/**
+ * Every environment variable the backend reads, as a runtime list.
+ *
+ * Exported so the integration harness can assert that `TEST_ENV` either pins each one or
+ * explicitly allowlists it. An unpinned key silently inherits the developer's root `.env`,
+ * which is how demo mode and the container's Chromium path leaked into host test runs and made
+ * the suite's result depend on whose machine ran it. Deriving the list from the schema rather
+ * than restating it means a newly added key cannot be forgotten.
+ */
+export const RAW_CONFIG_KEYS: readonly string[] = Object.keys(rawSchema.shape);
+
 export interface AppConfig {
   readonly nodeEnv: RawConfig['NODE_ENV'];
   readonly isProduction: boolean;
