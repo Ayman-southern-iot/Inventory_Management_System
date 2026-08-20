@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { Role, type RequisitionFunding } from '@ims/shared';
+import { ErrorCode, Role, type RequisitionFunding } from '@ims/shared';
 import { createTestApp, httpClient, type HttpClient, type TestApp } from './app';
 import { createDepartment, createUser, login, resetData, seedSubthresholdApprover } from './factories';
 import { createStockFixture, type StockFixture } from './stock-factories';
@@ -111,6 +111,7 @@ describe('funds and purchasing', () => {
     });
 
     expect(tooMuch.status).toBe(409);
+    expect(tooMuch.body.code).toBe(ErrorCode.FUNDING_EXCEEDS_APPROVED);
     // Nothing was written: a refused receipt must not leave a partial trace.
     expect((await fundingOf(req.id)).funded).toBe(0);
     expect(await statusOf(req.id)).toBe('SENT_TO_ACCOUNTS');
@@ -307,6 +308,7 @@ describe('funds and purchasing', () => {
 
     const early = await im.client.post(`/requisitions/${req.id}/verify-purchase`).send({});
     expect(early.status).toBe(409);
+    expect(early.body.code).toBe(ErrorCode.INVOICE_MISSING);
     expect(early.body.message).toContain('invoice');
     expect(await statusOf(req.id)).toBe('PURCHASED');
   });
@@ -406,6 +408,7 @@ describe('funds and purchasing', () => {
       .post(`/requisitions/${req.id}/unverify-purchase`)
       .send({ reason: 'Trying to undo a refund' });
     expect(refused.status).toBe(409);
+    expect(refused.body.code).toBe(ErrorCode.CANNOT_UNVERIFY_WITH_RETURNS);
     expect(await statusOf(req.id)).toBe('PURCHASE_VERIFIED');
   });
 
@@ -474,6 +477,7 @@ describe('funds and purchasing', () => {
       .send({ returnedAmount: 1500, returnNote: 'Wishful thinking' });
 
     expect(tooMuch.status).toBe(409);
+    expect(tooMuch.body.code).toBe(ErrorCode.RETURN_EXCEEDS_UNSPENT);
     // Nothing partially applied: no return row, and the status has not moved.
     expect((await fundingOf(req.id)).returns).toHaveLength(0);
     expect(await statusOf(req.id)).toBe('PURCHASED');
@@ -681,6 +685,7 @@ describe('funds and purchasing', () => {
     });
 
     expect(attempt.status).toBe(409);
+    expect(attempt.body.code).toBe(ErrorCode.RECEIVE_EXCEEDS_PURCHASED);
     // The first line's stock receipt and its new product must both be gone. This is the whole
     // reason StockService.receive takes the caller's transaction.
     const ledger = await ctx.db

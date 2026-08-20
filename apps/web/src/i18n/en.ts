@@ -1065,6 +1065,18 @@ export const t = {
     BOM_ALREADY_VOID: 'This BOM has already been voided.',
     PDF_RENDER_FAILED: 'The PDF could not be rendered. Try again.',
     PDF_DOWNLOAD_TOKEN_INVALID: 'This download link has expired.',
+    RETURN_EXCEEDS_UNSPENT:
+      'Only {unspent} is unspent, so {attempted} cannot be returned to Accounts.',
+    INVOICE_MISSING:
+      '{purchasesWithoutInvoice} purchase(s) on this requisition still have no invoice attached. Upload them before verifying.',
+    FUNDING_EXCEEDS_APPROVED:
+      'Recording {attempted} would take the funding to {wouldBecome}, past the approved {approved}. Ask an approver to revise the amount first.',
+    RECEIVE_EXCEEDS_PURCHASED:
+      'Only {outstanding} of "{itemName}" is still outstanding, so {attempted} cannot be received.',
+    CANNOT_UNVERIFY_WITH_RETURNS:
+      'This requisition has {returnedAmount} returned to Accounts already. Un-verifying is not the right way to undo a refund — record a corrective return instead.',
+    SIGNATURE_NOT_UPLOADED:
+      'You have not uploaded a signature yet. Add one from your profile, or approve without a signature.',
     INTERNAL: 'Something went wrong on the server.',
     NETWORK: 'Cannot reach the server.',
   },

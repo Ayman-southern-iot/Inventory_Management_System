@@ -114,7 +114,7 @@ export class SelfApprovalNoSubstituteError extends DomainError {
 export class SignatureNotUploadedError extends DomainError {
   constructor() {
     super(
-      ErrorCode.VALIDATION_FAILED,
+      ErrorCode.SIGNATURE_NOT_UPLOADED,
       'You have not uploaded a signature yet. Add one from your profile, or approve without a signature.',
       HttpStatus.BAD_REQUEST,
     );

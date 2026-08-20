@@ -31,7 +31,7 @@ export class InvalidFundingTransitionError extends DomainError {
 export class ReturnExceedsUnspentError extends DomainError {
   constructor(unspent: number, attempted: number) {
     super(
-      ErrorCode.VALIDATION_FAILED,
+      ErrorCode.RETURN_EXCEEDS_UNSPENT,
       `Only ${unspent} is unspent, so ${attempted} cannot be returned to Accounts.`,
       HttpStatus.CONFLICT,
       { unspent, attempted },
@@ -43,7 +43,7 @@ export class ReturnExceedsUnspentError extends DomainError {
 export class InvoiceMissingError extends DomainError {
   constructor(count: number) {
     super(
-      ErrorCode.VALIDATION_FAILED,
+      ErrorCode.INVOICE_MISSING,
       `${count} purchase(s) on this requisition still have no invoice attached. Upload them before verifying.`,
       HttpStatus.CONFLICT,
       { purchasesWithoutInvoice: count },
@@ -53,11 +53,14 @@ export class InvoiceMissingError extends DomainError {
 
 export class FundingExceedsApprovedError extends DomainError {
   constructor(approved: number, alreadyFunded: number, attempted: number) {
+    // Computed here rather than interpolated inline, so `details` carries the figure the copy
+    // needs. The client must never add two money values together to build a sentence.
+    const wouldBecome = alreadyFunded + attempted;
     super(
-      ErrorCode.VALIDATION_FAILED,
-      `Recording ${attempted} would take the funding to ${alreadyFunded + attempted}, past the approved ${approved}. Ask an approver to revise the amount first.`,
+      ErrorCode.FUNDING_EXCEEDS_APPROVED,
+      `Recording ${attempted} would take the funding to ${wouldBecome}, past the approved ${approved}. Ask an approver to revise the amount first.`,
       HttpStatus.CONFLICT,
-      { approved, alreadyFunded, attempted },
+      { approved, alreadyFunded, attempted, wouldBecome },
     );
   }
 }
@@ -69,7 +72,7 @@ export class FundingExceedsApprovedError extends DomainError {
 export class ReceiveExceedsPurchasedError extends DomainError {
   constructor(itemName: string, outstanding: number, attempted: number) {
     super(
-      ErrorCode.VALIDATION_FAILED,
+      ErrorCode.RECEIVE_EXCEEDS_PURCHASED,
       `Only ${outstanding} of "${itemName}" is still outstanding, so ${attempted} cannot be received.`,
       HttpStatus.CONFLICT,
       { itemName, outstanding, attempted },
@@ -85,7 +88,7 @@ export class ReceiveExceedsPurchasedError extends DomainError {
 export class CannotUnverifyWithReturnsError extends DomainError {
   constructor(returnedAmount: number) {
     super(
-      ErrorCode.VALIDATION_FAILED,
+      ErrorCode.CANNOT_UNVERIFY_WITH_RETURNS,
       `This requisition has ${returnedAmount} returned to Accounts already. Un-verifying is not the right way to undo a refund — record a corrective return instead.`,
       HttpStatus.CONFLICT,
       { returnedAmount },

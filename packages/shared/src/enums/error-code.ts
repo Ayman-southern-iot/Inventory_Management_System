@@ -88,6 +88,31 @@ export const ErrorCode = {
    */
   CANNOT_SEND_BACK_FOR_REVISION: 'CANNOT_SEND_BACK_FOR_REVISION',
 
+  /*
+   * Funds and approval refusals that each carry a specific, useful sentence.
+   *
+   * All six of these previously reused VALIDATION_FAILED. Since the web app selects copy by
+   * `code` and never by message, every one of them surfaced as "please correct the highlighted
+   * fields" — on screens that have no field highlighting at all — and the server's actual
+   * explanation was discarded on arrival. Five reported QA issues traced to that.
+   *
+   * Their `details` payloads carry the figures the copy interpolates, so the message the user
+   * reads is built from the same numbers the server refused on.
+   */
+
+  /** Handing back more than `funded − spent − transportation − alreadyReturned`. */
+  RETURN_EXCEEDS_UNSPENT: 'RETURN_EXCEEDS_UNSPENT',
+  /** Verifying a purchase while some of its purchases still have no invoice attached. */
+  INVOICE_MISSING: 'INVOICE_MISSING',
+  /** Logging a receipt that would take total funding past the approved amount. */
+  FUNDING_EXCEEDS_APPROVED: 'FUNDING_EXCEEDS_APPROVED',
+  /** Receiving more units of an item into stock than were actually purchased. */
+  RECEIVE_EXCEEDS_PURCHASED: 'RECEIVE_EXCEEDS_PURCHASED',
+  /** Un-verifying a purchase after money has already gone back to Accounts. */
+  CANNOT_UNVERIFY_WITH_RETURNS: 'CANNOT_UNVERIFY_WITH_RETURNS',
+  /** Approving "with signature" when the approver has never uploaded one. */
+  SIGNATURE_NOT_UPLOADED: 'SIGNATURE_NOT_UPLOADED',
+
   INTERNAL: 'INTERNAL',
 } as const;
 

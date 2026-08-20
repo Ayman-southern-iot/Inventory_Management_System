@@ -121,6 +121,7 @@ describe('signatures', () => {
       .send({ approve: true, note: null, approvedAmount: null, withSignature: true });
 
     expect(decided.status).toBe(400);
+    expect(decided.body.code).toBe(ErrorCode.SIGNATURE_NOT_UPLOADED);
     expect(decided.body.message).toContain('signature');
   });
 
