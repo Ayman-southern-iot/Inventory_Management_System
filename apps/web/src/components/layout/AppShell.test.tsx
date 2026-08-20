@@ -43,13 +43,14 @@ function userWithRoles(roles: Role[]): AuthUser {
   };
 }
 
-function renderShell() {
+function renderShell(at = '/') {
   return render(
     <QueryClientProvider client={new QueryClient()}>
-      <MemoryRouter initialEntries={['/']}>
+      <MemoryRouter initialEntries={[at]}>
         <Routes>
           <Route element={<AppShell />}>
             <Route path="/" element={<p>content</p>} />
+            <Route path={ROUTES.requisitions.detailPattern} element={<p>detail</p>} />
           </Route>
         </Routes>
       </MemoryRouter>
@@ -118,5 +119,27 @@ describe('AppShell navigation', () => {
 
     const link = screen.getByRole('menuitem', { name: t.nav.account });
     expect(link).toHaveAttribute('href', ROUTES.account.profile);
+  });
+
+  /**
+   * Reported by the PM: opening a requisition to approve it lit up "My requisitions" and left
+   * Approvals dark. NavLink matches by prefix unless `end` is set, and `end` is set only for
+   * the dashboard — so the old `/requisitions` route for the personal list prefix-matched every
+   * `/requisitions/:id` detail page. Moving the list to `/my-requisitions` (matching
+   * `/my-borrowings`) removes the collision instead of bolting `end` onto one link.
+   *
+   * No nav item is active on a detail page now, which is correct: a requisition detail is
+   * reachable from three different lists and the shell cannot know which one you came from.
+   */
+  it('marks no nav item active on a requisition detail page', () => {
+    currentUser = userWithRoles([Role.GENERAL, Role.APPROVER]);
+    renderShell('/requisitions/11111111-1111-1111-1111-111111111111');
+
+    expect(screen.getByRole('link', { name: t.nav.myRequisitions })).not.toHaveAttribute(
+      'aria-current',
+    );
+    expect(screen.getByRole('link', { name: t.nav.approvals })).not.toHaveAttribute(
+      'aria-current',
+    );
   });
 });

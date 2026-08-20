@@ -26,7 +26,13 @@ export const ROUTES = {
     detail: (id: string) => '/boms/' + id,
   },
   requisitions: {
-    mine: '/requisitions',
+    /**
+     * Deliberately not '/requisitions': that prefix-matches every '/requisitions/:id' detail
+     * page, and NavLink marks active by prefix unless `end` is set. The personal list lighting
+     * up while an approver reads someone else's requisition was a reported bug. Mirrors
+     * `borrowing.mine` ('/my-borrowings'), which already had it right.
+     */
+    mine: '/my-requisitions',
     approvals: '/approvals',
     all: '/all-requisitions',
     new: '/requisitions/new',
