@@ -593,3 +593,25 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   their own port choices for their own reasons: `infra/docker-compose.yml` (prod, 80+
   443 for real HTTPS), `infra/docker-compose.dev.yml` (host dev workflow, 5433+5434 to
   dodge host port conflicts), and the now-pinned root dev compose.
+- 2026-08-20 — **Approved may not exceed requested.** Ayman's ruling. The requirements
+  document is silent: §4 covers who approves and what a rejection does, and says nothing
+  about an approver revising the figure at all — so revision itself is `DERIVED`, and the
+  bound on it is a recorded decision, not a `REQUIRED` rule. Until now `approvedAmount` was
+  bounded only by `z.number().nonnegative().max(1_000_000_000)` with no comparison to the
+  request, and nothing in the DB constrained it either (`0008_requisitions.ts` checks only
+  `approved_amount >= 0`). An approver could sanction a billion against a 5,000 ask and the
+  request would go through with a 200.
+  The mechanical reason it cannot stay open: the BOM prints **Remaining** as
+  `requested − approved`, so approving more than was asked makes that column negative and the
+  document meaningless. Revising *down* is the whole point of the field and is untouched.
+  An approver who thinks the ask is too low uses **send-back-for-revision** so the requester
+  restates it — which keeps `requested_amount` honest as the frozen record of what was asked.
+  Verified before writing the guard: `requested_amount` is `itemsTotal + transportationCost`,
+  frozen at submit (`requisitions.service.ts:197-203`), so the bound is the requested figure
+  as-is and needs no transportation adjustment. The guard reads the **locked** row inside the
+  decision transaction, and permits equality (`>`, not `>=`) — approving the full ask
+  unchanged is the common case. New `ErrorCode.APPROVED_EXCEEDS_REQUESTED` (409) whose copy
+  points the approver at send-back rather than just refusing.
+  A `CHECK (approved_amount IS NULL OR approved_amount <= requested_amount)` would be the
+  stronger guard per the make-illegal-states-unrepresentable rule, but that is a migration and
+  was deliberately not taken here. Worth considering next time the schema is touched.

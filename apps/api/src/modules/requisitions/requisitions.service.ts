@@ -35,6 +35,7 @@ import {
   CannotSendBackForRevisionError,
   InvalidRequisitionTransitionError,
   NotYourApprovalError,
+  ApprovedExceedsRequestedError,
   SelfApprovalForbiddenError,
   SelfApprovalNoSubstituteError,
   SignatureNotUploadedError,
@@ -522,6 +523,15 @@ export class RequisitionsService {
       }
 
       if (input.approvedAmount !== null) {
+        // Ayman's ruling, 2026-08-20: approved may not exceed requested. Revising down is the
+        // point of the field; revising up would make the BOM's "Remaining" (requested minus
+        // approved) negative and the printed document nonsense. requested_amount is frozen at
+        // submit and already includes transportation cost, so it is the bound as-is. Read from
+        // the locked row rather than a value fetched earlier in the request.
+        const requested = Number(requisition.requested_amount ?? 0);
+        if (input.approvedAmount > requested) {
+          throw new ApprovedExceedsRequestedError(requested, input.approvedAmount);
+        }
         await this.repo.setApprovedAmount(tx, approval.requisition_id, input.approvedAmount);
         await this.repo.appendEvent(
           tx,

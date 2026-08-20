@@ -113,6 +113,18 @@ export const ErrorCode = {
   /** Approving "with signature" when the approver has never uploaded one. */
   SIGNATURE_NOT_UPLOADED: 'SIGNATURE_NOT_UPLOADED',
 
+  /**
+   * An approver tried to sanction more than was requested.
+   *
+   * Ayman's ruling, 2026-08-20: approved may not exceed requested. The requirements document
+   * is silent on revision entirely, so this is a recorded decision rather than a REQUIRED rule
+   * (see DECISIONS.md). The mechanical reason it cannot simply be allowed: the BOM's
+   * "Remaining" column is defined as requested - approved, so sanctioning more than was asked
+   * for makes Remaining negative and the printed document meaningless. An approver who thinks
+   * the request is too low sends it back for the requester to restate.
+   */
+  APPROVED_EXCEEDS_REQUESTED: 'APPROVED_EXCEEDS_REQUESTED',
+
   INTERNAL: 'INTERNAL',
 } as const;
 

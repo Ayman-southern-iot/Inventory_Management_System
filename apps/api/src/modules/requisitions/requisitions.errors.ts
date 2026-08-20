@@ -122,6 +122,29 @@ export class SignatureNotUploadedError extends DomainError {
 }
 
 /**
+ * An approver revised the sanctioned figure upward past what was asked for.
+ *
+ * Revising *down* is the whole point of the field — an approver trimming 4,178 to 3,500 is
+ * ordinary. Revising up is not the same operation: `requested_amount` is frozen at submit and
+ * the BOM prints "Remaining" as requested - approved, so a larger approved figure makes that
+ * column negative and the document nonsense. The requester restates the ask instead, which is
+ * what send-back-for-revision is for.
+ *
+ * `requested_amount` already includes transportation cost (it is items + transport, frozen at
+ * submit), so the bound is the requested figure itself and needs no adjustment.
+ */
+export class ApprovedExceedsRequestedError extends DomainError {
+  constructor(requested: number, attempted: number) {
+    super(
+      ErrorCode.APPROVED_EXCEEDS_REQUESTED,
+      `Cannot approve ${attempted}: only ${requested} was requested. Approve up to the requested amount, or send the requisition back for revision.`,
+      HttpStatus.CONFLICT,
+      { requested, attempted },
+    );
+  }
+}
+
+/**
  * The IM tried to send back a requisition for budget revision outside the supported
  * conditions. The path is the single-item + over-budget branch (plan D2/D3): the IM
  * looks at the BOM-generate page, sees the variance is unbridgeable, and bounces the

@@ -446,6 +446,63 @@ describe('requisitions and approvals', () => {
         RequisitionEventType.AMOUNT_REVISED,
       );
     });
+
+    /**
+     * Ayman's ruling, 2026-08-20: approved may not exceed requested. The requirements
+     * document says nothing about revision at all, so this is a recorded decision rather
+     * than a REQUIRED rule. The mechanical reason it cannot be left open: the BOM prints
+     * "Remaining" as requested minus approved, so sanctioning more than was asked for makes
+     * that column negative. An approver who thinks the ask is too low sends it back.
+     */
+    it('refuses an approved amount above the requested amount', async () => {
+      const created = await draft(5_000);
+      let detail = (await requester.client.post(`/requisitions/${created.body.id}/submit`).send())
+        .body;
+
+      detail = (
+        await im.client
+          .post(
+            `/requisitions/approvals/${approvalOf(detail, ApprovalStage.INVENTORY_MANAGER).id}/decision`,
+          )
+          .send({ approve: true })
+      ).body;
+
+      const refused = await approver1.client
+        .post(`/requisitions/approvals/${approvalOf(detail, ApprovalStage.APPROVER, 1).id}/decision`)
+        .send({ approve: true, approvedAmount: 6_000 });
+
+      expect(refused.status).toBe(409);
+      expect(refused.body.code).toBe(ErrorCode.APPROVED_EXCEEDS_REQUESTED);
+
+      // Nothing partially applied: the decision did not land and the figure did not move.
+      const after = (await requester.client.get(`/requisitions/${created.body.id}`)).body;
+      expect(after.status).toBe(RequisitionStatus.AWAITING_APPROVAL);
+      expect(after.approvedAmount).toBe(5_000);
+    });
+
+    it('allows an approved amount exactly equal to the requested amount', async () => {
+      // "May not exceed" permits equality — the guard is `>`, not `>=`. Approving the full
+      // ask unchanged is the common case and must not be collateral damage.
+      const created = await draft(5_000);
+      let detail = (await requester.client.post(`/requisitions/${created.body.id}/submit`).send())
+        .body;
+
+      detail = (
+        await im.client
+          .post(
+            `/requisitions/approvals/${approvalOf(detail, ApprovalStage.INVENTORY_MANAGER).id}/decision`,
+          )
+          .send({ approve: true })
+      ).body;
+
+      const accepted = await approver1.client
+        .post(`/requisitions/approvals/${approvalOf(detail, ApprovalStage.APPROVER, 1).id}/decision`)
+        .send({ approve: true, approvedAmount: 5_000 });
+
+      expect(accepted.status).toBe(200);
+      expect(accepted.body.status).toBe(RequisitionStatus.APPROVED);
+      expect(accepted.body.approvedAmount).toBe(5_000);
+    });
   });
 
   describe('withdrawal', () => {

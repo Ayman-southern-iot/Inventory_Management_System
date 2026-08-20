@@ -1077,6 +1077,8 @@ export const t = {
       'This requisition has {returnedAmount} returned to Accounts already. Un-verifying is not the right way to undo a refund — record a corrective return instead.',
     SIGNATURE_NOT_UPLOADED:
       'You have not uploaded a signature yet. Add one from your profile, or approve without a signature.',
+    APPROVED_EXCEEDS_REQUESTED:
+      'You cannot sanction more than the {requested} requested. Approve up to that, or send the requisition back so the requester can restate it.',
     INTERNAL: 'Something went wrong on the server.',
     NETWORK: 'Cannot reach the server.',
   },
