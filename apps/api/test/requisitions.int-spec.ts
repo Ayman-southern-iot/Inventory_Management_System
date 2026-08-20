@@ -503,6 +503,50 @@ describe('requisitions and approvals', () => {
       expect(accepted.body.status).toBe(RequisitionStatus.APPROVED);
       expect(accepted.body.approvedAmount).toBe(5_000);
     });
+
+    /**
+     * PM item 10: the approver portal's "Approved" tab showed nothing. It filtered on the
+     * requisition's *current* status, and APPROVED is transient — the IM generates a BOM and the
+     * requisition moves on, emptying the tab. What an approver wants is a record of what they
+     * personally sanctioned, which is their own approval rows, not the requisition's status.
+     */
+    it('lists what the viewer approved, not what is currently in APPROVED status', async () => {
+      // One the approver acts on...
+      const acted = await draft(5_000);
+      let actedDetail = (
+        await requester.client.post(`/requisitions/${acted.body.id}/submit`).send()
+      ).body;
+      actedDetail = (
+        await im.client
+          .post(
+            `/requisitions/approvals/${approvalOf(actedDetail, ApprovalStage.INVENTORY_MANAGER).id}/decision`,
+          )
+          .send({ approve: true })
+      ).body;
+      await approver1.client
+        .post(
+          `/requisitions/approvals/${approvalOf(actedDetail, ApprovalStage.APPROVER, 1).id}/decision`,
+        )
+        .send({ approve: true });
+
+      // ...and one left sitting in their queue, unacted.
+      const untouched = await draft(4_000);
+      const untouchedDetail = (
+        await requester.client.post(`/requisitions/${untouched.body.id}/submit`).send()
+      ).body;
+      await im.client
+        .post(
+          `/requisitions/approvals/${approvalOf(untouchedDetail, ApprovalStage.INVENTORY_MANAGER).id}/decision`,
+        )
+        .send({ approve: true });
+
+      const listed = await approver1.client.get('/requisitions?approvedByMe=true&limit=100');
+      expect(listed.status).toBe(200);
+
+      const ids = (listed.body.items as Array<{ id: string }>).map((row) => row.id);
+      expect(ids).toContain(acted.body.id);
+      expect(ids).not.toContain(untouched.body.id);
+    });
   });
 
   describe('withdrawal', () => {

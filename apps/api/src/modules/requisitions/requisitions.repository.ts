@@ -563,6 +563,24 @@ export class RequisitionsRepository {
         .$if(query.projectId !== undefined, (b) =>
           b.where('requisitions.project_id', '=', query.projectId!),
         )
+        // "I approved this": my own approval row, whatever the requisition did afterwards.
+        //
+        // Matched on assigned_user_id rather than acted_by_user_id, so an approval a delegate
+        // made on my behalf appears on MY list: the delegate acted as me and I am accountable
+        // for the decision. The consequence is that a delegate does not see their delegated
+        // approvals in their own tab — see the OPEN note on this change.
+        .$if(query.approvedByMe, (b) =>
+          b.where((eb) =>
+            eb.exists(
+              eb
+                .selectFrom('requisition_approvals as ra')
+                .select('ra.id')
+                .whereRef('ra.requisition_id', '=', 'requisitions.id')
+                .where('ra.action', '=', ApprovalAction.APPROVED)
+                .where('ra.assigned_user_id', '=', context.actorId),
+            ),
+          ),
+        )
         // "Waiting on me": an approval assigned to me, or to someone I am standing in for.
         .$if(query.awaitingMe, (b) =>
           b.where((eb) =>
@@ -635,7 +653,7 @@ export class RequisitionsRepository {
 
   async countAwaiting(actorId: string): Promise<number> {
     const result = await this.list(
-      { page: 1, limit: 1, mine: false, awaitingMe: true },
+      { page: 1, limit: 1, mine: false, awaitingMe: true, approvedByMe: false },
       { actorId, restrictToRequester: false },
     );
     return result.total;

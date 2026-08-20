@@ -234,6 +234,13 @@ export const listRequisitionsQuerySchema = paginationQuerySchema.extend({
   mine: queryBoolean(false),
   /** The approver/IM queue: things waiting on *me* right now. */
   awaitingMe: queryBoolean(false),
+  /**
+   * The approver's history: things *I* sanctioned. Deliberately not a status filter — APPROVED
+   * is transient (the IM generates a BOM and the requisition moves on), so filtering on it
+   * emptied the tab. An approval row is permanent, so this stays accurate forever, and it keeps
+   * showing requisitions the other approver later rejected: my approval still happened.
+   */
+  approvedByMe: queryBoolean(false),
 });
 export type ListRequisitionsQuery = z.infer<typeof listRequisitionsQuerySchema>;
 

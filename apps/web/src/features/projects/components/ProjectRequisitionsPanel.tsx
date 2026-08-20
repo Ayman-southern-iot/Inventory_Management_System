@@ -42,6 +42,7 @@ export function ProjectRequisitionsPanel({ projectId }: { projectId: string }) {
     projectId,
     mine: false,
     awaitingMe: false,
+    approvedByMe: false,
   };
   const requisitions = useRequisitions(query);
 

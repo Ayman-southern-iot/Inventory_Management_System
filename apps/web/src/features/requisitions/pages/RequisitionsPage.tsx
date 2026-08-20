@@ -58,7 +58,9 @@ export function RequisitionsPage({ mode }: { mode: Mode }) {
         {
           key: 'approved',
           label: t.requisitions.filterApproved,
-          patch: { status: RequisitionStatus.APPROVED },
+          // The approver's own history, not the requisition's current status: APPROVED is
+          // transient, so a status filter emptied this tab as soon as the IM made a BOM.
+          patch: { approvedByMe: true },
         },
         {
           key: 'rejected',
@@ -94,6 +96,7 @@ export function RequisitionsPage({ mode }: { mode: Mode }) {
       limit: PAGINATION_DEFAULT_LIMIT,
       mine: mode === 'mine',
       awaitingMe: false,
+      approvedByMe: false,
       ...(debouncedSearch.trim() ? { search: debouncedSearch.trim() } : {}),
       ...active.patch,
     };
