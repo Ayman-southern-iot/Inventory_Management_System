@@ -12,6 +12,53 @@ Format:
 **Next:** the single next action, specific enough to start without thinking
 ```
 
+## 2026-08-20 — QA round 1 + harness repair (no phase; post-Phase-06)
+
+**Did:**
+- **Onboarded a second engineer (Zai).** New `ASSIST.md` (operating manual: how to run the
+  stack, debug playbook, symptom→cause table, invariants it may not touch, known doc drift) and
+  `.claude/rules/70-assist-handoff.md` (evidence-carrying report format with a `SPEC` label
+  classifying every behaviour REQUIRED/DERIVED/NO-BASIS before it is fixed).
+- **Committed the customer requirements document** at `docs/reference/_source/requirements-verbatim.md`.
+  It had never been in the repo, so the top of the authority chain was unreadable to anyone
+  working here and everyone was reasoning from unverified transcriptions.
+- **Measured the integration baseline for the first time.** Documented figure was 458/11 wrong:
+  actual was 473 pass / 11 fail, not 458/8. Triaged all 11 to root cause; four were harness bugs
+  and are now fixed. Baseline is **484/7** at session end.
+- **Found and fixed `test:int -- <spec>` silently running all 39 files** — the command both
+  engineers were told to produce per-block evidence with.
+- **PM QA round:** 18 items triaged. Fixed the wheel-scroll data corruption (11 numeric fields,
+  one shared `TextField`), the "correct the highlighted fields" lie, six domain errors sharing
+  one `ErrorCode`, the approver cap, the sidebar route collision, and the empty Approved tab.
+
+**Decisions:** approved may not exceed requested (Ayman, recorded in DECISIONS.md) · PM item 14
+declined (prefilling the purchase form's unit cost defeats the invoice check) · `approvedByMe`
+matches `assigned_user_id` so delegated approvals land on the assignee · `FieldIssue` lifted to
+`@ims/shared` · trailer kept as `Claude Opus 5` rather than matching the branch's `Opus 4.8`,
+because attribution is not style.
+
+**Landmines:**
+- **`pnpm lint` is not green** — 21 pre-existing errors across 8 files. The repo cannot meet its
+  own definition of done. Compare the count, do not expect zero.
+- **Chromium was never installed** (`npx puppeteer browsers install chrome` in `apps/api`).
+  3 of the 7 remaining failures. Nobody here can verify the BOM PDF path until it is run.
+- **3 `reports` failures are cross-file `app_settings` pollution** — they pass in isolation and
+  fail in the suite. `requisitions.int-spec.ts` mutates the expense threshold; `reports` depends
+  on being sub-threshold. Not fixed.
+- **1 real product defect left:** oversized JSON body returns 500 not 413. `express.json()` errors
+  are plain `Error` with a `status` property, so they never reach `codeForStatus`'s
+  `PAYLOAD_TOO_LARGE` arm. `PAYLOAD_TOO_LARGE`'s enum comment describes only the multipart path
+  and needs widening when this is fixed.
+- I twice asserted a causal claim as fact that turned out insufficient (the Alpine Chromium path).
+  The `R`/`D` tagging in the handoff rule is what kept that cheap — keep using it.
+
+**Next:** 5c — `returnedAmount` defaults to `funding.unspent` instead of `'0'` in
+`FundsActionDialog.tsx:82`. Then 5d (bound `purchasedAt`/`receivedAt` to not-in-the-future,
+backdating still allowed), then two `ASSIST.md` §8 rows: "a refusal shows the wrong copy though
+the server's message is correct → the error reuses another code; assert `body.code`, not just
+status", and "`Cannot find module` from the repo root proves nothing under pnpm — re-run from the
+owning workspace".
+
 ## 2026-07-31 — Phase 05 finished: expense report and the IM funds panel
 
 **Did:**

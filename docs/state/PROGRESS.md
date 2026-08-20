@@ -5,6 +5,19 @@
 
 ## Current position
 
+- **2026-08-20 — QA round 1 and harness repair.** Phase work is finished; this session was the
+  project manager's first QA pass plus the test-harness repair that made its results
+  trustworthy. Nine commits. **Working tree clean, nothing outstanding uncommitted.**
+  Branch `fix/lan-secure-context`, 82 commits ahead of `main`, still unmerged.
+  - **Next task:** step 5c — `returnedAmount` defaults to `funding.unspent` rather than `'0'`
+    (`FundsActionDialog.tsx:82`). Then 5d (not-in-the-future date bound), then two ASSIST §8 rows.
+  - **Verified green:** typecheck clean · unit shared 7 / api 51 / web 102 · integration
+    **484 pass / 7 fail (491, 40 files)**. `pnpm lint` has **21 pre-existing errors** and is not
+    green — see NOW.md.
+  - The 7 integration failures are fully attributed for the first time: 3 cross-file
+    `app_settings` pollution in `reports`, 3 Chromium-not-installed, 1 real defect (413 vs 500).
+    The previously documented "8 pre-existing failures" was wrong in both halves.
+
 - **IM-side BOM customisation + 1-item over-budget send-back (2026-08-10):** the
   IM at the BOM-generate step used to have only `unitCost` and `vendor` editable, so a
   multi-item approved requisition where `approvedAmount < requestedAmount` had no

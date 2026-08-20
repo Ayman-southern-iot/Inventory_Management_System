@@ -615,3 +615,44 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   A `CHECK (approved_amount IS NULL OR approved_amount <= requested_amount)` would be the
   stronger guard per the make-illegal-states-unrepresentable rule, but that is a migration and
   was deliberately not taken here. Worth considering next time the schema is touched.
+- 2026-08-20 — **The recorded test baselines, measured rather than remembered.** Environment:
+  Windows host, `infra/docker-compose.dev.yml` test DB on 5434, Chromium **not** installed.
+  - **Integration: 484 pass / 7 fail (491 tests, 40 files).**
+    Per file: `reports` 12 tests / 4 failed · `e2e-requisition-to-bom` 5 / 2 ·
+    `throttling` 4 / 1 · everything else green.
+    The 7 attributed: **3** cross-file `app_settings` pollution in `reports` (it drafts at 9,000
+    needing sub-threshold, while `requisitions.int-spec.ts` mutates `EXPENSE_THRESHOLD_BDT`;
+    all 3 pass in isolation) · **3** Chromium never downloaded (`puppeteer.executablePath()`
+    resolves, file absent) · **1** genuine defect — oversized JSON body returns 500 not 413.
+  - **Unit: shared 7, api 51, web 102.**
+  - **`pnpm lint`: 21 errors, and it is not green.** Across
+    `apps/api/test/{e2e-requisition-to-bom,funding-snapshots,purchase-bom-quantity}.int-spec.ts`,
+    `apps/web/src/features/boms/components/BomLineEditorRow.quantity-hint.test.tsx`,
+    `apps/web/src/features/funds/components/FundsPanel.back.test.tsx`,
+    `apps/web/src/features/requisitions/components/SupportingDocumentCard.tsx`,
+    `packages/shared/src/contracts/requisitions.ts`,
+    `scripts/playwright-verify-snapshots.js`. `CLAUDE.md` defines done as including "lint
+    passes", so the repo cannot currently satisfy its own definition. Compare the count.
+  - **The previously documented figure was wrong in both halves.** It read "458 pass / 8
+    pre-existing failures in `reports` and `throttling`" and was quoted as authoritative by
+    `NOW.md`, `ASSIST.md` and this file. Actual at the start of the session: 473/11, across five
+    files, three of which the note never mentioned.
+  - **Hypothesis, not a finding**, for how "8" survived: entries at DECISIONS.md:537 and :566
+    read 450/8 and 458/8 — the pass count moved while the failure count stayed pinned, which is
+    the signature of a number copied forward rather than re-measured. A plausible mechanism is
+    `test:int -- <spec>` silently running all 39 files, blowing the documented 600s timeout, and
+    someone grepping `FAIL` from a truncated log — which undercounts by construction. No prior
+    log survives to confirm it. **Record baselines per-file, dated, with the environment named.**
+- 2026-08-20 — **PM item 14 declined: the purchase form will not prefill the requisition's
+  estimated unit cost.** The requisition holds the requester's *estimate*; the purchase step
+  exists to record what was actually paid, checked against the invoice (requirements §9 makes
+  unit cost the IM's entry, not the requester's). A prefilled figure invites the IM to accept it
+  without opening the invoice, which defeats the only control on that step. Superficially the
+  same request as item 15 (defaulting the return amount to the unspent balance) and answered the
+  opposite way: there, the default is the overwhelmingly common case and is already on screen;
+  here, the default is the thing the step is meant to verify.
+- 2026-08-20 — **Approver cap footnote.** The framing in the entry above understates the support:
+  `requisitions.service.ts:264` sets `approvedAmount: requestedAmount` at submit, so
+  `approved <= requested` already held by construction and simply had nothing defending it after
+  a revision. This is "guard an invariant the code already assumed", not "introduce a new
+  business rule" — a weaker and better-supported claim.
