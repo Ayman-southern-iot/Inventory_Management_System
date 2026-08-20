@@ -215,6 +215,50 @@ describe('funds and purchasing', () => {
     expect((await fundingOf(req.id)).funded).toBe(3001);
   });
 
+  /**
+   * QA round 1, item 5d. A fat-fingered year puts the money in a month that has not happened,
+   * and nothing downstream re-checks it. Asserted on the message and not just the status: the
+   * SPA renders `VALIDATION_FAILED` field issues verbatim, so a generic "Invalid input" here
+   * would be what the IM actually reads.
+   */
+  it('refuses an event date in the future, and says which date and why', async () => {
+    const req = await requisitionOnBom(5000);
+    await im.client.post(`/requisitions/${req.id}/send-to-accounts`).send();
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+    const futureReceipt = await im.client
+      .post(`/requisitions/${req.id}/fund-receipts`)
+      .send({ amount: 5000, receivedAt: tomorrow });
+    expect(futureReceipt.status).toBe(400);
+    expect(futureReceipt.body.code).toBe(ErrorCode.VALIDATION_FAILED);
+    expect(JSON.stringify(futureReceipt.body)).toContain(
+      'The date funds were received cannot be in the future',
+    );
+
+    const purchasable = await readyToPurchase(5000);
+    const futurePurchase = await im.client.post(`/requisitions/${purchasable.id}/purchases`).send({
+      vendor: 'Techshop BD',
+      purchasedAt: tomorrow,
+      lines: [{ requisitionItemId: purchasable.itemId, quantity: 1, unitCost: 4800 }],
+    });
+    expect(futurePurchase.status).toBe(400);
+    expect(JSON.stringify(futurePurchase.body)).toContain(
+      'The purchase date cannot be in the future',
+    );
+  });
+
+  it('still accepts a backdated event date — these record when it happened, not when it was typed', async () => {
+    const req = await readyToPurchase(5000);
+    const lastMonth = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    const purchased = await im.client.post(`/requisitions/${req.id}/purchases`).send({
+      vendor: 'Techshop BD',
+      purchasedAt: lastMonth,
+      lines: [{ requisitionItemId: req.itemId, quantity: 1, unitCost: 4800 }],
+    });
+    expect(purchased.status).toBe(201);
+  });
+
   /* ---------------------------------------------------------- concurrency */
 
   it('does not let two simultaneous receipts push funding past the approved amount', async () => {

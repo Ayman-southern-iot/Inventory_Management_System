@@ -32,6 +32,33 @@ const positiveMoneySchema = moneyAmountSchema.refine((value) => value > 0, {
   message: 'Amount must be greater than zero',
 });
 
+/* ----------------------------------------------------------- event dates */
+
+/**
+ * A browser clock running a little fast must not refuse an otherwise valid entry. The failure
+ * mode without it is a rejection nobody can reproduce, because the offending clock is the
+ * caller's. Five minutes is far short of the smallest real backdating case (same day).
+ */
+const CLOCK_SKEW_TOLERANCE_MS = 5 * 60 * 1000;
+
+/**
+ * An event date that has already happened.
+ *
+ * `receivedAt` and `purchasedAt` record *when it happened*, not when the IM typed it in, so
+ * backdating stays deliberately open — money released last Tuesday is entered on Thursday, and a
+ * purchase reaching the system a month later is still a real purchase. The future is the only
+ * direction that is always wrong: a receipt dated next year lands in the expense report for a
+ * month that has not happened, and nothing downstream would ever flag it.
+ *
+ * The message is passed in because it is the one the caller reads — the SPA renders
+ * `VALIDATION_FAILED` field issues verbatim, so "Invalid input" would reach the screen.
+ */
+const pastDatetimeSchema = (message: string) =>
+  z
+    .string()
+    .datetime({ offset: true })
+    .refine((value) => Date.parse(value) <= Date.now() + CLOCK_SKEW_TOLERANCE_MS, { message });
+
 /* ------------------------------------------------------- sent to accounts */
 
 /**
@@ -63,7 +90,7 @@ export type FundReceipt = z.infer<typeof fundReceiptSchema>;
 export const recordFundReceiptSchema = z.object({
   amount: positiveMoneySchema,
   /** When Accounts released it, which is not necessarily when the IM typed it in. */
-  receivedAt: z.string().datetime({ offset: true }),
+  receivedAt: pastDatetimeSchema('The date funds were received cannot be in the future'),
   reference: z.string().trim().max(120).nullable().default(null),
   note: z.string().trim().max(500).nullable().default(null),
 });
@@ -129,7 +156,7 @@ export const recordPurchaseSchema = z
   .object({
     vendor: z.string().trim().min(1).max(200),
     invoiceNo: z.string().trim().max(120).nullable().default(null),
-    purchasedAt: z.string().datetime({ offset: true }),
+    purchasedAt: pastDatetimeSchema('The purchase date cannot be in the future'),
     note: z.string().trim().max(500).nullable().default(null),
     lines: z.array(purchaseLineInputSchema).min(1).max(500),
   })
