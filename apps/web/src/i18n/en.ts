@@ -361,7 +361,7 @@ export const t = {
     unitCost: 'Unit cost',
     quantity: 'Quantity',
     returnedAmount: 'Amount going back to Accounts',
-    returnedAmountHint: 'Leave at zero if nothing is being returned.',
+    returnedAmountHint: 'Prefilled with the unspent balance. Set it to zero if nothing is going back.',
     returnNote: 'Why is it going back?',
     compartment: 'Compartment',
     borrower: 'Issue to',

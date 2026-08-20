@@ -39,6 +39,16 @@ function today(): string {
 }
 
 /**
+ * What verify-purchase should offer to send back: everything released that was neither spent
+ * nor already returned. The dialog prints this same figure one line above the field, so a
+ * hard '0' default made the IM read it and retype it — and the time they forgot, the balance
+ * stayed out of Accounts' books with nothing to say it had been missed.
+ */
+function defaultReturnedAmount(funding: RequisitionFunding | null): string {
+  return funding && funding.unspent > 0 ? String(funding.unspent) : '0';
+}
+
+/**
  * One dialog, switching on the action. The forms are small and share the same submit/close/toast
  * shape, so five separate dialog components would be five copies of the same wiring.
  */
@@ -79,7 +89,7 @@ export function FundsActionDialog({
   const [vendor, setVendor] = useState('');
   const [invoiceNo, setInvoiceNo] = useState('');
   const [unitCosts, setUnitCosts] = useState<Record<string, string>>({});
-  const [returnedAmount, setReturnedAmount] = useState('0');
+  const [returnedAmount, setReturnedAmount] = useState(() => defaultReturnedAmount(funding));
 
   useEffect(() => {
     if (!action) return;
@@ -88,7 +98,7 @@ export function FundsActionDialog({
     setReference('');
     setVendor('');
     setInvoiceNo('');
-    setReturnedAmount('0');
+    setReturnedAmount(defaultReturnedAmount(funding));
     // Pre-fill the receipt with what is still outstanding: the common case is Accounts releasing
     // exactly the remainder, and typing it again is friction.
     setAmount(funding && funding.outstanding > 0 ? String(funding.outstanding) : '');
