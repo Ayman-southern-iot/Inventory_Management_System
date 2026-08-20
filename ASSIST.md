@@ -611,7 +611,7 @@ Check here before you start reading code. Every row is something that has actual
 | Money figures inflated, roughly by an integer multiple | Fan-out from joining `fund_receipts` + `purchases` + `fund_returns` at once | Pre-aggregate per requisition. |
 | Submit fails: "An approver has not been assigned" while slots 1 and 2 are visibly filled | The **sub-threshold approver** is a *separate setting* from the two slots, and is the most commonly missed one | Admin → Settings → set it. Code: `SUBTHRESHOLD_APPROVER_UNASSIGNED`. |
 | `SELF_APPROVAL_NO_SUBSTITUTE` on submit | Nobody may approve their own requisition, and there is no one else configured to stand in | Operator must appoint a second IM / third approver. Not a code bug. |
-| Server message is clearly right but the UI shows the wrong sentence | The web app picks copy by **`code`**, not message | A new failure mode needs a new `ErrorCode` member *and* a copy entry. |
+| A refusal shows the wrong sentence even though the server's message is correct | The web app picks copy by **`code`**, not message — so a new failure mode that **reuses an existing `ErrorCode`** renders the old code's copy, however well the server words it | A new failure mode needs its own `ErrorCode` member *and* a copy entry in `apps/web/src/i18n/en.ts`. In the test, **assert `body.code`, not just the status** — a test that only checks `400`/`409` stays green while the user reads the wrong sentence. That is exactly how this shipped twice: the sub-threshold approver message (fixed by giving it `SUBTHRESHOLD_APPROVER_UNASSIGNED`) and six funds/approval refusals sharing one code. |
 | Integration test 500s with no stack trace | `test/app.ts` sets `logger: false` | Flip the logger on for your local run. |
 | `pnpm typecheck` fails on a shared type that visibly exists in `packages/shared/src` | `@ims/shared` resolves to `dist/`, not source — a new export is invisible until it is built | `pnpm --filter @ims/shared build`. `pnpm build` orders shared first; `pnpm typecheck` alone does not build anything. |
 | A BOM PDF test fails on a method that exists | `boms-pdf.int-spec.ts` overrides `PdfRendererService` with a **local stub** | Add the new renderer method to the stub too. |
@@ -623,6 +623,7 @@ Check here before you start reading code. Every row is something that has actual
 | A lint autofix broke Nest DI at boot | `@typescript-eslint/consistent-type-imports` is **off for `apps/api/src`** on purpose — Nest needs *value* imports to emit `design:paramtypes` | Never re-enable it there. |
 | PDF error leaks a container path or Chromium executable location | `PdfRenderFailedError` keeps its `reason` as a **field**, never as `details` — the filter copies `details` into the response | Keep it that way (G-12). |
 | Two IMs on one screen, both act, one gets a clean error | Conditional-update claiming (`WHERE status='PENDING'`) | Working as designed. Zero rows updated is how the loser finds out. |
+| `Cannot find module '<dep>'` from a command run at the repo root | pnpm keeps each workspace's dependencies in **its own** `node_modules` — the root resolves only what the root declares | **It proves nothing about whether the dependency is installed.** Re-run from the workspace that owns it (`cd apps/api && node -e "…"`) or via `pnpm --filter @ims/api exec …`. This is how "puppeteer is not installed" was once concluded about a package that was installed: the real gap was the **browser binary**, which `npx puppeteer browsers install chrome` downloads separately from the npm package. |
 
 ---
 
@@ -643,7 +644,8 @@ Condensed, so you can scan it before starting work. Detail for most of these is 
 - **`boms-pdf.int-spec.ts` has its own `PdfRendererService` stub** — keep it in sync.
 - **`test/app.ts` sets `logger: false`** — 500s arrive bare.
 - **Reusing a Kysely `sql` fragment renumbers its parameters.**
-- **The web app picks error copy by `code`.**
+- **The web app picks error copy by `code`.** Assert `body.code` in the test, not just the status.
+- **A `Cannot find module` at the repo root proves nothing** under pnpm — re-run from the owning workspace.
 - **`approver_slots.slot_no` is constrained to (1, 2)** — there is no slot 3 to fall back to.
 - **Dev settings persist.** Reset `EXPENSE_THRESHOLD_BDT` to 15,000 or read it live.
 - **A repeated-login smoke script trips its own 10/min/IP limit.**

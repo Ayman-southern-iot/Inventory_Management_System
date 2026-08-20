@@ -8,7 +8,7 @@
 >
 > **Maintenance rule:** see `.claude/rules/05-ai-playbook.md`. A `PostToolUse` hook
 > (`.claude/hooks/playbook-reminder.sh`) reminds Claude to update this file after every
-> meaningful edit. Last updated: 2026-08-17 (added `ASSIST.md` to §6).
+> meaningful edit. Last updated: 2026-08-20 (two landmines added to §16).
 >
 > **⚠ This file has known drift as of 2026-08-17** — §5.1 (`available` omits `quarantined_qty`),
 > §5.3 and §20 (the over-budget BOM gate was retired in `5435fac`), §5.3 (lifecycle list omits
@@ -1008,6 +1008,11 @@ reason the locking exists).
   placeholder numbers** → `GROUP BY <expr>` won't match `SELECT <expr>`. Group positionally.
 - **Web app selects error copy by `code`, not message.** A new failure mode needs a new
   `ErrorCode` member, or the UI shows the old sentence however good the server's message is.
+  The test must assert `body.code` — asserting only the status stays green while the user
+  reads the wrong sentence.
+- **A `Cannot find module` from the repo root proves nothing** — pnpm gives each workspace its
+  own `node_modules`, so the root resolves only what the root declares. Re-run from the owning
+  workspace or with `pnpm --filter <pkg> exec` before concluding anything is missing.
 - `approver_slots.slot_no` is constrained to **(1, 2)** — there is no slot 3 to fall back to.
 - Settings changed by hand in dev **persist** — reset `EXPENSE_THRESHOLD_BDT` to 15,000 or
   read it live rather than assuming.
