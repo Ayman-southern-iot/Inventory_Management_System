@@ -17,23 +17,21 @@ instance and they go fresh once the defects clear.
 
 ## Next action
 
-**D-002 — needs nothing, and it is the entry point of the whole procurement flow.**
-`RequisitionFormPage.tsx:50` asks `limit: 200` against a `PAGINATION_MAX_LIMIT` of 100, so
-`/products` 400s on every load and `catalogue.isError` is never read: the item picker has been
-starved since 29 July, every requisition line is unlinked free text, and that is why
-`in_stock_qty_at_submit` has never been written. Fix: import the constant, surface the error,
-add a unit test parsing every exported query constant through its schema.
+**D-002 landed** (`a6c1355`): `limit` is the imported `PAGINATION_MAX_LIMIT`, a failed
+catalogue says so with a retry, and `api/list-queries.contract.test.ts` parses every exported
+client query constant through its schema and fails on an unregistered new one. Left open by it:
+the picker still truncates in silence past 100 products — needs the `fetchAllProjects` paging
+treatment, no ruling required.
 
-Then **six rulings only Ayman can give**: **OQ-26** (may an approver hold two live
-delegations?) · **OQ-27** (D-020: does "Approved" mean currently or ever?) · **OQ-28** (D-032:
-remove the dead setting or relabel?) · **OQ-29** (D-023: may approvers list delegate candidates?
-one endpoint, two features) · **D-030**'s five `users.service.ts` sites, which name the
-*affected* user as the actor · **`git push`** — 27 commits including both Criticals exist on one
-machine only.
+**All six rulings given, 2026-08-23** — D-030's five sites GO · D-020 "Approved" = *currently*
+approved · D-032 setting REMOVED · `GET /users/selectable?role=` GO · one live delegation per
+approver (new rule, guard + probable partial unique index) · **`git push` still not authorised**:
+28 commits including both Criticals exist on one machine only. Order: docs, D-030, D-020,
+delegation guard + endpoint, D-032, then the Mediums.
 
 ## Green as of 2026-08-23 — measured, not remembered
 
-- `pnpm typecheck` clean · `pnpm test` → shared 13 · api 58 · web 112
+- `pnpm typecheck` clean · `pnpm test` → shared 13 · api 58 · web **126** (112 + 14 from D-002)
 - `pnpm --filter @ims/api test:int` → **497 pass / 1 fail (498 tests, 41 files)**
   The one failure is a **real defect**: oversized JSON body returns 500 not 413.
 - `pnpm lint` → **20 pre-existing errors. Not green.** Compare against 20, not zero.

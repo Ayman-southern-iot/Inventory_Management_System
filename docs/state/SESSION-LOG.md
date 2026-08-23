@@ -12,6 +12,24 @@ Format:
 **Next:** the single next action, specific enough to start without thinking
 ```
 
+## 2026-08-23 — correction to the QA round 2 entry below
+
+**Did:** nothing but check. Two `NOW.md` fixes were ordered and **both were already correct**,
+landed by `cf02fc8`: line 55 already reads "A missing tool binary is a skipped postinstall →
+`pnpm install`", and the integration baseline at line 37 already reads 497 pass / 1 fail. No
+edit was made for either; reporting the no-op rather than an imaginary diff.
+
+**Decisions:** the guard baseline was likewise already in `DECISIONS.md` (2026-08-23, all seven
+files named, alongside lint 20). What was genuinely missing and has now been added is the
+**current integration and unit baseline** — the newest dated figure in that file was still
+2026-08-20's 484/7 and shared 7 / api 51 / web 102, which is exactly the copied-forward-number
+failure that entry was written to stop.
+
+**Landmines:** `NOW.md`'s web unit count said 112 and is now 126 — D-002 (`a6c1355`) added 14
+tests. Any baseline quoted from a message older than that commit is one D-002 behind.
+
+**Next:** D-030's five `users.service.ts` sites.
+
 ## 2026-08-23 — QA round 2 (no phase; post-Phase-06)
 
 **Did:**

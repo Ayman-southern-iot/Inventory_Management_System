@@ -686,3 +686,11 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
 - 2026-08-23 — the fix for a missing tool binary is `pnpm install`, never the tool's own
   installer. `npx` at the repo root replaces pnpm's store with npm's flat layout and deletes
   `node_modules/.pnpm`. The old instruction in NOW.md was wrong and had never been run.
+- 2026-08-23 — **the measured baselines, superseding the 2026-08-20 figures above.** Same
+  environment (Windows host, test DB on 5434). **Integration 497 pass / 1 fail (498 tests, 41
+  files)** — the one failure is the genuine 500-not-413 on an oversized JSON body; the three
+  `reports` failures were an `audit.int-spec` settings leak and the three Chromium ones are
+  gone. **Unit: shared 13 · api 58 · web 112**, and web is **126** from `a6c1355` (D-002) on.
+  **Lint 20**, **`guard-hardcoding.sh --scan-all` 7** (named in the entry above). The 2026-08-20
+  entry's 484/7 and 7/51/102 are history, not the number to compare against — the whole point of
+  that entry was that a copied-forward figure is worse than none.
