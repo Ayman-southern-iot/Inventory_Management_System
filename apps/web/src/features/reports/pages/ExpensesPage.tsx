@@ -6,7 +6,13 @@ import { EmptyState, QueryBoundary, SkeletonRows } from '@/components/ui/states'
 import { t } from '@/i18n/en';
 import { cn } from '@/lib/cn';
 import { formatBdt } from '@/lib/format';
-import { useExpenseReport, expenseExportUrl } from '../api';
+import { messageForError } from '@/lib/error-message';
+import { useToast } from '@/components/ui/Toast';
+import { useExpenseReport, expenseExportPath } from '../api';
+import { useExportDownload } from '../use-export-download';
+
+/** Stem of the saved filename; the date and the extension are appended per download. */
+const EXPORT_FILE_STEM = 'expenses';
 
 /** `YYYY-MM-DD` in the business's own calendar, matching what the API expects. */
 function localDate(date: Date): string {
@@ -70,6 +76,25 @@ export function ExpensesPage() {
 
   const report = useExpenseReport(query);
 
+  // One hook per button, so a slow PDF render cannot disable the CSV button and a double
+  // click on either is a no-op rather than a second request.
+  const csv = useExportDownload();
+  const pdf = useExportDownload();
+  const toast = useToast();
+
+  async function runExport(format: 'csv' | 'pdf'): Promise<void> {
+    try {
+      await (format === 'csv' ? csv : pdf).download(
+        expenseExportPath(query, format),
+        `${EXPORT_FILE_STEM}-${localDate(new Date())}.${format}`,
+      );
+    } catch (error) {
+      // The old anchor could not report a failure at all — it saved whatever came back. A
+      // toast is the least this owes the user, given the figures go to Accounts.
+      toast.error(messageForError(error));
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <PageHeader title={t.expenses.title} subtitle={t.expenses.subtitle} />
@@ -125,24 +150,27 @@ export function ExpensesPage() {
             ))}
           </div>
 
-          {/* Anchors, not buttons: the browser handles the download, the auth cookie rides along
-              because the URL is same-origin, and there is no in-app loading state to manage.
-              Plain anchor styling matches the ghost-variant button — no nested interactive element. */}
+          {/* Buttons, not anchors: the endpoint is behind the JWT guard and a browser cannot
+              attach a bearer token to a top-level navigation, so the bytes come through
+              `api.blob()` and reach the user as an object URL. Same reasoning, and the same
+              shape, as SupportingDocumentCard. */}
           <div className="ml-auto flex flex-wrap items-center gap-1.5 pb-0.5">
-            <a
-              href={expenseExportUrl(query, 'csv')}
-              download
-              className="inline-flex h-8 items-center justify-center rounded-[--radius-control] px-3 text-sm font-medium text-ink-muted transition-colors hover:bg-surface-muted hover:text-ink"
+            <Button
+              variant="ghost"
+              size="sm"
+              isLoading={csv.pending}
+              onClick={() => void runExport('csv')}
             >
               {t.expenses.downloadCsv}
-            </a>
-            <a
-              href={expenseExportUrl(query, 'pdf')}
-              download
-              className="inline-flex h-8 items-center justify-center rounded-[--radius-control] px-3 text-sm font-medium text-ink-muted transition-colors hover:bg-surface-muted hover:text-ink"
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              isLoading={pdf.pending}
+              onClick={() => void runExport('pdf')}
             >
               {t.expenses.downloadPdf}
-            </a>
+            </Button>
           </div>
         </div>
 

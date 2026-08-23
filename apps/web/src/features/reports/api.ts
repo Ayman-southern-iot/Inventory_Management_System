@@ -16,12 +16,15 @@ export function useExpenseReport(query: ExpenseReportQuery) {
 }
 
 /**
- * Builds the export URL for the CSV / PDF download buttons. The current on-screen filter is the
- * filter the export uses — no separate dialog. Returned as a same-origin URL string so the buttons
- * can be plain `<a href download>` anchors: the auth cookie rides along, and the browser shows
- * its native download prompt without an in-app loading state.
+ * Builds the export path for the CSV / PDF download buttons. The current on-screen filter is
+ * the filter the export uses — no separate dialog.
+ *
+ * This is a path **relative to the API base**, for `api.blob()` to prefix and authenticate. It
+ * is deliberately not a browser-usable URL: it was one once, handed straight to an
+ * `<a href download>`, and D-024 is what that cost. The name says `Path` so the next person
+ * reaching for it in an `href` notices.
  */
-export function expenseExportUrl(query: ExpenseReportQuery, format: 'csv' | 'pdf'): string {
+export function expenseExportPath(query: ExpenseReportQuery, format: 'csv' | 'pdf'): string {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(query)) {
     if (value === undefined || value === null || value === '') continue;
