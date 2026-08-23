@@ -704,3 +704,24 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   `approved_amount`, so it drops out without being listed. The one judgement inside the ruling:
   `CANCELLED` is excluded on the same "can it be spent" test, which means a requisition
   cancelled after funding will show funded > approved. That is correct and it will look odd.
+- 2026-08-23 — **an approver may hold only ONE live delegation at a time.** Ayman's decision
+  (OQ-26); a **new behaviour rule**, not a defect fix. requirements §4 says "a delegate",
+  singular — suggestive, not decisive — and the deciding reason is that two people
+  simultaneously holding one approver's authority means an approval can be actioned by either
+  with nothing on the record saying which the approver meant. Enforced in
+  `DelegationsService.create` as an **overlap** test, not an "effective right now" test: two
+  future delegations that overlap each other are the same defect one day later. Windows are
+  half-open on both sides, matching `isEffectiveDelegate`'s `starts_at <= now < ends_at`, so a
+  delegation ending exactly as the next begins is a handover rather than a conflict. New
+  `ErrorCode.DELEGATION_ALREADY_LIVE` (409). **The guard is application-level only** — the
+  matching partial unique index is a migration and was NOT written; see the STOP in this
+  session's handoff. Two concurrent creates can still both pass the check.
+- 2026-08-23 — **`GET /users/selectable?role=` ships as the one picker feed.** Ayman's decision
+  (OQ-29 / D-023): one resource, one filter, serving both the delegate picker and
+  borrow-to-user (OQ-22). Readable by APPROVER, INVENTORY_MANAGER and ADMIN. It is a
+  permissions expansion, and the reason it is an acceptable one is that it exposes exactly the
+  two fields `ApprovalTracker` already renders to any approver — name and designation — while
+  `OVERSIGHT_ROLES` already lets any approver open any requisition. Its own controller rather
+  than a route on `UsersController`, because that class is `@Roles(ADMIN)` at the class level
+  and a non-admin route one decorator away from the admin surface is how that decorator gets
+  removed by accident. Candidates are deliberately **not** filtered by existing delegations.

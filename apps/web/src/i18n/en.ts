@@ -1083,6 +1083,8 @@ export const t = {
       'You have not uploaded a signature yet. Add one from your profile, or approve without a signature.',
     APPROVED_EXCEEDS_REQUESTED:
       'You cannot sanction more than the {requested} requested. Approve up to that, or send the requisition back so the requester can restate it.',
+    DELEGATION_ALREADY_LIVE:
+      'You already have a delegation covering part of that period. An approver can have only one delegate at a time — revoke the existing one first.',
     INTERNAL: 'Something went wrong on the server.',
     NETWORK: 'Cannot reach the server.',
   },

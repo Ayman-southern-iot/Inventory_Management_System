@@ -56,6 +56,33 @@ export const listUsersQuerySchema = paginationQuerySchema.extend({
 });
 export type ListUsersQuery = z.infer<typeof listUsersQuerySchema>;
 
+/**
+ * The picker feed (D-023 / OQ-29). Deliberately a *different* contract from `listUsersQuery`
+ * rather than a relaxation of it: this one is readable by approvers and the IM, so its
+ * projection is the constraint that matters and must not drift into the admin one.
+ *
+ * `includeInactive` is absent on purpose — a picker offering someone who cannot act is a
+ * dead end — and so is `departmentId`, which neither the delegate nor the borrow-to-user
+ * picker filters by.
+ */
+export const selectableUsersQuerySchema = paginationQuerySchema.extend({
+  search: z.string().trim().max(160).optional(),
+  role: roleSchema.optional(),
+});
+export type SelectableUsersQuery = z.infer<typeof selectableUsersQuerySchema>;
+
+/**
+ * Exactly the two fields `ApprovalTracker` already renders to any approver, and nothing else.
+ * No email, no roles, no department, no `lastLoginAt` — the endpoint is a name picker, and a
+ * field nobody asked for is a field nobody notices leaking.
+ */
+export const selectableUserSchema = z.object({
+  id: z.string().uuid(),
+  fullName: z.string(),
+  designation: z.string(),
+});
+export type SelectableUser = z.infer<typeof selectableUserSchema>;
+
 export const userSchema = z.object({
   id: z.string().uuid(),
   email: z.string().email(),

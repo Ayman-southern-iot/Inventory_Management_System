@@ -731,6 +731,96 @@ describe('requisitions and approvals', () => {
       expect(refused.body.code).toBe(ErrorCode.NOT_YOUR_APPROVAL);
     });
 
+    /**
+     * OQ-26, ruled 2026-08-23: one live delegation per approver. Before the guard,
+     * `create` checked not-self, delegate-is-an-active-approver and end-after-start and
+     * nothing else, so a second overlapping row inserted silently — and
+     * `isEffectiveDelegate` matches *any* live row, so either of two people could action the
+     * same approval with nothing recording which one the approver meant.
+     */
+    it('refuses a second delegation that overlaps a live one', async () => {
+      const first = await actorFor([Role.GENERAL, Role.APPROVER]);
+      const second = await actorFor([Role.GENERAL, Role.APPROVER]);
+
+      const granted = await approver1.client
+        .post('/requisitions/delegations')
+        .send({ delegateUserId: first.id, startsAt: isoIn(-1), endsAt: isoIn(48) });
+      expect(granted.status).toBe(201);
+
+      const overlapping = await approver1.client
+        .post('/requisitions/delegations')
+        .send({ delegateUserId: second.id, startsAt: isoIn(24), endsAt: isoIn(72) });
+
+      expect(overlapping.status).toBe(409);
+      expect(overlapping.body.code).toBe(ErrorCode.DELEGATION_ALREADY_LIVE);
+    });
+
+    it('refuses an overlap even when both windows are entirely in the future', async () => {
+      const first = await actorFor([Role.GENERAL, Role.APPROVER]);
+      const second = await actorFor([Role.GENERAL, Role.APPROVER]);
+
+      await approver1.client
+        .post('/requisitions/delegations')
+        .send({ delegateUserId: first.id, startsAt: isoIn(72), endsAt: isoIn(120) });
+
+      const overlapping = await approver1.client
+        .post('/requisitions/delegations')
+        .send({ delegateUserId: second.id, startsAt: isoIn(96), endsAt: isoIn(144) });
+
+      expect(overlapping.status).toBe(409);
+      expect(overlapping.body.code).toBe(ErrorCode.DELEGATION_ALREADY_LIVE);
+    });
+
+    it('allows a second delegation that starts after the first has ended', async () => {
+      const first = await actorFor([Role.GENERAL, Role.APPROVER]);
+      const second = await actorFor([Role.GENERAL, Role.APPROVER]);
+
+      await approver1.client
+        .post('/requisitions/delegations')
+        .send({ delegateUserId: first.id, startsAt: isoIn(-48), endsAt: isoIn(-24) });
+
+      const later = await approver1.client
+        .post('/requisitions/delegations')
+        .send({ delegateUserId: second.id, startsAt: isoIn(-1), endsAt: isoIn(24) });
+
+      expect(later.status).toBe(201);
+    });
+
+    it('frees the window when the first delegation is revoked', async () => {
+      const first = await actorFor([Role.GENERAL, Role.APPROVER]);
+      const second = await actorFor([Role.GENERAL, Role.APPROVER]);
+
+      const granted = await approver1.client
+        .post('/requisitions/delegations')
+        .send({ delegateUserId: first.id, startsAt: isoIn(-1), endsAt: isoIn(48) });
+      const revoked = await approver1.client.delete(
+        `/requisitions/delegations/${granted.body.id}`,
+      );
+      expect(revoked.status).toBe(204);
+
+      const replacement = await approver1.client
+        .post('/requisitions/delegations')
+        .send({ delegateUserId: second.id, startsAt: isoIn(-1), endsAt: isoIn(48) });
+
+      expect(replacement.status).toBe(201);
+    });
+
+    /** Two *different* approvers delegating to overlapping windows is not the defect. */
+    it('does not constrain a different approver', async () => {
+      const shared = await actorFor([Role.GENERAL, Role.APPROVER]);
+
+      const one = await approver1.client
+        .post('/requisitions/delegations')
+        .send({ delegateUserId: shared.id, startsAt: isoIn(-1), endsAt: isoIn(48) });
+      expect(one.status).toBe(201);
+
+      const two = await approver2.client
+        .post('/requisitions/delegations')
+        .send({ delegateUserId: shared.id, startsAt: isoIn(-1), endsAt: isoIn(48) });
+
+      expect(two.status).toBe(201);
+    });
+
     it('a future delegation grants nothing yet', async () => {
       const delegate = await actorFor([Role.GENERAL, Role.APPROVER]);
       const created = await approver1.client

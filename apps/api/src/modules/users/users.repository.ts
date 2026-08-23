@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { sql, type Transaction } from 'kysely';
-import { Role, type ListUsersQuery, type User } from '@ims/shared';
+import { Role, type ListUsersQuery, type SelectableUsersQuery, type User } from '@ims/shared';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
 import type { Database, UserRow } from '../../database/schema';
@@ -114,6 +114,58 @@ export class UsersRepository {
           'departments.name as department_name',
           ROLES_AGG.as('roles'),
         ])
+        .orderBy('users.full_name')
+        .limit(query.limit)
+        .offset(offset)
+        .execute(),
+      base.select((eb) => eb.fn.countAll<number>().as('count')).executeTakeFirst(),
+    ]);
+
+    return { items: rows, total: counted?.count ?? 0 };
+  }
+
+  /**
+   * The picker projection. Three columns, no join, no role aggregation — the row shape *is* the
+   * access-control decision here, so it is written out literally rather than derived from
+   * `baseSelect` (which carries the password hash and every admin-only column).
+   *
+   * Always active-only: an inactive user cannot approve or hold an item.
+   */
+  async listSelectable(
+    query: SelectableUsersQuery,
+  ): Promise<{ items: Array<{ id: string; full_name: string; designation: string }>; total: number }> {
+    const offset = (query.page - 1) * query.limit;
+
+    let base = this.db
+      .selectFrom('users')
+      .where('users.is_active', '=', true)
+      .$if(query.role !== undefined, (qb) =>
+        qb.where((eb) =>
+          eb.exists(
+            eb
+              .selectFrom('user_roles')
+              .select('user_roles.user_id')
+              .whereRef('user_roles.user_id', '=', 'users.id')
+              .where('user_roles.role', '=', query.role!),
+          ),
+        ),
+      );
+
+    if (query.search) {
+      // Name and designation only. Searching by email here would turn a name picker into an
+      // address oracle for every approver.
+      const term = `%${query.search.toLowerCase()}%`;
+      base = base.where((eb) =>
+        eb.or([
+          eb(sql`lower(users.full_name)`, 'like', term),
+          eb(sql`lower(users.designation)`, 'like', term),
+        ]),
+      );
+    }
+
+    const [rows, counted] = await Promise.all([
+      base
+        .select(['users.id', 'users.full_name', 'users.designation'])
         .orderBy('users.full_name')
         .limit(query.limit)
         .offset(offset)

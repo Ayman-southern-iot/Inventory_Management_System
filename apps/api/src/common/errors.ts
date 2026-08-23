@@ -90,6 +90,22 @@ export class ConflictError extends DomainError {
   }
 }
 
+/**
+ * One live delegation per approver (OQ-26). Windows are compared for *overlap*, not for
+ * "effective right now": two future delegations that overlap each other are the same defect
+ * one day later.
+ */
+export class DelegationAlreadyLiveError extends DomainError {
+  constructor(details?: unknown) {
+    super(
+      ErrorCode.DELEGATION_ALREADY_LIVE,
+      'You already have a delegation covering part of that period. Revoke it first.',
+      HttpStatus.CONFLICT,
+      details,
+    );
+  }
+}
+
 export class RateLimitedError extends DomainError {
   constructor(retryAfterSeconds: number) {
     super(

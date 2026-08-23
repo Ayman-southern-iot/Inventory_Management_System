@@ -3,7 +3,7 @@ import { sql } from 'kysely';
 import { Role, type CreateDelegationInput, type Delegation } from '@ims/shared';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
-import { ConflictError, NotFoundError } from '../../common/errors';
+import { ConflictError, DelegationAlreadyLiveError, NotFoundError } from '../../common/errors';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NOTIFICATION_LINKS } from '../notifications/notifications.links';
@@ -83,6 +83,31 @@ export class DelegationsService {
       .select('users.id')
       .executeTakeFirst();
     if (!delegate) throw new ConflictError('The delegate must be an active approver');
+
+    // One live delegation per approver (OQ-26, ruled 2026-08-23). Compared for *overlap*
+    // rather than "effective now": two future delegations that overlap each other are the same
+    // defect one day later. Half-open windows on both sides, matching `isEffectiveDelegate`'s
+    // `starts_at <= now < ends_at` — so a delegation ending exactly when the next begins is
+    // a handover, not an overlap.
+    //
+    // Deliberately NOT enforced by filtering the delegate picker: the constraint is on the
+    // approver's *window*, not on who is eligible, and hiding candidates would disguise the
+    // rule as an empty list.
+    const overlapping = await this.db
+      .selectFrom('delegations')
+      .select(['id', 'starts_at', 'ends_at'])
+      .where('approver_user_id', '=', approverUserId)
+      .where('is_active', '=', true)
+      .where('starts_at', '<', new Date(input.endsAt))
+      .where('ends_at', '>', new Date(input.startsAt))
+      .executeTakeFirst();
+    if (overlapping) {
+      throw new DelegationAlreadyLiveError({
+        existingDelegationId: overlapping.id,
+        startsAt: overlapping.starts_at.toISOString(),
+        endsAt: overlapping.ends_at.toISOString(),
+      });
+    }
 
     // A delegation hands someone else the right to approve. It and its audit row commit
     // together or not at all — otherwise a failed audit write returns 500 on a delegation that

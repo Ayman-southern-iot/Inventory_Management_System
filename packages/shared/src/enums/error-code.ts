@@ -125,6 +125,18 @@ export const ErrorCode = {
    */
   APPROVED_EXCEEDS_REQUESTED: 'APPROVED_EXCEEDS_REQUESTED',
 
+  /**
+   * An approver tried to hand their authority to a second person for an overlapping window.
+   *
+   * Ayman's ruling, 2026-08-23 (OQ-26): an approver may hold only ONE live delegation at a
+   * time. requirements §4 says "a delegate", singular — suggestive, not decisive — and the
+   * deciding reason is that two people simultaneously holding one approver's authority means
+   * an approval can be actioned by either, with nothing on the record saying which the
+   * approver meant. `isEffectiveDelegate` matches any live row, so before this the second
+   * delegation simply won by being asked first.
+   */
+  DELEGATION_ALREADY_LIVE: 'DELEGATION_ALREADY_LIVE',
+
   INTERNAL: 'INTERNAL',
 } as const;
 

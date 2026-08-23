@@ -7,6 +7,8 @@ import {
   type ListUsersQuery,
   type Paginated,
   type ResetPasswordInput,
+  type SelectableUser,
+  type SelectableUsersQuery,
   type UpdateUserInput,
   type User,
 } from '@ims/shared';
@@ -57,6 +59,24 @@ export class UsersService {
   async list(query: ListUsersQuery): Promise<Paginated<User>> {
     const { items, total } = await this.repo.list(query);
     return { items: items.map(toUser), page: query.page, limit: query.limit, total };
+  }
+
+  /**
+   * The picker feed (D-023 / OQ-29). No mapping through `toUser` — that shape carries the
+   * admin columns, and the point of this endpoint is that it cannot.
+   */
+  async listSelectable(query: SelectableUsersQuery): Promise<Paginated<SelectableUser>> {
+    const { items, total } = await this.repo.listSelectable(query);
+    return {
+      items: items.map((row) => ({
+        id: row.id,
+        fullName: row.full_name,
+        designation: row.designation,
+      })),
+      page: query.page,
+      limit: query.limit,
+      total,
+    };
   }
 
   /**
