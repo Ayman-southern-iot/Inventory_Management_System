@@ -631,6 +631,7 @@ row in the same session.
 | Two IMs on one screen, both act, one gets a clean error | Conditional-update claiming (`WHERE status='PENDING'`) | Working as designed. Zero rows updated is how the loser finds out. |
 | `Cannot find module '<dep>'` from a command run at the repo root | pnpm keeps each workspace's dependencies in **its own** `node_modules` — the root resolves only what the root declares | **It proves nothing about whether the dependency is installed.** Re-run from the workspace that owns it (`cd apps/api && node -e "…"`) or via `pnpm --filter @ims/api exec …`. This is how "puppeteer is not installed" was once concluded about a package that was installed. |
 | An `npx <tool>` or `npm i` run at the repo root appears to work, then **everything** breaks | npx/npm rewrote `node_modules` in npm's flat layout and **deleted pnpm's `node_modules/.pnpm` store**. Every workspace symlink is left dangling — `vitest` simply vanishes — and the root `package.json` gains a `dependencies` block plus a stray `package-lock.json` | Never run `npx` or `npm` at the root of this repo. Recover with: `git checkout -- package.json`, `rm -f package-lock.json`, then **`pnpm install`**. `pnpm-lock.yaml` and the workspace manifests are untouched by the damage, which is the only reason it is recoverable. |
+| A test goes green after your fix, but you never checked it goes **red again** with the fix reverted | It is testing something else. The classic is a fixture that never reached the state under test — a requisition that stayed `DRAFT` because the submit 409'd, so every assertion about a submitted requisition was trivially true | Revert the fix and re-run. If the test does not fail, it is not your test yet. This caught a D-014 clock spec that had already passed a red run: the first red was the fixture, not the defect, and only restoring the fix exposed it. Red-before is the step everyone remembers; **red-again-on-revert is the one that validates the test**. |
 | A tool's **binary** is missing although its npm package is installed | Its `postinstall` was skipped or interrupted — not a missing manual step | **`pnpm install`.** Puppeteer's postinstall fetches the pinned Chrome build (`131.0.6778.204`) on its own. Never reach for the tool's own installer: run from the root it resolves a different, newer copy of the tool and wrecks the store (row above); run from the workspace it is simply unnecessary. |
 
 ---
@@ -657,6 +658,8 @@ Condensed, so you can scan it before starting work. Detail for most of these is 
 - **Never run `npx` or `npm` at the repo root.** It replaces pnpm's store with npm's flat layout,
   `node_modules/.pnpm` disappears and every workspace link dangles. Recovery is `pnpm install`.
 - **A missing tool binary is a skipped postinstall.** `pnpm install`, never the tool's own installer.
+- **Revert the fix and check the test goes red again.** A red run before the fix does not prove
+  the test is testing the fix — a broken fixture is red for its own reasons.
 - **`approver_slots.slot_no` is constrained to (1, 2)** — there is no slot 3 to fall back to.
 - **Dev settings persist.** Reset `EXPENSE_THRESHOLD_BDT` to 15,000 or read it live.
 - **A repeated-login smoke script trips its own 10/min/IP limit.**
