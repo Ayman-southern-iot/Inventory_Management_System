@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { type Control, Controller, type UseFormRegister } from 'react-hook-form';
 import { Checkbox, TextField } from '@/components/ui/Field';
 import { t } from '@/i18n/en';
@@ -13,6 +14,13 @@ import type { BomGenerateLine } from './types';
  * through the wire. Same trick for `quantity` — the field is always an integer ≥ 1,
  * and an empty input is treated as the source quantity so the IM does not have to
  * touch a row just to keep it.
+ *
+ * That convention needs `quantityCleared`, and D-028 is what happens without it. The display
+ * used to be derived from the value — empty whenever the value equalled the source — so typing
+ * the source quantity blanked the box under the IM's cursor, and on a line whose source is 1
+ * the only legal value was the one that cleared. The value cannot tell you whether the box is
+ * empty, because it is the same number either way; only the IM having emptied it can. Blur
+ * resets the flag, so a field left empty goes back to showing the figure that will be sent.
  *
  * Source `requisition_items.quantity` is never modified — these edits live only on the
  * BOM line. The office is small; the IM coordinates budget changes verbally.
@@ -46,6 +54,8 @@ export function BomLineEditorRow({
   errorUnitCost,
   errorVendor,
 }: BomLineEditorRowProps) {
+  // True only while the IM has actually emptied the quantity box — see the note above.
+  const [quantityCleared, setQuantityCleared] = useState(false);
   return (
     <tr className={removed ? 'align-top opacity-50' : 'align-top'}>
       <td className="px-4 py-2.5">
@@ -66,15 +76,17 @@ export function BomLineEditorRow({
               min={1}
               max={sourceQuantity}
               step={1}
-              // Empty input is treated as the source quantity so the IM does not have
-              // to type the original value just to keep the row.
-              value={field.value === sourceQuantity ? '' : String(field.value)}
+              value={quantityCleared ? '' : String(field.value)}
               onChange={(event) => {
                 const raw = event.target.value;
                 if (raw === '') {
+                  // Emptying the box still means "keep the source quantity" — the form
+                  // carries it, and the box stays visibly empty until focus leaves.
+                  setQuantityCleared(true);
                   field.onChange(sourceQuantity);
                   return;
                 }
+                setQuantityCleared(false);
                 const parsed = Number(raw);
                 if (Number.isFinite(parsed)) {
                   // Clamp to the source so the IM cannot exceed it. The wire zod schema
@@ -82,7 +94,12 @@ export function BomLineEditorRow({
                   field.onChange(Math.max(1, Math.min(sourceQuantity, Math.floor(parsed))));
                 }
               }}
-              onBlur={field.onBlur}
+              onBlur={() => {
+                // Show what will actually be submitted, rather than leaving a blank box
+                // over a real value.
+                setQuantityCleared(false);
+                field.onBlur();
+              }}
               disabled={removed}
               error={errorQuantity}
               // The IM edits quantity per line and routinely forgets what the requisition
