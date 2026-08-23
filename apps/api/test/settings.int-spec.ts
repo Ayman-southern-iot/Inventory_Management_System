@@ -10,7 +10,13 @@ import {
   type Setting,
 } from '@ims/shared';
 import { createTestApp, httpClient, type HttpClient, type TestApp } from './app';
-import { createDepartment, createUser, login, resetData } from './factories';
+import {
+  createDepartment,
+  createUser,
+  login,
+  resetData,
+  restoreSeededSettings,
+} from './factories';
 import { ApproverSlotsService } from '../src/modules/settings/approver-slots.service';
 import { SettingsService } from '../src/modules/settings/settings.service';
 import { AuditService } from '../src/modules/audit/audit.service';
@@ -29,6 +35,10 @@ describe('settings', () => {
   });
 
   afterAll(async () => {
+    // This file raises EXPENSE_THRESHOLD_BDT by 1,000 relative to whatever it finds, so the
+    // leak drifts rather than sitting at one value — harder to spot than the fixed 9,999 in
+    // audit.int-spec, same consequence for whatever boots next.
+    await restoreSeededSettings(ctx);
     await ctx.close();
   });
 

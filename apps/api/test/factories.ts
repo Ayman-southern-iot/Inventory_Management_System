@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { sql } from 'kysely';
-import { Role, SettingKey, type LoginResponse } from '@ims/shared';
+import { AUDIT_ACTIONS, Role, SettingKey, type LoginResponse } from '@ims/shared';
 import type { Db } from '../src/database/create-db';
 import { PasswordService } from '../src/security/password.service';
 import { SettingsService } from '../src/modules/settings/settings.service';
-import { TEST_PASSWORD } from './config/test-env';
+import { TEST_ENV, TEST_PASSWORD } from './config/test-env';
 import type { HttpClient, TestApp } from './app';
 
 const passwords = new PasswordService();
@@ -124,7 +124,9 @@ export async function createUserAndLogin(
  *
  * Not `TRUNCATE ... CASCADE`: `app_settings.updated_by` references `users`, so CASCADE would
  * silently truncate the settings the running application has already cached and seeded.
- * `app_settings` is owned by boot-time seeding and is therefore reset by value, not by row.
+ * `app_settings` is the one table that is NOT reset here beyond `updated_by`: the running
+ * app caches settings and `resetData` only has the `Db`, so it cannot invalidate that cache.
+ * A spec that mutates a setting must put it back itself — see `restoreSeededSettings`.
  */
 export async function resetData(db: Db): Promise<void> {
   // Phase 06: the append-only trigger on audit_log blocks UPDATE, which means a SET NULL
@@ -318,6 +320,54 @@ export async function seedApprovalChain(ctx: TestApp, approverId: string): Promi
     .values({ department_id: null, slot_no: 1, user_id: approverId })
     .execute();
   await seedSubthresholdApprover(ctx, approverId);
+}
+
+/**
+ * Puts the seeded business settings back.
+ *
+ * `app_settings` is the only state that survives between spec files: `resetData` clears rows
+ * from every other table but can only null `updated_by` here, because it holds a `Db` and
+ * cache invalidation needs the running `SettingsService`. So a spec that changes a setting
+ * leaks it into every spec that boots afterwards, and the damage lands somewhere else entirely.
+ *
+ * That is not hypothetical. `audit.int-spec` dropped EXPENSE_THRESHOLD_BDT to 9,999 and never
+ * restored it; `reports.int-spec` then submitted above the threshold, needed two approvers,
+ * 409'd on unassigned slots and read `.approvals` off an error body. Three failures, blamed on
+ * a different file for months, and present or absent depending on how the runner happened to
+ * schedule the two — which made the whole baseline a function of timing.
+ *
+ * Call this in `afterAll` from any spec that writes a setting. It goes through
+ * `SettingsService` rather than raw SQL precisely so the cache is invalidated with the row.
+ */
+export async function restoreSeededSettings(ctx: TestApp): Promise<void> {
+  const settings = ctx.app.get(SettingsService);
+  const context = {
+    actorId: null,
+    actorName: null,
+    actorEmail: null,
+    actorRoles: [],
+    requestMethod: 'TEST',
+    requestPath: 'test://factories/restoreSeededSettings',
+    requestIp: null,
+    userAgent: 'factories.test.ts',
+  };
+
+  await settings.set(
+    SettingKey.EXPENSE_THRESHOLD_BDT,
+    Number(TEST_ENV.SETTING_EXPENSE_THRESHOLD_BDT),
+    context,
+  );
+  await settings.set(
+    SettingKey.APPROVER_SLOTS_BELOW_THRESHOLD,
+    Number(TEST_ENV.SETTING_APPROVER_SLOTS_BELOW_THRESHOLD),
+    context,
+  );
+  await settings.set(
+    SettingKey.APPROVER_SLOTS_AT_OR_ABOVE_THRESHOLD,
+    Number(TEST_ENV.SETTING_APPROVER_SLOTS_AT_OR_ABOVE_THRESHOLD),
+    context,
+  );
+  await settings.set(SettingKey.AUDIT_ENABLED_ACTIONS, [...AUDIT_ACTIONS], context);
 }
 
 export async function seedSubthresholdApprover(ctx: TestApp, approverId: string): Promise<void> {

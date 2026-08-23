@@ -3,9 +3,14 @@ import { sql } from 'kysely';
 import { AUDIT_ACTIONS, Role, SettingKey, type AuditEntry, type Paginated } from '@ims/shared';
 import { createTestApp, httpClient, type HttpClient, type TestApp } from './app';
 import { TEST_PASSWORD } from './config/test-env';
-import { createUser, createUserAndLogin, login, resetData, uniqueEmail } from './factories';
-import { AuditService } from '../src/modules/audit/audit.service';
-import { SettingsService } from '../src/modules/settings/settings.service';
+import {
+  createUser,
+  createUserAndLogin,
+  login,
+  resetData,
+  restoreSeededSettings,
+  uniqueEmail,
+} from './factories';
 
 /**
  * Phase 06 — global audit log verification.
@@ -24,14 +29,9 @@ import { SettingsService } from '../src/modules/settings/settings.service';
 describe('audit log', () => {
   let ctx: TestApp;
   let http: HttpClient;
-  let audit: AuditService;
-  /** Captured before anything runs, restored in afterAll — see the note there. */
-  let thresholdAtStart: number;
 
   beforeAll(async () => {
     ctx = await createTestApp();
-    audit = ctx.app.get(AuditService);
-    thresholdAtStart = await ctx.app.get(SettingsService).get(SettingKey.EXPENSE_THRESHOLD_BDT);
   });
 
   afterAll(async () => {
@@ -41,27 +41,11 @@ describe('audit log', () => {
     // narrowed list (the AUDIT_KNOWN_ACTIONS correction) — so left alone this leaks
     // category.create disabled into every spec file that boots after this one in the shared
     // suite database. Mirrors settings.int-spec.ts's own cleanup for the same setting.
-    await ctx.db
-      .updateTable('app_settings')
-      .set({ value: JSON.stringify([...AUDIT_ACTIONS]) })
-      .where('key', '=', SettingKey.AUDIT_ENABLED_ACTIONS)
-      .execute();
-    audit.clearEnabledActionsCache();
-
-    // 'records a setting update' drops EXPENSE_THRESHOLD_BDT to 9,999 through the real admin
-    // endpoint and nothing put it back, so every spec booting after this one inherited it.
-    // reports.int-spec is the one that notices: its fixtures submit above 9,999, which turns a
-    // one-approver requisition into a two-approver one, the submit 409s on unassigned slots,
-    // and the spec then reads `.approvals` off an error body. Those three failures have sat in
-    // the documented baseline for months attributed to requisitions.int-spec, which does not
-    // cause them — `vitest run audit.int-spec reports.int-spec` reproduces all three, and
-    // `requisitions.int-spec reports.int-spec` passes. Whether they appeared in a full run at
-    // all depended on file scheduling, which is why the number moved whenever anything shifted.
-    await ctx.db
-      .updateTable('app_settings')
-      .set({ value: JSON.stringify(thresholdAtStart) })
-      .where('key', '=', SettingKey.EXPENSE_THRESHOLD_BDT)
-      .execute();
+    // This file narrows AUDIT_ENABLED_ACTIONS and drops EXPENSE_THRESHOLD_BDT to 9,999, both
+    // through the real admin endpoints. Neither used to be put back, and the threshold leak is
+    // what produced the three reports.int-spec failures that sat in the baseline for months
+    // blamed on a different file. One helper now restores every seeded setting.
+    await restoreSeededSettings(ctx);
     await ctx.close();
   });
 
