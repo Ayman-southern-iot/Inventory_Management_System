@@ -4,60 +4,64 @@
 > demand: `ASSIST.md` (operating manual, symptom→cause table, landmines) · `SESSION-LOG.md` ·
 > `DECISIONS.md` · `OPEN-QUESTIONS.md` · `.claude/rules/70-assist-handoff.md` · `docs/RUNBOOK.md`.
 
-**Updated:** 2026-08-20
+**Updated:** 2026-08-23
 
 ## Where the build is
 
-Phases 00–06 complete. Not construction any more — a **QA round from the project manager** is in
-flight: 18 items triaged, **9 fixed, 4 answered from the requirements, 1 declined, 4 open.**
-Branch `fix/lan-secure-context` is **82 commits ahead of `main`, never merged** — the largest
-standing risk on this project.
+Phases 00–06 complete. **QA round 2** is in flight: `IMS_QA_Test_Plan.xlsx` (untracked, repo
+root) — 186 cases, **31 defect rows, not 32**; four Fails are second reproductions, and `EX-02`
+(inventory export, the only unimplemented **REQUIRED §10** obligation) has no defect ID at all.
+Full triage in `SESSION-LOG.md`. Both Criticals fixed, three Highs fixed. The tested instance
+`erp.southerneleven.com` runs `f68ff53`, **27 commits behind local**; Ayman says it is a test
+instance and they go fresh once the defects clear.
 
 ## Next action
 
-Ayman authorised a numbered list; **5c and 5d remain**, one commit each:
+**D-002 — needs nothing, and it is the entry point of the whole procurement flow.**
+`RequisitionFormPage.tsx:50` asks `limit: 200` against a `PAGINATION_MAX_LIMIT` of 100, so
+`/products` 400s on every load and `catalogue.isError` is never read: the item picker has been
+starved since 29 July, every requisition line is unlinked free text, and that is why
+`in_stock_qty_at_submit` has never been written. Fix: import the constant, surface the error,
+add a unit test parsing every exported query constant through its schema.
 
-- **5c** — `returnedAmount` defaults to `funding.unspent`, not `'0'` (`FundsActionDialog.tsx:82`;
-  the dialog already shows `funding.unspent` at :277).
-- **5d** — bound `purchasedAt`/`receivedAt` to not-in-the-future, zod refine + custom message.
-  **Backdating stays allowed** — event dates, not entry timestamps (`contracts/funds.ts:65`).
+Then **six rulings only Ayman can give**: **OQ-26** (may an approver hold two live
+delegations?) · **OQ-27** (D-020: does "Approved" mean currently or ever?) · **OQ-28** (D-032:
+remove the dead setting or relabel?) · **OQ-29** (D-023: may approvers list delegate candidates?
+one endpoint, two features) · **D-030**'s five `users.service.ts` sites, which name the
+*affected* user as the actor · **`git push`** — 27 commits including both Criticals exist on one
+machine only.
 
-Then two `ASSIST.md` §8 rows (see SESSION-LOG). PM item 6 is deferred — absent, not broken.
+## Green as of 2026-08-23 — measured, not remembered
 
-## Green as of 2026-08-20 — measured this session, not remembered
+- `pnpm typecheck` clean · `pnpm test` → shared 13 · api 58 · web 112
+- `pnpm --filter @ims/api test:int` → **497 pass / 1 fail (498 tests, 41 files)**
+  The one failure is a **real defect**: oversized JSON body returns 500 not 413.
+- `pnpm lint` → **20 pre-existing errors. Not green.** Compare against 20, not zero.
+- The old "3 reports failures" were a **settings leak** blamed on `requisitions.int-spec` for
+  months. The suite is deterministic now — do not expect 493/4 or 486/7.
 
-- `pnpm typecheck` clean · `pnpm test` → shared 7 · api 51 · web 102
-- `pnpm --filter @ims/api test:int` → **484 pass / 7 fail (491 tests, 40 files)**
-- `pnpm lint` → **21 pre-existing errors. Lint is NOT green**, so the repo cannot currently meet
-  its own definition of done. Compare the count against 21; do not expect zero.
+## Needs the operator
 
-**The 7, attributed** (misrecorded as "8" and unexplained for months): 3 × `reports` cross-file
-`app_settings` pollution (pass in isolation) · 3 × Chromium not installed · **1 real defect** —
-oversized JSON body returns 500 not 413, as `express.json()` errors are not `HttpException`
-and never reach `codeForStatus`.
+1. **Demo mode is ON in production** — the login page lists five accounts including Admin with a
+   shared password and one-click sign-in. Off before the fresh instance holds anything real.
+2. A fresh install cannot process one requisition until an admin sets the sub-threshold
+   approver, approver slots, an Inventory Manager and a department, and nothing reaches stock
+   until categories/zones/compartments exist. Rehearsed — the seed creates none of them.
+3. Offsite backups (**G-16**) and the restore drill (**G-17**).
 
-## Needs the operator — nobody else can do these
+## Landmines — full list in `ASSIST.md` §8/§9
 
-1. **`cd apps/api && npx puppeteer browsers install chrome`** — the binary was never downloaded
-   (`executablePath()` resolves, file absent). Clears 3 of the 7; until then nobody here can
-   verify the BOM PDF path end to end.
-2. Offsite backups (**G-16**) and the production restore drill (**G-17**).
-3. Set approver slots 1/2, the **sub-threshold approver** (a separate setting, the most-missed
-   one), and the expense threshold. Appoint a second IM and a third approver.
-4. **Ask the PM:** should a delegate see their delegated approvals in their own "Approved" tab?
-   Currently no — filtered on `assigned_user_id`. One `OR` reverses it; cheap now, not later.
-
-## Landmines — full list in `ASSIST.md` §9. The ones that bit *this* session:
-
-- **`test:int -- <spec>` does NOT filter** — runs all 39 files, ~161s. Use
-  `pnpm --filter @ims/api exec vitest run --config vitest.integration.config.ts <pattern>`.
-- **`@ims/shared` resolves to `dist/`** — rebuild or a new export is invisible to typecheck.
-- **Docker Desktop stops itself between sessions.** `docker info` before anything.
-- **A new `config.schema.ts` key fails the suite** until pinned in `TEST_ENV` or allowlisted
-  (`test/config/test-env.int-spec.ts`). Deliberate: unpinned keys inherit the dev `.env`.
+- **Never `npx`/`npm` at the repo root** — it deletes `node_modules/.pnpm` and `vitest` with it.
+  A missing tool binary is a skipped postinstall → `pnpm install`.
+- **`test:int -- <spec>` does not filter**; use `vitest run --config vitest.integration.config.ts
+  <pattern>`, space-separated — `"a|b|c"` matches as a substring and finds nothing.
+- **A spec that writes a setting must call `restoreSeededSettings(ctx)` in `afterAll`.**
+- **Red-before-green is not enough** — revert the fix, check the test goes red *again*.
+- **Check a command's effect, not its exit code** — several here silently do nothing.
+- **Docker Desktop stops itself between sessions.** `docker info` first.
 
 ## Open debt
 
-`G-18` (upload dirs unpinned in `TEST_ENV`; allowlisted, the fix is to pin them) · `G-19` (five
-endpoints return bare arrays) · PM items 6, 12, 14, 15 · money in error copy renders unformatted
-(`5000`, not `5,000`) — pre-existing, worth one pass.
+`G-18` · `G-19` · PM 6/12/14/15 · money unformatted in error copy · `EX-02` (REQUIRED §10) ·
+D-027 (web BOM header omits the project; the PDF carries it) · D-003 (past deadline accepted
+server-side) · D-016 (drafts render `?? 0` for a null requested amount).

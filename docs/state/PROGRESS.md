@@ -5,6 +5,30 @@
 
 ## Current position
 
+- **2026-08-23 — QA round 2: both Criticals and three Highs closed, plus the baseline itself.**
+  Fourteen commits. **Working tree clean**; `IMS_QA_Test_Plan.xlsx` is untracked at the repo root
+  and now carries a row 24 for REQ-000013, the record created to reproduce D-014.
+  Branch `fix/lan-secure-context`, **92 commits ahead of `main`, 27 ahead of `origin`.**
+  - **Next task:** D-002 — `RequisitionFormPage.tsx:50` requests `limit: 200` against a
+    `PAGINATION_MAX_LIMIT` of 100, so the catalogue 400s on every load and the item picker has
+    never worked. Needs no ruling. Everything else is blocked on Ayman (see NOW.md).
+  - **Verified green:** typecheck clean · unit shared 13 / api 58 / web 112 · integration
+    **497 pass / 1 fail (498, 41 files)** · `pnpm lint` **20 pre-existing errors**, not green.
+  - **The baseline was wrong, not just stale.** Three of the four remaining integration failures
+    were a settings leak from `audit.int-spec` (EXPENSE_THRESHOLD_BDT dropped to 9,999 and never
+    restored), attributed to `requisitions.int-spec` for months. `audit + reports` reproduces
+    them; `requisitions + reports` passes 51/51. Fixed, and `restoreSeededSettings` closes the
+    class. The suite is deterministic for the first time and the one remaining failure is real.
+  - **Fixed:** D-014 (dates stored a day early, cumulative — a pg DATE type parser) and the whole
+    clock family (three sites answering "what day is it" three ways, plus the §5 reminder job) ·
+    D-030 bar five held sites (audit `actor_name` resolved once at the insert; nine fabricated
+    actor names deleted) · D-028 (BOM quantity blanked on the source value) · D-024 (expense
+    export returned the SPA shell; now `api.blob()`).
+  - **Found, not fixed:** D-002 · `EX-02` — inventory export does not exist and is the only
+    unimplemented REQUIRED §10 obligation, with no defect ID in the workbook · demo mode is ON in
+    production · a fresh install has four configuration gaps before the first requisition can be
+    submitted · D-023 and the borrow-to-user picker are blocked on one absent endpoint.
+
 - **2026-08-20 — QA round 1 and harness repair.** Phase work is finished; this session was the
   project manager's first QA pass plus the test-harness repair that made its results
   trustworthy. Nine commits. **Working tree clean, nothing outstanding uncommitted.**

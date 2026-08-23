@@ -656,3 +656,33 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   `approved <= requested` already held by construction and simply had nothing defending it after
   a revision. This is "guard an invariant the code already assumed", not "introduce a new
   business rule" — a weaker and better-supported claim.
+- 2026-08-23 — `date` columns are returned as text by a pg type parser, not fixed at the seven
+  call sites that formatted them — a `date` is a calendar day, so turning it into an instant is
+  the error; removing the conversion removes the class (D-014).
+- 2026-08-23 — one clock decides every user-visible "is it overdue": `REPORTING_TIME_ZONE`, in
+  JS and in SQL — `current_date` resolves in the *database* container's zone and the API's zone
+  comes from an unversioned `infra/.env`, so the two agree only by luck.
+- 2026-08-23 — `REPORTING_TIME_ZONE` is validated against `Intl` at boot — `z.string().min(1)`
+  accepted `Asia/Dhakaa`, which then threw a RangeError mid-request instead of refusing to start.
+- 2026-08-23 — the audit `actor_name` is resolved once at the INSERT with a COALESCE subselect,
+  not joined on read and not passed per call site — the snapshot is deliberate (it survives a
+  rename), but ~53 call sites could never supply it because the JWT carries no name (D-030).
+- 2026-08-23 — a service must never substitute another name for a missing `actorName`. Nine did,
+  writing the entity's own name into the actor column; that is worse than a blank because it
+  renders as a real actor, and it masked the fix above.
+- 2026-08-23 — file downloads go through `api.blob()` and an object URL, not a signed URL — the
+  `SupportingDocumentCard` precedent. Signed URLs are for documents that leave the app and get
+  re-fetched (the BOM by Accounts); an expense report filtered by on-screen state is not one.
+- 2026-08-23 — `expenseExportUrl` renamed `expenseExportPath`: it returns a path relative to the
+  API base for `api.blob()` to prefix, and calling it a URL is what invited the `href` that
+  became D-024. Renaming so the misuse reads as wrong beats asserting against the misuse.
+- 2026-08-23 — a spec that writes an `app_settings` value must call `restoreSeededSettings(ctx)`
+  in `afterAll`. Settings are the only state that outlives a spec file: `resetData` holds a `Db`
+  and cannot invalidate the running `SettingsService` cache, so it only ever nulls `updated_by`.
+- 2026-08-23 — **`guard-hardcoding.sh --scan-all` baseline is 7**, so "pre-existing" is checkable
+  the way lint's count is: `bom-pdf.template.ts` (hex colour) and arbitrary Tailwind values in
+  `SettingsPage`, `LoginPage`, `NotificationBell`, `LifecycleTracker`, `SupportingDocumentCard`
+  and `RequisitionDetailPage`. Lint's own baseline is now **20**, not 21.
+- 2026-08-23 — the fix for a missing tool binary is `pnpm install`, never the tool's own
+  installer. `npx` at the repo root replaces pnpm's store with npm's flat layout and deletes
+  `node_modules/.pnpm`. The old instruction in NOW.md was wrong and had never been run.

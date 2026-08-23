@@ -12,6 +12,64 @@ Format:
 **Next:** the single next action, specific enough to start without thinking
 ```
 
+## 2026-08-23 — QA round 2 (no phase; post-Phase-06)
+
+**Did:**
+- **Triaged all 31 defect rows in `IMS_QA_Test_Plan.xlsx`** against
+  `requirements-verbatim.md`. The workbook says 32 failures; there are 31 defect rows, four
+  Fails are second reproductions, and `EX-02` — **inventory export, REQUIRED §10, entirely
+  unimplemented** — has no defect ID. It is the only unmet REQUIRED obligation found.
+- **D-014 (Critical) fixed.** pg parses `date` into a JS Date at the server's local midnight and
+  every reader formatted it with `.toISOString()`, i.e. UTC. On UTC+6 a deadline came back a day
+  early, and the edit form posts the stored value back, so each save lost another day.
+  Reproduced live as REQ-000013: 27 → 26 → 25. A DATE type parser removes the class.
+- **The clock family, closing D-014 properly.** Three sites answered "what day is it" three ways
+  — two in UTC, one via SQL `current_date` (the *database* container's zone). All now resolve
+  `REPORTING_TIME_ZONE`, including the §5 reminder job, which otherwise could have stayed silent
+  while the badge said Overdue. `REPORTING_TIME_ZONE` is validated against `Intl` at boot.
+- **D-030 (High) fixed bar five sites.** Not 19 call sites but ~53: `auditContextFromRequest`
+  sets `actorName: null` itself and the JWT has no name to give it. Resolved once, at the insert,
+  with a COALESCE subselect. Nine services had already "fixed" the null by passing whatever name
+  was in scope — the category's, the zone's, the product's — which is worse than a blank and also
+  masked the real fix. Five more in `users.service.ts` are held pending a ruling.
+- **D-028 and D-024 (High) fixed.** The BOM quantity box blanked when you typed the source value,
+  because empty-string meant both "cleared" and "equals source". The expense export was an
+  `<a href download>` with no `/api/v1` — 200, text/html, 722 bytes of SPA shell — and would have
+  401'd even corrected, since a browser cannot attach a bearer token to a navigation.
+- **Fixed the baseline itself.** Three of the four remaining integration failures were a settings
+  leak from `audit.int-spec`, blamed on `requisitions.int-spec` for months. Whether they appeared
+  depended on file scheduling, so every baseline number ever quoted was partly a function of
+  timing. **486/7 → 497/1**, and the one survivor is a real defect.
+- **Rehearsed the fresh install** on a scratch DB: migrations apply from empty (the 0020/0021 gap
+  is a non-event), the seed is idempotent — and leaves a system where the first requisition
+  cannot be submitted for four separate reasons.
+
+**Decisions:** DATE stays text at the driver, not fixed at seven call sites · one clock,
+`REPORTING_TIME_ZONE`, for every user-visible "is it overdue" · audit actor names resolved at
+write time rather than joined on read, preserving the deliberate snapshot · export downloads use
+`api.blob()` (the `SupportingDocumentCard` precedent), not a signed URL (the BOM precedent),
+because the report never leaves the app. All in DECISIONS.md.
+
+**Landmines:**
+- **`npx puppeteer browsers install chrome` — the remedy in this file and NOW.md — was wrong and
+  destructive.** Run at the repo root it installed puppeteer 25.8.0 over the pinned 23.11.1 and
+  deleted `node_modules/.pnpm` outright. The fix was always `pnpm install`; puppeteer's own
+  postinstall fetches the pinned Chrome. Recovered with `git checkout -- package.json`,
+  `rm package-lock.json`, `pnpm install`. Corrected in ASSIST §8 and NOW.md.
+- **Demo mode is ON in production.** The login page offers one-click sign-in as Administrator.
+- **D-002 is unfixed and it is the entry point of the whole flow** — the catalogue request 400s
+  on every load, so no requisition line has ever been linked to a product, and
+  `in_stock_qty_at_submit` has therefore never been written for any line in the system.
+- Two green tests were found *defending* defects (the export path, the BOM quantity field). Both
+  were written by describing the code rather than deciding the behaviour.
+- Five `users.service.ts` audit sites still name the affected user as the actor, in an
+  append-only table. Held, not forgotten.
+
+**Next:** D-002 — import `PAGINATION_MAX_LIMIT` at `RequisitionFormPage.tsx:50`, surface
+`catalogue.isError`, and add a unit test parsing every exported query constant through its
+schema. Then the six rulings in NOW.md, then `git push` — 27 commits including both Critical
+fixes exist on one machine only.
+
 ## 2026-08-20 — QA round 1 + harness repair (no phase; post-Phase-06)
 
 **Did:**
