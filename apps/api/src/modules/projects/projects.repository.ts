@@ -28,10 +28,10 @@ const VISIBLE_STATUSES = [
 const IN_USE_STATUSES = [BorrowStatus.ISSUED, BorrowStatus.PARTIALLY_RETURNED] as const;
 
 /**
- * `expected_return_date` is a `date` column, which the driver hands back as either a string or a
- * `Date` depending on how it was written. The contract is a plain `YYYY-MM-DD` string, so it is
- * normalised here rather than left for each client to guess — same treatment as
- * `toBorrowRequest` in the borrowing repository.
+ * `expected_return_date` is a `date` column. Since D-014 the driver hands these back as the raw
+ * `YYYY-MM-DD` text (see the DATE type parser in `create-db.ts`), so the string branch below is
+ * the only one taken. The `Date` branch stays as a guard: if that parser is ever removed this
+ * shifts a calendar day rather than failing, which is exactly the bug it exists to stop.
  */
 function toDateOnly(value: Date | string | null): string | null {
   if (value === null) return null;
