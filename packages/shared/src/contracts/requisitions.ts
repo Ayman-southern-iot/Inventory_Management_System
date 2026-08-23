@@ -39,6 +39,31 @@ export const WITHDRAWABLE_STATUSES: readonly RequisitionStatus[] = [
   RequisitionStatus.APPROVED,
 ];
 
+/**
+ * The statuses in which an approval **still stands**, i.e. the money is sanctioned and could
+ * actually be spent.
+ *
+ * `approved_amount` is written at submit — it seeds the BOM with a figure to print — and only
+ * send-back nulls it, so the column alone cannot answer "was this approved?". A rejected or
+ * still-undecided requisition carries a full figure. Anything reporting *approved money* must
+ * predicate on this list rather than on the column being non-null.
+ *
+ * `REJECTED` and `CANCELLED` are out because the money cannot be spent; `IM_REVIEW` and
+ * `AWAITING_APPROVAL` are out because nobody has sanctioned it yet. Ruling 2026-08-23 (OQ-27):
+ * "Approved" means *currently* approved. The requirements are silent.
+ */
+export const APPROVAL_STANDING_STATUSES: readonly RequisitionStatus[] = [
+  RequisitionStatus.APPROVED,
+  RequisitionStatus.BOM_GENERATED,
+  RequisitionStatus.SENT_TO_ACCOUNTS,
+  RequisitionStatus.FUNDS_PARTIAL,
+  RequisitionStatus.FUNDS_RECEIVED,
+  RequisitionStatus.PURCHASED,
+  RequisitionStatus.PURCHASE_VERIFIED,
+  RequisitionStatus.STOCKED,
+  RequisitionStatus.CLOSED,
+];
+
 export const RequisitionUrgency = {
   LOW: 'LOW',
   NORMAL: 'NORMAL',

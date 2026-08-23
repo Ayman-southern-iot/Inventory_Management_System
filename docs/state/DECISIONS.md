@@ -694,3 +694,13 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   **Lint 20**, **`guard-hardcoding.sh --scan-all` 7** (named in the entry above). The 2026-08-20
   entry's 484/7 and 7/51/102 are history, not the number to compare against — the whole point of
   that entry was that a copied-forward figure is worse than none.
+- 2026-08-23 — **"Approved" on the Expenses report means *currently* approved.** Ayman's
+  decision (OQ-27 / D-020); **the requirements are silent** — §10 asks for the report and names
+  no column semantics, so this is DERIVED, not REQUIRED. Accounts reads that column as money
+  that can actually be spent, and a rejected requisition's never can. Implemented as a predicate
+  on the *sum* only — `APPROVAL_STANDING_STATUSES` in `packages/shared` — deliberately **not**
+  on the report's scope: "Requested" legitimately covers everything submitted, and the two
+  columns diverging is what makes the report informative. Send-back already nulls
+  `approved_amount`, so it drops out without being listed. The one judgement inside the ruling:
+  `CANCELLED` is excluded on the same "can it be spent" test, which means a requisition
+  cancelled after funding will show funded > approved. That is correct and it will look odd.

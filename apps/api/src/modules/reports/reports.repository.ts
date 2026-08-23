@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
+import { APPROVAL_STANDING_STATUSES } from '@ims/shared';
 import type { ExpenseReportQuery } from '@ims/shared';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
@@ -52,6 +53,10 @@ export class ReportsRepository {
     // `requested`/`approved` are attributed by submission date; the money figures by the date it
     // moved. A requisition submitted in June and paid in July contributes to both months, in
     // different columns — which is what an accountant expects.
+    // Interpolated once as a bound parameter; `::text[]` because `requisitions.status` is a
+    // Postgres enum and an enum does not compare to text without the cast.
+    const standingStatuses = [...APPROVAL_STANDING_STATUSES];
+
     const submittedWindow = sql`
       (${fromDate}::date IS NULL OR r.submitted_at >= ${fromInstant})
       AND (${toDate}::date IS NULL OR r.submitted_at < ${toInstant})
@@ -83,6 +88,7 @@ export class ReportsRepository {
           r.project_id,
           r.requested_amount,
           r.approved_amount,
+          r.status,
           -- Pre-aggregated per requisition so the join below cannot fan out.
           (SELECT coalesce(sum(fr.amount), 0) FROM fund_receipts fr
             WHERE fr.requisition_id = r.id
@@ -110,7 +116,13 @@ export class ReportsRepository {
         ${labelExpr} AS label,
         count(*)::text AS requisition_count,
         coalesce(sum(r.requested_amount), 0)::text AS requested,
-        coalesce(sum(r.approved_amount), 0)::text AS approved,
+        -- Not a plain sum of approved_amount: the column is written at submit and only
+        -- send-back nulls it, so a rejected or undecided requisition carries a full figure
+        -- (D-020). Approved here means CURRENTLY approved, so the sum is predicated on status.
+        coalesce(sum(
+          CASE WHEN r.status::text = ANY(${standingStatuses}::text[])
+            THEN r.approved_amount ELSE 0 END
+        ), 0)::text AS approved,
         coalesce(sum(r.funded), 0)::text AS funded,
         coalesce(sum(r.spent), 0)::text AS spent,
         coalesce(sum(r.returned), 0)::text AS returned

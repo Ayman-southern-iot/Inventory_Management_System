@@ -143,6 +143,24 @@ describe('expense report', () => {
     expect((await fetchReport()).totals.requisitionCount).toBe(0);
   });
 
+  /**
+   * D-020. `approved_amount` is written at submit (it seeds the BOM with a figure to print) and
+   * only send-back nulls it, so a rejected or still-undecided requisition carried a full
+   * "approved" figure into a report Accounts reads as spendable money. Requested legitimately
+   * covers everything submitted; Approved must not. Ruling 2026-08-23: *currently* approved.
+   */
+  it('counts only a standing approval as Approved, while Requested still covers everything submitted', async () => {
+    await rejectedAtIm({ requested: 5_000 });
+    await awaitingDecision({ requested: 3_000 });
+    await verifiable({ requested: 10_000, approved: 8_000 });
+
+    const report = await fetchReport();
+
+    expect(report.totals.requisitionCount).toBe(3);
+    expect(report.totals.requested).toBe(18_000);
+    expect(report.totals.approved).toBe(8_000);
+  });
+
   it('is visible to approvers, IMs and admin, but not to a plain user', async () => {
     expect((await im.client.get('/reports/expenses')).status).toBe(200);
     expect((await approver.client.get('/reports/expenses')).status).toBe(200);
@@ -297,6 +315,40 @@ describe('expense report', () => {
         .post(`/requisitions/${id}/purchases/${purchase.id}/invoice`)
         .attach('file', Buffer.from('%PDF-1.4 invoice'), 'invoice.pdf');
     }
+  }
+
+  /** Submitted and nothing more — the IM has not looked at it yet. */
+  async function awaitingDecision(input: { requested: number }): Promise<string> {
+    const id = await draft(input.requested, 'Awaiting a decision');
+    await requester.client.post(`/requisitions/${id}/submit`).send();
+    return id;
+  }
+
+  /** Submitted and killed at the IM stage — requirements §4: either rejection kills the request. */
+  async function rejectedAtIm(input: { requested: number }): Promise<string> {
+    const id = await draft(input.requested, 'Rejected fixture');
+    const submitted = (await requester.client.post(`/requisitions/${id}/submit`).send()).body;
+    const imApprovalId = submitted.approvals.find(
+      (a: { stage: string }) => a.stage === 'INVENTORY_MANAGER',
+    ).id;
+    const decided = await im.client
+      .post(`/requisitions/approvals/${imApprovalId}/decision`)
+      .send({ approve: false, note: 'we already have these' });
+    expect(decided.status).toBe(200);
+    return id;
+  }
+
+  async function draft(requested: number, reason: string): Promise<string> {
+    const created = await requester.client.post('/requisitions').send({
+      departmentId,
+      urgency: 'NORMAL',
+      reason,
+      items: [
+        { itemName: 'Widget', quantity: 1, estimatedUnitPrice: requested, productId: null, note: null },
+      ],
+    });
+    expect(created.status).toBe(201);
+    return created.body.id as string;
   }
 
   /** A requisition taken to FUNDS_RECEIVED, ready for purchases. */
