@@ -375,9 +375,9 @@ describe('BOMs', () => {
     // The over-budget ceiling used to bounce the BOM and flip sources back to
     // AWAITING_APPROVAL. That gate was removed: a unit cost going up between approval and
     // BOM generation is a normal slowdown, not a policy violation. The setting
-    // (BOM_OVER_BUDGET_TOLERANCE_PCT) and the `over_budget_bounced` column are kept for
-    // historical rows, but no BOM generated today will carry the bounced flag, and no
-    // generation will throw BOM_OVER_BUDGET.
+    // (BOM_OVER_BUDGET_TOLERANCE_PCT) was removed on 2026-08-23 (D-032); the
+    // `over_budget_bounced` column is kept for historical rows, but no BOM generated today
+    // will carry the bounced flag, and no generation will throw BOM_OVER_BUDGET.
     it('over-budget is generated: subtotal above approved no longer bounces (invariant 4 retired)', async () => {
       // Approved total per requisition is 5000. Subtotal = 6000 (one unit at 6000). Under
       // the old gate this would bounce; today it generates cleanly.

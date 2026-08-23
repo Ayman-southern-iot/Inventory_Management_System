@@ -93,7 +93,6 @@ const rawSchema = z.object({
   SETTING_EXPENSE_THRESHOLD_BDT: z.coerce.number().int().nonnegative().default(15_000),
   SETTING_APPROVER_SLOTS_BELOW_THRESHOLD: z.coerce.number().int().min(1).max(2).default(1),
   SETTING_APPROVER_SLOTS_AT_OR_ABOVE_THRESHOLD: z.coerce.number().int().min(1).max(2).default(2),
-  SETTING_BOM_OVER_BUDGET_TOLERANCE_PCT: z.coerce.number().int().min(0).max(100).default(10),
   /**
    * Phase 05 — single admin-designated approver for sub-threshold requisitions. Empty
    * string on first boot means "not configured"; submitting a sub-threshold requisition
@@ -457,7 +456,6 @@ export function buildConfig(source: Record<string, string | undefined>): AppConf
       SETTING_APPROVER_SLOTS_BELOW_THRESHOLD: env.SETTING_APPROVER_SLOTS_BELOW_THRESHOLD,
       SETTING_APPROVER_SLOTS_AT_OR_ABOVE_THRESHOLD:
         env.SETTING_APPROVER_SLOTS_AT_OR_ABOVE_THRESHOLD,
-      SETTING_BOM_OVER_BUDGET_TOLERANCE_PCT: env.SETTING_BOM_OVER_BUDGET_TOLERANCE_PCT,
       SETTING_SUBTHRESHOLD_APPROVER_USER_ID: env.SETTING_SUBTHRESHOLD_APPROVER_USER_ID,
       // Comma-separated on the wire, an array in the setting. Empty stays empty so the
       // registry's transform turns it into "every action".

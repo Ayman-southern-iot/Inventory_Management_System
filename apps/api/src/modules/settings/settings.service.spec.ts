@@ -21,7 +21,6 @@ const SEED_VALUES: Record<SettingKeyType, number | string | string[] | null> = {
   [SettingKey.EXPENSE_THRESHOLD_BDT]: 20_000,
   [SettingKey.APPROVER_SLOTS_BELOW_THRESHOLD]: 1,
   [SettingKey.APPROVER_SLOTS_AT_OR_ABOVE_THRESHOLD]: 2,
-  [SettingKey.BOM_OVER_BUDGET_TOLERANCE_PCT]: 10,
   // Phase 05: the sub-threshold approver is `null` until the admin designates one. The
   // service tests only check that the seed round-trips, so an explicit null here keeps the
   // cache-coverage assertions honest.

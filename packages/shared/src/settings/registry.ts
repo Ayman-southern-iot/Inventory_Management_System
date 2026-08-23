@@ -17,7 +17,6 @@ export const SettingKey = {
   EXPENSE_THRESHOLD_BDT: 'EXPENSE_THRESHOLD_BDT',
   APPROVER_SLOTS_BELOW_THRESHOLD: 'APPROVER_SLOTS_BELOW_THRESHOLD',
   APPROVER_SLOTS_AT_OR_ABOVE_THRESHOLD: 'APPROVER_SLOTS_AT_OR_ABOVE_THRESHOLD',
-  BOM_OVER_BUDGET_TOLERANCE_PCT: 'BOM_OVER_BUDGET_TOLERANCE_PCT',
   /**
    * Phase 05: a single admin-designated approver handles all sub-threshold requisitions
    * (`requestedAmount < EXPENSE_THRESHOLD_BDT`). `null` means "not configured yet" —
@@ -151,18 +150,6 @@ const definitions = {
     seedEnvVar: 'SETTING_APPROVER_SLOTS_AT_OR_ABOVE_THRESHOLD',
     kind: 'integer',
     labelKey: 'approverSlotsAtOrAbove',
-  },
-  /**
-   * OPEN QUESTION: OQ-05 — a BOM whose total exceeds the approved amount by more than this
-   * percentage goes back for re-approval instead of on to Accounts. The working assumption is
-   * yes with a configurable tolerance, which is why this is a setting and not a literal.
-   */
-  [SettingKey.BOM_OVER_BUDGET_TOLERANCE_PCT]: {
-    key: SettingKey.BOM_OVER_BUDGET_TOLERANCE_PCT,
-    schema: z.number().int().min(0).max(100),
-    seedEnvVar: 'SETTING_BOM_OVER_BUDGET_TOLERANCE_PCT',
-    kind: 'integer',
-    labelKey: 'bomOverBudgetTolerance',
   },
   /**
    * The single approver assigned to all sub-threshold requisitions. Previously the system

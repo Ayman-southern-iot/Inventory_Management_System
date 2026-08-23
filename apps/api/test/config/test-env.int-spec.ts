@@ -63,7 +63,6 @@ const ALLOWLISTED: Record<string, string> = {
   // through SettingsService first — see requisitions.int-spec.ts's beforeEach, which sets
   // SUBTHRESHOLD_APPROVER_USER_ID rather than trusting the env seed.
   SETTING_SUBTHRESHOLD_APPROVER_USER_ID: 'Seed only; specs set the row via SettingsService.',
-  SETTING_BOM_OVER_BUDGET_TOLERANCE_PCT: 'Seed only; specs set the row via SettingsService.',
   SETTING_AUDIT_ENABLED_ACTIONS: 'Seed only; specs set the row via SettingsService.',
   SETTING_AUDIT_RETENTION_DAYS: 'Seed only; specs set the row via SettingsService.',
 

@@ -79,13 +79,16 @@ interface LoadedSource {
  *      that snapshot, so renaming an approver tomorrow cannot rewrite a BOM Accounts
  *      has already paid against.
  *
- *   2. The over-budget tolerance setting (`BOM_OVER_BUDGET_TOLERANCE_PCT`) is no longer a
- *      generation gate. An IM dropping a unit cost from the wholesale price to the street
- *      price is the common case where the line goes over budget; bouncing the BOM blocks
- *      legitimate work for what is effectively a normal slowdown. The `over_budget_bounced`
- *      column is kept on the row for historical records (and to keep the audit vocabulary
- *      stable), but the generator never sets it to `true` and a bounced row is never
- *      created. The PDF may still show a variance line for visibility — see the template.
+ *   2. There is no over-budget generation gate. An IM dropping a unit cost from the
+ *      wholesale price to the street price is the common case where a line goes over budget;
+ *      bouncing the BOM blocks legitimate work for what is effectively a normal slowdown.
+ *      The gate was retired in `5435fac` (OQ-05), and its `BOM_OVER_BUDGET_TOLERANCE_PCT`
+ *      setting was **removed** on 2026-08-23 (D-032) — it had governed nothing for two weeks
+ *      while still seeding into every fresh install and offering an admin a control with no
+ *      effect. The `over_budget_bounced` column is kept on the row for historical records
+ *      (and to keep the audit vocabulary stable), but the generator never sets it to `true`
+ *      and a bounced row is never created. The PDF may still show a variance line for
+ *      visibility — see the template.
  */
 @Injectable()
 export class BomsService {
