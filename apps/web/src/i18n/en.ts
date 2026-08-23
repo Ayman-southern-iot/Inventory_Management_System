@@ -738,6 +738,10 @@ export const t = {
     inStockAdvisory: 'Advisory only — you can still request more.',
     fromCatalogue: 'From the catalogue',
     freeText: 'Not in the catalogue',
+    // Shown when `GET /products` fails. Without it the picker is simply empty and the requester
+    // types free text, unaware every line will reach the approvers unlinked from stock (D-002).
+    catalogueUnavailable:
+      'The item catalogue could not be loaded, so the picker is empty. You can still type item names, but they will not be linked to a stocked product.',
     // detail page only — the items table subheading inside the merged stats+items card.
     // The form-page itemsHeading is for the editor; this is for the read-only view.
     lineItemsHeading: 'Line items',

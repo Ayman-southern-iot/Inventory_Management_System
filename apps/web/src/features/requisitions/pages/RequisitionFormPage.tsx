@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Plus, Send } from 'lucide-react';
 import {
+  PAGINATION_MAX_LIMIT,
   RequisitionStatus,
   RequisitionUrgency,
   saveRequisitionSchema,
@@ -46,9 +47,24 @@ const EMPTY_ITEM = {
   note: null,
 };
 
-/** Enough of the catalogue to search client-side; the register is small at this scale. */
-const CATALOGUE_QUERY = { page: 1, limit: 200, includeInactive: false, inStockOnly: false } as const;
-const DEPARTMENTS_QUERY = { page: 1, limit: 100, includeInactive: false } as const;
+/**
+ * The whole catalogue in one page, because `ItemRow` searches it client-side. `limit` is the
+ * contract's ceiling, not a number picked here: `listProductsQuerySchema` caps it at
+ * `PAGINATION_MAX_LIMIT`, and a literal above that 400s on every load (D-002 — it asked for 200
+ * and the picker was empty from 29 July until 23 August). Both constants are exported for
+ * `api/list-queries.contract.test.ts`, which parses them through the schemas they are bound by.
+ *
+ * A catalogue larger than `PAGINATION_MAX_LIMIT` is truncated in silence — the same defect
+ * shape `fetchAllProjects` pages around, and it cannot be fixed by raising this number. Raised
+ * with the lead, not fixed here.
+ */
+export const CATALOGUE_QUERY = {
+  page: 1,
+  limit: PAGINATION_MAX_LIMIT,
+  includeInactive: false,
+  inStockOnly: false,
+} as const;
+export const DEPARTMENTS_QUERY = { page: 1, limit: PAGINATION_MAX_LIMIT, includeInactive: false } as const;
 
 /**
  * Task 3.2 — the requisition form, in the two zones requirements §3 scopes:
@@ -315,6 +331,23 @@ export function RequisitionFormPage() {
               {t.requisitions.addItem}
             </Button>
           </header>
+
+          {/*
+            A failed catalogue used to be indistinguishable from an empty one: the picker just
+            had no options and the requester typed free text, so every line reached the
+            approvers unlinked from stock and `in_stock_qty_at_submit` stayed null (D-002).
+          */}
+          {catalogue.isError ? (
+            <div
+              role="alert"
+              className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-surface-muted px-5 py-3"
+            >
+              <p className="text-sm text-danger">{t.requisitions.catalogueUnavailable}</p>
+              <Button type="button" variant="secondary" size="sm" onClick={() => catalogue.refetch()}>
+                {t.common.retry}
+              </Button>
+            </div>
+          ) : null}
 
           {fields.map((field, index) => (
             <ItemRowContainer

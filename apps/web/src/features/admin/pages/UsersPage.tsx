@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { KeyRound, Pencil, Plus, Power } from 'lucide-react';
 import {
   PAGINATION_DEFAULT_LIMIT,
+  PAGINATION_MAX_LIMIT,
   Role,
   type ListUsersQuery,
   type User,
@@ -17,7 +18,12 @@ import { useDepartments, useSetUserActive, useUsers } from '../api';
 import { UserFormDialog } from '../components/UserFormDialog';
 import { ResetPasswordDialog } from '../components/ResetPasswordDialog';
 
-const ALL_DEPARTMENTS_QUERY = { page: 1, limit: 100, includeInactive: false } as const;
+/** Exported for `api/list-queries.contract.test.ts`, which parses it through its schema. */
+export const ALL_DEPARTMENTS_QUERY = {
+  page: 1,
+  limit: PAGINATION_MAX_LIMIT,
+  includeInactive: false,
+} as const;
 
 export function UsersPage() {
   const toast = useToast();

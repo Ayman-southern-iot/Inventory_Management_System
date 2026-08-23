@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -32,8 +32,16 @@ vi.mock('@/features/projects/api', () => ({
   useProjects: () => ({ data: [], isPending: false }),
 }));
 
+/**
+ * Mutable so one test can put the catalogue query in its failed state. D-002 shipped a query
+ * the API rejects, and `catalogue.isError` was never read — the picker was simply empty.
+ */
+const catalogueRefetch = vi.fn();
+const CATALOGUE_LOADED = { data: { items: [] }, isPending: false, isError: false, error: null, refetch: catalogueRefetch };
+let catalogueResult: Record<string, unknown> = CATALOGUE_LOADED;
+
 vi.mock('@/features/inventory/api', () => ({
-  useProducts: () => ({ data: { items: [] }, isPending: false }),
+  useProducts: () => catalogueResult,
 }));
 
 vi.mock('@/components/ui/Toast', () => ({
@@ -51,6 +59,11 @@ function renderForm() {
 }
 
 describe('RequisitionFormPage', () => {
+  beforeEach(() => {
+    catalogueResult = CATALOGUE_LOADED;
+    catalogueRefetch.mockClear();
+  });
+
   it('saves with a null project when the user picks "No project"', async () => {
     createSpy.mockClear();
     const user = userEvent.setup();
@@ -89,5 +102,47 @@ describe('RequisitionFormPage', () => {
     await user.type(screen.getByLabelText(t.requisitions.unitPrice), '399.99');
 
     expect(total.textContent).toBe('1,599.96');
+  });
+
+  /**
+   * D-002. `CATALOGUE_QUERY` asked for 200 rows against a max of 100, so /products 400d on
+   * every load; nothing read `isError`, so the form rendered an empty picker and every line
+   * became unlinked free text. The limit is fixed by the contract test — this pins the other
+   * half: a catalogue that fails for any reason has to say so.
+   */
+  it('tells the requester when the catalogue failed to load', () => {
+    catalogueResult = {
+      data: undefined,
+      isPending: false,
+      isError: true,
+      error: new Error('limit must be less than or equal to 100'),
+      refetch: catalogueRefetch,
+    };
+
+    renderForm();
+
+    expect(screen.getByRole('alert')).toHaveTextContent(t.requisitions.catalogueUnavailable);
+  });
+
+  it('offers a retry that refetches the catalogue', async () => {
+    catalogueResult = {
+      data: undefined,
+      isPending: false,
+      isError: true,
+      error: new Error('limit must be less than or equal to 100'),
+      refetch: catalogueRefetch,
+    };
+    const user = userEvent.setup();
+    renderForm();
+
+    await user.click(screen.getByRole('button', { name: t.common.retry }));
+
+    expect(catalogueRefetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows no catalogue warning when the catalogue loaded', () => {
+    renderForm();
+
+    expect(screen.queryByText(t.requisitions.catalogueUnavailable)).toBeNull();
   });
 });

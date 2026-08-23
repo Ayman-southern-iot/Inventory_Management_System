@@ -4,6 +4,7 @@ import {
   AUDIT_ALWAYS_ON_ACTIONS,
   AUDIT_ACTIONS,
   AUDIT_RETENTION_PRESETS,
+  PAGINATION_MAX_LIMIT,
   Role,
   SettingKey,
   getSettingDefinition,
@@ -22,7 +23,13 @@ import { messageForError } from '@/lib/error-message';
 import { cn } from '@/lib/cn';
 import { useApproverSlots, useSetApproverSlot, useSettings, useUpdateSetting, useUsers } from '../api';
 
-const APPROVER_QUERY = { page: 1, limit: 100, includeInactive: false, role: Role.APPROVER } as const;
+/** Exported for `api/list-queries.contract.test.ts`, which parses it through its schema. */
+export const APPROVER_QUERY = {
+  page: 1,
+  limit: PAGINATION_MAX_LIMIT,
+  includeInactive: false,
+  role: Role.APPROVER,
+} as const;
 
 /** The registry drives the label, so adding a setting needs no change here. */
 function labelFor(key: SettingKey): string {

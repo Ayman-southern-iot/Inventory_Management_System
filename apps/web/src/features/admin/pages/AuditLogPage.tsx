@@ -19,8 +19,11 @@ const ROLE_LABELS: Record<Role, string> = {
   ...t.roles,
 };
 
-/** Populates the user filter. Inactive users included — they still own historical rows. */
-const AUDIT_ACTOR_QUERY = {
+/**
+ * Populates the user filter. Inactive users included — they still own historical rows.
+ * Exported for `api/list-queries.contract.test.ts`, which parses it through its schema.
+ */
+export const AUDIT_ACTOR_QUERY = {
   page: 1,
   limit: PAGINATION_MAX_LIMIT,
   includeInactive: true,
