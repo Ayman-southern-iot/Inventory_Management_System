@@ -8,7 +8,7 @@
 >
 > **Maintenance rule:** see `.claude/rules/05-ai-playbook.md`. A `PostToolUse` hook
 > (`.claude/hooks/playbook-reminder.sh`) reminds Claude to update this file after every
-> meaningful edit. Last updated: 2026-08-20 (two landmines added to §16).
+> meaningful edit. Last updated: 2026-08-20 (npx/npm-at-root landmine added to §16).
 >
 > **⚠ This file has known drift as of 2026-08-17** — §5.1 (`available` omits `quarantined_qty`),
 > §5.3 and §20 (the over-budget BOM gate was retired in `5435fac`), §5.3 (lifecycle list omits
@@ -1013,6 +1013,11 @@ reason the locking exists).
 - **A `Cannot find module` from the repo root proves nothing** — pnpm gives each workspace its
   own `node_modules`, so the root resolves only what the root declares. Re-run from the owning
   workspace or with `pnpm --filter <pkg> exec` before concluding anything is missing.
+- **Never run `npx` or `npm` at the repo root.** npm rewrites `node_modules` in its flat layout
+  and deletes pnpm's `node_modules/.pnpm`, leaving every workspace symlink dangling (`vitest`
+  disappears outright). Recover with `git checkout -- package.json`, `rm -f package-lock.json`,
+  `pnpm install`. A missing tool *binary* is a skipped postinstall — `pnpm install` fetches it;
+  the tool's own installer is never the answer.
 - `approver_slots.slot_no` is constrained to **(1, 2)** — there is no slot 3 to fall back to.
 - Settings changed by hand in dev **persist** — reset `EXPENSE_THRESHOLD_BDT` to 15,000 or
   read it live rather than assuming.

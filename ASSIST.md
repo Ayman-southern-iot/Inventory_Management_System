@@ -598,6 +598,12 @@ Per §12. Mechanism, location, evidence, proposed fix, blast radius.
 
 Check here before you start reading code. Every row is something that has actually happened.
 
+**A remedy in this table that no session has run is a hypothesis, not a fix.** The
+`npx puppeteer browsers install chrome` line lived here for a day, was repeated in three
+reports by two engineers, and destroyed a virtual store the first time anyone tried it. If you
+act on a row and it works, you have upgraded it; if you act on a row and it does not, fix the
+row in the same session.
+
 | Symptom | Most likely cause | What to do |
 |---|---|---|
 | Every DI dependency is `undefined`, Nest fails far from the cause | Someone ran `apps/api` through **`tsx`**. esbuild does not emit `design:paramtypes`. | Use `pnpm dev`, or `pnpm --filter @ims/api build && node apps/api/dist/src/main.js`. `tsx` is fine for `scripts/migrate.ts` and `scripts/seed.ts` (no DI there). |
@@ -623,7 +629,9 @@ Check here before you start reading code. Every row is something that has actual
 | A lint autofix broke Nest DI at boot | `@typescript-eslint/consistent-type-imports` is **off for `apps/api/src`** on purpose — Nest needs *value* imports to emit `design:paramtypes` | Never re-enable it there. |
 | PDF error leaks a container path or Chromium executable location | `PdfRenderFailedError` keeps its `reason` as a **field**, never as `details` — the filter copies `details` into the response | Keep it that way (G-12). |
 | Two IMs on one screen, both act, one gets a clean error | Conditional-update claiming (`WHERE status='PENDING'`) | Working as designed. Zero rows updated is how the loser finds out. |
-| `Cannot find module '<dep>'` from a command run at the repo root | pnpm keeps each workspace's dependencies in **its own** `node_modules` — the root resolves only what the root declares | **It proves nothing about whether the dependency is installed.** Re-run from the workspace that owns it (`cd apps/api && node -e "…"`) or via `pnpm --filter @ims/api exec …`. This is how "puppeteer is not installed" was once concluded about a package that was installed: the real gap was the **browser binary**, which `npx puppeteer browsers install chrome` downloads separately from the npm package. |
+| `Cannot find module '<dep>'` from a command run at the repo root | pnpm keeps each workspace's dependencies in **its own** `node_modules` — the root resolves only what the root declares | **It proves nothing about whether the dependency is installed.** Re-run from the workspace that owns it (`cd apps/api && node -e "…"`) or via `pnpm --filter @ims/api exec …`. This is how "puppeteer is not installed" was once concluded about a package that was installed. |
+| An `npx <tool>` or `npm i` run at the repo root appears to work, then **everything** breaks | npx/npm rewrote `node_modules` in npm's flat layout and **deleted pnpm's `node_modules/.pnpm` store**. Every workspace symlink is left dangling — `vitest` simply vanishes — and the root `package.json` gains a `dependencies` block plus a stray `package-lock.json` | Never run `npx` or `npm` at the root of this repo. Recover with: `git checkout -- package.json`, `rm -f package-lock.json`, then **`pnpm install`**. `pnpm-lock.yaml` and the workspace manifests are untouched by the damage, which is the only reason it is recoverable. |
+| A tool's **binary** is missing although its npm package is installed | Its `postinstall` was skipped or interrupted — not a missing manual step | **`pnpm install`.** Puppeteer's postinstall fetches the pinned Chrome build (`131.0.6778.204`) on its own. Never reach for the tool's own installer: run from the root it resolves a different, newer copy of the tool and wrecks the store (row above); run from the workspace it is simply unnecessary. |
 
 ---
 
@@ -646,6 +654,9 @@ Condensed, so you can scan it before starting work. Detail for most of these is 
 - **Reusing a Kysely `sql` fragment renumbers its parameters.**
 - **The web app picks error copy by `code`.** Assert `body.code` in the test, not just the status.
 - **A `Cannot find module` at the repo root proves nothing** under pnpm — re-run from the owning workspace.
+- **Never run `npx` or `npm` at the repo root.** It replaces pnpm's store with npm's flat layout,
+  `node_modules/.pnpm` disappears and every workspace link dangles. Recovery is `pnpm install`.
+- **A missing tool binary is a skipped postinstall.** `pnpm install`, never the tool's own installer.
 - **`approver_slots.slot_no` is constrained to (1, 2)** — there is no slot 3 to fall back to.
 - **Dev settings persist.** Reset `EXPENSE_THRESHOLD_BDT` to 15,000 or read it live.
 - **A repeated-login smoke script trips its own 10/min/IP limit.**
