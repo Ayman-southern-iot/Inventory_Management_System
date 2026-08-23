@@ -16,6 +16,8 @@ import {
   type RequisitionItemInput,
   type SaveRequisitionInput,
 } from '@ims/shared';
+import { CONFIG, type AppConfig } from '../../config';
+import { todayIn } from '../../common/calendar';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
 import type { Database } from '../../database/schema';
@@ -51,12 +53,18 @@ function normalizeTransportation(input: SaveRequisitionInput): {
 export class RequisitionsRepository {
   constructor(
     @Inject(DB) private readonly db: Db,
+    @Inject(CONFIG) private readonly config: AppConfig,
     // Forward-ref: RequisitionsModule and FundsModule are mutually dependent. The repository
     // reads `funding_snapshots` for the detail endpoint, which is what made the circles
     // necessary in the first place.
     @Inject(forwardRef(() => FundsRepository))
     private readonly fundsRepo: FundsRepository,
   ) {}
+
+  /** Today in the business's own calendar — the only clock allowed to decide "overdue". */
+  private today(): string {
+    return todayIn(this.config.reportingTimeZone);
+  }
 
   async findById(id: string, executor: Db | Tx = this.db) {
     return executor.selectFrom('requisitions').selectAll().where('id', '=', id).executeTakeFirst();
@@ -410,7 +418,7 @@ export class RequisitionsRepository {
       this.fundsRepo.listSnapshotsForRequisition(id),
     ]);
 
-    const base = toRequisition(row);
+    const base = toRequisition(row, this.today());
     const supportingDocument =
       row.supporting_document_file_id && row.supporting_document_original_name
         ? {
@@ -643,8 +651,9 @@ export class RequisitionsRepository {
       .select((eb) => eb.fn.countAll<number>().as('count'))
       .executeTakeFirst();
 
+    const today = this.today();
     return {
-      items: rows.map(toRequisition),
+      items: rows.map((row) => toRequisition(row, today)),
       page: query.page,
       limit: query.limit,
       total: Number(counted?.count ?? 0),
@@ -691,7 +700,7 @@ interface RequisitionRow {
   updated_at: Date;
 }
 
-function toRequisition(row: RequisitionRow): Requisition {
+function toRequisition(row: RequisitionRow, today: string): Requisition {
   const deadline = row.approval_deadline
     ? typeof row.approval_deadline === 'string'
       ? row.approval_deadline
@@ -728,7 +737,7 @@ function toRequisition(row: RequisitionRow): Requisition {
     isOverdue:
       awaitingDecision.includes(row.status) &&
       deadline !== null &&
-      deadline < new Date().toISOString().slice(0, 10),
+      deadline < today,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
   };

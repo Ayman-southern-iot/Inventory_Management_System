@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isValidTimeZone } from '../common/calendar';
 
 /**
  * THE ONLY FILE IN THE BACKEND THAT MAY TOUCH `process.env` (rules/10-no-hardcoding.md).
@@ -191,7 +192,11 @@ const rawSchema = z.object({
    * The business's own calendar. Report date ranges are resolved against this, not UTC — at
    * +06 a Dhaka morning is the previous UTC day, and a July range would silently drop it.
    */
-  REPORTING_TIME_ZONE: z.string().min(1).default('Asia/Dhaka'),
+  REPORTING_TIME_ZONE: z
+    .string()
+    .min(1)
+    .refine(isValidTimeZone, { message: 'must be a valid IANA time zone, e.g. Asia/Dhaka' })
+    .default('Asia/Dhaka'),
   COMPANY_NAME: z.string().min(1).default('Southern IoT'),
   /** Pipe-separated so one env var carries a multi-line address block. */
   COMPANY_ADDRESS: z

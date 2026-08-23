@@ -1,7 +1,7 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Role } from '@ims/shared';
 import { createTestApp, httpClient, type HttpClient, type TestApp } from './app';
-import { createUser, login, resetData } from './factories';
+import { createUser, login, resetData, seedSubthresholdApprover } from './factories';
 import { createStockFixture, type StockFixture } from './stock-factories';
 import { StockService } from '../src/modules/stock/stock.service';
 
@@ -26,6 +26,7 @@ describe('date columns survive a round trip', () => {
   let ctx: TestApp;
   let requester: { id: string; client: HttpClient };
   let im: { id: string; client: HttpClient };
+  let approver: { id: string; client: HttpClient };
   let fixture: StockFixture;
   let stock: StockService;
 
@@ -45,10 +46,22 @@ describe('date columns survive a round trip', () => {
     await ctx.close();
   });
 
+  // The faked clock must never outlive its test — a later spec minting a token against it
+  // would fail in a way that looks nothing like the cause.
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   beforeEach(async () => {
     await resetData(ctx.db);
     requester = await actorFor([Role.GENERAL]);
     im = await actorFor([Role.GENERAL, Role.INVENTORY_MANAGER]);
+    approver = await actorFor([Role.GENERAL, Role.APPROVER]);
+    await ctx.db
+      .insertInto('approver_slots')
+      .values({ department_id: null, slot_no: 1, user_id: approver.id })
+      .execute();
+    await seedSubthresholdApprover(ctx, approver.id);
     fixture = await createStockFixture(ctx.db);
 
     // A borrow request 404s against a product with no placement, so put stock on the shelf.
@@ -106,6 +119,37 @@ describe('date columns survive a round trip', () => {
 
     const after = await requester.client.get(`/requisitions/${created.body.id}`);
     expect(after.body.approvalDeadline).toBe(DEADLINE);
+  });
+
+  /**
+   * The tail of D-014: "what day is it" was answered in UTC, so for the first six hours of
+   * every Dhaka day the overdue flag was a day behind. The clock is faked into that window —
+   * 20:00 UTC on the 23rd is 02:00 on the 24th in Dhaka — so a deadline of the 23rd is
+   * yesterday to the business and still today to UTC.
+   *
+   * The clock is set before signing in, because the token's own iat/exp are minted against
+   * whatever `Date` says at the time and would otherwise fail validation at the faked instant.
+   */
+  it('flags a deadline overdue on the business calendar, not the UTC one', async () => {
+    vi.setSystemTime(new Date('2026-08-23T20:00:00.000Z'));
+
+    const inWindow = await actorFor([Role.GENERAL]);
+    const created = await inWindow.client.post('/requisitions').send({
+      approvalDeadline: '2026-08-23',
+      items: [
+        { itemName: 'Widget', quantity: 1, estimatedUnitPrice: 500, productId: null, note: null },
+      ],
+    });
+    const submitted = await inWindow.client.post(`/requisitions/${created.body.id}/submit`).send();
+    // Without this the requisition stays DRAFT, which is never overdue, and the test would
+    // pass or fail for a reason that has nothing to do with the clock.
+    expect(submitted.status).toBe(200);
+
+    const fetched = await inWindow.client.get(`/requisitions/${created.body.id}`);
+    expect(fetched.body.approvalDeadline).toBe('2026-08-23');
+    // UTC says the 23rd is today, so `deadline < today` is false and the flag stays down.
+    // Dhaka says it is already the 24th, so the deadline has passed and the approvers are late.
+    expect(fetched.body.isOverdue).toBe(true);
   });
 
   it('returns the borrowing expected-return date exactly as it was written', async () => {

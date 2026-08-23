@@ -9,6 +9,8 @@ import {
   type Paginated,
   type ReturnCondition,
 } from '@ims/shared';
+import { CONFIG, type AppConfig } from '../../config';
+import { todayIn } from '../../common/calendar';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
 import { ConflictError } from '../../common/errors';
@@ -19,7 +21,15 @@ type Writer = Db | Tx;
 
 @Injectable()
 export class BorrowingRepository {
-  constructor(@Inject(DB) private readonly db: Db) {}
+  constructor(
+    @Inject(DB) private readonly db: Db,
+    @Inject(CONFIG) private readonly config: AppConfig,
+  ) {}
+
+  /** Today in the business's own calendar — the only clock allowed to decide "overdue". */
+  private today(): string {
+    return todayIn(this.config.reportingTimeZone);
+  }
 
   async findProductForBorrow(productId: string) {
     return this.db
@@ -410,7 +420,7 @@ export class BorrowingRepository {
     const row = await this.viewSelect(writer)
       .where('borrow_requests.id', '=', id)
       .executeTakeFirst();
-    return row ? toBorrowRequest(row) : undefined;
+    return row ? toBorrowRequest(row, this.today()) : undefined;
   }
 
   async list(
@@ -468,8 +478,9 @@ export class BorrowingRepository {
       .select((eb) => eb.fn.countAll<number>().as('count'))
       .executeTakeFirst();
 
+    const today = this.today();
     return {
-      items: rows.map(toBorrowRequest),
+      items: rows.map((row) => toBorrowRequest(row, today)),
       page: query.page,
       limit: query.limit,
       total: Number(counted?.count ?? 0),
@@ -554,8 +565,12 @@ export class BorrowingRepository {
         'borrow_requests.returned_qty as returned_qty',
         'borrow_requests.expected_return_date as expected_return_date',
         'borrow_requests.issued_at as issued_at',
+        // `current_date` resolves in the *database container's* zone, which is pinned in
+        // compose while the API's lives in an unversioned `infra/.env`. Binding the configured
+        // zone means this projection and the JS one below cannot drift apart.
         sql<boolean>`borrow_requests.expected_return_date IS NOT NULL
-          AND borrow_requests.expected_return_date < current_date`.as('is_overdue'),
+          AND borrow_requests.expected_return_date
+              < (now() AT TIME ZONE ${this.config.reportingTimeZone})::date`.as('is_overdue'),
         'latest_return.last_return_condition as last_return_condition',
       ])
       .orderBy('borrow_requests.issued_at', 'desc')
@@ -608,7 +623,7 @@ interface BorrowViewRow {
   created_at: Date;
 }
 
-function toBorrowRequest(row: BorrowViewRow): BorrowRequest {
+function toBorrowRequest(row: BorrowViewRow, today: string): BorrowRequest {
   const outstanding = row.is_returnable ? row.quantity - row.returned_qty : 0;
   const expected: string | null = row.expected_return_date
     ? typeof row.expected_return_date === 'string'
@@ -645,7 +660,7 @@ function toBorrowRequest(row: BorrowViewRow): BorrowRequest {
     issuedAt: row.issued_at ? new Date(row.issued_at).toISOString() : null,
     returnedAt: row.returned_at ? new Date(row.returned_at).toISOString() : null,
     // Computed here rather than stored: a persisted flag is wrong the moment midnight passes.
-    isOverdue: isOut && expected !== null && expected < new Date().toISOString().slice(0, 10),
+    isOverdue: isOut && expected !== null && expected < today,
     createdAt: new Date(row.created_at).toISOString(),
   };
 }
