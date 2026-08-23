@@ -142,7 +142,7 @@ export class ProductsService {
               description: input.description,
             },
           },
-          { ...context, actorName: context.actorName ?? input.name },
+          context,
           tx,
         );
         return newId;
@@ -222,7 +222,7 @@ export class ProductsService {
               summary: `Updated product ${existing.productCode}`,
               metadata: { changes },
             },
-            { ...context, actorName: context.actorName ?? existing.name },
+            context,
             tx,
           );
         }

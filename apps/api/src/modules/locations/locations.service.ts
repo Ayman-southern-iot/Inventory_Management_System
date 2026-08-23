@@ -42,7 +42,7 @@ export class LocationsService {
             summary: `Created zone ${input.name}`,
             metadata: { name: input.name },
           },
-          { ...context, actorName: context.actorName ?? input.name },
+          context,
           tx,
         );
         return newId;
@@ -95,7 +95,7 @@ export class LocationsService {
               summary: `Updated zone ${existing.name}`,
               metadata: { changes },
             },
-            { ...context, actorName: context.actorName ?? existing.name },
+            context,
             tx,
           );
         }
@@ -129,7 +129,7 @@ export class LocationsService {
             summary: `Created compartment ${zone.name}/${input.code}`,
             metadata: { zoneId: input.zoneId, code: input.code },
           },
-          { ...context, actorName: context.actorName ?? zone.name },
+          context,
           tx,
         );
         return newId;
@@ -187,7 +187,7 @@ export class LocationsService {
               summary: `Updated compartment ${existing.code}`,
               metadata: { changes },
             },
-            { ...context, actorName: context.actorName ?? existing.code },
+            context,
             tx,
           );
         }

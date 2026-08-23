@@ -64,7 +64,7 @@ export class CategoriesService {
               isTrackable: input.isTrackable,
             },
           },
-          { ...context, actorName: context.actorName ?? input.name },
+          context,
           tx,
         );
         return newId;
@@ -142,7 +142,7 @@ export class CategoriesService {
               summary: `Updated category ${existing.name}`,
               metadata: { changes },
             },
-            { ...context, actorName: context.actorName ?? existing.name },
+            context,
             tx,
           );
         }

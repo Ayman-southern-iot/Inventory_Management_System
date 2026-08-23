@@ -163,6 +163,40 @@ describe('audit log', () => {
     expect(JSON.stringify(created?.metadata ?? {})).not.toContain('hash');
   });
 
+  /**
+   * QA round 2, D-030 — High. The admin audit page promises "who did it, and from where", and
+   * showed "Unknown actor" for nearly every business action, including every approval and
+   * rejection. Login was the exception, which is the clue: `auth.service` is the only caller
+   * that passes `actorName` explicitly (`user.full_name`, three sites). Everything else —
+   * the fourteen controllers using the `@CurrentAuditContext` decorator as intended, and the
+   * thirteen services that hand-build a context — inherits `actorName: null` from
+   * `auditContextFromRequest`, whose own comment defers the job to "services can fill it from
+   * the users row when needed". Almost none do.
+   *
+   * The row snapshots the name rather than joining on read, deliberately, so it survives a
+   * later rename (AuditLogPage.tsx). So the name has to be resolved at write time, once,
+   * rather than at fifty-odd call sites.
+   */
+  it('names the actor on an ordinary mutation, not just on login', async () => {
+    const fullName = 'Ada Auditor';
+    const { user, session } = await createUserAndLogin(ctx.db, http, {
+      roles: [Role.ADMIN],
+      fullName,
+    });
+    const admin = http.as(session.accessToken);
+
+    const created = await admin.post('/categories').send({ name: uniqueEmail('cat'), isTrackable: false });
+    expect(created.status).toBe(201);
+
+    const list = await admin.get('/admin/audit-log');
+    const entry = (list.body as Paginated<AuditEntry>).items.find(
+      (e) => e.action === 'category.create' && e.actorId === user.id,
+    );
+    expect(entry).toBeDefined();
+    // The whole promise of the page: this is the assertion that was failing in production.
+    expect(entry?.actorName).toBe(fullName);
+  });
+
   it('records a setting update', async () => {
     const admin = await adminClient();
     const update = await admin.put('/admin/settings').send({

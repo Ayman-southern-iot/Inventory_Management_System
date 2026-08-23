@@ -23,23 +23,6 @@ export interface AuditContext {
   userAgent: string | null;
 }
 
-/**
- * Minimal stub. Used by callers that don't yet have a request in scope (system jobs,
- * background tasks, and service-to-service calls). All fields null except the actor id.
- */
-export function systemAuditContext(actorId: string | null = null): AuditContext {
-  return {
-    actorId,
-    actorName: null,
-    actorEmail: null,
-    actorRoles: [],
-    requestMethod: null,
-    requestPath: null,
-    requestIp: null,
-    userAgent: null,
-  };
-}
-
 /** For scheduled jobs and the seeder — no actor, no HTTP. */
 export const SYSTEM_AUDIT_CONTEXT: AuditContext = {
   actorId: null,
@@ -62,7 +45,11 @@ export function auditContextFromRequest(
 ): AuditContext {
   return {
     actorId: user?.id ?? null,
-    actorName: null, // not on RequestUser; services can fill it from the users row when needed
+    // Not on RequestUser — the JWT carries sub/email/roles and no name. Left null on
+    // purpose: the audit insert resolves it from `actor_id` (see audit.repository.ts).
+    // Do NOT "fix" this by passing whatever name happens to be in scope at the call site;
+    // thirteen services did exactly that and wrote the *subject's* name into the actor column.
+    actorName: null,
     actorEmail: user?.email ?? null,
     actorRoles: user?.roles ?? [],
     requestMethod: req.method ?? null,

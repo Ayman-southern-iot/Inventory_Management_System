@@ -436,7 +436,7 @@ export class BomsService {
             overBudgetBounced: detail.overBudgetBounced,
           },
         },
-        { ...context, actorId, actorName: context.actorName ?? detail.generatedByName ?? null },
+        { ...context, actorId },
         tx,
       );
     });

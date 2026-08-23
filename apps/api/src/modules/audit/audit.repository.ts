@@ -170,6 +170,12 @@ async insert(tx: Tx | undefined, row: AuditInsert): Promise<void> {
     // apostrophe in any audited value — `note: "it's fine"` on an approval — therefore closed
     // the literal, which was both a SQL injection reachable by every authenticated user and a
     // guaranteed 500 on ordinary English text.
+    // actor_name is a snapshot, not a join: the admin page must keep showing who acted even
+    // after that person is renamed (AuditLogPage.tsx). Nothing upstream can supply it —
+    // auditContextFromRequest builds from the JWT, which carries sub/email/roles and no name —
+    // so every request-originated row used to land with NULL and render as "Unknown actor".
+    // Resolving it here, once, rather than at ~53 call sites, is what makes it impossible to
+    // forget; the subselect runs in the same transaction as the mutation being audited.
     await sql`
       INSERT INTO audit_log (
         actor_id, actor_name, actor_email, actor_roles,
@@ -179,7 +185,9 @@ async insert(tx: Tx | undefined, row: AuditInsert): Promise<void> {
         outcome, error_code
       )
       VALUES (
-        ${row.actor_id}, ${row.actor_name}, ${row.actor_email}, ${JSON.stringify(row.actor_roles)}::jsonb,
+        ${row.actor_id},
+        COALESCE(${row.actor_name}, (SELECT full_name FROM users WHERE id = ${row.actor_id}::uuid)),
+        ${row.actor_email}, ${JSON.stringify(row.actor_roles)}::jsonb,
         ${row.action}, ${row.entity_type}, ${row.entity_id}, ${row.entity_ref},
         ${row.summary}, ${JSON.stringify(row.metadata ?? {})}::jsonb,
         ${row.request_method}, ${row.request_path}, ${row.request_ip}, ${row.user_agent},
