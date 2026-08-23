@@ -570,7 +570,7 @@ export class BorrowingRepository {
         // zone means this projection and the JS one below cannot drift apart.
         sql<boolean>`borrow_requests.expected_return_date IS NOT NULL
           AND borrow_requests.expected_return_date
-              < (now() AT TIME ZONE ${this.config.reportingTimeZone})::date`.as('is_overdue'),
+              < (now() AT TIME ZONE ${this.config.reportingTimeZone}::text)::date`.as('is_overdue'),
         'latest_return.last_return_condition as last_return_condition',
       ])
       .orderBy('borrow_requests.issued_at', 'desc')

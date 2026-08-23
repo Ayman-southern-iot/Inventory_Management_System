@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { sql } from 'kysely';
 import { ApprovalAction, ApprovalStage, RequisitionStatus } from '@ims/shared';
+import { CONFIG, type AppConfig } from '../../config';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -41,6 +42,7 @@ export class ApprovalDeadlineJob {
 
   constructor(
     @Inject(DB) private readonly db: Db,
+    @Inject(CONFIG) private readonly config: AppConfig,
     private readonly notifications: NotificationsService,
   ) {}
 
@@ -104,7 +106,12 @@ export class ApprovalDeadlineJob {
       JOIN users u        ON u.id = ra.assigned_user_id
       WHERE ra.action = ${ApprovalAction.PENDING}
         AND r.approval_deadline IS NOT NULL
-        AND r.approval_deadline < current_date
+        -- The badge on the screen resolves "overdue" against REPORTING_TIME_ZONE. Using
+        -- current_date here would resolve it against the database container's zone instead,
+        -- and the two agree only while both containers happen to be pinned the same way --
+        -- the API's zone comes from an unversioned infra/.env. A requisition reading
+        -- "Overdue" while no reminder ever fires is the failure requirements 5 exists to stop.
+        AND r.approval_deadline < (now() AT TIME ZONE ${this.config.reportingTimeZone}::text)::date
         AND (
           (ra.stage = ${ApprovalStage.INVENTORY_MANAGER}::approval_stage
              AND r.status = ${RequisitionStatus.IM_REVIEW}::requisition_status)
