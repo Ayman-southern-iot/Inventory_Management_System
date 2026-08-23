@@ -302,6 +302,24 @@ export async function countRefreshTokens(
  * submission calls this in `beforeEach`; tests that specifically want the "unassigned" path
  * should reset it back to `null` themselves.
  */
+/**
+ * Everything a requisition needs in order to leave DRAFT: a company-wide slot-1 approver for
+ * the at-or-above path, and the sub-threshold approver for the below path.
+ *
+ * These are two unrelated settings and a spec that seeds only one gets a submit that 409s with
+ * `APPROVER_SLOT_UNASSIGNED` or `SUBTHRESHOLD_APPROVER_UNASSIGNED`. The requisition then stays
+ * DRAFT, and any assertion about a submitted requisition's state passes or fails for a reason
+ * that has nothing to do with what is under test — which is exactly how the D-014 clock spec
+ * first came out green. If a spec submits anything, call this rather than the two by hand.
+ */
+export async function seedApprovalChain(ctx: TestApp, approverId: string): Promise<void> {
+  await ctx.db
+    .insertInto('approver_slots')
+    .values({ department_id: null, slot_no: 1, user_id: approverId })
+    .execute();
+  await seedSubthresholdApprover(ctx, approverId);
+}
+
 export async function seedSubthresholdApprover(ctx: TestApp, approverId: string): Promise<void> {
   const settings = ctx.app.get(SettingsService);
   await settings.set(SettingKey.SUBTHRESHOLD_APPROVER_USER_ID, approverId, {

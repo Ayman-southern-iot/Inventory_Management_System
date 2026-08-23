@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Role } from '@ims/shared';
 import { createTestApp, httpClient, type HttpClient, type TestApp } from './app';
-import { createUser, login, resetData, seedSubthresholdApprover } from './factories';
+import { createUser, login, resetData, seedApprovalChain } from './factories';
 import { createStockFixture, type StockFixture } from './stock-factories';
 import { StockService } from '../src/modules/stock/stock.service';
 
@@ -57,11 +57,7 @@ describe('date columns survive a round trip', () => {
     requester = await actorFor([Role.GENERAL]);
     im = await actorFor([Role.GENERAL, Role.INVENTORY_MANAGER]);
     approver = await actorFor([Role.GENERAL, Role.APPROVER]);
-    await ctx.db
-      .insertInto('approver_slots')
-      .values({ department_id: null, slot_no: 1, user_id: approver.id })
-      .execute();
-    await seedSubthresholdApprover(ctx, approver.id);
+    await seedApprovalChain(ctx, approver.id);
     fixture = await createStockFixture(ctx.db);
 
     // A borrow request 404s against a product with no placement, so put stock on the shelf.
