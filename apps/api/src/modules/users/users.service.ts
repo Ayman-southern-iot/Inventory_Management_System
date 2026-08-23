@@ -116,7 +116,7 @@ export class UsersService {
               mustChangePassword: input.mustChangePassword,
             },
           },
-          { ...context, actorName: context.actorName ?? input.email.split('@')[0] ?? null },
+          context,
           tx,
         );
         return userId;
@@ -204,7 +204,7 @@ export class UsersService {
         summary: `Updated user ${existing.email}`,
         metadata: { changes },
       },
-      { ...context, actorName: context.actorName ?? existing.full_name },
+      context,
       tx,
     );
 
@@ -259,7 +259,7 @@ export class UsersService {
             sessionsRevoked: !isActive,
           },
         },
-        { ...context, actorName: context.actorName ?? existing.full_name },
+        context,
         tx,
       );
     });
@@ -300,7 +300,7 @@ export class UsersService {
             sessionsRevoked: true,
           },
         },
-        { ...context, actorName: context.actorName ?? existing.full_name },
+        context,
         tx,
       );
 
@@ -334,11 +334,11 @@ export class UsersService {
     const ok = await this.passwords.verify(existing.password_hash, currentPassword);
     if (!ok) throw new ForbiddenError('Current password is incorrect');
 
-    await this.resetPassword(
-      id,
-      { newPassword, mustChangePassword: false },
-      { ...context, actorName: context.actorName ?? existing.full_name },
-    );
+    // `context` is passed through untouched. `auth.service.changePassword` already supplies
+    // `actorName` from the record it loaded, and where it did not, the audit insert resolves the
+    // name from `actor_id` — so the old `?? existing.full_name` was unreachable here and a
+    // subject-as-actor bug everywhere else it appeared (D-030).
+    await this.resetPassword(id, { newPassword, mustChangePassword: false }, context);
   }
 
   async touchLastLogin(id: string): Promise<void> {

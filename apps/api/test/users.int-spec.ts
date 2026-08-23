@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { sql } from 'kysely';
 import { ErrorCode, ROLE_VALUES, Role, type User } from '@ims/shared';
 import { createTestApp, httpClient, type HttpClient, type TestApp } from './app';
 import { ROTATED_PASSWORD, TEST_PASSWORD } from './config/test-env';
@@ -409,6 +410,110 @@ describe('admin user management', () => {
         expect(Object.keys(item)).not.toContain('password_hash');
         expect(Object.keys(item)).not.toContain('passwordHash');
       }
+    });
+  });
+
+  /* ------------------------------- audit attribution ------------------------------- */
+
+  /**
+   * D-030's last five sites. `auditContextFromRequest` leaves `actorName` null on purpose — the
+   * JWT carries no name and the audit insert resolves it from `actor_id` — but five call sites
+   * here "helped" with `?? existing.full_name` / `?? input.email.split('@')[0]`, writing the
+   * *subject* into the actor column. A blank actor reads as unknown; the subject's own name
+   * reads as a real person who did not do it, in an append-only table.
+   */
+  describe('audit attribution', () => {
+    async function adminNamed(fullName: string): Promise<Admin & { fullName: string }> {
+      const http = httpClient(ctx.app);
+      const user = await createUser(ctx.db, {
+        roles: [Role.ADMIN],
+        fullName,
+        designation: 'Administrator',
+      });
+      const session = await login(http, user.email);
+      return { id: user.id, email: user.email, fullName, client: http.as(session.accessToken) };
+    }
+
+    async function auditRows(
+      action: string,
+      entityId: string,
+    ): Promise<Array<{ actor_id: string | null; actor_name: string | null }>> {
+      const result = await sql<{ actor_id: string | null; actor_name: string | null }>`
+        SELECT actor_id, actor_name
+        FROM audit_log
+        WHERE action = ${action} AND entity_id = ${entityId}
+      `.execute(ctx.db);
+      return result.rows;
+    }
+
+    it('names the admin who reset a password, not the user whose password was reset', async () => {
+      const admin = await adminNamed('Aisha Admin');
+      const target = await createUser(ctx.db, { fullName: 'Tariq Target' });
+
+      const reset = await admin.client
+        .post(`/admin/users/${target.id}/password`)
+        .send({ newPassword: ROTATED_PASSWORD });
+      expect(reset.status).toBe(204);
+
+      const rows = await auditRows('user.reset_password', target.id);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.actor_id).toBe(admin.id);
+      expect(rows[0]?.actor_name).toBe('Aisha Admin');
+      expect(rows[0]?.actor_name).not.toBe('Tariq Target');
+    });
+
+    it('names the admin who deactivated an account, not the account', async () => {
+      const admin = await adminNamed('Aisha Admin');
+      const target = await createUser(ctx.db, { fullName: 'Tariq Target' });
+
+      const response = await admin.client
+        .patch(`/admin/users/${target.id}/active`)
+        .send({ isActive: false });
+      expect(response.status).toBe(200);
+
+      const rows = await auditRows('user.set_active', target.id);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.actor_id).toBe(admin.id);
+      expect(rows[0]?.actor_name).toBe('Aisha Admin');
+    });
+
+    it('names the admin who created a user, not the local part of the new address', async () => {
+      const admin = await adminNamed('Aisha Admin');
+      const email = uniqueEmail('newjoiner');
+
+      const created = await admin.client
+        .post('/admin/users')
+        .send(newUserBody({ email, fullName: 'New Joiner' }));
+      expect(created.status).toBe(201);
+
+      const rows = await auditRows('user.create', (created.body as User).id);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.actor_id).toBe(admin.id);
+      expect(rows[0]?.actor_name).toBe('Aisha Admin');
+      expect(rows[0]?.actor_name).not.toBe(email.split('@')[0]);
+    });
+
+    /**
+     * The self-service path is the one case where actor and subject are the same person, so the
+     * deleted fallback happened to produce the right answer. It was still unreachable —
+     * `auth.service.changePassword` supplies `actorName` from the record it already loaded — and
+     * this is what proves removing it did not blank the row.
+     */
+    it('still names the user on their own password change', async () => {
+      const http = httpClient(ctx.app);
+      const user = await createUser(ctx.db, { fullName: 'Self Server' });
+      const session = await login(http, user.email);
+
+      const changed = await http
+        .as(session.accessToken)
+        .post('/auth/change-password')
+        .send({ currentPassword: TEST_PASSWORD, newPassword: ROTATED_PASSWORD });
+      expect(changed.status).toBe(200);
+
+      const rows = await auditRows('user.reset_password', user.id);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.actor_id).toBe(user.id);
+      expect(rows[0]?.actor_name).toBe('Self Server');
     });
   });
 });
