@@ -108,6 +108,40 @@ describe('expense report', () => {
     expect(report.buckets[0]!.spent).toBe(4_000);
   });
 
+  /**
+   * Department is optional (D-006) and REQ-000003 was submitted without one, so the department
+   * breakdown has to account for money nobody assigned. The page's own subtitle promises
+   * "Figures always reconcile", and a row silently missing from the breakdown is how that
+   * promise breaks — quietly, in the view most likely to reach a budget conversation.
+   *
+   * Asserted as a delta plus an invariant rather than absolute figures: `resetData` leaves
+   * requisitions behind on purpose (`requisition_events` is append-only), so the unscoped
+   * report legitimately carries other specs' rows. The delta is mine; the reconciliation is
+   * everyone's.
+   */
+  it('keeps a requisition with no department in the breakdown, and the buckets still reconcile', async () => {
+    const sumOf = (report: ExpenseReport, field: 'approved' | 'requested') =>
+      report.buckets.reduce((total, bucket) => total + bucket[field], 0);
+    const noDepartmentBucket = (report: ExpenseReport) =>
+      report.buckets.find((bucket) => bucket.label === 'No department');
+
+    const before = await departmentReport();
+    const approvedBefore = noDepartmentBucket(before)?.approved ?? 0;
+
+    await approvedWithoutDepartment(3_000);
+
+    const after = await departmentReport();
+    const bucket = noDepartmentBucket(after);
+
+    // It is in the breakdown at all — labelled, not dropped and not keyed by a bare null.
+    expect(bucket).toBeDefined();
+    expect(bucket!.approved - approvedBefore).toBe(3_000);
+
+    // The promise the page makes, on the grouping most likely to be read as an allocation.
+    expect(sumOf(after, 'approved')).toBe(after.totals.approved);
+    expect(sumOf(after, 'requested')).toBe(after.totals.requested);
+  });
+
   it('honours the date range, inclusive of the closing day', async () => {
     await fullyProcessed({ requested: 5_000, approved: 5_000, spend: 4_000, giveBack: 0 });
 
@@ -315,6 +349,43 @@ describe('expense report', () => {
         .post(`/requisitions/${id}/purchases/${purchase.id}/invoice`)
         .attach('file', Buffer.from('%PDF-1.4 invoice'), 'invoice.pdf');
     }
+  }
+
+  /** Unscoped, because a department-less requisition cannot be reached by ?departmentId=. */
+  async function departmentReport(): Promise<ExpenseReport> {
+    const response = await im.client.get('/reports/expenses?groupBy=department');
+    expect(response.status).toBe(200);
+    return response.body as ExpenseReport;
+  }
+
+  /** Taken to APPROVED — a standing approval — with Department deliberately left unset. */
+  async function approvedWithoutDepartment(requested: number): Promise<string> {
+    const created = await requester.client.post('/requisitions').send({
+      departmentId: null,
+      urgency: 'NORMAL',
+      reason: 'No department on purpose (D-006)',
+      items: [
+        { itemName: 'Widget', quantity: 1, estimatedUnitPrice: requested, productId: null, note: null },
+      ],
+    });
+    expect(created.status).toBe(201);
+    const id = created.body.id as string;
+
+    const submitted = (await requester.client.post(`/requisitions/${id}/submit`).send()).body;
+    const imApprovalId = submitted.approvals.find(
+      (a: { stage: string }) => a.stage === 'INVENTORY_MANAGER',
+    ).id;
+    const afterIm = (
+      await im.client.post(`/requisitions/approvals/${imApprovalId}/decision`).send({ approve: true })
+    ).body;
+    const approverApprovalId = afterIm.approvals.find(
+      (a: { stage: string }) => a.stage === 'APPROVER',
+    ).id;
+    const decided = await approver.client
+      .post(`/requisitions/approvals/${approverApprovalId}/decision`)
+      .send({ approve: true });
+    expect(decided.status).toBe(200);
+    return id;
   }
 
   /** Submitted and nothing more — the IM has not looked at it yet. */

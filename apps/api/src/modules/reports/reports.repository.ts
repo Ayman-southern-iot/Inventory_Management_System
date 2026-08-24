@@ -62,6 +62,18 @@ export class ReportsRepository {
       AND (${toDate}::date IS NULL OR r.submitted_at < ${toInstant})
     `;
 
+    /**
+     * The department breakdown groups on `department_id` — where the money lands — and
+     * deliberately **not** on the requester. An IM raising a requisition for Engineering
+     * hardware is Engineering's spend, not the IM's, and a report Accounts reads as an
+     * allocation must say so. Do not "correct" this to the requester on the grounds that the
+     * requisition *list* groups that way: the list answers "whose request is this?", this
+     * answers "whose budget is this?".
+     *
+     * `coalesce(..., 'none')` is what keeps a department-less requisition in the breakdown
+     * rather than dropping it: Department is optional (D-006), and a row that fell out here
+     * would break the "Figures always reconcile" promise the page makes.
+     */
     const groupExpr =
       query.groupBy === 'month'
         ? sql`to_char(date_trunc('month', r.submitted_at AT TIME ZONE ${timeZone}::text), 'YYYY-MM')`
