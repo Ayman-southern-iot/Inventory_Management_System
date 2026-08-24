@@ -56,6 +56,37 @@ export function RequisitionDetailPage() {
   const navigate = useNavigate();
 
   const requisition = useRequisition(requisitionId);
+  const detailData = requisition.data;
+
+  /**
+   * What the requested figure will be when submit freezes it: the server's own line totals plus
+   * transportation, which is exactly what `RequisitionsService.submit` adds up. Only rendered
+   * while `requestedAmount` is null (D-016).
+   */
+  const provisionalTotal = useMemo(
+    () =>
+      (detailData?.items ?? []).reduce((sum, item) => sum + item.estimatedLineTotal, 0) +
+      (detailData?.transportationCost ?? 0),
+    [detailData],
+  );
+
+  /**
+   * Three states, not two (D-021). The old condition picked "an approver revised this" whenever
+   * any approver had acted, so an approval that left the amount untouched still claimed a
+   * revision — on a financial record. A revision is the amounts *differing*; an approval that
+   * changed nothing needs no caption at all.
+   */
+  const sanctionedHint = useMemo(() => {
+    if (!detailData) return undefined;
+    if (detailData.approvedAmount === null) return undefined;
+    if (detailData.approvals.every((a) => a.action !== ApprovalAction.APPROVED)) {
+      return t.requisitions.sanctionedHintPending;
+    }
+    return detailData.requestedAmount !== null &&
+      detailData.approvedAmount !== detailData.requestedAmount
+      ? t.requisitions.sanctionedHintRevised
+      : undefined;
+  }, [detailData]);
   const submit = useSubmitRequisition();
   const cancel = useCancelRequisition();
   const withdraw = useWithdrawApproval();
@@ -261,19 +292,31 @@ export function RequisitionDetailPage() {
                         <dl className="flex flex-wrap justify-end gap-x-10 gap-y-3 sm:justify-start">
                           <Figure
                             label={t.requisitions.requested}
-                            value={(detail.requestedAmount ?? 0).toLocaleString()}
+                            // `requestedAmount` is null until submit freezes it. `?? 0` put a hard
+                            // REQUESTED 0 directly above a line-item table totalling the real
+                            // amount (D-016). Before it is frozen, show the sum of those same
+                            // lines — the line totals come from the server, so this is the
+                            // addition submit does, not a second implementation of the
+                            // arithmetic — and label it provisional. Once frozen, the stored
+                            // figure wins: an item edited later must not move what the approvers
+                            // were shown.
+                            value={(detail.requestedAmount ?? provisionalTotal).toLocaleString()}
+                            hint={
+                              detail.requestedAmount === null
+                                ? t.requisitions.requestedHintDraft
+                                : undefined
+                            }
                           />
                           <Figure
                             label={t.requisitions.sanctioned}
-                            value={(detail.approvedAmount ?? 0).toLocaleString()}
-                            hint={
-                              // Until at least one approver has acted, the sanctioned figure is just
-                              // a copy of the requested one — say so explicitly so the label "Sanctioned"
-                              // doesn't mislead in the same way "Approved" did.
-                              detail.approvals.every((a) => a.action !== ApprovalAction.APPROVED)
-                                ? t.requisitions.sanctionedHintPending
-                                : t.requisitions.sanctionedHintRevised
+                            // Nothing is sanctioned before submit, and 0 is a figure — an em dash
+                            // is the absence of one.
+                            value={
+                              detail.approvedAmount === null
+                                ? t.common.none
+                                : detail.approvedAmount.toLocaleString()
                             }
+                            hint={sanctionedHint}
                           />
                           {detail.requiredApproverCount !== null ? (
                             <Figure

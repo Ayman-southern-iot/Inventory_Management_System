@@ -755,6 +755,9 @@ export const t = {
     // to print; an approver may revise it down. We label it "Sanctioned" so the UI does not
     // claim an approver signed off before one has.
     sanctioned: 'Sanctioned',
+    // A draft has no frozen figure yet, so what is shown is the sum of the lines below and
+    // must say so — the alternative was rendering a hard 0 above a costed table (D-016).
+    requestedHintDraft: 'Provisional — fixed when you submit.',
     sanctionedHintPending: 'Defaults to the requested amount; approvers may revise down.',
     sanctionedHintRevised: 'An approver revised this from the requested amount.',
     total: 'Total',
