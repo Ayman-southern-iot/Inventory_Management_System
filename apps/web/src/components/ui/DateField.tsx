@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Calendar, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { t } from '@/i18n/en';
 import { cn } from '@/lib/cn';
 import { formatDateTime } from '@/lib/format';
+import { useAnchoredPosition } from '@/lib/useAnchoredPosition';
 
 /**
  * A date picker built out of buttons.
@@ -25,6 +26,9 @@ import { formatDateTime } from '@/lib/format';
  * constructor, never by parsing a string: `new Date('2026-08-13')` is UTC midnight and renders
  * as the 12th at +06, which is exactly the shift D-014 was about.
  */
+
+/** Matches the w-72 on the popover below. */
+const POPOVER_WIDTH_PX = 288;
 
 const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'] as const;
 
@@ -69,11 +73,15 @@ export function DateField({
   const id = useId();
   const today = useMemo(startOfToday, []);
   const containerRef = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const popoverRef = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
 
   const [open, setOpen] = useState(false);
+  // Shared with the item-row suggestion list — both are portalled out of a Panel that clips.
+  const {
+    anchorRef: triggerRef,
+    popoverRef,
+    position,
+  } = useAnchoredPosition<HTMLButtonElement, HTMLDivElement>(open, POPOVER_WIDTH_PX);
+
   /** The calendar day under consideration, as YYYY-MM-DD. Time is held separately below. */
   const [draft, setDraft] = useState<string | null>(null);
   /** 1-12, 0/15/30/45, and the meridiem — a 12-hour clock, per Ayman's ruling 2026-08-26. */
@@ -102,58 +110,6 @@ export function DateField({
       setViewMonth(today.month);
     }
   }, [open, value, today.year, today.month]);
-
-  /**
-   * Where the popover goes, measured against the trigger in viewport coordinates.
-   *
-   * The popover is rendered through a portal (see the bottom of this file), so it is a child of
-   * `document.body` rather than of the field. That is the fix for it being cut off: `Panel`
-   * carries `overflow-hidden` to keep its own children inside its rounded corners, and anything
-   * absolutely positioned inside a Panel gets clipped by it. A portal has no such ancestor.
-   *
-   * It also flips above the trigger when there is not enough room below, which the old
-   * `top-full` could not do — a field near the bottom of a long form put the calendar off the
-   * end of the window.
-   */
-  const reposition = useCallback(() => {
-    const trigger = triggerRef.current;
-    if (!trigger) return;
-
-    const rect = trigger.getBoundingClientRect();
-    const popoverHeight = popoverRef.current?.offsetHeight ?? 0;
-    const GAP = 4;
-
-    // Below unless it would overflow the viewport *and* there is more room above.
-    const roomBelow = window.innerHeight - rect.bottom;
-    const flipUp = popoverHeight > 0 && roomBelow < popoverHeight + GAP && rect.top > roomBelow;
-
-    setPosition({
-      top: flipUp ? rect.top - popoverHeight - GAP : rect.bottom + GAP,
-      // Kept inside the right edge on a narrow window, and never off the left.
-      left: Math.max(GAP, Math.min(rect.left, window.innerWidth - 288 - GAP)),
-    });
-  }, []);
-
-  // Before paint, so the popover never renders at the wrong place for a frame.
-  useLayoutEffect(() => {
-    if (!open) {
-      setPosition(null);
-      return;
-    }
-    reposition();
-  }, [open, reposition]);
-
-  // Scrolling or resizing moves the trigger; the popover has to follow it. `capture` so a
-  // scrolling ancestor counts, not just the window.
-  useEffect(() => {
-    if (!open) return;
-    window.addEventListener('scroll', reposition, true);
-    window.addEventListener('resize', reposition);
-    return () => {
-      window.removeEventListener('scroll', reposition, true);
-      window.removeEventListener('resize', reposition);
-    };
-  }, [open, reposition]);
 
   // Close on an outside click or Escape. Escape matters more than it looks: this sits inside a
   // form, and a picker you can only dismiss by clicking away is a trap for keyboard users.

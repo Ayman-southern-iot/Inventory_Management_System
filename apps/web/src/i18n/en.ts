@@ -766,6 +766,11 @@ export const t = {
     itemName: 'Item',
     itemNameHint: 'Pick from the catalogue, or type anything we do not stock yet.',
     itemNamePlaceholder: 'Search the catalogue, or type a new item',
+    outOfStock: 'None in stock',
+    linkedOutOfStock: 'In the catalogue. None in stock right now.',
+    noCatalogueMatch: 'Nothing in the catalogue matches. It will be requested as a new item.',
+    // The duplicate guard: one product typed three ways is three products in every report.
+    didYouMean: 'Did you mean {name}? Click to use the catalogue entry.',
     quantity: 'Quantity',
     unitPrice: 'Unit price (BDT)',
     lineTotal: 'Line total',
