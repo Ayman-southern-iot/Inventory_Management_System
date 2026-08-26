@@ -46,24 +46,24 @@ Status values: `TODO` · `IN PROGRESS` · `DONE` (gate green, handoff block issu
 | P-01 | EX-02 inventory records export | High | REQUIRED §10 | TODO | |
 | P-02 | D-002 picker truncates past 100 | Medium | NO-BASIS (shipped surface) | TODO | |
 | P-03 | D-003 past deadline accepted server-side | Medium | NO-BASIS (shipped surface) | TODO | |
-| P-04 | D-004 draft edit drops Department/Project | Medium | NO-BASIS (shipped surface) | TODO | |
-| P-05 | D-005 raw zod string shown to user | Low | NO-BASIS (shipped surface) | TODO | |
+| P-04 | D-004 draft edit drops Department/Project | Medium | NO-BASIS (shipped surface) | **DONE** | `2bb58d2` |
+| P-05 | D-005 raw zod string shown to user | Low | NO-BASIS (shipped surface) | **DONE** | `a44050f` |
 | P-06 | D-006 request-level fields all optional | Medium | NO-BASIS (**rule change**) | BLOCKED | needs ruling |
-| P-07 | D-009 dashboard "arrive in later phases" | Cosmetic | NO-BASIS (shipped surface) | **DONE** | uncommitted |
-| P-08 | D-010 Products nav vs Inventory heading | Cosmetic | NO-BASIS (shipped surface) | **DONE** | uncommitted |
+| P-07 | D-009 dashboard "arrive in later phases" | Cosmetic | NO-BASIS (shipped surface) | **DONE** | `6ab88f9` |
+| P-08 | D-010 Products nav vs Inventory heading | Cosmetic | NO-BASIS (shipped surface) | **DONE** | `6ab88f9` |
 | P-09 | D-011 three date formats | Cosmetic | NO-BASIS (shipped surface) | TODO | |
 | P-10 | D-012 every page shares a browser title | Cosmetic | NO-BASIS (shipped surface) | TODO | |
 | P-11 | D-013 per-role authorisation unverified | Medium | REQUIRED §2 (verification) | TODO | |
 | P-12 | D-015 failed submit silently drafts | Medium | NO-BASIS (shipped surface) | TODO | |
-| P-13 | D-017 totals shown from invalid input | Low | NO-BASIS (shipped surface) | TODO | |
-| P-14 | D-018 Reason labelled NOTE | Cosmetic | REQUIRED §3 (field name) | **DONE** | uncommitted |
-| P-15 | D-019 list re-sorts with no indicator | Low | NO-BASIS (shipped surface) | TODO | |
+| P-13 | D-017 totals shown from invalid input | Low | NO-BASIS (shipped surface) | **DONE** | `2bb58d2` |
+| P-14 | D-018 Reason labelled NOTE | Cosmetic | REQUIRED §3 (field name) | **DONE** | `6ab88f9` |
+| P-15 | D-019 list re-sorts with no indicator | Low | NO-BASIS (shipped surface) | **DONE** | `d4a3864` |
 | P-16 | D-025 funding validation has no feedback | Medium | NO-BASIS (shipped surface) | TODO | |
 | P-17 | D-026 BOM preview totals never recompute | Medium | NO-BASIS (shipped surface) | TODO | |
 | P-18 | D-027 linked project absent from web BOM | Medium | REQUIRED §9 | TODO | |
 | P-19 | D-029 BOM history repeats one event | Cosmetic | NO-BASIS (shipped surface) | TODO | |
 | P-20 | D-031 settings audit has no before/after | Medium | DERIVED (§11 control) | TODO | |
-| P-21 | oversized JSON body returns 500 not 413 | Medium | NO-BASIS (shipped surface) | **DONE** | uncommitted |
+| P-21 | oversized JSON body returns 500 not 413 | Medium | NO-BASIS (shipped surface) | **DONE** | `4efbf75` |
 
 ## Execution order and batching
 
