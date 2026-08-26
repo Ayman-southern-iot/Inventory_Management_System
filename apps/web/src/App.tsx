@@ -32,6 +32,7 @@ import { AuditLogPage } from '@/features/admin/pages/AuditLogPage';
 import { t } from '@/i18n/en';
 import { ProtectedRoute } from '@/routes/ProtectedRoute';
 import { ROUTES } from '@/routes/paths';
+import { DocumentTitle } from '@/lib/useDocumentTitle';
 
 const RETRYABLE_ATTEMPTS = 2;
 
@@ -63,6 +64,9 @@ export function App() {
               router (routes read the user), so it sits inside both. */}
           <ToastProvider>
             <AuthProvider>
+              {/* Sets the tab title from the route (D-012). Inside the router, above the
+                  routes, so it covers the login page as well as the shell. */}
+              <DocumentTitle />
               <Routes>
                 <Route path={ROUTES.login} element={<LoginPage />} />
 
