@@ -14,123 +14,117 @@ type StageState = 'done' | 'current' | 'future' | 'rejected' | 'cancelled';
  * The nine lifecycle stages the tracker renders. Order matters — the tracker is a
  * horizontal stepper that walks left to right.
  *
- * `doneEvent` is the event that, once recorded, marks the stage as complete even if the
- * requisition has since rolled back (e.g. a BOM was generated then voided). The status
- * column tells us what's true *now*; events tell us what *has happened*.
+ * `timestampEvents` supplies the "done at" tooltip only. It decides nothing about which chip is
+ * lit; see `currentStageIndex` for why.
  */
 interface Stage {
   key: keyof typeof t.requisitions.lifecycleStages;
-  /** Event types whose presence marks this stage done, regardless of current status. */
-  doneEvents: RequisitionEventType[];
-  /** Statuses that mark this stage as the current one. */
-  currentStatuses: RequisitionStatus[];
+  /** Events whose latest occurrence dates this stage. Presentation only. */
+  timestampEvents: RequisitionEventType[];
 }
 
 const STAGES: readonly Stage[] = [
   {
     key: 'submitted',
-    doneEvents: [RequisitionEventType.SUBMITTED, RequisitionEventType.CREATED],
-    currentStatuses: [RequisitionStatus.DRAFT],
+    timestampEvents: [RequisitionEventType.SUBMITTED, RequisitionEventType.CREATED],
   },
   {
     key: 'imReview',
-    doneEvents: [RequisitionEventType.IM_APPROVED, RequisitionEventType.FULLY_APPROVED],
-    currentStatuses: [RequisitionStatus.IM_REVIEW],
+    timestampEvents: [RequisitionEventType.IM_APPROVED, RequisitionEventType.FULLY_APPROVED],
   },
-  {
-    key: 'approved',
-    // Stages where an approver (or the IM, in the sub-threshold case) is acting: the
-    // approval is in flight. "Approved" becomes done after FULLY_APPROVED lands.
-    doneEvents: [RequisitionEventType.FULLY_APPROVED],
-    currentStatuses: [RequisitionStatus.AWAITING_APPROVAL, RequisitionStatus.APPROVED],
-  },
+  { key: 'approved', timestampEvents: [RequisitionEventType.FULLY_APPROVED] },
   {
     key: 'bom',
-    doneEvents: [RequisitionEventType.BOM_GENERATED, RequisitionEventType.BOM_RENDERED],
-    currentStatuses: [RequisitionStatus.BOM_GENERATED],
+    timestampEvents: [RequisitionEventType.BOM_GENERATED, RequisitionEventType.BOM_RENDERED],
   },
-  {
-    key: 'accounts',
-    doneEvents: [RequisitionEventType.SENT_TO_ACCOUNTS, RequisitionEventType.FUNDS_RECEIVED],
-    currentStatuses: [RequisitionStatus.SENT_TO_ACCOUNTS],
-  },
-  {
-    key: 'funded',
-    // FUNDS_PARTIAL has no dedicated event — its own status is the only signal.
-    doneEvents: [RequisitionEventType.FUNDS_RECEIVED],
-    currentStatuses: [RequisitionStatus.FUNDS_PARTIAL, RequisitionStatus.FUNDS_RECEIVED],
-  },
-  {
-    key: 'purchased',
-    doneEvents: [RequisitionEventType.PURCHASED],
-    currentStatuses: [RequisitionStatus.PURCHASED],
-  },
-  {
-    key: 'verified',
-    doneEvents: [RequisitionEventType.PURCHASE_VERIFIED],
-    currentStatuses: [RequisitionStatus.PURCHASE_VERIFIED],
-  },
+  { key: 'accounts', timestampEvents: [RequisitionEventType.SENT_TO_ACCOUNTS] },
+  { key: 'funded', timestampEvents: [RequisitionEventType.FUNDS_RECEIVED] },
+  { key: 'purchased', timestampEvents: [RequisitionEventType.PURCHASED] },
+  { key: 'verified', timestampEvents: [RequisitionEventType.PURCHASE_VERIFIED] },
   {
     key: 'inStock',
-    doneEvents: [RequisitionEventType.STOCKED, RequisitionEventType.CLOSED],
-    currentStatuses: [RequisitionStatus.STOCKED, RequisitionStatus.CLOSED],
+    timestampEvents: [
+      RequisitionEventType.STOCKED,
+      RequisitionEventType.BORROWED_OUT,
+      RequisitionEventType.CLOSED,
+    ],
   },
 ] as const;
 
+/** Past the last stage: everything is done and nothing is in progress. */
+const ALL_DONE = STAGES.length;
+
 /**
- * The lifecycle stages for which a `fundingSnapshots` row exists or could exist. Used by
- * the Money-and-purchasing stage selector to render the pill row. The selector never
- * shows pills for REJECTED/CANCELLED/UNVERIFIED_PURCHASE — those are rewind/terminal
- * paths the snapshot hooks deliberately do not write to (see `FundsService.recordFundingSnapshot`).
+ * Which stage is *in progress* for a given status. Everything before it is done, everything
+ * after it is still to come.
  *
- * `submitted` and `imReview`/`approved` are intentionally omitted here because the
- * Money-and-purchasing panel itself only renders after BOM_GENERATED (the panel guards
- * on `reached` below). Showing pills for stages the user can't see would be confusing.
+ * Derived from the status alone, deliberately. The tracker used to ask "has this stage's event
+ * fired?" and check the status first, which got two things wrong:
+ *
+ *  - **A finished stage stayed amber.** `approved` claimed `APPROVED` as one of its "current"
+ *    statuses and that check ran before the event check, so a fully approved requisition showed
+ *    Approved as pending until a BOM was generated. Same at `FUNDS_RECEIVED`, `PURCHASED` and
+ *    `PURCHASE_VERIFIED` — the stage that had just completed was lit instead of the next one
+ *    waiting on someone. Ayman, 2026-08-26: "if IM approves then it should be pending in next
+ *    stage not current stage."
+ *  - **It could not go backwards.** `requisition_events` is append-only, so a stage marked done
+ *    by its event stayed done after a BOM was voided or a purchase reversed. Phase 08 makes most
+ *    of this chain reversible, which turns that from a cosmetic wrinkle into the tracker
+ *    contradicting the status badge next to it.
+ *
+ * The status is the one thing that always describes the present, so it is the only input.
  */
-export const SNAPSHOT_STAGES: ReadonlyArray<{
-  key: keyof typeof t.requisitions.lifecycleStages;
-  statuses: readonly RequisitionStatus[];
-}> = [
-  { key: 'bom', statuses: [RequisitionStatus.BOM_GENERATED] },
-  { key: 'accounts', statuses: [RequisitionStatus.SENT_TO_ACCOUNTS] },
-  { key: 'funded', statuses: [RequisitionStatus.FUNDS_PARTIAL, RequisitionStatus.FUNDS_RECEIVED] },
-  { key: 'purchased', statuses: [RequisitionStatus.PURCHASED] },
-  { key: 'verified', statuses: [RequisitionStatus.PURCHASE_VERIFIED] },
-  { key: 'inStock', statuses: [RequisitionStatus.STOCKED, RequisitionStatus.CLOSED] },
-] as const;
+function currentStageIndex(status: RequisitionStatus): number {
+  switch (status) {
+    case RequisitionStatus.DRAFT:
+      return 0;
+    case RequisitionStatus.IM_REVIEW:
+      return 1;
+    case RequisitionStatus.AWAITING_APPROVAL:
+      return 2;
+    case RequisitionStatus.APPROVED:
+      return 3;
+    case RequisitionStatus.BOM_GENERATED:
+      return 4;
+    // Sent, and now waiting on Accounts to release the money. A partial receipt has not
+    // finished the funding stage, so both statuses sit on it.
+    case RequisitionStatus.SENT_TO_ACCOUNTS:
+    case RequisitionStatus.FUNDS_PARTIAL:
+      return 5;
+    case RequisitionStatus.FUNDS_RECEIVED:
+      return 6;
+    case RequisitionStatus.PURCHASED:
+      return 7;
+    case RequisitionStatus.PURCHASE_VERIFIED:
+      return 8;
+    case RequisitionStatus.STOCKED:
+    case RequisitionStatus.CLOSED:
+      return ALL_DONE;
+    // Terminal — `stateOfStage` short-circuits before it asks, so the value is never read.
+    case RequisitionStatus.REJECTED:
+    case RequisitionStatus.CANCELLED:
+      return ALL_DONE;
+  }
+}
 
 function eventsForStage(requisition: RequisitionDetail, stage: Stage): string | null {
   const matches = requisition.events
     // `eventType` arrives as a loose `string` from the wire schema; cast through the enum
     // since the only writers are backend modules that always emit valid values.
-    .filter((e) =>
-      (stage.doneEvents as readonly string[]).includes(e.eventType as string),
-    )
+    .filter((e) => (stage.timestampEvents as readonly string[]).includes(e.eventType as string))
     .sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt));
   const latest = matches[matches.length - 1];
   return latest ? latest.createdAt : null;
 }
 
-function stateOfStage(requisition: RequisitionDetail, stage: Stage): StageState {
+function stateOfStage(requisition: RequisitionDetail, index: number): StageState {
   // Terminal branches short-circuit the whole row.
   if (requisition.status === RequisitionStatus.REJECTED) return 'rejected';
   if (requisition.status === RequisitionStatus.CANCELLED) return 'cancelled';
 
-  // STOCKED and CLOSED are terminal-completed: every stage is done. Without this,
-  // the `inStock` row was rendering as amber/current (its own `currentStatuses` matched)
-  // which read as "still pending" — same colour as the "needs your approval" badge —
-  // when the requisition was actually finished.
-  if (
-    requisition.status === RequisitionStatus.STOCKED ||
-    requisition.status === RequisitionStatus.CLOSED
-  ) {
-    return 'done';
-  }
-
-  if (stage.currentStatuses.includes(requisition.status)) return 'current';
-  if (stage.doneEvents.some((e) => requisition.events.some((ev) => ev.eventType === e))) {
-    return 'done';
-  }
+  const current = currentStageIndex(requisition.status);
+  if (index < current) return 'done';
+  if (index === current) return 'current';
   return 'future';
 }
 
@@ -245,7 +239,7 @@ export function LifecycleTracker({ requisition }: { requisition: RequisitionDeta
           <StageCell
             key={stage.key}
             stage={stage}
-            state={stateOfStage(requisition, stage)}
+            state={stateOfStage(requisition, index)}
             completedAt={eventsForStage(requisition, stage)}
             isFirst={index === 0}
             isLast={index === STAGES.length - 1}

@@ -119,6 +119,57 @@ describe('LifecycleTracker', () => {
     expect(items[1]!.querySelector('[aria-current="step"]')).toBeNull();
   });
 
+  /**
+   * Ayman, 2026-08-26: "after IM or approver sign or PDF generate the lifecycle shows pending
+   * not completed — it should be pending in the next stage, not the current one."
+   *
+   * The stage that has just been completed must be green and the one waiting on somebody must be
+   * amber. The old model checked `currentStatuses` before the done-events, and four stages listed
+   * their own completing status as "current", so each of these lit the chip that had just
+   * finished. Table-driven because it was four separate stages with one cause.
+   */
+  it.each([
+    ['APPROVED', RequisitionStatus.APPROVED, 2, 3],
+    ['FUNDS_RECEIVED', RequisitionStatus.FUNDS_RECEIVED, 5, 6],
+    ['PURCHASED', RequisitionStatus.PURCHASED, 6, 7],
+    ['PURCHASE_VERIFIED', RequisitionStatus.PURCHASE_VERIFIED, 7, 8],
+  ])(
+    'at %s the completed stage is done and the next one is pending',
+    (_label, status, completedIndex, nextIndex) => {
+      render(<LifecycleTracker requisition={requisition({ status })} />);
+
+      const items = chips();
+      expect(items[completedIndex]!.querySelector('[aria-current="step"]')).toBeNull();
+      expect(items[nextIndex]!.querySelector('[aria-current="step"]')).toBeInTheDocument();
+    },
+  );
+
+  /**
+   * The other half of the same fix, and the reason it had to be status-derived rather than
+   * event-derived: `requisition_events` is append-only, so a BOM_GENERATED event outlives the
+   * BOM it describes. Phase 08 makes most of this chain reversible, which would otherwise leave
+   * the tracker claiming a stage is done while the status badge beside it says otherwise.
+   */
+  it('walks back when a stage is reversed, even though its event is still on the record', () => {
+    render(
+      <LifecycleTracker
+        requisition={requisition({
+          status: RequisitionStatus.APPROVED,
+          events: [
+            event(RequisitionEventType.FULLY_APPROVED, '2026-01-15T11:00:00.000Z'),
+            event(RequisitionEventType.BOM_GENERATED, '2026-01-15T12:00:00.000Z'),
+            event(RequisitionEventType.BOM_VOIDED, '2026-01-15T13:00:00.000Z'),
+          ],
+        })}
+      />,
+    );
+
+    const items = chips();
+    // BOM is where the work now sits, not a finished stage behind us.
+    expect(items[3]!.querySelector('[aria-current="step"]')).toBeInTheDocument();
+    expect(items[4]!.querySelector('[aria-current="step"]')).toBeNull();
+  });
+
   it('renders the rejected state when status is REJECTED', () => {
     render(
       <LifecycleTracker
