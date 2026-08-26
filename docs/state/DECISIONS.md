@@ -756,3 +756,55 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   (commit)" column — it was written against `f68ff53` and reported 29 Open when 10 were already
   fixed, which made it actively misleading about both scope and progress. Only columns K and L
   were touched; every cell QA authored is unchanged.
+
+## Phase 08 — Reversible money stages, lifecycle truth, personal dashboard
+
+- 2026-08-26 — **Every money stage between approval and add-to-inventory is reversible; nothing
+  after it is** — an IM who clicks one stage too far had nowhere to go, and Ayman asked for a way
+  back at each. `STOCKED` and borrow-out are excluded because stock has physically moved by then;
+  undoing that is a stock adjustment through `StockService` (ADR-0001), deliberately a different
+  and harder operation than a status flip.
+- 2026-08-26 — **A reversal undoes one entry per press, repeatable** — Ayman's ruling. A
+  requisition funded in three instalments must not lose two of them to a single click, and "undo
+  the whole stage" cannot express "undo the one I just got wrong".
+- 2026-08-26 — **Money rows are voided, never deleted** (migration 0028) — the record that someone
+  entered 40,000 and then took it back is exactly what an auditor asks about, and a deleted row
+  cannot answer it. A CHECK enforces `voided_at`, `voided_by` and `void_reason` together, because
+  an unattributable void is worse than no void at all.
+- 2026-08-26 — **The status after a reversal is re-derived, never remembered** — `FUNDS_PARTIAL`
+  vs `FUNDS_RECEIVED` is a function of `SUM(receipts)` against the approved amount, so a reversal
+  that flipped to "the previous status" would send a two-instalment requisition back to
+  `SENT_TO_ACCOUNTS` with real money still sitting on it.
+- 2026-08-26 — **A reversal refusal names the step that must be undone first** — the status guard
+  alone would answer "this requisition is PURCHASED, expected FUNDS_RECEIVED", which is true and
+  no help. The funded statuses are admitted into the guard purely so the specific error can fire.
+- 2026-08-26 — **The lifecycle tracker derives stage state from status alone** — the previous
+  event-based model lit the stage that had just finished rather than the one waiting, and
+  `requisition_events` is append-only so it could never walk backwards when a stage was reversed.
+  Events now supply only the "completed at" tooltip.
+- 2026-08-26 — **`spent` means everything that left the company, transportation included** —
+  transportation buys carriage, not stock, so it has no `purchases` row; a spend figure reading
+  only that table was short by exactly the carriage, silently, on every requisition that had any.
+  The report contradicted itself as a result (net cash 750 beside spent 250 with 250 returned).
+  The two halves are also reported separately so the total can be reconciled against the invoices
+  rather than merely believed.
+- 2026-08-26 — **Transportation is attributed to the purchase, and only once there is one** —
+  nothing has been carried until something has been bought, and the same date window then decides
+  both. Summed per requisition rather than through a join: three vendors is three purchase rows
+  and one van.
+- 2026-08-26 — **The personal dashboard is own-figures-only, with no user parameter at all** —
+  Ayman's ruling. `/dashboard/me` rather than `/dashboard/:userId` with an ownership check: a
+  route that cannot express "show me somebody else" needs no guard against it, and nothing on the
+  screen goes near the permission model.
+- 2026-08-26 — **Borrow damage counts are units, not requests** — returning three of five cables
+  damaged is three damaged units on one request, and a per-request count would report one. The
+  tile carries a "units" suffix so the number cannot be misread on screen either.
+- 2026-08-26 — **A free-text purchase line can be received onto an existing catalogue product** —
+  free text has to stay possible (requirements §3), so the duplicate cannot be forbidden at the
+  form; it is resolved when the goods are in the IM's hands and the ambiguity is settled. Product
+  names are not unique — only `product_code` is — so nothing downstream would have caught a
+  second "ESP32".
+- 2026-08-26 — **An invoice remains required to verify a purchase** — Ayman chose "as today" after
+  I had described the status quo wrongly as optional. `funds.service.ts` has always thrown
+  `INVOICE_MISSING`; the rule is unchanged and the attach control moved into the form that
+  enforces it.

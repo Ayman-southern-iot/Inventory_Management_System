@@ -38,6 +38,8 @@ Status: 🔴 blocking · 🟠 needed soon · 🟢 can wait
 |----|--------|----------|--------------------|--------|
 | OQ-30 | 🟠 | **Should `POST /boms` and `POST /boms/:id/void` carry `@Roles`, like every sibling route?** Found by a false-passing test while closing D-013. Both are genuinely enforced — `BomsService.assertCanGenerate` / `assertCanVoid` refuse anyone without INVENTORY_MANAGER or ADMIN — so this is **not a hole**, and `permissions-non-admin.int-spec.ts` proves both refuse with 403. The difference is *when*: Nest runs guards before pipes, so every other route refuses before validation, while these two validate first. An unauthorised caller sending a malformed body therefore gets a 400 describing the payload shape rather than a 403. Adding `@Roles` touches permissions, which is a STOP, so it is recorded rather than done. | Leave as-is; it is a real control, just at a different layer. The test sends a schema-valid body and says why. | Nothing — defence in depth |
 | OQ-31 | 🟢 | **Does "no project means personal development" extend to borrowing?** The 2026-08-26 ruling was given in the requisition context and applied there (`5d5eef6`). `t.borrowing.noProject` still reads "No project" on the borrow dialog and the product detail page, so the same null now reads two different ways depending on which screen you are on — which is the shape of D-011 in a different dimension. | Left alone rather than assumed. One line of copy either way. | Nothing |
+| OQ-32 | 🟠 | **When a purchase is voided, does its transportation leave `spent` too?** The reversals (`215b3cf`) landed before the transportation fix (`f7c7f72`) and the two were never reconciled. Voiding a purchase removes its own total from `spent` everywhere, but the report attributes carriage with `CASE WHEN EXISTS (a live purchase)` and the dashboard with an equivalent `EXISTS`, so the carriage *probably* drops out with the last live purchase and stays while any other stands — which is arguably right, and is asserted nowhere. | None yet. Reproduce it in `money-audit.int-spec.ts` before deciding what it should do; the answer is likely "carriage follows the last purchase out", but it must be a decision rather than an accident. | The money audit being complete |
+| OQ-33 | 🟢 | **Do `IMS_QA_Test_Plan.xlsx` and `docs/policy/` belong in the repo?** Both have sat untracked at the root across four sessions. The workbook is the QA source of truth and is edited outside the repo; `docs/policy/` holds the inventory policy generator and its .docx output. | Left untracked rather than committed on a guess. A binary .xlsx in git is a merge conflict nobody can resolve; a generated .docx is build output. The *generator* arguably belongs in the repo and the .docx does not. | Nothing |
 
 ## Known gaps carried out of Phase 00
 
@@ -108,3 +110,22 @@ rediscovered as a surprise.
   carries a default (`default_returnable`) and the borrow form may override it per line.
   Handles the cable that is usually consumed but occasionally returned, without needing an
   admin to edit the catalogue. Answered by the user 2026-07-28.
+
+## Answered 2026-08-26 — phase 08
+
+- **Should every stage after approval be reversible?** → **Yes, up to but not including
+  add-to-inventory.** One entry per press, repeatable. Add-to-inventory and borrow-out stay
+  one-way because stock has physically moved. Answered by Ayman.
+- **Migration 0028 (void columns on `fund_receipts` and `purchases`)?** → **Approved.** The only
+  way stages 3 and 4 can have a real Back button: their status is derived from the money rows, so
+  a status flip is undone by the next read. Answered by Ayman.
+- **Should an invoice be required to verify a purchase?** → **Yes — unchanged.** Ayman chose "as
+  today"; I had described today wrongly as optional. `funds.service.ts` has always thrown
+  `INVOICE_MISSING`. The rule stands and the attach control moved into the form that enforces it.
+- **Who sees the personal dashboard figures?** → **Own only.** No per-user lookup, so no
+  permission change and nothing near the auth boundary. Answered by Ayman.
+- **What does "spent" mean?** → **Everything that left the company, transportation included.**
+  Raised by Ayman as a defect, confirmed by the audit in both the report and the dashboard.
+- **Should a repeat purchase merge into the existing product?** → **Yes, across locations.** It
+  already did when the requester picked from the catalogue; it now also does when they free-typed
+  the name, because the IM can resolve the line to an existing product at receive time.

@@ -8,8 +8,8 @@
 >
 > **Maintenance rule:** see `.claude/rules/05-ai-playbook.md`. A `PostToolUse` hook
 > (`.claude/hooks/playbook-reminder.sh`) reminds Claude to update this file after every
-> meaningful edit. Last updated: 2026-08-26 (phase 07 closed the QA round 2 defect list; two
-> landmines added to §16, new surface recorded in §17).
+> meaningful edit. Last updated: 2026-08-26 (phase 08: reversible money stages, migration 0028,
+> the transportation-in-spent fix; landmines added to §16, new surface in §17).
 >
 > **⚠ This file has known drift as of 2026-08-17** — §5.1 (`available` omits `quarantined_qty`),
 > §5.3 and §20 (the over-budget BOM gate was retired in `5435fac`), §5.3 (lifecycle list omits
@@ -72,11 +72,22 @@ Internal **procurement + inventory + BOM** system for **Southern IoT** (Dhaka, *
   a background layer. Lives in a separate container with `mem_limit: 1g` so a render that
   overruns its budget cannot take the API down.
 
-**Build status (Aug 2026):** all seven phases done, **368 integration tests green**,
+**Build status (Aug 2026):** phases 00-08 done, **656 integration tests green**,
 typecheck/lint/test green. Project Hub feature (Tasks 1–7) added on top: hub listing at
 `/projects`, project detail at `/projects/:projectId` with IN_USE/RETURNED tags, IM/Admin
-detach, and requisitions-for-this-project. No new phase is open. Remaining work is
-**go-live ops**, not construction. See `docs/state/NOW.md` (auto-injected every session)
+detach, and requisitions-for-this-project.
+
+**Phase 08 (2026-08-26)** added the way back: every money stage between approval and
+add-to-inventory is reversible (`undo-send-to-accounts`, void one receipt, void one purchase,
+plus the existing `unverify-purchase`), one entry per press and repeatable. Migration **0028**
+makes `fund_receipts` and `purchases` voidable rather than deletable. The lifecycle tracker now
+derives stage state from status rather than from the append-only event log. `GET /dashboard/me`
+serves each person's own record. And `spent` — in the Expenses report and on the dashboard — now
+means invoices **plus transportation**, which it did not, silently, on every requisition carrying
+carriage.
+
+Remaining work is **go-live ops** plus one known gap (OQ-32: transportation on a voided
+purchase), not construction. See `docs/state/NOW.md` (auto-injected every session)
 for the live "what's next".
 
 ---
@@ -991,6 +1002,19 @@ reason the locking exists).
 
 ## 16. Landmines (each has cost a session before)
 
+- **A backtick inside a `` sql`…` `` template ends the literal.** Cost two debugging rounds:
+  migration 0027 first, then `reports.repository.ts` in phase 08 — a SQL comment that quoted a
+  table name in backticks terminated the query and produced a syntax error pointing at an
+  unrelated line. Write SQL comments in plain words, no backticks. The same hazard bites heredocs in bash: use
+  the Write/Edit tools for anything containing backticks, `${}` or nested quotes.
+- **Never return `this.funding()` from inside its own transaction.** It runs on its own
+  connection, so a read taken within the transaction returns the figures as they were *before* the
+  call — exactly the state the caller is asking to see changed. Latent in `unverifyPurchase` since
+  5.5 (harmless there, because unverify moves no money) and fatal for a void. Fixed in all four
+  call sites; the comment above each says why.
+- **`resetData` deliberately leaves requisitions in place** — their events are append-only — so
+  money accumulates across a spec file. Assert report totals as a **delta**, or scope the query by
+  a department the test created. An absolute figure passes until somebody adds a test above yours.
 - **`pnpm typecheck` reads `packages/shared/dist`, not its source.** Add an `ErrorCode`, a
   contract or a type in `packages/shared` and typecheck still fails against the stale build until
   you run `pnpm --filter @ims/shared build`. The integration suite passes in the meantime, because
@@ -1043,6 +1067,24 @@ reason the locking exists).
 ---
 
 ## 17. Open work & known gaps
+
+**Phase 08 (2026-08-26): the way back, and an arithmetic audit.** 656 integration tests green,
+49 files. Ledger: `plan/PHASE-08-reversible-stages-and-dashboard.md`.
+
+New surface, for anyone grepping: `POST /requisitions/:id/undo-send-to-accounts`,
+`POST /requisitions/:id/fund-receipts/:receiptId/void`,
+`POST /requisitions/:id/purchases/:purchaseId/void`, `GET /dashboard/me`; `ErrorCode`
+`CANNOT_UNDO_SEND_WITH_RECEIPTS`, `CANNOT_VOID_RECEIPT_WITH_PURCHASES`,
+`CANNOT_VOID_RECEIVED_PURCHASE`, `MONEY_ROW_NOT_FOUND`; event types `UNDO_SENT_TO_ACCOUNTS`,
+`FUND_RECEIPT_VOIDED`, `PURCHASE_VOIDED`; audit actions `requisition.undo_send_to_accounts`,
+`requisition.void_fund_receipt`, `requisition.void_purchase`; migration **0028** (voidable money
+rows); `ExpenseBucket.purchased` / `.transportation`; `receiveIntoStockLine.existingProductId`;
+`apps/web/src/lib/catalogueMatch.ts` (moved out of the requisitions feature, now shared).
+
+**The one known gap this phase left: OQ-32.** The reversals landed before the transportation fix
+and the two were never reconciled — whether voiding a purchase also removes its carriage from
+`spent` is untested in both the report and the dashboard. Reproduce it in
+`apps/api/test/money-audit.int-spec.ts` before deciding what it should do.
 
 **Phase 07 (2026-08-26) closed the QA round 2 defect list: 22 of 22.** The integration suite is
 fully green for the first time (606 pass / 0 fail, 45 files). `EX-02` is built, so **there is no

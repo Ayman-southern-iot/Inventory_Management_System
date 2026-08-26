@@ -646,6 +646,18 @@ row in the same session.
 Condensed, so you can scan it before starting work. Detail for most of these is in §8.
 
 - **Docker Desktop stops itself between sessions.** `docker info` first, always.
+- **A backtick inside a `` sql`…` `` template ends the literal.** Cost two debugging rounds:
+  migration 0027, then `reports.repository.ts`. A SQL comment that quoted a table name in
+  backticks terminated the query, and the syntax error pointed at an unrelated line. Write SQL
+  comments in plain words. The same hazard bites bash heredocs — use Write/Edit for anything
+  containing backticks, `${}` or nested quotes.
+- **Never return `this.funding()` from inside its own transaction.** It runs on its own
+  connection, so the caller gets the figures as they were *before* the call — the exact state they
+  are asking to see changed. Latent in `unverifyPurchase` since 5.5 (harmless there: unverify
+  moves no money), fatal for a void. Fixed in all four call sites.
+- **`resetData` deliberately leaves requisitions in place** — their events are append-only — so
+  money accumulates across a spec file. Assert report totals as a **delta**, or scope by a
+  department the test created. An absolute figure passes until somebody adds a test above yours.
 - **`pnpm typecheck` reads `packages/shared/dist`, not source.** Change a shared contract or add
   an `ErrorCode` and typecheck fails against the stale build until
   `pnpm --filter @ims/shared build`. The integration suite passes throughout, because vitest

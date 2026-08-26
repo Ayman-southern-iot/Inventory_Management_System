@@ -8,34 +8,36 @@
 
 ## Where the build is
 
-Phases 00–06 complete. **Phase 07 complete: the QA round 2 defect list is closed, 22 of 22**
-(`plan/PHASE-07-qa-round-2-defects.md` has the ledger, classification and commit per item).
-`EX-02` shipped with it, so **no REQUIRED obligation in the requirements document is now
-unimplemented**. `IMS_QA_Test_Plan.xlsx` has been corrected — its Status column reflects the repo
-and a "Fixed In (commit)" column names what closed each row.
+Phases 00–07 complete. **Phase 08 complete: all 10 ledger items**
+(`plan/PHASE-08-reversible-stages-and-dashboard.md`). Every money stage between approval and
+add-to-inventory is now reversible; the lifecycle tracker derives from status, not from the
+append-only event log; the invoice lives inside the verify form; the dashboard shows each
+person's own record. A money audit spec walks Ayman's exact scenario end to end.
 
 ## Next action
 
-**Task 6.2, the nightly invariant job**: `SUM(stock_ledger) = stock_placements.quantity` per
-product. Extend it to `reserved_qty` in the same pass (G-14) — it cannot currently see a stranded
-reservation, which is the whole failure mode G-14 describes. Then **6.3, the backup and restore
-drill**, the highest-value remaining task given the no-data-loss requirement.
+**Transportation on a voided purchase.** Reversals (`215b3cf`) landed before the transportation
+fix (`f7c7f72`), and the two have not been reconciled: voiding a purchase removes its total from
+`spent`, but the report's `CASE WHEN EXISTS (live purchase)` and the dashboard's equivalent
+should then drop the carriage too — and that is untested either way. Reproduce it in
+`money-audit.int-spec.ts` first, then fix. **Then** the BOM PDF totals against the same scenario,
+which was never checked. After that, phase 06: task 6.2 (nightly invariant job, extended to
+`reserved_qty` per G-14) and 6.3 (backup/restore drill).
 
 ## Green as of 2026-08-26 — measured, not remembered
 
-- `pnpm typecheck` clean · `pnpm test` → shared 13 · api 58 · web 163
-- `pnpm --filter @ims/api test:int` → **606 pass / 0 fail (45 files)**
-  **Fully green for the first time.** The long-standing single failure was a real defect
-  (oversized JSON body answered 500, not 413) and is fixed in `4efbf75`.
+- `pnpm typecheck` clean · `pnpm test` → shared 13 · api 58 · web 245
+- `pnpm --filter @ims/api test:int` → **656 pass / 0 fail (49 files)**
 - `pnpm lint` → **20 pre-existing errors. Not green.** Compare against 20, not zero.
-- Phase 07 added **no migration**. Migrations 0001–0025 applied.
+- Migrations 0001–**0028** applied. 0028 (void columns) verified up → down → up.
+- Docker stack rebuilt and serving the current code at http://localhost:5173.
 
 ## Needs the operator
 
-1. **`git push` is still not authorised — 63 commits exist on this machine only**, including both
-   Criticals and EX-02. This is now the single largest risk to the work.
-2. **Demo mode is ON in production** — the login page lists five accounts including Admin with a
-   shared password and one-click sign-in. Off before the fresh instance holds anything real.
+1. **`git push` is still not authorised — 145 commits ahead of `main`, 72 ahead of `origin`.**
+   Everything since QA round 2 exists on this machine only. Now the single largest risk.
+2. **Demo mode is ON in production** — the login page lists five accounts with a shared password.
+   Off before the fresh instance holds anything real.
 3. Offsite backups (**G-16**) and the restore drill (**G-17**).
 4. A fresh install cannot process one requisition until an admin sets the sub-threshold approver,
    approver slots, an Inventory Manager and a department; nothing reaches stock until
@@ -43,21 +45,21 @@ drill**, the highest-value remaining task given the no-data-loss requirement.
 
 ## Landmines — full list in `ASSIST.md` §9
 
-- **`pnpm typecheck` reads `packages/shared/dist`, not source.** Change a shared contract or add
-  an `ErrorCode` and it fails against the stale build until `pnpm --filter @ims/shared build`.
-  The integration suite passes throughout, so a green suite is **not** evidence typecheck is green.
-- **`pnpm db:up`, not `docker compose up`.** The root compose file is the production-shaped stack
-  and leaves 5434 unbound; every int-spec then dies on `ECONNREFUSED 127.0.0.1:5434`.
-- **Never `npx`/`npm` at the repo root** — it deletes `node_modules/.pnpm` and `vitest` with it.
+- **Backticks inside a `` sql`…` `` template end the literal.** Cost two debugging rounds
+  (migration 0027, then `reports.repository.ts`). Write SQL comments without them.
+- **`pnpm typecheck` reads `packages/shared/dist`.** Change a contract or add an `ErrorCode` and
+  it fails against the stale build until `pnpm --filter @ims/shared build`. A green integration
+  suite is **not** evidence typecheck is green.
+- **`resetData` deliberately keeps requisitions** (their events are append-only), so money
+  accumulates across a spec file. Assert report totals as a **delta** or scope by department.
+- **Never return `this.funding()` from inside its own transaction** — it runs on another
+  connection and returns pre-commit figures. Fixed in all four call sites; do not reintroduce.
+- **`pnpm db:up`, not `docker compose up`** for the test DB. **Never `npx`/`npm` at the root.**
 - **`test:int -- <spec>` does not filter**; use `vitest run --config vitest.integration.config.ts
-  <pattern>`, space-separated.
-- **A spec that writes a setting must call `restoreSeededSettings(ctx)` in `afterAll`.**
-- **Red-before-green is not enough** — revert the fix, check the test goes red *again*.
-- **Check a command's effect, not its exit code.** **Docker Desktop stops itself between sessions.**
+  <pattern>`.
 
 ## Open debt
 
-`G-18` · `G-19` · PM 6/12/14/15 · money unformatted in error copy · **OQ-30** (`POST /boms` and
-`/boms/:id/void` are guarded in `BomsService`, not by `@Roles` — a real control, but it runs after
-validation, so an unauthorised malformed request gets 400 before 403) · **OQ-31** (borrowing still
-says "No project"; the personal-development ruling was applied to requisitions only).
+`G-18` · `G-19` · PM 6/12/14/15 · **OQ-30** (BOM role checks run after validation, so an
+unauthorised malformed request gets 400 before 403) · **OQ-31** (borrowing still says "No
+project") · **OQ-32** (transportation vs voided purchase — the next action above).

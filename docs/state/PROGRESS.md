@@ -5,6 +5,38 @@
 
 ## Current position
 
+- **2026-08-26 — Phase 08: reversible money stages, lifecycle truth, personal dashboard, and a
+  money audit that found two real arithmetic bugs.** Ten commits.
+  **Working tree clean** apart from `IMS_QA_Test_Plan.xlsx` and `docs/policy/`, both untracked
+  and both awaiting a decision on whether they belong in the repo.
+  Branch `fix/lan-secure-context`, **145 commits ahead of `main`, 72 ahead of `origin`.**
+  - **Next task:** transportation on a **voided** purchase. The reversals (`215b3cf`) landed
+    before the transportation fix (`f7c7f72`) and the two were never reconciled — voiding a
+    purchase drops its total from `spent`, but whether the carriage follows is untested in both
+    the report and the dashboard. Reproduce in `money-audit.int-spec.ts`, then fix. Then the BOM
+    PDF totals against the same scenario, which was never checked.
+  - **Verified green:** typecheck clean · unit shared 13 / api 58 / web 245 · integration
+    **656 pass / 0 fail (49 files)** · `pnpm lint` **20 pre-existing errors**, unchanged.
+  - **Shipped:** every money stage between approval and add-to-inventory is reversible
+    (`undo-send-to-accounts`, void one receipt, void one purchase, plus the existing
+    `unverify-purchase`), one entry per press and repeatable, each refusing with the step that
+    must be undone first · migration **0028** makes `fund_receipts` and `purchases` voidable,
+    all three markers or none by CHECK, with ten read sites taught to skip them · the lifecycle
+    tracker derives stage state from status rather than from the append-only event log, so it
+    lights the stage that is *waiting* and can walk backwards when one is reversed · the invoice
+    attach control moved into the verify form, which is the step that requires it · `GET
+    /dashboard/me` and the personal record page · a free-text purchase line can now be received
+    onto an existing catalogue product instead of forking a duplicate.
+  - **Found by audit, fixed:** the Expenses report and the dashboard both reported `spent` as
+    `SUM(purchases.total_amount)` alone, so every requisition carrying transportation was
+    under-reported by exactly the carriage — and the report contradicted itself, showing net cash
+    750 beside spent 250 with 250 returned. `spent` now means everything that left the company,
+    with the two halves shown separately so it can be reconciled against the invoices.
+  - **Found by audit, correct already:** the unspent/return calculation. `verifyPurchase` has
+    always folded transportation in, so Ayman's 1,000 requisition offers back 250, not 750.
+  - **Landmine paid twice this session:** a backtick inside a `` sql`…` `` template ends the
+    literal. It broke migration 0027 last session and `reports.repository.ts` this one.
+
 - **2026-08-23 — QA round 2: both Criticals and three Highs closed, plus the baseline itself.**
   Fourteen commits. **Working tree clean**; `IMS_QA_Test_Plan.xlsx` is untracked at the repo root
   and now carries a row 24 for REQ-000013, the record created to reproduce D-014.
@@ -206,6 +238,8 @@
 | 04 | BOM — generation, snapshot, letterhead PDF | ✅ done and verified | 10 migrations |
 | 05 | Funds, purchasing, signatures, finished BOM | done and verified | 19 migrations, 351 int tests |
 | 06 | Hardening — invariant job, backups, monitoring, runbook | 6.1 done; 6.2-6.7 open | |
+| 07 | QA round 2 defect burndown | ✅ done and verified | 22 of 22, plus EX-02 |
+| 08 | Reversible money stages, lifecycle truth, personal dashboard | ✅ done and verified | migration 0028, 656 int tests |
 
 Legend: ⬜ not started · 🟡 in progress · ✅ done and verified
 

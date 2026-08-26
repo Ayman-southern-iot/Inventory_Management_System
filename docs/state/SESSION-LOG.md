@@ -12,6 +12,68 @@ Format:
 **Next:** the single next action, specific enough to start without thinking
 ```
 
+## 2026-08-26 — Phase 08
+**Did:**
+- Every money stage between approval and add-to-inventory is now reversible. `undo-send-to-accounts`,
+  void one fund receipt, void one purchase, alongside the `unverify-purchase` that already existed.
+  One entry per press and repeatable, so a requisition funded in three instalments does not lose two
+  of them to a click. Each refusal names the step that has to be undone first rather than returning a
+  generic transition error. `STOCKED` and borrow-out stay one-way: stock has moved by then.
+- Migration **0028** makes `fund_receipts` and `purchases` voidable — `voided_at` / `voided_by` /
+  `void_reason`, all three or none by CHECK, plus a partial index. The row survives as evidence and
+  leaves the arithmetic. Ten read sites (not the four the plan first claimed) learned to skip them.
+- The lifecycle tracker lit the stage that had just *finished* instead of the one waiting. Root cause:
+  `stateOfStage` checked `currentStatuses` before the done-events and four stages listed their own
+  completing status as "current". Stage state now derives from status alone, which also lets it walk
+  backwards when a stage is reversed — the event log is append-only, so it never could.
+- The invoice attach control moved into the verify-purchase form, which is the step that *requires*
+  it. The IM was previously refused by a form that could not fix the problem it raised.
+- `GET /dashboard/me` and the personal record page: requisitions raised/approved/rejected/in-flight,
+  borrowing with the three damage conditions counted in **units**, and spend.
+- **The money audit.** Walked Ayman's exact scenario end to end (5 × 100 + 500 van = 1,000 requested,
+  bought at 5 × 50) asserting every figure on every screen. Found the Expenses report and the
+  dashboard both reporting `spent` as `SUM(purchases.total_amount)` alone — under by exactly the
+  carriage on every requisition that had any, and self-contradictory: net cash 750 beside spent 250
+  with 250 returned. Fixed, with the two halves shown separately so the total can be reconciled.
+- A free-text purchase line can now be received onto an **existing** catalogue product instead of
+  forking a duplicate. Ayman's ESP32 case worked already when the requester picked from the list;
+  it did not when they typed the name, and only `product_code` is unique, so nothing caught it.
+
+**Decisions:**
+- Migration 0028 approved by Ayman (a STOP). Additive columns only, reversible down, verified
+  up → down → up against a real database and the CHECK proven to reject an unattributed void.
+- Undo depth: one entry per press, repeatable. Ruled by Ayman.
+- Dashboard visibility: own figures only. No user parameter on the endpoint at all, so there is
+  nothing to authorise beyond being signed in — `/dashboard/me`, never `/dashboard/:userId`.
+- `spent` means everything that left the company, transportation included, everywhere it is
+  reported. Recorded in DECISIONS.md with the reasoning.
+- Transportation is attributed to the purchase and counted only once there is one: nothing has been
+  carried until something has been bought.
+- Reversal reasons are mandatory, matching `unverify-purchase`. Not asked — consistency.
+- Invoice stays **required** to verify. Ayman chose "as today" after I had described today wrongly
+  as optional; the status quo is that `funds.service.ts` throws `INVOICE_MISSING`, and it stands.
+
+**Landmines:**
+- **Transportation vs a voided purchase is unreconciled and untested.** The reversals landed before
+  the transportation fix. Voiding a purchase drops its total from `spent`; whether the carriage
+  follows it out is not asserted anywhere, in either the report or the dashboard. This is the next
+  action, and it is a real gap, not a tidy-up.
+- **The BOM PDF totals were never checked against this scenario.** Everything else that prints a
+  money figure was; that one was not.
+- No concurrency test on the reversals. Two IMs voiding the same receipt at once is guarded by
+  `voided_at IS NULL` in the UPDATE predicate and covered sequentially, but not with `Promise.all`.
+- The suggestion list and the date picker are portalled and positioned from `getBoundingClientRect`,
+  which jsdom reports as all zeros — flip-up placement near the bottom of a long form is untested.
+- Two `FundsPanel.back.test.tsx` cases were **re-grounded, not deleted**: they asserted the absence
+  of a Back button at `FUNDS_RECEIVED` and `PURCHASED`, which was true until Ayman's ruling replaced
+  the rule they encoded.
+- `lint` is still 20 pre-existing errors. Unchanged all session, and still nobody's.
+
+**Next:** Reproduce transportation-on-a-voided-purchase in `money-audit.int-spec.ts` — void the
+purchase on the 1,000/500 scenario and assert what `spent` should read in both the expenses report
+and `/dashboard/me` — then make the two agree. After that, the BOM PDF totals against the same
+scenario. Then phase 06 task 6.2.
+
 ## 2026-08-26 — Phase 07, QA round 2 defect burndown
 
 **Did:**
