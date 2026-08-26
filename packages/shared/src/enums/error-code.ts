@@ -48,6 +48,8 @@ export const ErrorCode = {
    * a single "fill it in" message cannot say which one.
    */
   REQUISITION_INCOMPLETE: 'REQUISITION_INCOMPLETE',
+  /** D-003: the deadline had already passed at the moment of submission. */
+  APPROVAL_DEADLINE_IN_PAST: 'APPROVAL_DEADLINE_IN_PAST',
   APPROVAL_ALREADY_ACTED: 'APPROVAL_ALREADY_ACTED',
   NOT_YOUR_APPROVAL: 'NOT_YOUR_APPROVAL',
   APPROVER_SLOT_UNASSIGNED: 'APPROVER_SLOT_UNASSIGNED',

@@ -802,6 +802,9 @@ export const t = {
       'Rejecting ends the whole request. The other approvers will not be asked, and it cannot be reopened.',
     // results
     draftSaved: 'Draft saved.',
+    // D-015: submitting is save-then-submit, so a refused submit still leaves a saved draft
+    // holding a reference number. Saying nothing is how QA ended up with two orphan drafts.
+    keptAsDraft: 'Your work was kept as a draft. Submit it again once the problem above is fixed.',
     submitted: 'Submitted. The Inventory Manager will review it first.',
     approvedToast: 'Approved.',
     rejectedToast: 'Rejected. The requester has been told.',
@@ -1041,6 +1044,8 @@ export const t = {
     APPROVAL_ALREADY_ACTED: 'Someone already acted on this approval. Refresh to see the outcome.',
     // The server names the missing fields in details.missing; the form marks them. This is the
     // fallback for anywhere that shows the bare message. Drafts are unaffected by design.
+    APPROVAL_DEADLINE_IN_PAST:
+      'That approval deadline has already passed. Pick today or a later date, then submit again.',
     REQUISITION_INCOMPLETE:
       'Department, approval deadline and reason are needed before this can be submitted. Your draft has been kept.',
     NOT_YOUR_APPROVAL: 'That approval is not assigned to you.',

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { ErrorCode } from '@ims/shared';
+import { ErrorCode, PAGINATION_MAX_LIMIT } from '@ims/shared';
 import type {
   AdjustStockInput,
   Category,
@@ -229,5 +229,47 @@ export function useLedger(query: ListLedgerQuery) {
     queryFn: ({ signal }) =>
       api.get<Paginated<LedgerEntry>>(`/stock/ledger${toSearchParams(query)}`, signal),
     placeholderData: (previous) => previous,
+  });
+}
+
+/**
+ * Every active product, paged until the server runs out.
+ *
+ * D-002. The requisition form's item picker searches the catalogue client-side, so it needs the
+ * whole list — but it asked for a single page of `PAGINATION_MAX_LIMIT` and stopped there. Past
+ * that many products the rest were simply invisible, with nothing on screen to say so: the user
+ * types a name that exists and the picker offers nothing, which reads as "we do not stock it".
+ *
+ * Mirrors `fetchAllProjects`, including its guard: a page with no rows ends the loop even if
+ * `total` says otherwise, because a table changing under a paged read must not spin forever.
+ */
+export async function fetchAllProducts(
+  query: ListProductsQuery,
+  signal: AbortSignal | undefined,
+): Promise<Product[]> {
+  const items: Product[] = [];
+  let page = 1;
+  let total = Infinity;
+
+  while (items.length < total) {
+    const result = await api.get<Paginated<Product>>(
+      `/products${toSearchParams({ ...query, page, limit: PAGINATION_MAX_LIMIT })}`,
+      signal,
+    );
+    items.push(...result.items);
+    total = result.total;
+    if (result.items.length === 0) break;
+    page += 1;
+  }
+
+  return items;
+}
+
+export function useAllProducts(query: ListProductsQuery) {
+  return useQuery({
+    // Distinct from useProducts' key for the same filters: this one holds every page, and
+    // serving a paged cache entry to a caller expecting the whole catalogue is the defect again.
+    queryKey: [...queryKeys.products.list(query), 'all'],
+    queryFn: ({ signal }) => fetchAllProducts(query, signal),
   });
 }

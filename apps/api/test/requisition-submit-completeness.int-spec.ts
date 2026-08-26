@@ -139,6 +139,45 @@ describe('a submission must carry its request-level fields', () => {
     expect(submitted.body.status).toBe(RequisitionStatus.IM_REVIEW);
   });
 
+  /**
+   * D-003. The deadline field's helper text says "Pick today or later" and the browser enforced
+   * it; the API did not, so a requisition could be submitted already Overdue and trip the §5
+   * reminder at the moment of submission.
+   */
+  it('refuses to submit a deadline that has already passed', async () => {
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    const { created, submitted } = await createThenSubmit({ approvalDeadline: yesterday });
+
+    expect(submitted.status).toBe(409);
+    expect(submitted.body.code).toBe(ErrorCode.APPROVAL_DEADLINE_IN_PAST);
+
+    // The work is kept, exactly as for an incomplete requisition.
+    const fetched = await requester.client.get(`/requisitions/${created.body.id}`);
+    expect(fetched.body.status).toBe(RequisitionStatus.DRAFT);
+  });
+
+  it('accepts a deadline of today, which is what "today or later" means', async () => {
+    // Deliberately the business calendar's today, not UTC's: at +06 they differ for the first
+    // six hours of every day, and a UTC comparison would refuse a deadline that is still today
+    // in Dhaka. That is D-014's bug class.
+    const todayInDhaka = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Dhaka',
+    }).format(new Date());
+    const { submitted } = await createThenSubmit({ approvalDeadline: todayInDhaka });
+
+    expect(submitted.status).toBe(200);
+  });
+
+  it('lets a draft keep a stale deadline until it is submitted', async () => {
+    const created = await requester.client.post('/requisitions').send({
+      ...COMPLETE(),
+      approvalDeadline: '2020-01-01',
+    });
+
+    expect(created.status).toBe(201);
+    expect(created.body.approvalDeadline).toBe('2020-01-01');
+  });
+
   it('submits when all three are present', async () => {
     const { submitted } = await createThenSubmit({});
 

@@ -20,6 +20,7 @@ import {
   NotFoundError,
   ValidationFailedError,
 } from '../../common/errors';
+import { calendarDayOf } from '../../common/calendar';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NOTIFICATION_LINKS } from '../notifications/notifications.links';
@@ -31,6 +32,7 @@ import { FundsRepository } from '../funds/funds.repository';
 import { DelegationsService } from './delegations.service';
 import {
   ApprovalAlreadyActedError,
+  ApprovalDeadlineInPastError,
   ApproverSlotUnassignedError,
   CannotSendBackForRevisionError,
   InvalidRequisitionTransitionError,
@@ -206,6 +208,16 @@ export class RequisitionsService {
       missing.push('Reason');
     }
     if (missing.length > 0) throw new RequisitionIncompleteError(missing);
+
+    // D-003: the field's own helper text says "Pick today or later" and the browser enforced it,
+    // but the API did not — so a requisition could be submitted already Overdue and trip the §5
+    // reminder at the moment of submission. Compared against the business calendar, never a bare
+    // `new Date()`: at +06 a UTC day boundary would reject a deadline that is still today here.
+    // Only at submit; a draft is allowed to hold a stale deadline the requester has not revisited.
+    const deadline = calendarDayOf(existing.approval_deadline);
+    if (deadline !== null && deadline < this.repo.today()) {
+      throw new ApprovalDeadlineInPastError(deadline, this.repo.today());
+    }
 
     // Frozen at submit: items total + transportation cost. The cost is what the requester
     // entered (or 0 / null when they did not need any). The DB has already enforced the

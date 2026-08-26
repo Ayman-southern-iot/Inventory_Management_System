@@ -39,6 +39,25 @@ export class RequisitionIncompleteError extends DomainError {
   }
 }
 
+/**
+ * D-003. The deadline field's own helper text says "Pick today or later" and the browser
+ * enforced it; the API did not. A requisition could be submitted with a deadline already in the
+ * past, arriving Overdue and able to trip the §5 reminder at the moment of submission.
+ *
+ * Shipped surface promising something it did not keep, so this is a defect rather than a new
+ * rule. Enforced only at submit: a draft may hold a stale deadline its author has not revisited.
+ */
+export class ApprovalDeadlineInPastError extends DomainError {
+  constructor(deadline: string, today: string) {
+    super(
+      ErrorCode.APPROVAL_DEADLINE_IN_PAST,
+      `The approval deadline ${deadline} has already passed. Pick ${today} or later before submitting.`,
+      HttpStatus.CONFLICT,
+      { deadline, today },
+    );
+  }
+}
+
 export class ApprovalAlreadyActedError extends DomainError {
   constructor() {
     // Two approvers acting at the same instant, or a double-click that slipped the key.

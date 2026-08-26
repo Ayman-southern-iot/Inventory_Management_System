@@ -61,8 +61,8 @@ vi.mock('@/features/projects/api', () => ({
 }));
 
 vi.mock('@/features/inventory/api', () => ({
-  useProducts: () => ({
-    data: { items: [] },
+  useAllProducts: () => ({
+    data: [],
     isPending: false,
     isError: false,
     error: null,

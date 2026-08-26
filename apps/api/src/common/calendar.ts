@@ -47,3 +47,17 @@ export function isValidTimeZone(timeZone: string): boolean {
     return false;
   }
 }
+
+/**
+ * A `date` column's value as `YYYY-MM-DD`, whatever the driver handed back.
+ *
+ * `532a4ba` configured pg to return `date` columns as strings, so the string branch is the
+ * normal path. The `Date` branch stays because a driver-level regression there is exactly the
+ * silent one-day shift D-014 was, and returning a wrong day is worse than the extra three lines.
+ * `toISOString()` is safe here only because such a value is UTC midnight by construction.
+ */
+export function calendarDayOf(value: Date | string | null | undefined): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string') return value.slice(0, 10);
+  return Number.isNaN(value.getTime()) ? null : value.toISOString().slice(0, 10);
+}

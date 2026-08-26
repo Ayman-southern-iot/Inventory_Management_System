@@ -130,13 +130,12 @@ describe('date columns survive a round trip', () => {
     vi.setSystemTime(new Date('2026-08-23T20:00:00.000Z'));
 
     const inWindow = await actorFor([Role.GENERAL]);
-    // D-006: a submission carries a department and a reason. The deadline here is deliberate --
-    // it is the value under test.
+    // D-006: a submission carries a department and a reason.
     const department = await createDepartment(ctx.db);
     const created = await inWindow.client.post('/requisitions').send({
       departmentId: department.id,
       reason: 'Overdue calendar boundary',
-      approvalDeadline: '2026-08-23',
+      approvalDeadline: '2026-09-30',
       items: [
         { itemName: 'Widget', quantity: 1, estimatedUnitPrice: 500, productId: null, note: null },
       ],
@@ -145,6 +144,18 @@ describe('date columns survive a round trip', () => {
     // Without this the requisition stays DRAFT, which is never overdue, and the test would
     // pass or fail for a reason that has nothing to do with the clock.
     expect(submitted.status).toBe(200);
+
+    /**
+     * The deadline under test is written after submit, because D-003 now refuses a deadline that
+     * has already passed — and at the faked instant, 2026-08-23 has passed in Dhaka, which is the
+     * very thing this test is asserting. Submitting it was how the fixture used to reach this
+     * state; the state itself is unchanged, and so is everything asserted below.
+     */
+    await ctx.db
+      .updateTable('requisitions')
+      .set({ approval_deadline: '2026-08-23' })
+      .where('id', '=', created.body.id)
+      .execute();
 
     const fetched = await inWindow.client.get(`/requisitions/${created.body.id}`);
     expect(fetched.body.approvalDeadline).toBe('2026-08-23');

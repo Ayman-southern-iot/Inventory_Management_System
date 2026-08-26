@@ -37,11 +37,12 @@ vi.mock('@/features/projects/api', () => ({
  * the API rejects, and `catalogue.isError` was never read — the picker was simply empty.
  */
 const catalogueRefetch = vi.fn();
-const CATALOGUE_LOADED = { data: { items: [] }, isPending: false, isError: false, error: null, refetch: catalogueRefetch };
+// useAllProducts pages the whole catalogue and returns a flat array, not a Paginated page (D-002).
+const CATALOGUE_LOADED = { data: [], isPending: false, isError: false, error: null, refetch: catalogueRefetch };
 let catalogueResult: Record<string, unknown> = CATALOGUE_LOADED;
 
 vi.mock('@/features/inventory/api', () => ({
-  useProducts: () => catalogueResult,
+  useAllProducts: () => catalogueResult,
 }));
 
 vi.mock('@/components/ui/Toast', () => ({

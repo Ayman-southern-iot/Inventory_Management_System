@@ -22,7 +22,7 @@ import { formatBdt } from '@/lib/format';
 import { ROUTES } from '@/routes/paths';
 import { useDepartments } from '@/features/admin/api';
 import { useProjects } from '@/features/projects/api';
-import { useProducts } from '@/features/inventory/api';
+import { useAllProducts } from '@/features/inventory/api';
 import { ItemRow } from '../components/ItemRow';
 import { lineTotalOf } from '../lineTotal';
 import { SupportingDocumentField } from '../components/SupportingDocumentField';
@@ -55,9 +55,10 @@ const EMPTY_ITEM = {
  * and the picker was empty from 29 July until 23 August). Both constants are exported for
  * `api/list-queries.contract.test.ts`, which parses them through the schemas they are bound by.
  *
- * A catalogue larger than `PAGINATION_MAX_LIMIT` is truncated in silence — the same defect
- * shape `fetchAllProjects` pages around, and it cannot be fixed by raising this number. Raised
- * with the lead, not fixed here.
+ * The picker reads it through `useAllProducts`, which pages until the server runs out, so a
+ * catalogue larger than `PAGINATION_MAX_LIMIT` is no longer truncated in silence (D-002).
+ * `page`/`limit` stay on this constant because `api/list-queries.contract.test.ts` parses it
+ * through `listProductsQuerySchema`; the paging loop overrides both.
  */
 export const CATALOGUE_QUERY = {
   page: 1,
@@ -80,7 +81,7 @@ export function RequisitionFormPage() {
   const existing = useRequisition(requisitionId ?? '');
   const departments = useDepartments(DEPARTMENTS_QUERY);
   const projects = useProjects();
-  const catalogue = useProducts(CATALOGUE_QUERY);
+  const catalogue = useAllProducts(CATALOGUE_QUERY);
 
   const createRequisition = useCreateRequisition();
   const updateRequisition = useUpdateRequisition();
@@ -124,7 +125,7 @@ export function RequisitionFormPage() {
    * `useFieldArray` uses, so it re-renders in step with the rows.
    */
   const items = useWatch({ control: form.control, name: 'items' }) as SaveRequisitionInput['items'] | undefined;
-  const products: Product[] = useMemo(() => catalogue.data?.items ?? [], [catalogue.data]);
+  const products: Product[] = useMemo(() => catalogue.data ?? [], [catalogue.data]);
 
   const itemsTotal = useMemo(
     () =>
@@ -222,14 +223,33 @@ export function RequisitionFormPage() {
    * frozen is what is on the record rather than whatever the browser last calculated.
    */
   async function onSubmitForApproval(values: SaveRequisitionInput) {
+    // Held outside the try so the catch can tell the two failures apart: the save itself failing
+    // (nothing exists) and the save succeeding while the submit is refused (a draft exists, and
+    // has already taken a reference number).
+    let draftId: string | null = null;
     try {
-      const id = await persist(values);
-      if (!id) return;
-      await submitRequisition.mutateAsync({ id });
+      draftId = await persist(values);
+      if (!draftId) return;
+      await submitRequisition.mutateAsync({ id: draftId });
       toast.success(t.requisitions.submitted);
-      navigate(ROUTES.requisitions.detail(id));
+      navigate(ROUTES.requisitions.detail(draftId));
     } catch (error) {
       toast.error(messageForError(error));
+
+      /**
+       * D-015. Submitting is save-then-submit, so a refused submit still leaves a saved draft
+       * holding a reference number — and the requester was told only why the submit failed.
+       * QA hit this twice in one session and produced two orphan drafts, because a form that
+       * still looks unsaved invites you to press Submit again.
+       *
+       * The work is worth keeping; doing it silently is the defect. So say it, and land them on
+       * the draft, where the reference number is visible and the button says Save rather than
+       * offering to create a second one.
+       */
+      if (draftId) {
+        toast.success(t.requisitions.keptAsDraft);
+        navigate(ROUTES.requisitions.detail(draftId));
+      }
     }
   }
 

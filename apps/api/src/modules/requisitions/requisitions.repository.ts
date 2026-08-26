@@ -61,8 +61,13 @@ export class RequisitionsRepository {
     private readonly fundsRepo: FundsRepository,
   ) {}
 
-  /** Today in the business's own calendar — the only clock allowed to decide "overdue". */
-  private today(): string {
+  /**
+   * Today in the business's own calendar — the only clock allowed to decide "overdue".
+   *
+   * Public since D-003: the submit path refuses a deadline already in the past, and it has to
+   * ask the same clock. A second `new Date()` in the service is how D-014 happened.
+   */
+  today(): string {
     return todayIn(this.config.reportingTimeZone);
   }
 
