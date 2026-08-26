@@ -197,6 +197,16 @@ describe('audit log', () => {
     );
     expect(updated).toBeDefined();
     expect(updated?.metadata).toMatchObject({ after: 9_999 });
+
+    /**
+     * D-031. The before/after pair was always in `metadata`, but the summary read only
+     * "Updated setting EXPENSE_THRESHOLD_BDT" — and the summary is the line an auditor scans.
+     * Reconstructing what a financial control was set to on a given date meant opening every
+     * row one at a time.
+     */
+    expect(updated?.summary).toContain(SettingKey.EXPENSE_THRESHOLD_BDT);
+    expect(updated?.summary).toContain('9999');
+    expect(updated?.summary).toMatch(/from .* to /);
   });
 
   /* --------------------------------- filters -------------------------------- */

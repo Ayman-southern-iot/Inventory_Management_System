@@ -251,7 +251,16 @@ export class SettingsService implements OnModuleInit {
         entityType: 'settings',
         entityId: key,
         entityRef: key,
-        summary: `Updated setting ${key}`,
+        /**
+         * D-031. The before/after pair has always been in `metadata` (and the detail drawer
+         * renders it), but the summary said only "Updated setting EXPENSE_THRESHOLD_BDT" — and
+         * the summary is the line an auditor scans down. Reconstructing what a financial control
+         * was set to on a given date meant opening every row one at a time.
+         *
+         * The values go in the sentence. `metadata` keeps the structured pair, because the
+         * summary is prose and prose is not something to parse.
+         */
+        summary: `Changed setting ${key} from ${describeSettingValue(previousValue)} to ${describeSettingValue(parsed.data)}`,
         metadata: { before: previousValue, after: parsed.data },
       }, context, tx);
     });
@@ -276,4 +285,18 @@ export class SettingsService implements OnModuleInit {
   static get definitions(): typeof SETTING_DEFINITIONS {
     return SETTING_DEFINITIONS;
   }
+}
+
+/**
+ * A setting value as it should read inside an audit sentence.
+ *
+ * Kept short deliberately: `AUDIT_ENABLED_ACTIONS` holds every audit action, and spelling all of
+ * them into a summary line would bury the one-word settings changes it sits beside. The full
+ * value is in `metadata` either way, which is where anything machine-read should look.
+ */
+function describeSettingValue(value: unknown): string {
+  if (value === null || value === undefined) return 'not set';
+  if (Array.isArray(value)) return `${value.length} item${value.length === 1 ? '' : 's'}`;
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
 }
