@@ -946,21 +946,41 @@ export class FundsService {
           );
         }
 
-        // A free-text requisition line becomes a real catalogue product the first time anything
-        // is received against it, and the item is repointed so the next receipt reuses it.
+        /**
+         * A free-text requisition line is resolved to a real catalogue product the first time
+         * anything is received against it, and the item is repointed so every later receipt —
+         * and every later requisition that picks it — reuses the same product.
+         *
+         * Two ways to resolve it, and the second is the one that keeps the shelf honest:
+         *
+         *  - **an existing product**, when the goods are something we already stock. Receiving
+         *    into a different compartment then adds a second placement under one product, and the
+         *    totals roll up. Ayman's ESP32 case (2026-08-26).
+         *  - **a new product**, when they genuinely are new.
+         *
+         * Without the first, "ESP32" free-typed a second time became a second ESP32 forever.
+         * Product names are not unique — only `product_code` is — so nothing downstream would
+         * have noticed.
+         */
         let productId = locked.productId;
         if (!productId) {
-          if (!line.newProduct) {
+          if (line.existingProductId) {
+            // Asserted rather than trusted: an id that names nothing would otherwise be written
+            // into `requisition_items.product_id` and fail later, further from the cause.
+            await this.products.findById(line.existingProductId);
+            productId = line.existingProductId;
+          } else if (line.newProduct) {
+            productId = await this.products.createWithin(
+              tx,
+              { ...line.newProduct, defaultReturnable: true, description: null },
+              context,
+            );
+          } else {
             throw new ValidationFailedError({
               path: `lines.${line.purchaseLineId}.newProduct`,
-              message: `"${locked.itemName}" is not in the catalogue yet, so it needs product details`,
+              message: `"${locked.itemName}" is not in the catalogue yet, so pick the product it is, or describe a new one`,
             });
           }
-          productId = await this.products.createWithin(
-            tx,
-            { ...line.newProduct, defaultReturnable: true, description: null },
-            context,
-          );
           await this.repo.linkRequisitionItemProduct(tx, locked.requisitionItemId, productId);
         }
 

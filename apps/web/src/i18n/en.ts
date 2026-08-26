@@ -439,6 +439,12 @@ export const t = {
     compartment: 'Compartment',
     borrower: 'Issue to',
     expectedReturnDate: 'Expected back',
+    resolveProductTitle: 'Which product is this?',
+    resolveProductHint:
+      'Nobody picked this from the catalogue when the requisition was raised, so say what it is now. Choosing an item we already stock adds these units to it, wherever they are shelved.',
+    useExistingProduct: 'It is a product we already stock',
+    createNewProduct: 'It is a new product',
+    existingProduct: 'Product',
     newProductTitle: 'This item is not in the catalogue yet',
     newProductHint: 'Receiving it creates the product, so it becomes searchable and borrowable.',
     productCode: 'Storage ID',

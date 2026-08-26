@@ -260,14 +260,45 @@ export const newCatalogueProductSchema = z.object({
 });
 export type NewCatalogueProduct = z.infer<typeof newCatalogueProductSchema>;
 
-export const receiveIntoStockLineSchema = z.object({
-  purchaseLineId: uuidSchema,
-  compartmentId: uuidSchema,
-  /** May be less than the purchased quantity — a part-shipment is a normal thing to record. */
-  quantity: z.number().int().positive().max(1_000_000),
-  /** Required when the underlying requisition item is still free text; ignored otherwise. */
-  newProduct: newCatalogueProductSchema.optional(),
-});
+export const receiveIntoStockLineSchema = z
+  .object({
+    purchaseLineId: uuidSchema,
+    compartmentId: uuidSchema,
+    /** May be less than the purchased quantity — a part-shipment is a normal thing to record. */
+    quantity: z.number().int().positive().max(1_000_000),
+    /**
+     * Create a new catalogue entry for a line that is still free text. Ignored when the
+     * requisition item is already linked to a product.
+     */
+    newProduct: newCatalogueProductSchema.optional(),
+    /**
+     * Or point that free-text line at a product we already stock.
+     *
+     * Ayman, 2026-08-26: "we have 5 ESP in meta A1, we buy 5 more — while adding to inventory it
+     * should go under the same ESP, no matter the location, so the total is 10."
+     *
+     * That works automatically when the requester picked the product from the catalogue on the
+     * requisition form. It could not when they free-typed the name, because the only option here
+     * was `newProduct` — so "ESP32" typed a second time became a *second* ESP32, and the two
+     * never added up again. Product names are not unique (only `product_code` is), so nothing
+     * downstream would have caught it.
+     *
+     * Free text has to stay possible: requirements §3 requires that something we do not stock yet
+     * is still requestable. So the answer is not to forbid it, it is to let the IM resolve it to
+     * the real product at the moment the goods are in their hands and the ambiguity is settled.
+     */
+    existingProductId: uuidSchema.optional(),
+  })
+  .superRefine((input, ctx) => {
+    // Both would be a contradiction the server would have to break arbitrarily.
+    if (input.newProduct && input.existingProductId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['existingProductId'],
+        message: 'Choose an existing product or describe a new one, not both',
+      });
+    }
+  });
 export type ReceiveIntoStockLine = z.infer<typeof receiveIntoStockLineSchema>;
 
 export const receiveIntoStockSchema = z.object({

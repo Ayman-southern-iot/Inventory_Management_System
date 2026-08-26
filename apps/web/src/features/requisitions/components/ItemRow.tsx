@@ -8,7 +8,7 @@ import { t } from '@/i18n/en';
 import { cn } from '@/lib/cn';
 import { formatBdt } from '@/lib/format';
 import { useAnchoredPosition } from '@/lib/useAnchoredPosition';
-import { exactCatalogueMatch, nearestCatalogueMatch, rankMatches } from '../catalogueMatch';
+import { exactCatalogueMatch, nearestCatalogueMatch, rankMatches } from '@/lib/catalogueMatch';
 import { lineTotalOf } from '../lineTotal';
 
 /** The suggestion list matches the Item column, which is 44% of a max-w-6xl form. */

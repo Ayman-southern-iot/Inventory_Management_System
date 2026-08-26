@@ -75,7 +75,7 @@ describe('the money adds up, end to end', () => {
   /* ------------------------------------------------------------ the walk */
 
   it('folds transportation into the requested amount at submit', async () => {
-    const req = await raise();
+    const req = await raise(LINKED());
 
     const detail = (await requester.client.get(`/requisitions/${req.id}`)).body;
     expect(detail.requestedAmount).toBe(REQUESTED);
@@ -202,6 +202,101 @@ describe('the money adds up, end to end', () => {
     expect(placements.reduce((sum, row) => sum + row.quantity, 0)).toBe(UNITS * 2);
   });
 
+  /**
+   * The other half of the same question: what happens when nobody picked the product.
+   *
+   * Free text has to stay possible (requirements §3 — something we do not stock yet must still be
+   * requestable), so the ambiguity cannot be forbidden at the form. It is resolved at the moment
+   * the goods are in the IM's hands: they say which product this actually is, the requisition
+   * item is repointed at it, and the units land on the existing product rather than a new one
+   * that happens to share its name.
+   */
+  it('lets the IM attach a free-text line to the product it actually is', async () => {
+    await stocked(fixture.compartmentA, UNITS);
+
+    // Someone types the name instead of picking it. Same board, no link.
+    const req = await freeTextRequisition('ESP32');
+    const funding = await fundingOf(req.id);
+    const line = funding.purchases[0]!.lines[0]!;
+
+    const response = await im.client.post(`/requisitions/${req.id}/receive-to-stock`).send({
+      lines: [
+        {
+          purchaseLineId: line.id,
+          compartmentId: fixture.compartmentB,
+          quantity: UNITS,
+          existingProductId: fixture.productId,
+        },
+      ],
+      note: null,
+    });
+    expect(response.status).toBe(200);
+
+    // Ten of one product across two shelves — not five of each of two products.
+    const totals = await productTotals();
+    expect(totals.totalQuantity).toBe(UNITS * 2);
+
+    const productRows = await ctx.db
+      .selectFrom('products')
+      .where('category_id', '=', fixture.categoryId)
+      .select('id')
+      .execute();
+    expect(productRows).toHaveLength(1);
+
+    // The requisition item now points at the real product, so any later receipt on it needs no
+    // decision at all.
+    const item = await ctx.db
+      .selectFrom('requisition_items')
+      .where('requisition_id', '=', req.id)
+      .select('product_id')
+      .executeTakeFirstOrThrow();
+    expect(item.product_id).toBe(fixture.productId);
+  });
+
+  it('still refuses a free-text line with neither an existing product nor a new one', async () => {
+    const req = await freeTextRequisition('Something we have never bought');
+    const funding = await fundingOf(req.id);
+    const line = funding.purchases[0]!.lines[0]!;
+
+    const response = await im.client.post(`/requisitions/${req.id}/receive-to-stock`).send({
+      lines: [
+        { purchaseLineId: line.id, compartmentId: fixture.compartmentA, quantity: UNITS },
+      ],
+      note: null,
+    });
+
+    // Refused by the service, not the schema — both are 400 here, so the message is what tells
+    // them apart. It names the item, which is the only way the IM knows which line to fix.
+    expect(response.status).toBe(400);
+    expect(response.body.details.message).toContain('Something we have never bought');
+  });
+
+  it('refuses a line that names both an existing product and a new one', async () => {
+    const req = await freeTextRequisition('Ambiguous');
+    const funding = await fundingOf(req.id);
+    const line = funding.purchases[0]!.lines[0]!;
+
+    const response = await im.client.post(`/requisitions/${req.id}/receive-to-stock`).send({
+      lines: [
+        {
+          purchaseLineId: line.id,
+          compartmentId: fixture.compartmentA,
+          quantity: UNITS,
+          existingProductId: fixture.productId,
+          newProduct: {
+            productCode: 'NEW-1',
+            name: 'Ambiguous',
+            categoryId: fixture.categoryId,
+            unit: 'pcs',
+          },
+        },
+      ],
+      note: null,
+    });
+
+    expect(response.status).toBe(400);
+  });
+
   /* --------------------------------------------------------------- helpers */
 
   async function signIn(roles: Role[]): Promise<{ id: string; client: HttpClient }> {
@@ -223,8 +318,35 @@ describe('the money adds up, end to end', () => {
     return response.body as { totalQuantity: number };
   }
 
-  /** A draft carrying both halves of the money: five items at 100, and a 500 van. */
-  async function raise(): Promise<{ id: string; itemId: string }> {
+  /**
+   * The same walk to PURCHASE_VERIFIED, but with the item typed rather than picked — so the
+   * requisition line carries a name and no `productId`.
+   */
+  async function freeTextRequisition(itemName: string): Promise<{ id: string; itemId: string }> {
+    const req = await raise({ itemName, productId: null });
+    await approve(req);
+    await buy(req);
+    await attachInvoice(req.id);
+    const verify = await im.client.post(`/requisitions/${req.id}/verify-purchase`).send({
+      returnedAmount: EXPECTED_UNSPENT,
+      returnNote: 'Bought under estimate',
+    });
+    expect(verify.status).toBe(200);
+    return req;
+  }
+
+  /**
+   * A draft carrying both halves of the money: five items at 100, and a 500 van.
+   *
+   * `item` is passed explicitly by every caller rather than defaulted. A default here would read
+   * from `fixture` at call time and quietly re-supply the catalogue link in the very test that
+   * exists to check what happens without one — which is exactly how a green test can assert
+   * nothing at all.
+   */
+  async function raise(item: {
+    itemName: string;
+    productId: string | null;
+  }): Promise<{ id: string; itemId: string }> {
     const created = await requester.client.post('/requisitions').send({
       approvalDeadline: futureDeadline(),
       departmentId,
@@ -234,11 +356,11 @@ describe('the money adds up, end to end', () => {
       transportationDescription: 'Van hire to the warehouse',
       items: [
         {
-          itemName: 'ESP32',
+          itemName: item.itemName,
           quantity: UNITS,
           estimatedUnitPrice: UNIT_ESTIMATE,
-          // Linked to the catalogue, which is what makes the repeat-purchase case work.
-          productId: fixture.productId,
+          // Null here is the free-text case: nobody picked from the catalogue.
+          productId: item.productId,
           note: null,
         },
       ],
@@ -253,9 +375,16 @@ describe('the money adds up, end to end', () => {
     return { id, itemId: detail.items[0].id as string };
   }
 
-  async function approvedRequisition(): Promise<{ id: string; itemId: string }> {
-    const req = await raise();
+  /** The catalogue-linked default: the requester picked ESP32 from the list. */
+  const LINKED = () => ({ itemName: 'ESP32', productId: fixture.productId });
 
+  async function approvedRequisition(): Promise<{ id: string; itemId: string }> {
+    const req = await raise(LINKED());
+    await approve(req);
+    return req;
+  }
+
+  async function approve(req: { id: string; itemId: string }): Promise<void> {
     const detail = (await im.client.get(`/requisitions/${req.id}`)).body;
     const imApproval = detail.approvals.find(
       (a: { stage: string }) => a.stage === 'INVENTORY_MANAGER',
@@ -269,14 +398,16 @@ describe('the money adds up, end to end', () => {
     await approver.client
       .post(`/requisitions/approvals/${approverApproval.id}/decision`)
       .send({ approve: true });
-
-    return req;
   }
 
   /** Approved, BOM'd, sent, funded in full, and bought at the real price. */
   async function purchased(): Promise<{ id: string; itemId: string }> {
     const req = await approvedRequisition();
+    await buy(req);
+    return req;
+  }
 
+  async function buy(req: { id: string; itemId: string }): Promise<void> {
     const bom = await im.client.post('/boms').send({
       requisitionIds: [req.id],
       lines: [
@@ -299,8 +430,6 @@ describe('the money adds up, end to end', () => {
       lines: [{ requisitionItemId: req.itemId, quantity: UNITS, unitCost: UNIT_ACTUAL }],
     });
     expect(purchase.status).toBe(201);
-
-    return req;
   }
 
   async function attachInvoice(requisitionId: string): Promise<void> {
