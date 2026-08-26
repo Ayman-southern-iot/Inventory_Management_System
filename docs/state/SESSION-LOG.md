@@ -12,6 +12,57 @@ Format:
 **Next:** the single next action, specific enough to start without thinking
 ```
 
+## 2026-08-26 — Phase 07, QA round 2 defect burndown
+
+**Did:**
+- **Closed the QA round 2 defect list, 22 of 22.** Started by reconciling
+  `IMS_QA_Test_Plan.xlsx` against git: it reported 29 Open, but 10 were already fixed locally and
+  2 partly, so the spreadsheet overstated the work by a third. The real list was 21, which became
+  22 when Ayman's D-006 ruling produced a second item. Ledger in
+  `plan/PHASE-07-qa-round-2-defects.md`.
+- **The integration suite is fully green for the first time: 606 pass / 0 fail across 45 files**,
+  from a 516/1 baseline. The long-standing single failure was a real defect — express's
+  body-parser throws an `http-errors` object, not a Nest `HttpException`, so a 413 fell through
+  to the generic 500 branch (`4efbf75`).
+- **`EX-02` is built** (`3323e7f`): `GET /reports/inventory{,/export.csv,/export.pdf}`, current
+  stock by product with its location breakdown. This was the **last REQUIRED obligation in the
+  requirements document with no implementation at all** — §10 asks for the BOM *and* inventory
+  records as PDF, and only the BOM half had shipped. QA had filed it under D-024 with no defect
+  ID of its own, which is how it survived two QA rounds.
+- **Proved the authorisation controls rather than assuming them** (`749722a`): 70 cases across 23
+  routes. D-013 was an unproven control, not a broken one, and it holds — every guarded route
+  refuses the wrong role with 403 and anonymous with 401.
+- Corrected `IMS_QA_Test_Plan.xlsx` so it stops contradicting the repo: Status column rewritten
+  from the actual state, plus a new "Fixed In (commit)" column. QA's own cells are untouched.
+
+**Decisions:** Ayman's D-006 ruling (department, approval deadline and reason required **at
+submit only**; project optional, and no project means **personal development**) is in
+`DECISIONS.md` with its reasoning. Two reports turned out to be wrong on the facts and are
+recorded as such rather than "fixed": **D-031** claimed settings audit entries capture neither
+value — they always did, since `084a462`, and the detail drawer renders them; the real defect was
+that the *summary* said nothing, so the values went there. **D-013** was unverified, not broken.
+
+**Landmines:**
+- **Nothing was pushed. 63 commits exist on one machine only**, including both Criticals and
+  EX-02. This is the largest risk carried out of this session.
+- **D-006 cost 17 spec files of fixture churn** — 154 tests failed on the first run because almost
+  every fixture predated the rule. No test was skipped, deleted or weakened. Three specs
+  (`approval-deadline`, `reports`, `date-columns`) had their **setup** re-grounded where D-006 and
+  D-003 closed the route they used to reach a state that still exists in older rows; every
+  assertion in them is unchanged and both cases are in `DECISIONS.md`. Worth re-reading before
+  trusting those three.
+- Two new landmines added to `ASSIST.md` §9 and playbook §16: `pnpm typecheck` reads
+  `packages/shared/dist` so a green int suite is not evidence typecheck is green; and `pnpm db:up`
+  is not `docker compose up` — the root compose file leaves 5434 unbound.
+- **OQ-30 is a finding, not a fix.** `POST /boms` and `POST /boms/:id/void` carry no `@Roles`;
+  they are genuinely enforced inside `BomsService`, but after validation rather than before it,
+  so my first version of the permissions test passed against a route it never exercised. Adding
+  `@Roles` touches permissions, which is a STOP — recorded, not done.
+- Demo mode is still ON in production.
+
+**Next:** Task 6.2, the nightly invariant job — `SUM(stock_ledger) = stock_placements.quantity`
+per product, extended to `reserved_qty` in the same pass per G-14.
+
 ## 2026-08-23 — correction to the QA round 2 entry below
 
 **Did:** nothing but check. Two `NOW.md` fixes were ordered and **both were already correct**,

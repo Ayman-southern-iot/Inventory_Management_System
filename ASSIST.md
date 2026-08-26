@@ -646,6 +646,12 @@ row in the same session.
 Condensed, so you can scan it before starting work. Detail for most of these is in §8.
 
 - **Docker Desktop stops itself between sessions.** `docker info` first, always.
+- **`pnpm typecheck` reads `packages/shared/dist`, not source.** Change a shared contract or add
+  an `ErrorCode` and typecheck fails against the stale build until
+  `pnpm --filter @ims/shared build`. The integration suite passes throughout, because vitest
+  resolves shared from source — so a green suite is not evidence that typecheck is green.
+- **`pnpm db:up`, not `docker compose up`.** The root compose file is the production-shaped stack
+  and leaves 5434 unbound; every int-spec then dies on `ECONNREFUSED 127.0.0.1:5434`.
 - **Never run `apps/api` through `tsx`.** DI dies silently.
 - **A stale API process is not a code bug.** Check start time vs `dist/` mtime.
 - **Built entrypoint is `apps/api/dist/src/main.js`**, not `dist/main.js`.

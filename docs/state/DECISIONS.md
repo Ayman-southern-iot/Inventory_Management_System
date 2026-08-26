@@ -745,3 +745,14 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   (`reports.int-spec`) construct that state by clearing the column after submit — those states
   still exist in rows written before the rule, and the assertions about them are unchanged. Only
   the route to the state moved, because the old route is now a 409.
+- 2026-08-26 — `POST /boms` and `POST /boms/:id/void` keep their service-level guard rather than
+  gaining `@Roles` (OQ-30) — both are genuinely enforced by `BomsService.assertCanGenerate` /
+  `assertCanVoid`, proven by `permissions-non-admin.int-spec.ts`, so this is a layering
+  inconsistency and not a hole. Adding `@Roles` touches permissions, which `70-assist-handoff.md`
+  makes a STOP, so it is recorded for the lead instead of changed. The visible consequence is that
+  an unauthorised caller sending a malformed body gets a 400 describing the payload before it ever
+  gets a 403.
+- 2026-08-26 — `IMS_QA_Test_Plan.xlsx` Status column rewritten from the repo, plus a "Fixed In
+  (commit)" column — it was written against `f68ff53` and reported 29 Open when 10 were already
+  fixed, which made it actively misleading about both scope and progress. Only columns K and L
+  were touched; every cell QA authored is unchanged.

@@ -8,7 +8,8 @@
 >
 > **Maintenance rule:** see `.claude/rules/05-ai-playbook.md`. A `PostToolUse` hook
 > (`.claude/hooks/playbook-reminder.sh`) reminds Claude to update this file after every
-> meaningful edit. Last updated: 2026-08-20 (npx/npm-at-root landmine added to §16).
+> meaningful edit. Last updated: 2026-08-26 (phase 07 closed the QA round 2 defect list; two
+> landmines added to §16, new surface recorded in §17).
 >
 > **⚠ This file has known drift as of 2026-08-17** — §5.1 (`available` omits `quarantined_qty`),
 > §5.3 and §20 (the over-budget BOM gate was retired in `5435fac`), §5.3 (lifecycle list omits
@@ -990,6 +991,15 @@ reason the locking exists).
 
 ## 16. Landmines (each has cost a session before)
 
+- **`pnpm typecheck` reads `packages/shared/dist`, not its source.** Add an `ErrorCode`, a
+  contract or a type in `packages/shared` and typecheck still fails against the stale build until
+  you run `pnpm --filter @ims/shared build`. The integration suite passes in the meantime, because
+  vitest resolves shared from source — so the suite can be green while typecheck is broken, which
+  is the wrong way round to find out. Build shared first when the change touches it.
+- **`pnpm db:up`, not `docker compose up`.** The root `docker-compose.yml` is the production-shaped
+  stack; the integration suite wants `infra/docker-compose.dev.yml` (dev Postgres 5433, test
+  Postgres 5434), which is what `pnpm db:up` starts. Bringing up the wrong one leaves 5434 unbound
+  and every int-spec dies on `ECONNREFUSED 127.0.0.1:5434`.
 - **Docker Desktop stops itself between sessions.** `docker info` before any migration/test.
 - **Never run `apps/api` through `tsx`** — esbuild drops `design:paramtypes` and Nest DI
   resolves every injected dep to `undefined`. Use `pnpm --filter @ims/api build && node
@@ -1033,6 +1043,16 @@ reason the locking exists).
 ---
 
 ## 17. Open work & known gaps
+
+**Phase 07 (2026-08-26) closed the QA round 2 defect list: 22 of 22.** The integration suite is
+fully green for the first time (606 pass / 0 fail, 45 files). `EX-02` is built, so **there is no
+longer any REQUIRED obligation in the requirements document without an implementation**. Ledger
+and reasoning: `plan/PHASE-07-qa-round-2-defects.md`.
+
+New surface from that phase, for anyone grepping: `ErrorCode.REQUISITION_INCOMPLETE` and
+`ErrorCode.APPROVAL_DEADLINE_IN_PAST`; `GET /reports/inventory{,/export.csv,/export.pdf}`;
+`formatDate` in `apps/web/src/lib/format.ts` and the global zod error map in
+`apps/web/src/i18n/zod-error-map.ts` (installed by a side-effect import from `main.tsx`).
 
 Current best view is `docs/state/OPEN-QUESTIONS.md`. Snapshot of operator-actionable items:
 

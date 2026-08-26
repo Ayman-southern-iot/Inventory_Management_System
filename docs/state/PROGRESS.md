@@ -161,16 +161,24 @@
   transaction). A `@Cron` daily sweep deletes orphans older than 24h. Migration 0024,
   `stored_files.pending_claim_by` column, 10 new integration tests cover orphan row,
   ownership gate, atomic claim, sweep. The existing DRAFT-only endpoint is unchanged.
-- **Phase:** 05 complete. Phase 06 in progress — 6.1 (audit log UI) effectively done, 6.2–6.7 open.
+- **Phase:** 00–06 complete. **Phase 07 complete (2026-08-26)** — the QA round 2 defect list,
+  22 of 22, ledger in `plan/PHASE-07-qa-round-2-defects.md`. `EX-02` shipped with it, so no
+  REQUIRED obligation in the requirements document is now unimplemented.
 - **Next task:** **6.2, the nightly invariant job** (`SUM(stock_ledger) = stock_placements.quantity`
   per product). Extend it to `reserved_qty` at the same time, per G-14 — it currently cannot see a
   stranded reservation, which is the whole failure mode G-14 describes. Then **6.3, the backup and
   restore drill**, which is the highest-value remaining task given the no-data-loss requirement.
-- **Working tree:** clean. Everything is committed and verified green: `pnpm typecheck`,
-  `pnpm lint`, `pnpm test`, and `pnpm --filter @ims/api test:int` (**32 files, 458
-  integration tests**; 450 pass, 8 pre-existing failures unchanged in `demo-accounts`,
-  `login-backoff`, `reports`, `throttling`). Migrations 0001–0025 applied; 0014–0025
-  each rollback-verified.
+- **Blocking the operator, not the code:** demo mode is still ON in production (the login page
+  lists Admin with a shared password); offsite backups (G-16) and the restore drill (G-17) are
+  still outstanding; and **`git push` remains unauthorised — 63 commits exist on one machine
+  only**, including both Criticals and EX-02.
+- **Working tree:** clean. Measured 2026-08-26, after the last edit of phase 07:
+  `pnpm typecheck` clean · `pnpm lint` **20 errors, which is the baseline — compare against 20,
+  not zero** · `pnpm test` shared 13 / api 58 / web 163 · `pnpm --filter @ims/api test:int`
+  **606 pass / 0 fail across 45 files**. The integration suite is fully green for the first time;
+  the long-standing single failure (an oversized JSON body answering 500 instead of 413) was a
+  real defect and is fixed in `4efbf75`. Migrations 0001–0025 applied; 0014–0025 each
+  rollback-verified. **Phase 07 added no migration.**
 - **Blocked by:** nothing. OQ-18 and OQ-19 are answered. OQ-14, OQ-15, OQ-16, OQ-20 and OQ-22 are
   recorded assumptions, not hard blocks.
 - **Operator action outstanding:** Settings → Sub-threshold approver is unset, so requisitions
