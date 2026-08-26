@@ -21,6 +21,9 @@ import {
   recordFundReceiptSchema,
   recordPurchaseSchema,
   unverifyPurchaseSchema,
+  undoSendToAccountsSchema,
+  voidFundReceiptSchema,
+  voidPurchaseSchema,
   verifyPurchaseSchema,
   sendToAccountsSchema,
   receiveIntoStockSchema,
@@ -29,6 +32,9 @@ import {
   type RecordPurchaseInput,
   type RequisitionFunding,
   type UnverifyPurchaseInput,
+  type UndoSendToAccountsInput,
+  type VoidFundReceiptInput,
+  type VoidPurchaseInput,
   type VerifyPurchaseInput,
   type SendToAccountsInput,
   type ReceiveIntoStockInput,
@@ -248,6 +254,73 @@ export class FundsController {
     return this.runOnce(idempotencyKey, actor.id, `funds:borrow:${id}`, async () => {
       await this.funds.borrowToUser(id, body, actor.id, ctx);
       return this.funds.funding(id);
+    });
+  }
+
+  /**
+   * The Back button at "Sent to Accounts". Flips the requisition to `BOM_GENERATED` so the IM can
+   * correct whatever they sent. Nothing is voided because nothing was recorded — the step is a
+   * status and a note. Refused once Accounts has released any money against it.
+   */
+  @Post('undo-send-to-accounts')
+  @Roles(Role.INVENTORY_MANAGER, Role.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async undoSendToAccounts(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(zodPipe(undoSendToAccountsSchema)) body: UndoSendToAccountsInput,
+    @CurrentUser() actor: RequestUser,
+    @CurrentAuditContext() ctx: AuditContext,
+    @Headers(IDEMPOTENCY_HEADER) idempotencyKey?: string,
+  ): Promise<RequisitionFunding> {
+    return this.runOnce(idempotencyKey, actor.id, `funds:undo-send:${id}`, async () => {
+      return this.funds.undoSendToAccounts(id, body, actor.id, ctx);
+    });
+  }
+
+  /**
+   * The Back button at "Money received". Voids **one** receipt — the ruling of 2026-08-26 is one
+   * entry per press, repeatable, so a requisition funded in three instalments cannot lose two of
+   * them to a single click. The status re-derives from what is left.
+   *
+   * Idempotency-keyed on the receipt, not the requisition: two different receipts are two
+   * different intentions and must not collide, while a double-click on one is exactly what the
+   * key is for.
+   */
+  @Post('fund-receipts/:receiptId/void')
+  @Roles(Role.INVENTORY_MANAGER, Role.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async voidReceipt(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('receiptId', ParseUUIDPipe) receiptId: string,
+    @Body(zodPipe(voidFundReceiptSchema)) body: VoidFundReceiptInput,
+    @CurrentUser() actor: RequestUser,
+    @CurrentAuditContext() ctx: AuditContext,
+    @Headers(IDEMPOTENCY_HEADER) idempotencyKey?: string,
+  ): Promise<RequisitionFunding> {
+    return this.runOnce(idempotencyKey, actor.id, `funds:void-receipt:${receiptId}`, async () => {
+      return this.funds.voidReceipt(id, receiptId, body, actor.id, ctx);
+    });
+  }
+
+  /**
+   * The Back button at "Purchase recorded". Voids one purchase and its lines; a split-vendor
+   * requisition stays `PURCHASED` while any other purchase still stands. Refused once any of the
+   * purchase's units have been received into stock — past that point the correction is a stock
+   * adjustment, not a status flip.
+   */
+  @Post('purchases/:purchaseId/void')
+  @Roles(Role.INVENTORY_MANAGER, Role.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async voidPurchase(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('purchaseId', ParseUUIDPipe) purchaseId: string,
+    @Body(zodPipe(voidPurchaseSchema)) body: VoidPurchaseInput,
+    @CurrentUser() actor: RequestUser,
+    @CurrentAuditContext() ctx: AuditContext,
+    @Headers(IDEMPOTENCY_HEADER) idempotencyKey?: string,
+  ): Promise<RequisitionFunding> {
+    return this.runOnce(idempotencyKey, actor.id, `funds:void-purchase:${purchaseId}`, async () => {
+      return this.funds.voidPurchase(id, purchaseId, body, actor.id, ctx);
     });
   }
 

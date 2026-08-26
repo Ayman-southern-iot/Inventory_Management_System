@@ -106,13 +106,17 @@ export class ReportsRepository {
           r.approved_amount,
           r.status,
           -- Pre-aggregated per requisition so the join below cannot fan out.
+          -- voided_at IS NULL on both money subqueries (migration 0028): a reversed receipt
+          -- or purchase stays on the row for the audit trail and leaves every figure.
           (SELECT coalesce(sum(fr.amount), 0) FROM fund_receipts fr
             WHERE fr.requisition_id = r.id
+              AND fr.voided_at IS NULL
               AND (${fromDate}::date IS NULL OR fr.received_at >= ${fromInstant})
               AND (${toDate}::date IS NULL OR fr.received_at < ${toInstant})
           ) AS funded,
           (SELECT coalesce(sum(pu.total_amount), 0) FROM purchases pu
             WHERE pu.requisition_id = r.id
+              AND pu.voided_at IS NULL
               AND (${fromDate}::date IS NULL OR pu.purchased_at >= ${fromInstant})
               AND (${toDate}::date IS NULL OR pu.purchased_at < ${toInstant})
           ) AS spent,

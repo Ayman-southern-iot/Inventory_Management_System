@@ -6,6 +6,9 @@ import {
   type RecordFundReceiptInput,
   type RecordPurchaseInput,
   type UnverifyPurchaseInput,
+  type UndoSendToAccountsInput,
+  type VoidFundReceiptInput,
+  type VoidPurchaseInput,
   type VerifyPurchaseInput,
   type SendToAccountsInput,
   type ReceiveIntoStockInput,
@@ -26,10 +29,14 @@ import { ProductsService } from '../products/products.service';
 import { BorrowingService } from '../borrowing/borrowing.service';
 import { FundsRepository, type Tx } from './funds.repository';
 import {
+  CannotUndoSendWithReceiptsError,
   CannotUnverifyWithReturnsError,
+  CannotVoidReceiptWithPurchasesError,
+  CannotVoidReceivedPurchaseError,
   FundingExceedsApprovedError,
   InvalidFundingTransitionError,
   InvoiceMissingError,
+  MoneyRowNotFoundError,
   ReceiveExceedsPurchasedError,
   ReturnExceedsUnspentError,
 } from './funds.errors';
@@ -616,7 +623,7 @@ export class FundsService {
     actorId: string,
     context: AuditContext,
   ): Promise<RequisitionFunding> {
-    return this.db.transaction().execute(async (tx) => {
+    await this.db.transaction().execute(async (tx) => {
       const requisition = await this.lock(tx, requisitionId);
       this.assertStatus(requisition.status, 'unverified', [RequisitionStatus.PURCHASE_VERIFIED]);
 
@@ -651,8 +658,240 @@ export class FundsService {
         tx,
       );
 
-      return this.funding(requisitionId);
     });
+
+    // Read after the commit, never from inside it. `funding()` runs on its own connection, so
+    // a read taken within the transaction returns the figures as they were *before* this call —
+    // which is exactly the state the caller is asking to see changed.
+    return this.funding(requisitionId);
+  }
+
+  /* ---------------------------------------------------------- reversals */
+
+  /**
+   * Take the requisition back off the Accounts queue.
+   *
+   * Nothing is voided here because nothing was recorded — "sent to Accounts" is a status and a
+   * note, not a money row (OQ-19: nothing leaves the system). Refused the moment Accounts has
+   * released anything against it: at that point the requisition is not waiting to be sent, and a
+   * receipt hanging off a requisition that claims it was never sent describes a state that never
+   * existed rather than an earlier one.
+   */
+  async undoSendToAccounts(
+    requisitionId: string,
+    input: UndoSendToAccountsInput,
+    actorId: string,
+    context: AuditContext,
+  ): Promise<RequisitionFunding> {
+    await this.db.transaction().execute(async (tx) => {
+      const requisition = await this.lock(tx, requisitionId);
+      // The funded statuses are admitted here only so the *next* check can refuse them with a
+      // useful message. A partial receipt has already moved the status off SENT_TO_ACCOUNTS, so
+      // without this the IM pressing Back would get "this requisition is FUNDS_PARTIAL, expected
+      // SENT_TO_ACCOUNTS" — true, and no help at all in working out what to do about it.
+      this.assertStatus(requisition.status, 'taken back from Accounts', [
+        RequisitionStatus.SENT_TO_ACCOUNTS,
+        RequisitionStatus.FUNDS_PARTIAL,
+        RequisitionStatus.FUNDS_RECEIVED,
+      ]);
+
+      // Read under the lock that will write the status, so a receipt cannot land between the
+      // check and the flip.
+      const [receiptCount, funded] = await Promise.all([
+        this.repo.countReceipts(requisitionId, tx),
+        this.repo.sumReceipts(requisitionId, tx),
+      ]);
+      if (receiptCount > 0) throw new CannotUndoSendWithReceiptsError(funded, receiptCount);
+
+      await this.requisitions.setStatus(tx, requisitionId, RequisitionStatus.BOM_GENERATED, false);
+      await this.requisitions.appendEvent(
+        tx,
+        requisitionId,
+        RequisitionEventType.UNDO_SENT_TO_ACCOUNTS,
+        actorId,
+        { reason: input.reason },
+      );
+      await this.audit.record(
+        {
+          action: 'requisition.undo_send_to_accounts',
+          entityType: 'requisition',
+          entityId: requisitionId,
+          entityRef: requisition.requisition_no,
+          summary: `Took ${requisition.requisition_no} back from Accounts`,
+          metadata: { reason: input.reason },
+        },
+        context,
+        tx,
+      );
+
+    });
+
+    // Read after the commit, never from inside it. `funding()` runs on its own connection, so
+    // a read taken within the transaction returns the figures as they were *before* this call —
+    // which is exactly the state the caller is asking to see changed.
+    return this.funding(requisitionId);
+  }
+
+  /**
+   * Void one fund receipt.
+   *
+   * The status is **re-derived from what remains**, never assumed. Two instalments minus one is
+   * still `FUNDS_PARTIAL`; only voiding the last one goes back to `SENT_TO_ACCOUNTS`. That is the
+   * same rule `recordReceipt` applies in the other direction, and deriving it here rather than
+   * remembering a "previous status" is what keeps a three-instalment requisition correct.
+   *
+   * Refused while a purchase stands on the money. Undo happens in the order things happened;
+   * otherwise a purchase is left funded by a receipt that no longer counts.
+   */
+  async voidReceipt(
+    requisitionId: string,
+    receiptId: string,
+    input: VoidFundReceiptInput,
+    actorId: string,
+    context: AuditContext,
+  ): Promise<RequisitionFunding> {
+    await this.db.transaction().execute(async (tx) => {
+      const requisition = await this.lock(tx, requisitionId);
+      // `PURCHASED` is admitted only so the purchase check below can refuse it by name. Recording
+      // a purchase moves the status off the funded stages, so leaving it out would answer "this
+      // requisition is PURCHASED, expected FUNDS_RECEIVED" — accurate, and no use to an IM trying
+      // to work out that they must undo the purchase first.
+      this.assertStatus(requisition.status, 'un-funded', [
+        RequisitionStatus.FUNDS_PARTIAL,
+        RequisitionStatus.FUNDS_RECEIVED,
+        RequisitionStatus.PURCHASED,
+      ]);
+
+      const purchaseCount = await this.repo.countPurchases(requisitionId, tx);
+      if (purchaseCount > 0) throw new CannotVoidReceiptWithPurchasesError(purchaseCount);
+
+      const amount = await this.repo.voidReceipt(
+        tx,
+        receiptId,
+        requisitionId,
+        actorId,
+        input.reason,
+      );
+      if (amount === undefined) throw new MoneyRowNotFoundError('receipt', receiptId);
+
+      // Re-read after the void, inside the same transaction: this is the sum the status derives
+      // from, and reading it beforehand would re-derive the status we just left.
+      const funded = await this.repo.sumReceipts(requisitionId, tx);
+      const approved = round2(Number(requisition.approved_amount ?? 0));
+      const nextStatus =
+        funded <= 0
+          ? RequisitionStatus.SENT_TO_ACCOUNTS
+          : approved > 0 && funded >= approved
+            ? RequisitionStatus.FUNDS_RECEIVED
+            : RequisitionStatus.FUNDS_PARTIAL;
+
+      await this.requisitions.setStatus(tx, requisitionId, nextStatus, false);
+      await this.requisitions.appendEvent(
+        tx,
+        requisitionId,
+        RequisitionEventType.FUND_RECEIPT_VOIDED,
+        actorId,
+        { receiptId, amount, funded, reason: input.reason },
+      );
+      await this.recordFundingSnapshot(tx, requisitionId, nextStatus);
+      await this.audit.record(
+        {
+          action: 'requisition.void_fund_receipt',
+          entityType: 'requisition',
+          entityId: requisitionId,
+          entityRef: requisition.requisition_no,
+          summary: `Voided a ${amount} receipt on ${requisition.requisition_no}`,
+          metadata: { receiptId, amount, funded, reason: input.reason },
+        },
+        context,
+        tx,
+      );
+
+    });
+
+    // Read after the commit, never from inside it. `funding()` runs on its own connection, so
+    // a read taken within the transaction returns the figures as they were *before* this call —
+    // which is exactly the state the caller is asking to see changed.
+    return this.funding(requisitionId);
+  }
+
+  /**
+   * Void one purchase, with its lines.
+   *
+   * Refused once any of its units have been received: stock exists that this purchase is the
+   * justification for, and voiding it would leave the ledger describing goods nobody bought. The
+   * correction at that point is a stock adjustment, deliberately a different and harder operation
+   * (ADR-0001 — only StockService moves stock, and nothing in here touches it).
+   *
+   * The lines are not marked individually. They hang off the purchase and every read reaches them
+   * through it, so one marker on the parent is the whole story; a second marker on each child
+   * would be two places for the same fact to disagree.
+   */
+  async voidPurchase(
+    requisitionId: string,
+    purchaseId: string,
+    input: VoidPurchaseInput,
+    actorId: string,
+    context: AuditContext,
+  ): Promise<RequisitionFunding> {
+    await this.db.transaction().execute(async (tx) => {
+      const requisition = await this.lock(tx, requisitionId);
+      this.assertStatus(requisition.status, 'un-purchased', [RequisitionStatus.PURCHASED]);
+
+      const received = await this.repo.sumReceivedForPurchase(purchaseId, tx);
+      if (received > 0) throw new CannotVoidReceivedPurchaseError(received);
+
+      const amount = await this.repo.voidPurchase(
+        tx,
+        purchaseId,
+        requisitionId,
+        actorId,
+        input.reason,
+      );
+      if (amount === undefined) throw new MoneyRowNotFoundError('purchase', purchaseId);
+
+      // A split-vendor requisition stays PURCHASED while any purchase is still standing. Only
+      // when the last one goes does it fall back to the funded status — itself re-derived from
+      // the receipts rather than remembered.
+      const remaining = await this.repo.countPurchases(requisitionId, tx);
+      let nextStatus: RequisitionStatus = RequisitionStatus.PURCHASED;
+      if (remaining === 0) {
+        const funded = await this.repo.sumReceipts(requisitionId, tx);
+        const approved = round2(Number(requisition.approved_amount ?? 0));
+        nextStatus =
+          approved > 0 && funded >= approved
+            ? RequisitionStatus.FUNDS_RECEIVED
+            : RequisitionStatus.FUNDS_PARTIAL;
+      }
+
+      await this.requisitions.setStatus(tx, requisitionId, nextStatus, false);
+      await this.requisitions.appendEvent(
+        tx,
+        requisitionId,
+        RequisitionEventType.PURCHASE_VOIDED,
+        actorId,
+        { purchaseId, amount, remaining, reason: input.reason },
+      );
+      await this.recordFundingSnapshot(tx, requisitionId, nextStatus);
+      await this.audit.record(
+        {
+          action: 'requisition.void_purchase',
+          entityType: 'requisition',
+          entityId: requisitionId,
+          entityRef: requisition.requisition_no,
+          summary: `Voided a ${amount} purchase on ${requisition.requisition_no}`,
+          metadata: { purchaseId, amount, remaining, reason: input.reason },
+        },
+        context,
+        tx,
+      );
+
+    });
+
+    // Read after the commit, never from inside it. `funding()` runs on its own connection, so
+    // a read taken within the transaction returns the figures as they were *before* this call —
+    // which is exactly the state the caller is asking to see changed.
+    return this.funding(requisitionId);
   }
 
   /* ------------------------------------------------------ add to inventory */

@@ -95,3 +95,70 @@ export class CannotUnverifyWithReturnsError extends DomainError {
     );
   }
 }
+
+/* ------------------------------------------------------------ reversals */
+
+/**
+ * Sending to Accounts is undoable right up until Accounts acts on it. After that the requisition
+ * is not "waiting to be sent" any more — money exists against it — and pretending otherwise would
+ * leave a receipt attached to a requisition that claims it was never sent.
+ */
+export class CannotUndoSendWithReceiptsError extends DomainError {
+  constructor(funded: number, receiptCount: number) {
+    super(
+      ErrorCode.CANNOT_UNDO_SEND_WITH_RECEIPTS,
+      `Accounts has already released ${funded} against this requisition. Void the receipt first.`,
+      HttpStatus.CONFLICT,
+      { funded, receiptCount },
+    );
+  }
+}
+
+/**
+ * Undo in the order things happened. A purchase stands on the money that funded it, so voiding
+ * the receipt underneath it would leave a purchase funded by nothing — the requisition would
+ * describe a state that never existed rather than an earlier one.
+ */
+export class CannotVoidReceiptWithPurchasesError extends DomainError {
+  constructor(purchaseCount: number) {
+    super(
+      ErrorCode.CANNOT_VOID_RECEIPT_WITH_PURCHASES,
+      `${purchaseCount} purchase(s) are still recorded against this money. Void those first.`,
+      HttpStatus.CONFLICT,
+      { purchaseCount },
+    );
+  }
+}
+
+/**
+ * The point past which there is no way back. Once units have been received, stock exists on a
+ * shelf; voiding the purchase that justified it would leave the ledger describing goods nobody
+ * bought. The correction at that point is a stock adjustment, which is a different and
+ * deliberately harder operation (ADR-0001 — only StockService moves stock).
+ */
+export class CannotVoidReceivedPurchaseError extends DomainError {
+  constructor(receivedQuantity: number) {
+    super(
+      ErrorCode.CANNOT_VOID_RECEIVED_PURCHASE,
+      `${receivedQuantity} unit(s) from this purchase are already in stock, so it cannot be voided.`,
+      HttpStatus.CONFLICT,
+      { receivedQuantity },
+    );
+  }
+}
+
+/**
+ * Covers both "not on this requisition" and "already voided" on purpose. The two are the same
+ * answer to the caller — there is nothing here to act on — and distinguishing them would let a
+ * caller probe which receipt ids exist on requisitions they cannot see.
+ */
+export class MoneyRowNotFoundError extends DomainError {
+  constructor(kind: 'receipt' | 'purchase', id: string) {
+    super(
+      ErrorCode.MONEY_ROW_NOT_FOUND,
+      `That ${kind} is not on this requisition, or has already been voided.`,
+      HttpStatus.NOT_FOUND,
+      { kind, id },
+    );
+  }
+}

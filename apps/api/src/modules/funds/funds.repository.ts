@@ -57,6 +57,7 @@ export class FundsRepository {
       .selectFrom('fund_receipts')
       .leftJoin('users', 'users.id', 'fund_receipts.recorded_by')
       .where('fund_receipts.requisition_id', '=', requisitionId)
+      .where('fund_receipts.voided_at', 'is', null)
       .select([
         'fund_receipts.id',
         'fund_receipts.requisition_id',
@@ -93,6 +94,7 @@ export class FundsRepository {
     const row = await executor
       .selectFrom('fund_receipts')
       .where('requisition_id', '=', requisitionId)
+      .where('voided_at', 'is', null)
       .select((eb) => eb.fn.sum<string>('amount').as('total'))
       .executeTakeFirst();
     return money(row?.total ?? null);
@@ -162,6 +164,7 @@ export class FundsRepository {
       .selectFrom('purchases')
       .leftJoin('users', 'users.id', 'purchases.recorded_by')
       .where('purchases.requisition_id', '=', requisitionId)
+      .where('purchases.voided_at', 'is', null)
       .select([
         'purchases.id',
         'purchases.requisition_id',
@@ -250,6 +253,7 @@ export class FundsRepository {
     const row = await executor
       .selectFrom('purchases')
       .where('requisition_id', '=', requisitionId)
+      .where('voided_at', 'is', null)
       .select((eb) => eb.fn.sum<string>('total_amount').as('total'))
       .executeTakeFirst();
     return money(row?.total ?? null);
@@ -280,6 +284,9 @@ export class FundsRepository {
       tx
         .selectFrom('purchases')
         .where('id', '=', line.purchase_id)
+        // A voided purchase yields no context, so receiving one of its lines returns undefined
+        // and the caller refuses. Goods cannot be booked in against a purchase that was undone.
+        .where('voided_at', 'is', null)
         .select('requisition_id')
         .executeTakeFirst(),
       tx
@@ -328,6 +335,7 @@ export class FundsRepository {
       .selectFrom('purchase_lines')
       .innerJoin('purchases', 'purchases.id', 'purchase_lines.purchase_id')
       .where('purchases.requisition_id', '=', requisitionId)
+      .where('purchases.voided_at', 'is', null)
       .whereRef('purchase_lines.received_quantity', '<', 'purchase_lines.quantity')
       .select((eb) => eb.fn.countAll<string>().as('count'))
       .executeTakeFirst();
@@ -356,6 +364,7 @@ export class FundsRepository {
     return executor
       .selectFrom('purchases')
       .where('id', '=', purchaseId)
+      .where('voided_at', 'is', null)
       .selectAll()
       .executeTakeFirst();
   }
@@ -368,10 +377,107 @@ export class FundsRepository {
     const row = await executor
       .selectFrom('purchases')
       .where('requisition_id', '=', requisitionId)
+      .where('voided_at', 'is', null)
       .where('invoice_file_id', 'is', null)
       .select((eb) => eb.fn.countAll<string>().as('count'))
       .executeTakeFirst();
     return Number(row?.count ?? 0);
+  }
+
+  /* ---------------------------------------------------------- reversals */
+
+  /**
+   * Mark one money row voided, if it is live and belongs to this requisition.
+   *
+   * The requisition id is in the WHERE rather than checked beforehand: it makes the ownership
+   * check and the write one statement, so a receipt id from another requisition cannot be voided
+   * by a caller who is authorised on this one. `voided_at IS NULL` in the same predicate makes
+   * the write idempotent — a double-click updates nothing the second time and the caller sees the
+   * zero-row result, rather than overwriting the first void's reason and actor.
+   *
+   * Returns the row's amount so the caller can put a real figure in the event and the audit
+   * summary without a second read.
+   */
+  private async markVoided(
+    tx: Tx,
+    table: 'fund_receipts' | 'purchases',
+    id: string,
+    requisitionId: string,
+    actorId: string,
+    reason: string,
+  ): Promise<number | undefined> {
+    // Aliased to one name so both tables return the same shape. Returning the raw column name
+    // and casting the type would have the row arrive under `total_amount` while the code reads
+    // `.amount` — undefined at runtime, and typed as fine.
+    const row = await tx
+      .updateTable(table)
+      .set({ voided_at: new Date(), voided_by: actorId, void_reason: reason })
+      .where('id', '=', id)
+      .where('requisition_id', '=', requisitionId)
+      .where('voided_at', 'is', null)
+      .returning((eb) =>
+        (table === 'fund_receipts' ? eb.ref('amount') : eb.ref('total_amount')).as('voided_amount'),
+      )
+      .executeTakeFirst();
+    return row === undefined ? undefined : money(row.voided_amount);
+  }
+
+  async voidReceipt(
+    tx: Tx,
+    receiptId: string,
+    requisitionId: string,
+    actorId: string,
+    reason: string,
+  ): Promise<number | undefined> {
+    return this.markVoided(tx, 'fund_receipts', receiptId, requisitionId, actorId, reason);
+  }
+
+  async voidPurchase(
+    tx: Tx,
+    purchaseId: string,
+    requisitionId: string,
+    actorId: string,
+    reason: string,
+  ): Promise<number | undefined> {
+    return this.markVoided(tx, 'purchases', purchaseId, requisitionId, actorId, reason);
+  }
+
+  /** How many live purchases stand on this requisition. */
+  async countPurchases(requisitionId: string, executor: Db | Tx = this.db): Promise<number> {
+    const row = await executor
+      .selectFrom('purchases')
+      .where('requisition_id', '=', requisitionId)
+      .where('voided_at', 'is', null)
+      .select((eb) => eb.fn.countAll<string>().as('count'))
+      .executeTakeFirst();
+    return Number(row?.count ?? 0);
+  }
+
+  /** How many live receipts stand on this requisition. */
+  async countReceipts(requisitionId: string, executor: Db | Tx = this.db): Promise<number> {
+    const row = await executor
+      .selectFrom('fund_receipts')
+      .where('requisition_id', '=', requisitionId)
+      .where('voided_at', 'is', null)
+      .select((eb) => eb.fn.countAll<string>().as('count'))
+      .executeTakeFirst();
+    return Number(row?.count ?? 0);
+  }
+
+  /**
+   * Units of this purchase already booked onto a shelf. Non-zero means the purchase can no longer
+   * be voided: stock exists that it is the justification for.
+   */
+  async sumReceivedForPurchase(
+    purchaseId: string,
+    executor: Db | Tx = this.db,
+  ): Promise<number> {
+    const row = await executor
+      .selectFrom('purchase_lines')
+      .where('purchase_id', '=', purchaseId)
+      .select((eb) => eb.fn.sum<string>('received_quantity').as('total'))
+      .executeTakeFirst();
+    return Number(row?.total ?? 0);
   }
 
   /* ------------------------------------------------------- fund returns */

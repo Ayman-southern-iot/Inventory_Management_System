@@ -1140,6 +1140,16 @@ export const t = {
       'Only {outstanding} of "{itemName}" is still outstanding, so {attempted} cannot be received.',
     CANNOT_UNVERIFY_WITH_RETURNS:
       'This requisition has {returnedAmount} returned to Accounts already. Un-verifying is not the right way to undo a refund — record a corrective return instead.',
+    // Every reversal refusal names the step that has to be undone first. "You cannot do this" on
+    // its own leaves the IM guessing, and the answer is always one specific earlier stage.
+    CANNOT_UNDO_SEND_WITH_RECEIPTS:
+      'Accounts has already released {funded} against this requisition. Void that receipt before taking it back off the Accounts queue.',
+    CANNOT_VOID_RECEIPT_WITH_PURCHASES:
+      '{purchaseCount} purchase(s) are recorded against this money. Void those first, then the receipt.',
+    CANNOT_VOID_RECEIVED_PURCHASE:
+      '{receivedQuantity} unit(s) from this purchase are already on a shelf, so it can no longer be voided. Correct the stock instead.',
+    MONEY_ROW_NOT_FOUND:
+      'That entry is not on this requisition, or somebody has already voided it. Reload the page to see where things stand.',
     SIGNATURE_NOT_UPLOADED:
       'You have not uploaded a signature yet. Add one from your profile, or approve without a signature.',
     APPROVED_EXCEEDS_REQUESTED:

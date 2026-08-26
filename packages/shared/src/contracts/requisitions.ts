@@ -129,6 +129,13 @@ export const RequisitionEventType = {
    * event in the events view (see `requiresRevisionTag` / `revisedAfterSendBack`).
    */
   SEND_BACK_FOR_REVISION: 'SEND_BACK_FOR_REVISION',
+  /* --- Phase 08: the way back. Appended, never replacing the event being undone. --- */
+  /** The IM took the requisition back off the Accounts queue. No money had moved. */
+  UNDO_SENT_TO_ACCOUNTS: 'UNDO_SENT_TO_ACCOUNTS',
+  /** One fund receipt was voided. The row stays; the funded total re-derives without it. */
+  FUND_RECEIPT_VOIDED: 'FUND_RECEIPT_VOIDED',
+  /** One purchase was voided, with its lines. Refused once any of its goods were received. */
+  PURCHASE_VOIDED: 'PURCHASE_VOIDED',
   STOCKED: 'STOCKED',
   /** Goods went straight out to a person instead of onto a shelf (task 5.7). */
   BORROWED_OUT: 'BORROWED_OUT',

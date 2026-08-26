@@ -210,6 +210,39 @@ export const unverifyPurchaseSchema = z.object({
 });
 export type UnverifyPurchaseInput = z.infer<typeof unverifyPurchaseSchema>;
 
+/* ------------------------------------------------------- stepping back */
+
+/**
+ * The reason on every reversal, shaped once.
+ *
+ * Ayman's ruling, 2026-08-26: every stage between approval and add-to-inventory needs a way back,
+ * because an IM who clicks one stage too far currently has nowhere to go. A reversal is the one
+ * kind of action whose *justification* is the whole record — the forward step is explained by the
+ * thing it recorded, a reversal is explained only by the person doing it. So the reason is
+ * mandatory here exactly as it is on `unverifyPurchaseSchema`, which set the shape.
+ */
+const reversalReasonSchema = z.object({
+  reason: z.string().trim().min(1).max(500),
+});
+
+/** Take the requisition back off the Accounts queue. Refused once any money has arrived. */
+export const undoSendToAccountsSchema = reversalReasonSchema;
+export type UndoSendToAccountsInput = z.infer<typeof undoSendToAccountsSchema>;
+
+/**
+ * Void one fund receipt. The row is kept and marked, never deleted: "someone recorded 40,000 and
+ * then took it back" is precisely what an auditor asks about, and a deleted row cannot answer.
+ *
+ * One receipt per press, repeatable (ruling 2026-08-26). A requisition funded in three instalments
+ * must not lose two of them to a single click.
+ */
+export const voidFundReceiptSchema = reversalReasonSchema;
+export type VoidFundReceiptInput = z.infer<typeof voidFundReceiptSchema>;
+
+/** Void one purchase and its lines. Refused once any of its goods have been received into stock. */
+export const voidPurchaseSchema = reversalReasonSchema;
+export type VoidPurchaseInput = z.infer<typeof voidPurchaseSchema>;
+
 /* -------------------------------------------------------- add to inventory */
 
 /**

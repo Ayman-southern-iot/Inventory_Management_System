@@ -1,4 +1,4 @@
-# Phase 08 — reversible post-approval stages, lifecycle truth, per-person dashboard
+DONEpending |DONEpending |DONEpending |DONEpending |DONEpending |# Phase 08 — reversible post-approval stages, lifecycle truth, per-person dashboard
 
 **Opened:** 2026-08-26 · **Source:** Ayman, 2026-08-26 (four asks in one message)
 **Baseline commit:** `52a1e9e`
@@ -39,20 +39,35 @@ sum, and deleting a money row in a system with an audit trail is not an option.
 
 Hence `voided_at` / `voided_by` / `void_reason`: the row stays as evidence, the arithmetic skips it.
 
-**Every read of the two tables — the complete list, four sites:**
+**Every read of the two tables — the complete list, ten sites.** The plan first said four; that
+was wrong, and the correction is the point. Enumerating properly before writing the filter is what
+this list is for, because a missed site does not fail — it silently counts money that was undone.
 
-- `funds.repository.ts` — `sumReceipts`, `listReceipts`, `listPurchases`
-- `reports.repository.ts` — the `funded` and `spent` subqueries (lines ~109 and ~114)
+`funds.repository.ts` (8):
 
-Nothing else in `apps/api` reads `fund_receipts` or `purchases`. A fifth site appearing later is
-the failure mode to watch: it would double-count voided money silently.
+- `listReceipts`, `sumReceipts`
+- `listPurchases`, `sumPurchases`
+- `lockPurchaseLine` — the purchase-context read. A voided purchase now yields no context, so
+  receiving one of its lines refuses rather than booking goods against an undone purchase.
+- `countOutstandingLines` — voided lines are not outstanding, they are gone
+- `findPurchase` — used by invoice attach and download
+- `countPurchasesWithoutInvoice`
+
+`reports.repository.ts` (2): the `funded` and `spent` subqueries.
+
+`computeCurrentFunding` needs no change of its own — it delegates to `sumReceipts`,
+`sumPurchases` and `sumReturns`. `fund_returns` is untouched: a return is money genuinely handed
+back, not a mistake being undone.
+
+An eleventh site appearing later is the failure mode to watch. The guard against it is the
+integration test that voids one row and asserts every derived figure moves, not the list above.
 
 ## Rulings taken 2026-08-26 (all recorded in DECISIONS.md)
 
 | Question | Ruling |
 |---|---|
 | Migration 0028 | **Approved.** Additive columns only, reversible down. |
-| Invoice required to verify? | **No** — stays optional. Invoices arrive days after the goods. |
+| Invoice required to verify? | **Yes — unchanged.** Ayman chose "as today"; I had described today wrongly as optional. `funds.service.ts:504` has always thrown `INVOICE_MISSING`. The status quo stands and B-1 becomes more useful, not less: the requirement is now satisfiable inside the form that enforces it. |
 | Dashboard visibility | **Own figures only.** No permission change, nothing near the auth boundary. |
 | Undo depth | **One entry per press, repeatable.** A three-instalment requisition must not lose two receipts to one click. |
 | Reversal actor | IM/Admin, matching the forward action on the same stage. Not asked — follows the existing `@Roles`. |
@@ -64,7 +79,7 @@ Status values: `TODO` · `IN PROGRESS` · `DONE` (gate green, handoff block issu
 
 | # | Item | SPEC | Status | Commit |
 |---|---|---|---|---|
-| C-1 | Lifecycle tracker: derive stage state from status, not from append-only events | NO-BASIS (defect in shipped surface) | DONE | pending |
+| C-1 | Lifecycle tracker: derive stage state from status, not from append-only events | NO-BASIS (defect in shipped surface) | DONE | `8633384` |
 | A-0 | Migration 0028 — void columns on `fund_receipts` and `purchases` | DERIVED (ruling 2026-08-26) | TODO | |
 | A-1 | Exclude voided rows from all four read sites | DERIVED | TODO | |
 | A-2 | `undo-send-to-accounts` → `BOM_GENERATED` (no rows voided) | DERIVED | TODO | |

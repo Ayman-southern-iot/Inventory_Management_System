@@ -532,6 +532,14 @@ export interface FundReceiptsTable {
   note: string | null;
   recorded_by: string;
   created_at: CreatedAt;
+  /**
+   * Void markers (migration 0028). A voided row is excluded from every sum but never deleted:
+   * the record that someone entered this figure and then took it back is the evidence a reversal
+   * exists to preserve. A CHECK enforces that all three are set together.
+   */
+  voided_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
+  voided_by: ColumnType<string | null, string | null | undefined, string | null>;
+  void_reason: ColumnType<string | null, string | null | undefined, string | null>;
 }
 
 export interface PurchasesTable {
@@ -549,6 +557,14 @@ export interface PurchasesTable {
   invoice_uploaded_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
+  /**
+   * Void markers (migration 0028). A voided row is excluded from every sum but never deleted:
+   * the record that someone entered this figure and then took it back is the evidence a reversal
+   * exists to preserve. A CHECK enforces that all three are set together.
+   */
+  voided_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
+  voided_by: ColumnType<string | null, string | null | undefined, string | null>;
+  void_reason: ColumnType<string | null, string | null | undefined, string | null>;
 }
 
 /**

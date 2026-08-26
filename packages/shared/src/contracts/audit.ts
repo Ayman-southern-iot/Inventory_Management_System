@@ -130,6 +130,18 @@ export const AUDIT_ACTIONS = [
    * can re-record. Only legal before any money has been returned to Accounts.
    */
   'requisition.unverify_purchase',
+  /*
+   * Phase 08 — the rest of the way back. Ayman's ruling, 2026-08-26: every stage between approval
+   * and add-to-inventory is reversible, because an IM who clicks one stage too far had nowhere to
+   * go. Each of these is the *reversal*, audited in its own right — the forward row stays exactly
+   * where it was, so the trail reads "did this, then undid it" rather than losing the first half.
+   */
+  /** The IM took the requisition back off the Accounts queue. Legal only before money arrives. */
+  'requisition.undo_send_to_accounts',
+  /** One fund receipt voided. The row survives, marked; the funded total re-derives without it. */
+  'requisition.void_fund_receipt',
+  /** One purchase voided, with its lines. Refused once any of its goods reached a shelf. */
+  'requisition.void_purchase',
   /**
    * Recorded on a single-item + over-budget approved requisition when the IM bounces it back
    * to the requester for budget revision. The status flips to DRAFT; the requester re-submits

@@ -121,6 +121,20 @@ export const ErrorCode = {
   RECEIVE_EXCEEDS_PURCHASED: 'RECEIVE_EXCEEDS_PURCHASED',
   /** Un-verifying a purchase after money has already gone back to Accounts. */
   CANNOT_UNVERIFY_WITH_RETURNS: 'CANNOT_UNVERIFY_WITH_RETURNS',
+
+  /*
+   * Phase 08 reversals. Each one refuses a step back that would leave the requisition describing
+   * something that never happened — the money undone underneath a purchase, or goods booked in
+   * against a purchase that no longer exists.
+   */
+  /** Undoing "sent to Accounts" once Accounts has already released money against it. */
+  CANNOT_UNDO_SEND_WITH_RECEIPTS: 'CANNOT_UNDO_SEND_WITH_RECEIPTS',
+  /** Voiding a receipt while a purchase is still standing on the money it recorded. */
+  CANNOT_VOID_RECEIPT_WITH_PURCHASES: 'CANNOT_VOID_RECEIPT_WITH_PURCHASES',
+  /** Voiding a purchase after some of its goods have already been received into stock. */
+  CANNOT_VOID_RECEIVED_PURCHASE: 'CANNOT_VOID_RECEIVED_PURCHASE',
+  /** The receipt or purchase is not on this requisition, or has already been voided. */
+  MONEY_ROW_NOT_FOUND: 'MONEY_ROW_NOT_FOUND',
   /** Approving "with signature" when the approver has never uploaded one. */
   SIGNATURE_NOT_UPLOADED: 'SIGNATURE_NOT_UPLOADED',
 
