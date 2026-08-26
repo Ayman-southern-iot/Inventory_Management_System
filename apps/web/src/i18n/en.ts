@@ -385,6 +385,9 @@ export const t = {
     // toasts
     sentToAccounts: 'Marked as sent to Accounts.',
     receiptRecorded: 'Receipt recorded.',
+    // D-025: the amount input now states the cap it is enforcing, so an over-payment is caught
+    // before submit rather than by a toast afterwards.
+    outstandingHint: 'Still outstanding on this requisition:',
     purchaseRecorded: 'Purchase recorded.',
     invoiceAttached: 'Invoice attached.',
     purchaseVerified: 'Purchase verified.',

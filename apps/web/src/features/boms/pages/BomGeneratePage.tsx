@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useFieldArray, useForm } from 'react-hook-form';
+import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Send, Undo2 } from 'lucide-react';
 import {
@@ -66,10 +66,21 @@ export function BomGeneratePage() {
   const form = useForm<BomGenerateForm>({
     defaultValues: { lines: [] },
   });
-  const { control, register, reset, watch } = form;
+  const { control, register, reset } = form;
   const fieldArray = useFieldArray({ control, name: 'lines' });
 
-  const lines = watch('lines');
+  /**
+   * D-026: `useWatch`, not `watch('lines')`.
+   *
+   * `watch` handed back the same array of the same line objects on every render, mutated in
+   * place. The rows still looked right because each row reads `line.unitCost` during render and
+   * so saw the mutation — but `useMemo(..., [lines])` compares the array *reference*, which
+   * never changed, so every derived number below was computed once and then frozen. The IM
+   * watched line totals move while BOM SUBTOTAL and VARIANCE stayed at their opening figures.
+   *
+   * `useWatch` returns a fresh structure per change, so the memos below invalidate honestly.
+   */
+  const lines = useWatch({ control, name: 'lines' });
 
   /**
    * Toggling a candidate synchronises the line list. We rebuild from scratch on every

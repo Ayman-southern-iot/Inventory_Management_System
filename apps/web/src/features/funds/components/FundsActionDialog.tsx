@@ -5,7 +5,7 @@ import { Dialog } from '@/components/ui/Dialog';
 import { TextAreaField, TextField } from '@/components/ui/Field';
 import { useToast } from '@/components/ui/Toast';
 import { t } from '@/i18n/en';
-import { messageForError } from '@/lib/error-message';
+import { fieldErrorsFor, messageForError } from '@/lib/error-message';
 import { formatBdt } from '@/lib/format';
 import {
   useRecordPurchase,
@@ -90,6 +90,18 @@ export function FundsActionDialog({
   const [invoiceNo, setInvoiceNo] = useState('');
   const [unitCosts, setUnitCosts] = useState<Record<string, string>>({});
   const [returnedAmount, setReturnedAmount] = useState(() => defaultReturnedAmount(funding));
+  /**
+   * D-025: the server names the field it refused; the dialog now marks it instead of only
+   * raising a toast that promised a highlight it never delivered.
+   */
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  /**
+   * What is still owed. `funding.outstanding` is the server's own figure — the same one the
+   * effect below pre-fills the amount with — so the cap and the default can never disagree.
+   * Null with no funding record, in which case the input carries no cap rather than a made-up one.
+   */
+  const outstandingBalance = funding ? funding.outstanding : null;
 
   useEffect(() => {
     if (!action) return;
@@ -114,6 +126,8 @@ export function FundsActionDialog({
 
   async function onSubmit() {
     if (!action) return;
+    // A retry starts from a clean slate, or a corrected field keeps wearing its old refusal.
+    setFieldErrors({});
     try {
       switch (action) {
         case 'send-to-accounts':
@@ -174,6 +188,7 @@ export function FundsActionDialog({
       }
       onClose();
     } catch (error) {
+      setFieldErrors(fieldErrorsFor(error));
       toast.error(messageForError(error));
     }
   }
@@ -217,8 +232,19 @@ export function FundsActionDialog({
               label={t.funds.amount}
               type="number"
               min={0}
+              // D-025: the server refuses a receipt above the outstanding balance, so the input
+              // says so up front rather than letting the user find out on submit. Omitted when
+              // there is nothing sensible to cap against, so the browser never enforces a bound
+              // the server does not.
+              max={outstandingBalance ?? undefined}
+              hint={
+                outstandingBalance === null
+                  ? undefined
+                  : `${t.funds.outstandingHint} ${outstandingBalance.toLocaleString()}`
+              }
               step="0.01"
               value={amount}
+              error={fieldErrors.amount}
               onChange={(event) => setAmount(event.target.value)}
             />
             <TextField

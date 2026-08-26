@@ -56,3 +56,36 @@ export function messageForError(error: unknown): string {
   if (error instanceof ApiError) return error.message;
   return t.errors.INTERNAL;
 }
+
+/**
+ * The server's field issues, keyed by the field they belong to, so a caller can mark the input
+ * instead of only raising a toast.
+ *
+ * D-025: recording 150,000 against an approved 99,000 was correctly refused, but the only
+ * feedback was "Please correct the highlighted fields" with nothing highlighted, no
+ * `aria-invalid` and no inline message. The reason was already on the wire — `FieldIssue.path`
+ * has always been there — and nobody was reading it.
+ *
+ * The last issue for a path wins; the server sends at most one per field in practice, and
+ * arbitrarily picking the first would be no more correct.
+ */
+export function fieldErrorsFor(error: unknown): Record<string, string> {
+  if (!(error instanceof ApiError) || error.code !== ErrorCode.VALIDATION_FAILED) return {};
+
+  const details = (error as { details?: unknown }).details;
+  if (!Array.isArray(details)) return {};
+
+  const out: Record<string, string> = {};
+  for (const issue of details) {
+    if (
+      typeof issue === 'object' &&
+      issue !== null &&
+      typeof (issue as FieldIssue).path === 'string' &&
+      typeof (issue as FieldIssue).message === 'string' &&
+      (issue as FieldIssue).message.trim().length > 0
+    ) {
+      out[(issue as FieldIssue).path] = (issue as FieldIssue).message.trim();
+    }
+  }
+  return out;
+}
