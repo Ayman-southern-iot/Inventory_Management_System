@@ -87,8 +87,8 @@ Status values: `TODO` · `IN PROGRESS` · `DONE` (gate green, handoff block issu
 | A-4 | Void one purchase; status re-derives from what remains | DERIVED | DONE | `215b3cf` |
 | A-5 | `FundsPanel`: a Back button at every reversible stage, with a naming confirm | DERIVED | DONE | `51b60b3` |
 | B-1 | Invoice attach moves into the Verify purchase form; `InvoiceRow` becomes download-only | DERIVED | DONE | `51b60b3` |
-| D-1 | `GET /dashboard/me` — requisition, borrowing and spend counters for the caller | DERIVED | TODO | |
-| D-2 | Dashboard page renders the three blocks | DERIVED | TODO | |
+| D-1 | `GET /dashboard/me` — requisition, borrowing and spend counters for the caller | DERIVED | DONE | `54f3161` |
+| D-2 | Dashboard page renders the three blocks | DERIVED | DONE | `54f3161` |
 
 ## Invariants this phase comes near
 
