@@ -6,6 +6,7 @@ import {
 } from '@ims/shared';
 import { cn } from '@/lib/cn';
 import { t } from '@/i18n/en';
+import { formatDateTime } from '@/lib/format';
 
 type StageState = 'done' | 'current' | 'future' | 'rejected' | 'cancelled';
 
@@ -209,7 +210,7 @@ function StageCell({
         aria-current={state === 'current' ? 'step' : undefined}
         title={
           state === 'done' && completedAt
-            ? t.requisitions.lifecycleDoneAt.replace('{when}', new Date(completedAt).toLocaleString())
+            ? t.requisitions.lifecycleDoneAt.replace('{when}', formatDateTime(completedAt))
             : label
         }
       >
@@ -267,7 +268,7 @@ export function LifecycleTracker({ requisition }: { requisition: RequisitionDeta
                 {event.actorName ? ` · ${event.actorName}` : null}
                 <span className="text-ink-subtle">
                   {' '}
-                  · {new Date(event.createdAt).toLocaleString()}
+                  · {formatDateTime(event.createdAt)}
                 </span>
               </li>
             ))}

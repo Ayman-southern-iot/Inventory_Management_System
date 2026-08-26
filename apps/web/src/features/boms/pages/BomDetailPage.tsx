@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge, PageHeader, Panel } from '@/components/ui/primitives';
 import { QueryBoundary } from '@/components/ui/states';
 import { t } from '@/i18n/en';
+import { formatDateTime } from '@/lib/format';
 import { api } from '@/api/client';
 import { queryKeys } from '@/api/keys';
 import { ROUTES } from '@/routes/paths';
@@ -174,7 +175,7 @@ function BomDetailView({
             {events.map((event) => (
               <li key={event.id} className="px-4 py-2.5 text-sm text-ink">
                 <span className="font-mono text-xs text-ink-muted">
-                  {event.createdAt}
+                  {formatDateTime(event.createdAt)}
                 </span>
                 {' · '}
                 <span className="font-medium">{event.actorName ?? '—'}</span>

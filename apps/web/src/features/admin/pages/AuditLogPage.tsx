@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge, Pagination, Panel, PageHeader, Table } from '@/components/ui/primitives';
 import { EmptyState, QueryBoundary, SkeletonRows } from '@/components/ui/states';
 import { t } from '@/i18n/en';
+import { formatDateTime } from '@/lib/format';
 import { useAuditLog, useAuditLogEntry, useUsers } from '../api';
 
 const ROLE_LABELS: Record<Role, string> = {
@@ -361,7 +362,7 @@ function DetailBody({ entry }: { entry: AuditEntry }) {
   return (
     <div className="space-y-4 text-sm">
       <DetailSection label={t.auditLog.columns.timestamp}>
-        <time dateTime={entry.createdAt}>{entry.createdAt}</time>
+        <time dateTime={entry.createdAt}>{formatDateTime(entry.createdAt)}</time>
       </DetailSection>
       <DetailSection label={t.auditLog.details.actor}>
         <p className="font-medium text-ink">{entry.actorName ?? t.auditLog.actors.unknown}</p>

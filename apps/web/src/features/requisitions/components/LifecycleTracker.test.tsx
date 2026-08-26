@@ -7,6 +7,7 @@ import {
   type RequisitionDetail,
   type RequisitionEvent,
 } from '@ims/shared';
+import { formatDateTime } from '@/lib/format';
 import { LifecycleTracker } from './LifecycleTracker';
 
 function event(type: RequisitionEventType, createdAt: string): RequisitionEvent {
@@ -95,11 +96,11 @@ describe('LifecycleTracker', () => {
 
     // The IM review chip should now show "completed at" because IM_APPROVED fired.
     expect(
-      screen.getByTitle(`Completed ${new Date(imApprovedAt).toLocaleString()}`),
+      screen.getByTitle(`Completed ${formatDateTime(imApprovedAt)}`),
     ).toBeInTheDocument();
     // Submitted is also done but with the SUBMITTED timestamp.
     expect(
-      screen.getByTitle(`Completed ${new Date(submittedAt).toLocaleString()}`),
+      screen.getByTitle(`Completed ${formatDateTime(submittedAt)}`),
     ).toBeInTheDocument();
   });
 

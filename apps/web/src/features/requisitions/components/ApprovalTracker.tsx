@@ -9,6 +9,7 @@ import {
 } from '@ims/shared';
 import { Button } from '@/components/ui/Button';
 import { t } from '@/i18n/en';
+import { formatDateTime } from '@/lib/format';
 import { cn } from '@/lib/cn';
 
 /**
@@ -95,7 +96,7 @@ function TrackerNode({
             {actedByDelegate
               ? `${approval.actedByUserName} ${t.requisitions.onBehalfOf} ${approval.assignedUserName}`
               : style.label}
-            {approval.actedAt ? ` · ${new Date(approval.actedAt).toLocaleString()}` : null}
+            {approval.actedAt ? ` · ${formatDateTime(approval.actedAt)}` : null}
           </p>
         ) : (
           <p className="mt-0.5 text-xs text-ink-subtle">{style.label}</p>

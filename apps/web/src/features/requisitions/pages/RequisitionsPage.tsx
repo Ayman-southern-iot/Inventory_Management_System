@@ -12,6 +12,7 @@ import { TextField } from '@/components/ui/Field';
 import { Badge, PageHeader, Pagination, Panel, Table } from '@/components/ui/primitives';
 import { EmptyState, QueryBoundary, SkeletonRows } from '@/components/ui/states';
 import { t } from '@/i18n/en';
+import { formatDate } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import { ROUTES } from '@/routes/paths';
 import { SEARCH_DEBOUNCE_MS } from '@/features/inventory/constants';
@@ -226,7 +227,7 @@ export function RequisitionsPage({ mode }: { mode: Mode }) {
                       {t.requisitions.urgencyLabel[requisition.urgency]}
                     </td>
                     <td className="px-4 py-2.5 text-sm text-ink-muted">
-                      {requisition.approvalDeadline ?? t.common.none}
+                      {formatDate(requisition.approvalDeadline)}
                     </td>
                     <td className="px-4 py-2.5">
                       <div className="flex flex-wrap gap-1">

@@ -19,6 +19,33 @@ export function formatDateTime(isoTimestamp: string): string {
   });
 }
 
+/**
+ * A calendar day, for the fields that are a day rather than an instant: an approval deadline,
+ * an expected return date. These arrive as `YYYY-MM-DD` and were being printed verbatim, which
+ * is why the app showed three date formats at once (D-011) — a raw `2026-08-13` here, a
+ * `formatDateTime` "Aug 12, 2026" there, and a bare `toLocaleString()` "8/13/2026, 1:57:26 PM"
+ * somewhere else.
+ *
+ * Parsed as local midnight, not through `new Date('2026-08-13')`, which JavaScript reads as
+ * **UTC** midnight and then renders in local time — at +06 that prints the day before. That is
+ * the same class of bug as D-014, and it is not being reintroduced at the view layer.
+ */
+export function formatDate(isoDate: string | null | undefined): string {
+  if (!isoDate) return '—';
+
+  const parts = /^(\d{4})-(\d{2})-(\d{2})/.exec(isoDate);
+  const parsed = parts
+    ? new Date(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]))
+    : new Date(isoDate);
+
+  if (Number.isNaN(parsed.getTime())) return isoDate;
+  return parsed.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
 /** Quantities are integers; grouping keeps 12000 from reading as 1200. */
 /**
  * Money, with exactly two decimals.

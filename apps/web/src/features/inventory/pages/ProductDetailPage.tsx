@@ -7,6 +7,7 @@ import { Badge, PageHeader, Panel, Table } from '@/components/ui/primitives';
 import { EmptyState, QueryBoundary, SkeletonRows } from '@/components/ui/states';
 import { cn } from '@/lib/cn';
 import { t } from '@/i18n/en';
+import { formatDate, formatDateTime } from '@/lib/format';
 import { ROUTES } from '@/routes/paths';
 import { Role, ReturnCondition } from '@ims/shared';
 import { useAuth } from '@/features/auth/auth-context';
@@ -182,7 +183,7 @@ function ActiveBorrowRow({ borrow }: { borrow: ActiveProductBorrow }) {
       <td className="px-4 py-2.5 text-sm text-ink-muted">
         {borrow.expectedReturnDate ? (
           <span className={cn(borrow.isOverdue && 'font-medium text-danger')}>
-            {borrow.expectedReturnDate}
+            {formatDate(borrow.expectedReturnDate)}
             {borrow.isOverdue ? ` · ${t.borrowing.overdue}` : ''}
           </span>
         ) : (
@@ -461,7 +462,7 @@ function ProductDetailBody({
                           {t.inventory.movement[entry.movementType]}
                         </p>
                         <p className="text-xs text-ink-subtle">
-                          {new Date(entry.createdAt).toLocaleString()} ·{' '}
+                          {formatDateTime(entry.createdAt)} ·{' '}
                           {entry.performedByName ?? t.common.unknown}
                         </p>
                       </td>
