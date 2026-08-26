@@ -182,6 +182,7 @@ export function RequisitionsPage({ mode }: { mode: Mode }) {
         >
           {(data) => (
             <>
+              <p className="px-5 pt-4 text-xs text-ink-subtle">{t.requisitions.sortNote}</p>
               <Table
                 headers={[
                   t.requisitions.requisitionNo,

@@ -831,6 +831,10 @@ export const t = {
     filterRejected: 'Rejected',
 
     searchPlaceholder: 'Search by reference, requester or reason',
+    // D-019: the list is ordered by updated_at DESC server-side, but no column shows that and
+    // none of the headers is sortable, so an edited draft appeared to jump the queue for no
+    // reason. Stating the order is the honest fix; sortable headers would be a new feature.
+    sortNote: 'Sorted by last updated, newest first.',
     emptyTitle: 'Nothing to show',
     emptyBody: 'No requisitions match this filter.',
     myEmptyTitle: 'You have not raised a requisition yet',
