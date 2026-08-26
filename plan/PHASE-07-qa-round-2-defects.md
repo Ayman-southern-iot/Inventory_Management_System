@@ -48,7 +48,7 @@ Status values: `TODO` · `IN PROGRESS` · `DONE` (gate green, handoff block issu
 | P-03 | D-003 past deadline accepted server-side | Medium | NO-BASIS (shipped surface) | TODO | |
 | P-04 | D-004 draft edit drops Department/Project | Medium | NO-BASIS (shipped surface) | **DONE** | `2bb58d2` |
 | P-05 | D-005 raw zod string shown to user | Low | NO-BASIS (shipped surface) | **DONE** | `a44050f` |
-| P-06 | D-006 request-level fields all optional | Medium | NO-BASIS (**rule change**) | BLOCKED | needs ruling |
+| P-06 | D-006 request-level fields all optional | Medium | DERIVED (ruling 2026-08-26) | **DONE** | `8ab180d` |
 | P-07 | D-009 dashboard "arrive in later phases" | Cosmetic | NO-BASIS (shipped surface) | **DONE** | `6ab88f9` |
 | P-08 | D-010 Products nav vs Inventory heading | Cosmetic | NO-BASIS (shipped surface) | **DONE** | `6ab88f9` |
 | P-09 | D-011 three date formats | Cosmetic | NO-BASIS (shipped surface) | TODO | |
@@ -64,6 +64,7 @@ Status values: `TODO` · `IN PROGRESS` · `DONE` (gate green, handoff block issu
 | P-19 | D-029 BOM history repeats one event | Cosmetic | NO-BASIS (shipped surface) | TODO | |
 | P-20 | D-031 settings audit has no before/after | Medium | DERIVED (§11 control) | TODO | |
 | P-21 | oversized JSON body returns 500 not 413 | Medium | NO-BASIS (shipped surface) | **DONE** | `4efbf75` |
+| P-22 | no project means personal development | n/a | DERIVED (ruling 2026-08-26) | **DONE** | `5d5eef6` |
 
 ## Execution order and batching
 
