@@ -943,6 +943,9 @@ export const t = {
 
   boms: {
     title: 'Bills of Materials',
+    // Column header on the per-source line table. Was a bare 'Purpose' literal in JSX, which
+    // rules/30-frontend.md bans -- copy lives here so a wording change is one file.
+    purpose: 'Purpose',
     subtitle: 'Group approved requisitions into a payable document for Accounts.',
     newBom: 'New BOM',
 

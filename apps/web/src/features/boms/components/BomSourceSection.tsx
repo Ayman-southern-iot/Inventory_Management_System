@@ -25,6 +25,18 @@ export function BomSourceSection({
         {source.departmentName ? (
           <span className="text-xs text-ink-subtle">· {source.departmentName}</span>
         ) : null}
+        {/*
+          D-027. requirements §9's field table requires Linked project on the BOM, auto-filled
+          from the request. The PDF carried it and `requisitionFootprintsSchema.projectName` is
+          documented as "printed in the BOM header" — the header simply never rendered it, so the
+          web BOM and the printed one disagreed about a REQUIRED field.
+
+          Always shown, never hidden when null: no project means personal development (Ayman's
+          ruling, 2026-08-26), which is an answer rather than a blank.
+        */}
+        <span className="text-xs text-ink-subtle">
+          · {source.projectName ?? t.requisitions.noProject}
+        </span>
         {source.approvedAmount !== null ? (
           <span className="ml-auto text-xs text-ink-muted">
             <span className="tabular-nums text-ink">
@@ -42,7 +54,7 @@ export function BomSourceSection({
           t.boms.unitCost,
           t.boms.lineTotal,
           t.boms.vendor,
-          'Purpose',
+          t.boms.purpose,
         ]}
       >
         {lines.length === 0 ? (

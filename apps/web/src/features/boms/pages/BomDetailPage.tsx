@@ -83,21 +83,32 @@ function BomDetailView({
 
   const sourceQueries = useSourceEvents(detail);
 
-  // Merge the BOM-related events from each source into one ordered stream.
-  const events = useMemo<RequisitionEvent[]>(
+  /**
+   * Merge the BOM-related events from each source into one ordered stream, each tagged with the
+   * requisition it came from.
+   *
+   * D-029: a BOM batched from three requisitions showed three identical BOM_GENERATED rows, same
+   * timestamp, same actor, nothing to tell them apart. The rows are not duplicates and nothing is
+   * collapsed or deleted here — `requisition_events` is append-only and one event per source is
+   * the correct record. They were simply rendered without the one field that distinguishes them.
+   */
+  const events = useMemo<Array<RequisitionEvent & { requisitionNo: string }>>(
     () =>
       sourceQueries
-        .flatMap((query) => query.data?.events ?? [])
+        .flatMap((query, index) => {
+          const requisitionNo = detail.sources[index]?.requisitionNo ?? '';
+          return (query.data?.events ?? []).map((event) => ({ ...event, requisitionNo }));
+        })
         .filter((event) => BOM_EVENT_TYPES.has(event.eventType))
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-    [sourceQueries],
+    [sourceQueries, detail.sources],
   );
 
   return (
     <>
       <PageHeader
         title={detail.bomNo}
-        subtitle={`${t.boms.generatedAt} ${detail.generatedAt} · ${t.boms.generatedBy} ${detail.generatedByName}`}
+        subtitle={`${t.boms.generatedAt} ${formatDateTime(detail.generatedAt)} · ${t.boms.generatedBy} ${detail.generatedByName}`}
       />
 
       <Panel>
@@ -141,7 +152,7 @@ function BomDetailView({
               {t.boms.voidBanner}
             </p>
             <p className="mt-1 text-ink">
-              {t.boms.voidedAt} {detail.voidedAt ?? '—'}
+              {t.boms.voidedAt} {detail.voidedAt ? formatDateTime(detail.voidedAt) : t.common.dash}
               {' · '}
               {t.boms.voidedBy} {detail.voidedByName ?? '—'}
               {detail.voidReason ? ` · ${detail.voidReason}` : null}
@@ -181,6 +192,16 @@ function BomDetailView({
                 <span className="font-medium">{event.actorName ?? '—'}</span>
                 {' · '}
                 <span className="text-ink-muted">{event.eventType}</span>
+                {/* D-029: which source requisition this event belongs to. Without it a batched
+                    BOM's three BOM_GENERATED rows are indistinguishable. */}
+                {event.requisitionNo ? (
+                  <>
+                    {' · '}
+                    <span className="font-mono text-xs text-ink-subtle">
+                      {event.requisitionNo}
+                    </span>
+                  </>
+                ) : null}
               </li>
             ))}
           </ul>
