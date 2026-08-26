@@ -146,7 +146,7 @@ export function DateField({
         )}
       >
         <Calendar aria-hidden className="size-4 shrink-0 text-ink-subtle" />
-        <span className={cn('font-mono font-medium tabular-nums', !value && 'font-sans font-normal text-ink-subtle')}>
+        <span className={cn('tabular-nums', !value && 'text-ink-subtle')}>
           {value ? formatDate(value) : (placeholder ?? t.common.dash)}
         </span>
       </button>
@@ -202,7 +202,7 @@ export function DateField({
             {WEEKDAYS.map((weekday) => (
               <span
                 key={weekday}
-                className="pb-1.5 text-center text-micro font-semibold tracking-wide text-ink-subtle"
+                className="pb-1.5 text-center text-[0.625rem] font-semibold text-ink-subtle"
               >
                 {weekday}
               </span>
@@ -232,7 +232,7 @@ export function DateField({
                   aria-pressed={isSelected}
                   className={cn(
                     'flex aspect-square items-center justify-center rounded-[--radius-control]',
-                    'font-mono text-xs tabular-nums text-ink hover:bg-brand-subtle',
+                    'text-xs tabular-nums text-ink hover:bg-brand-subtle',
                     isToday && 'font-bold text-brand',
                     isSelected && 'bg-brand text-on-brand hover:bg-brand',
                     isPast && 'cursor-not-allowed text-ink-subtle opacity-40 hover:bg-surface',

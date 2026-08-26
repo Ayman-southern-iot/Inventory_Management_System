@@ -151,7 +151,7 @@ export function ItemRow({
               min={1}
               step="1"
               placeholder="0"
-              className="text-right font-mono tabular-nums"
+              className="text-right tabular-nums"
               error={errors.quantity}
               name={field.name}
               ref={field.ref}
@@ -177,7 +177,7 @@ export function ItemRow({
               min={0}
               step="0.01"
               placeholder="0.00"
-              className="text-right font-mono tabular-nums"
+              className="text-right tabular-nums"
               error={errors.estimatedUnitPrice}
               name={field.name}
               ref={field.ref}
@@ -192,7 +192,7 @@ export function ItemRow({
       </td>
 
       {/* Top-padded to sit on the inputs' baseline rather than the cell's top edge. */}
-      <td className="whitespace-nowrap py-2.5 pr-2 pt-4 text-right align-top font-mono text-control font-semibold tabular-nums text-ink">
+      <td className="whitespace-nowrap py-2.5 pr-2 pt-4 text-right align-top text-sm font-medium tabular-nums text-ink">
         {lineTotal === null ? t.common.dash : formatBdt(lineTotal)}
       </td>
 

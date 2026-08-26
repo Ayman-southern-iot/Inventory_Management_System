@@ -8,21 +8,6 @@
     <!-- Internal tool: no reason for a search engine or a referrer to see any of it. -->
     <meta name="robots" content="noindex, nofollow" />
     <meta name="referrer" content="same-origin" />
-    <!--
-      IBM Plex, the reference design's type. `tokens.css` carries a full system fallback stack
-      for both families, so if this request fails — and on an internal VM with no outbound
-      route it will — the app renders in the system UI font rather than breaking.
-
-      This is the one external request the SPA makes. Self-hosting the two families under
-      `public/fonts` removes it and is worth doing before go-live; it means committing binary
-      assets, which is why it is not done here.
-    -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
-      rel="stylesheet"
-    />
     <title>Inventory Management System</title>
   </head>
   <body>

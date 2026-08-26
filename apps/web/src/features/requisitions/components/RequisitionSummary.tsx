@@ -54,22 +54,22 @@ export function RequisitionSummary({
   return (
     <aside className="lg:sticky lg:top-6">
       <div className="rounded-[--radius-panel] border border-border bg-surface p-5 shadow-[--shadow-panel]">
-        <h2 className="text-label font-semibold text-ink">{t.requisitions.summaryHeading}</h2>
+        <h2 className="text-base font-semibold text-ink">{t.requisitions.summaryHeading}</h2>
 
         <dl className="mt-4 flex flex-col gap-1.5 text-sm">
           <div className="flex items-baseline justify-between">
-            <dt className="text-micro font-semibold uppercase tracking-wider text-ink-subtle">{t.requisitions.transportation.itemsTotal}</dt>
-            <dd className="font-mono tabular-nums text-ink">{formatBdt(itemsTotal)}</dd>
+            <dt className="text-ink-muted">{t.requisitions.transportation.itemsTotal}</dt>
+            <dd className="tabular-nums text-ink">{formatBdt(itemsTotal)}</dd>
           </div>
           <div className="flex items-baseline justify-between">
-            <dt className="text-micro font-semibold uppercase tracking-wider text-ink-subtle">
+            <dt className="text-ink-muted">
               {t.requisitions.transportation.transportationTotal}
             </dt>
-            <dd className="font-mono tabular-nums text-ink">{formatBdt(transportationTotal)}</dd>
+            <dd className="tabular-nums text-ink">{formatBdt(transportationTotal)}</dd>
           </div>
           <div className="mt-1 flex items-baseline justify-between border-t border-border pt-3">
             <dt className="font-medium text-ink">{t.requisitions.transportation.requested}</dt>
-            <dd className="font-mono text-xl font-semibold tabular-nums text-ink">
+            <dd className="text-xl font-semibold tabular-nums text-ink">
               {formatBdt(requestedTotal)}
             </dd>
           </div>

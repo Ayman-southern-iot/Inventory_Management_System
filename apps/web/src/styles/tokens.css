@@ -5,86 +5,45 @@
  * code in a component is a bug (rules/30-frontend.md). The tracker's green/ash/red exists
  * once, as `success` / `pending` / `danger`, so a change to "what approved looks like" is a
  * one-line edit rather than a grep.
- *
- * ---------------------------------------------------------------------------------------------
- * The palette below is the reference design's, taken verbatim as hex.
- *
- * Stated in hex rather than converted to oklch on purpose: the brief was to match the reference
- * exactly, and a round-trip through oklch shifts every value by a fraction of a percent. Where a
- * colour has no counterpart in the reference (info, the zone ring) it stays in oklch, and the
- * comment says so. Mixed notation in one file is a smaller cost than a palette that is nearly
- * right.
- *
- * The character of it: a warm paper ground rather than a cool grey one, ink that is brown-black
- * rather than blue-black, and hairlines warm enough to disappear into the paper. That is most of
- * why the reference reads as considered — far more than any single component does.
  */
 @theme {
-  /*
-   * IBM Plex, as the reference specifies. The fallback stacks are real, not decoration: the font
-   * is fetched from Google's CDN in `index.html`, and this tool runs on an internal VM where that
-   * request can simply fail. When it does, the app falls back to the system UI font and stays
-   * legible rather than breaking.
-   *
-   * Self-hosting the two families under `public/fonts` is the robust version and is worth doing
-   * before go-live; it is not done here because it means committing binary assets.
-   */
   --font-sans:
-    'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
-    'Helvetica Neue', sans-serif;
-  --font-mono:
-    'IBM Plex Mono', ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, monospace;
+    'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
+    sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, monospace;
 
-  /*
-   * The small end of the type scale, tokenised because the reference leans on it heavily and
-   * Tailwind's default steps (12px, 14px) are too coarse for it. Half-pixel sizes are the
-   * reference's own; they are what keeps a dense form from feeling shouted.
-   */
-  --text-micro: 0.65625rem; /* 10.5px — uppercase letterspaced labels */
-  --text-caption: 0.75rem; /* 12px  — card subtitles, helper text */
-  --text-label: 0.8125rem; /* 13px  — card titles, nav, dense body */
-  --text-control: 0.84375rem; /* 13.5px — input text and table cells */
-
-  /* Neutral ramp — the warm paper the whole tool sits on. */
-  --color-canvas: #f6f4ef;
-  --color-surface: #ffffff;
-  /* The reference uses `--paper` for muted blocks *inside* a white card, so this is canvas. */
-  --color-surface-muted: #f6f4ef;
-  --color-border: #e6e1d6;
-  --color-border-strong: #d3ccbc;
-  --color-ink: #1b1a17;
-  --color-ink-muted: #726d63;
-  --color-ink-subtle: #a39d91;
+  /* Neutral ramp — the surface the whole tool sits on. */
+  --color-canvas: oklch(98.4% 0.002 250);
+  --color-surface: oklch(100% 0 0);
+  --color-surface-muted: oklch(96.5% 0.003 250);
+  --color-border: oklch(90.5% 0.005 250);
+  --color-border-strong: oklch(83% 0.008 250);
+  --color-ink: oklch(24% 0.014 258);
+  --color-ink-muted: oklch(52% 0.014 258);
+  --color-ink-subtle: oklch(64% 0.012 258);
 
   /* Brand. Used for primary actions and focus rings, nothing else. */
-  --color-brand: #1f3a52;
-  --color-brand-hover: #16293a;
-  --color-brand-subtle: #e7edf1;
-  --color-on-brand: #ffffff;
+  --color-brand: oklch(52% 0.16 258);
+  --color-brand-hover: oklch(46% 0.16 258);
+  --color-brand-subtle: oklch(95% 0.03 258);
+  --color-on-brand: oklch(100% 0 0);
 
   /* Status. These are semantic, not decorative: approved / awaiting / rejected. */
-  --color-success: #2e6a4c;
-  --color-success-subtle: #e7f0ea;
-  --color-pending: #a6671f;
-  --color-pending-subtle: #f8eedf;
-  --color-danger: #ae3a34;
-  --color-danger-subtle: #faeae7;
-  /*
-   * No counterpart in the reference, which has no informational state. Kept as the brand pair so
-   * an info chip reads as part of the palette rather than as a stray blue from the old scheme.
-   */
-  --color-info: #1f3a52;
-  --color-info-subtle: #e7edf1;
+  --color-success: oklch(56% 0.14 152);
+  --color-success-subtle: oklch(95.5% 0.04 152);
+  --color-pending: oklch(64% 0.13 78);
+  --color-pending-subtle: oklch(96% 0.05 85);
+  --color-danger: oklch(55% 0.19 27);
+  --color-danger-subtle: oklch(95.5% 0.04 27);
+  --color-info: oklch(58% 0.11 232);
+  --color-info-subtle: oklch(95.5% 0.03 232);
 
   /*
    * Zone identity palette. Deliberately NOT status colours: a zone is neither good nor bad, so
    * reusing success/danger here would teach the wrong thing. A slot is picked by hashing the
    * zone id (features/inventory/zone-colour.ts), which is why the palette is a fixed ring of
    * six rather than a per-zone value — a new zone must not need a code change.
-   *
-   * Left in oklch and unchanged: the reference has no zones, so there is nothing to match them
-   * to, and re-tuning six identity colours that nobody has looked at on the new ground would be
-   * guessing. Worth a pass once someone can see the inventory screens against warm paper.
+   * Hues are spaced away from success (152), pending (78) and danger (27).
    */
   --color-zone-1: oklch(52% 0.13 258);
   --color-zone-1-subtle: oklch(95.5% 0.03 258);
@@ -99,17 +58,11 @@
   --color-zone-6: oklch(50% 0.11 110);
   --color-zone-6-subtle: oklch(95.5% 0.04 110);
 
-  /* 8px on controls, 10px on cards — the reference's `--radius` and its input radius. */
   --radius-control: 0.5rem;
-  --radius-panel: 0.625rem;
+  --radius-panel: 0.75rem;
 
-  /*
-   * Two shadows, both barely there. The second is a wide, very faint spread rather than a
-   * tighter dark one: it lifts a white card off warm paper without drawing an edge, which is
-   * the difference between a card that floats and one that looks stuck on.
-   */
-  --shadow-panel: 0 1px 2px rgb(27 26 23 / 0.04), 0 1px 12px rgb(27 26 23 / 0.03);
-  --shadow-overlay: 0 8px 28px rgb(27 26 23 / 0.14);
+  --shadow-panel: 0 1px 2px oklch(24% 0.014 258 / 0.06), 0 1px 3px oklch(24% 0.014 258 / 0.04);
+  --shadow-overlay: 0 10px 32px oklch(24% 0.014 258 / 0.14);
 }
 
 @layer base {
@@ -121,46 +74,13 @@
     background-color: var(--color-canvas);
     color: var(--color-ink);
     font-family: var(--font-sans);
-    font-size: 0.875rem;
-    line-height: 1.5;
     -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
   }
 
-  /*
-   * Every control in the reference shares one shape, one border and one focus ring. Set here
-   * rather than repeated per component so a field cannot quietly drift from the others — which
-   * is what happened to the requisition item rows before they became a table.
-   */
-  input,
-  select,
-  textarea {
-    font-family: inherit;
-    font-size: var(--text-control);
-  }
-
-  /*
-   * The focus ring. A soft brand-tinted halo instead of a hard outline: on warm paper a 2px
-   * outline reads as a defect, and this has to appear on every field on a dense form.
-   * `:focus-visible`, so it follows the keyboard and does not flash on every mouse click.
-   */
+  /* Accessibility floor (rules/30-frontend.md): focus must always be visible. */
   :focus-visible {
-    outline: none;
-    border-color: var(--color-brand);
-    box-shadow: 0 0 0 3px rgb(31 58 82 / 0.1);
-  }
-
-  /*
-   * The floor rules/30-frontend.md sets: focus must always be visible. The rule above removes
-   * the outline in favour of a ring, so anything that cannot show a ring — a bare button, a
-   * link — keeps a real outline.
-   */
-  a:focus-visible,
-  button:focus-visible,
-  [role='button']:focus-visible {
     outline: 2px solid var(--color-brand);
     outline-offset: 2px;
-    box-shadow: none;
   }
 
   /* The tool is used every day by keyboard; respect a user who has asked for less motion. */

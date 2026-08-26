@@ -287,8 +287,8 @@ export function RequisitionFormPage() {
         {/* ---------------------------------------------- zone 1: the request */}
         <Panel className="shadow-[--shadow-panel]">
           <header className="border-b border-border px-5 py-4">
-            <h2 className="text-label font-semibold text-ink">{t.requisitions.detailsHeading}</h2>
-            <p className="mt-0.5 text-caption text-ink-muted">{t.requisitions.detailsHint}</p>
+            <h2 className="text-base font-semibold text-ink">{t.requisitions.detailsHeading}</h2>
+            <p className="mt-0.5 text-sm text-ink-muted">{t.requisitions.detailsHint}</p>
           </header>
 
           <div className="grid gap-5 p-5 sm:grid-cols-2">
@@ -374,10 +374,10 @@ export function RequisitionFormPage() {
             too — but disabled until the first save gives the request a stable id. */}
         <Panel className="shadow-[--shadow-panel]">
           <header className="border-b border-border px-5 py-4">
-            <h2 className="text-label font-semibold text-ink">
+            <h2 className="text-base font-semibold text-ink">
               {t.requisitions.supportingDocument.fieldHeading}
             </h2>
-            <p className="mt-0.5 text-caption text-ink-muted">
+            <p className="mt-0.5 text-sm text-ink-muted">
               {t.requisitions.supportingDocument.fieldHint}
             </p>
           </header>
@@ -398,8 +398,8 @@ export function RequisitionFormPage() {
         <Panel className="shadow-[--shadow-panel]">
           <header className="flex items-center justify-between border-b border-border px-5 py-4">
             <div>
-              <h2 className="text-label font-semibold text-ink">{t.requisitions.itemsHeading}</h2>
-              <p className="mt-0.5 text-caption text-ink-muted">{t.requisitions.itemsHint}</p>
+              <h2 className="text-base font-semibold text-ink">{t.requisitions.itemsHeading}</h2>
+              <p className="mt-0.5 text-sm text-ink-muted">{t.requisitions.itemsHint}</p>
             </div>
             <Button
               type="button"
@@ -508,10 +508,10 @@ export function RequisitionFormPage() {
             honest. */}
         <Panel className="shadow-[--shadow-panel]">
           <header className="border-b border-border px-5 py-4">
-            <h2 className="text-label font-semibold text-ink">
+            <h2 className="text-base font-semibold text-ink">
               {t.requisitions.transportation.heading}
             </h2>
-            <p className="mt-0.5 text-caption text-ink-muted">
+            <p className="mt-0.5 text-sm text-ink-muted">
               {t.requisitions.transportation.hint}
             </p>
           </header>
