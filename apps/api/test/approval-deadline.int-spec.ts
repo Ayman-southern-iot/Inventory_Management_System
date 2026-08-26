@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ApprovalStage, RequisitionStatus, Role } from '@ims/shared';
 import { createTestApp, httpClient, type HttpClient, type TestApp } from './app';
-import { createUser, login, resetData, seedSubthresholdApprover } from './factories';
+import { createDepartment, createUser, futureDeadline, login, resetData, seedSubthresholdApprover } from './factories';
 import { ApprovalDeadlineJob } from '../src/modules/requisitions/approval-deadline.job';
 
 /**
@@ -15,6 +15,7 @@ describe('approval deadline reminders', () => {
   let requester: { id: string; client: HttpClient };
   let im: { id: string; client: HttpClient };
   let approver: { id: string; client: HttpClient };
+  let departmentId: string;
 
   const actorFor = async (roles: Role[]) => {
     const user = await createUser(ctx.db, { roles });
@@ -44,6 +45,7 @@ describe('approval deadline reminders', () => {
       .execute();
 
     await seedSubthresholdApprover(ctx, approver.id);
+    departmentId = (await createDepartment(ctx.db)).id;
 
     // Requisitions cannot be deleted between tests — requisition_events is append-only — so
     // earlier overdue ones would keep answering the job and inflate every count. Stamping the
@@ -55,10 +57,23 @@ describe('approval deadline reminders', () => {
       .execute();
   });
 
-  /** Submits a small requisition (one approver) with the given deadline. */
+  /**
+   * Submits a small requisition (one approver) carrying the given deadline.
+   *
+   * D-006 made the deadline mandatory *at submit*, so a null one can no longer be submitted
+   * through the API at all. A null deadline is still reachable in the data — every row written
+   * before the rule has one — and the job must stay quiet about those, so that state is now
+   * built the only way it can legitimately exist: submit a valid deadline, then clear the
+   * column directly. The assertions below are unchanged; only the route to the state is.
+   *
+   * Past deadlines are written the same way. They are the whole subject of this spec, and D-003
+   * will refuse them at submit for the same reason D-006 refuses a missing one.
+   */
   const submitWithDeadline = async (approvalDeadline: string | null) => {
     const created = await requester.client.post('/requisitions').send({
-      approvalDeadline,
+      departmentId,
+      reason: 'Deadline reminder fixture',
+      approvalDeadline: futureDeadline(),
       items: [
         { itemName: 'Widget', quantity: 1, estimatedUnitPrice: 500, productId: null, note: null },
       ],
@@ -66,7 +81,16 @@ describe('approval deadline reminders', () => {
     const submitted = await requester.client
       .post(`/requisitions/${created.body.id}/submit`)
       .send();
-    return submitted.body;
+    expect(submitted.status).toBe(200);
+
+    await ctx.db
+      .updateTable('requisitions')
+      .set({ approval_deadline: approvalDeadline })
+      .where('id', '=', created.body.id)
+      .execute();
+
+    const refreshed = await requester.client.get(`/requisitions/${created.body.id}`);
+    return refreshed.body;
   };
 
   const yesterday = () => new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);

@@ -34,6 +34,7 @@ import {
   ApproverSlotUnassignedError,
   CannotSendBackForRevisionError,
   InvalidRequisitionTransitionError,
+  RequisitionIncompleteError,
   NotYourApprovalError,
   ApprovedExceedsRequestedError,
   SelfApprovalForbiddenError,
@@ -194,6 +195,17 @@ export class RequisitionsService {
 
     const items = await this.repo.findItems(id);
     if (items.length === 0) throw new ConflictError('Add at least one item before submitting');
+
+    // D-006, Ayman's ruling 2026-08-26. Required at *submit*, never at save: a draft is allowed
+    // to be half-finished, which is the whole point of a draft. Project is not on this list —
+    // no project means personal development, which is an answer and not an omission.
+    const missing: string[] = [];
+    if (!existing.department_id) missing.push('Department');
+    if (!existing.approval_deadline) missing.push('Approval deadline');
+    if (typeof existing.reason !== 'string' || existing.reason.trim() === '') {
+      missing.push('Reason');
+    }
+    if (missing.length > 0) throw new RequisitionIncompleteError(missing);
 
     // Frozen at submit: items total + transportation cost. The cost is what the requester
     // entered (or 0 / null when they did not need any). The DB has already enforced the

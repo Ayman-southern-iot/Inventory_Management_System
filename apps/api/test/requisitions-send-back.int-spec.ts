@@ -13,7 +13,7 @@ import {
   Role,
 } from '@ims/shared';
 import { createTestApp, httpClient, type HttpClient, type TestApp } from './app';
-import { createUser, login, resetData, seedSubthresholdApprover } from './factories';
+import { createUser, login, resetData, seedSubthresholdApprover , futureDeadline} from './factories';
 
 interface Actor {
   id: string;
@@ -93,6 +93,7 @@ describe('Requisitions — send back for revision', () => {
     approvedAmount: number,
   ) => {
     const created = await requester.client.post('/requisitions').send({
+      approvalDeadline: futureDeadline(),
       departmentId,
       urgency: 'NORMAL',
       reason: 'Test requisition',
@@ -141,6 +142,7 @@ describe('Requisitions — send back for revision', () => {
   /** Drive a multi-item requisition to APPROVED. */
   const approveMultiItem = async (items: Array<{ quantity: number; unitPrice: number }>) => {
     const created = await requester.client.post('/requisitions').send({
+      approvalDeadline: futureDeadline(),
       departmentId,
       urgency: 'NORMAL',
       reason: 'Multi-item test',
@@ -209,6 +211,7 @@ describe('Requisitions — send back for revision', () => {
   it('refuses a requisition that is not in APPROVED', async () => {
     // Take a requisition only to IM_REVIEW, leaving the chain half-open.
     const created = await requester.client.post('/requisitions').send({
+      approvalDeadline: futureDeadline(),
       departmentId,
       urgency: 'NORMAL',
       items: [

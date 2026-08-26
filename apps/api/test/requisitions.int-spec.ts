@@ -9,7 +9,7 @@ import {
   SettingKey,
 } from '@ims/shared';
 import { createTestApp, httpClient, type HttpClient, type TestApp } from './app';
-import { createUser, login, resetData } from './factories';
+import { createUser, login, resetData , futureDeadline} from './factories';
 import { SettingsService } from '../src/modules/settings/settings.service';
 
 interface Actor {
@@ -92,6 +92,7 @@ describe('requisitions and approvals', () => {
   /** Creates a draft whose total is exactly `amount`. */
   const draft = async (amount: number, overrides: Record<string, unknown> = {}) =>
     requester.client.post('/requisitions').send({
+      approvalDeadline: futureDeadline(),
       departmentId,
       urgency: 'NORMAL',
       reason: 'Test requisition',
@@ -189,7 +190,9 @@ describe('requisitions and approvals', () => {
 
     it('freezes the line totals as a generated column', async () => {
       const created = await requester.client.post('/requisitions').send({
+        approvalDeadline: futureDeadline(),
         departmentId,
+        reason: 'Line total freeze',
         items: [
           { itemName: 'A', quantity: 3, estimatedUnitPrice: 100, productId: null, note: null },
           { itemName: 'B', quantity: 2, estimatedUnitPrice: 250, productId: null, note: null },

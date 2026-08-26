@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Role } from '@ims/shared';
 import { createTestApp, httpClient, type HttpClient, type TestApp } from './app';
-import { createUser, login, resetData, seedApprovalChain } from './factories';
+import { createDepartment, createUser, login, resetData, seedApprovalChain } from './factories';
 import { createStockFixture, type StockFixture } from './stock-factories';
 import { StockService } from '../src/modules/stock/stock.service';
 
@@ -130,7 +130,12 @@ describe('date columns survive a round trip', () => {
     vi.setSystemTime(new Date('2026-08-23T20:00:00.000Z'));
 
     const inWindow = await actorFor([Role.GENERAL]);
+    // D-006: a submission carries a department and a reason. The deadline here is deliberate --
+    // it is the value under test.
+    const department = await createDepartment(ctx.db);
     const created = await inWindow.client.post('/requisitions').send({
+      departmentId: department.id,
+      reason: 'Overdue calendar boundary',
       approvalDeadline: '2026-08-23',
       items: [
         { itemName: 'Widget', quantity: 1, estimatedUnitPrice: 500, productId: null, note: null },

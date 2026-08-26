@@ -44,7 +44,7 @@ import {
   Role,
 } from '@ims/shared';
 import { createTestApp, httpClient, type HttpClient, type TestApp } from './app';
-import { createUser, login, resetData, seedSubthresholdApprover } from './factories';
+import { createUser, login, resetData, seedSubthresholdApprover , futureDeadline} from './factories';
 
 interface Actor {
   id: string;
@@ -114,6 +114,7 @@ describe('e2e: requisition → BOM pipeline (data flow)', () => {
   /** Drive a fresh requisition from draft to fully approved. Returns the detail. */
   const approveRequisition = async (amount: number, itemName = 'E2E Widget') => {
     const created = await requester.client.post('/requisitions').send({
+      approvalDeadline: futureDeadline(),
       departmentId,
       urgency: 'NORMAL',
       reason: 'E2E requisition',

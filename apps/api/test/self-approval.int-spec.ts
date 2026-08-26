@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ErrorCode, Role, SettingKey } from '@ims/shared';
 import { createTestApp, httpClient, type HttpClient, type TestApp } from './app';
-import { createUser, login, resetData } from './factories';
+import { createUser, login, resetData , futureDeadline} from './factories';
 import { SettingsService } from '../src/modules/settings/settings.service';
 
 /**
@@ -98,6 +98,7 @@ describe('self-approval (requirements §10, OQ-07)', () => {
   /** Raises a draft as `actor` for exactly `amount`, and submits it. */
   const submitAs = async (actor: Actor, amount: number) => {
     const created = await actor.client.post('/requisitions').send({
+      approvalDeadline: futureDeadline(),
       departmentId,
       urgency: 'NORMAL',
       reason: 'Self-approval test',

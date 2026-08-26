@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { Role } from '@ims/shared';
 import { createTestApp, httpClient, type HttpClient, type TestApp } from './app';
-import { createDepartment, createUser, login, resetData, seedSubthresholdApprover } from './factories';
+import { createDepartment, createUser, login, resetData, seedSubthresholdApprover , futureDeadline} from './factories';
 import { createStockFixture, type StockFixture } from './stock-factories';
 
 /**
@@ -59,6 +59,7 @@ describe('recordPurchase — BOM quantity override', () => {
     unitCost: number,
   ): Promise<{ id: string; itemId: string }> {
     const created = await requester.client.post('/requisitions').send({
+      approvalDeadline: futureDeadline(),
       departmentId,
       urgency: 'NORMAL',
       reason: 'BOM-quantity override test',
@@ -204,6 +205,7 @@ describe('recordPurchase — BOM quantity override', () => {
 
     // Build a requisition but never generate a BOM.
     const created = await requester.client.post('/requisitions').send({
+      approvalDeadline: futureDeadline(),
       departmentId,
       urgency: 'NORMAL',
       reason: 'No-BOM repo contract',

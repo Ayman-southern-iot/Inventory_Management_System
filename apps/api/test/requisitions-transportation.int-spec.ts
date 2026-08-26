@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { sql } from 'kysely';
 import { ErrorCode, Role, SettingKey } from '@ims/shared';
 import { createTestApp, httpClient, type HttpClient, type TestApp } from './app';
-import { createUser, login, resetData } from './factories';
+import { createDepartment, createUser, futureDeadline, login, resetData } from './factories';
 
 interface Actor {
   id: string;
@@ -28,6 +28,7 @@ describe('requisition transportation cost', () => {
   let ctx: TestApp;
   let requester: Actor;
   let im: Actor;
+  let departmentId: string;
 
   // Threshold higher than any requisition amount in this suite so the submit path takes the
   // subthreshold branch (designated approver under SUBTHRESHOLD_APPROVER_USER_ID) instead of
@@ -62,10 +63,14 @@ describe('requisition transportation cost', () => {
     await resetData(ctx.db);
     requester = await actorFor(ctx, [Role.GENERAL]);
     im = await actorFor(ctx, [Role.GENERAL, Role.INVENTORY_MANAGER]);
+    // D-006: a submission carries a department and a deadline, so the fixture must too.
+    departmentId = (await createDepartment(ctx.db)).id;
     await ensureSubthresholdSettings();
   });
 
   const draftBody = (overrides: Record<string, unknown> = {}) => ({
+    departmentId,
+    approvalDeadline: futureDeadline(),
     urgency: 'NORMAL',
     reason: 'Going to market',
     items: [

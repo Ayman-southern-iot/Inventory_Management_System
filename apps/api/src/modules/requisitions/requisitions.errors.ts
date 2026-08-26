@@ -13,6 +13,32 @@ export class InvalidRequisitionTransitionError extends DomainError {
   }
 }
 
+/**
+ * The request-level fields requirements §3 scopes per requisition, which a *submission* must
+ * carry even though a draft need not.
+ *
+ * Ayman's ruling, 2026-08-26, answering D-006. The requirements document lists these fields in
+ * §3 but never says they are mandatory, so this is a recorded decision and not a REQUIRED rule
+ * — see DECISIONS.md. Project is deliberately absent: a requisition with no project is personal
+ * development, which is a real answer rather than a missing one.
+ *
+ * The deadline is the load-bearing one. §5's reminder flow pings an approver who has not acted
+ * "by its approval deadline", so a requisition without one can never trigger the reminder it is
+ * entitled to, and nothing downstream notices.
+ */
+export class RequisitionIncompleteError extends DomainError {
+  constructor(missing: readonly string[]) {
+    super(
+      ErrorCode.REQUISITION_INCOMPLETE,
+      `This requisition cannot be submitted yet: ${missing.join(', ')} ${
+        missing.length === 1 ? 'is' : 'are'
+      } required. It has been kept as a draft.`,
+      HttpStatus.CONFLICT,
+      { missing },
+    );
+  }
+}
+
 export class ApprovalAlreadyActedError extends DomainError {
   constructor() {
     // Two approvers acting at the same instant, or a double-click that slipped the key.

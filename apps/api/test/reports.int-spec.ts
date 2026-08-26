@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { Role, type ExpenseReport } from '@ims/shared';
 import { createTestApp, httpClient, type HttpClient, type TestApp } from './app';
-import { createDepartment, createUser, login, resetData, seedSubthresholdApprover } from './factories';
+import { createDepartment, createUser, login, resetData, seedSubthresholdApprover , futureDeadline} from './factories';
 
 /**
  * Phase 05 task 5.8 — the expense report.
@@ -166,6 +166,7 @@ describe('expense report', () => {
   it('counts only submitted requisitions', async () => {
     // A draft has no submitted_at, so it cannot belong to any month.
     await requester.client.post('/requisitions').send({
+      approvalDeadline: futureDeadline(),
       departmentId,
       urgency: 'NORMAL',
       reason: 'Never submitted',
@@ -358,10 +359,22 @@ describe('expense report', () => {
     return response.body as ExpenseReport;
   }
 
-  /** Taken to APPROVED — a standing approval — with Department deliberately left unset. */
+  /**
+   * Taken to APPROVED — a standing approval — carrying no department.
+   *
+   * D-006 (Ayman's ruling, 2026-08-26) made department mandatory at submit, so this state can no
+   * longer be created through the API. It has not stopped existing: every requisition submitted
+   * before the rule can still have a null department, and the report must keep labelling those
+   * rather than dropping them or keying a bucket on a bare null. So the row is submitted with a
+   * department and then cleared, which is precisely what a legacy row looks like.
+   *
+   * The assertions in the test are untouched. Only the way the state is reached has changed,
+   * because the old way is now a 409.
+   */
   async function approvedWithoutDepartment(requested: number): Promise<string> {
     const created = await requester.client.post('/requisitions').send({
-      departmentId: null,
+      approvalDeadline: futureDeadline(),
+      departmentId,
       urgency: 'NORMAL',
       reason: 'No department on purpose (D-006)',
       items: [
@@ -385,6 +398,14 @@ describe('expense report', () => {
       .post(`/requisitions/approvals/${approverApprovalId}/decision`)
       .send({ approve: true });
     expect(decided.status).toBe(200);
+
+    // Now make it the legacy row this helper is named for.
+    await ctx.db
+      .updateTable('requisitions')
+      .set({ department_id: null })
+      .where('id', '=', id)
+      .execute();
+
     return id;
   }
 
@@ -411,6 +432,7 @@ describe('expense report', () => {
 
   async function draft(requested: number, reason: string): Promise<string> {
     const created = await requester.client.post('/requisitions').send({
+      approvalDeadline: futureDeadline(),
       departmentId,
       urgency: 'NORMAL',
       reason,
@@ -428,6 +450,7 @@ describe('expense report', () => {
     approved: number;
   }): Promise<{ id: string; itemId: string }> {
     const created = await requester.client.post('/requisitions').send({
+      approvalDeadline: futureDeadline(),
       departmentId,
       urgency: 'NORMAL',
       reason: 'Expense report fixture',

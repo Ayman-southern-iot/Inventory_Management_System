@@ -13,7 +13,7 @@ import { DB } from '../src/database/database.module';
 import type { Db } from '../src/database/create-db';
 import { renderBomHtml } from '../src/modules/boms/bom-pdf.template';
 import { httpClient, type HttpClient, type TestApp } from './app';
-import { createUser, login, resetData, seedSubthresholdApprover } from './factories';
+import { createUser, login, resetData, seedSubthresholdApprover , futureDeadline} from './factories';
 
 /**
  * Transportation cost on a requisition, as it lands on the BOM.
@@ -123,6 +123,7 @@ describe('BOM transportation cost', () => {
         : {};
 
     const created = await requester.client.post('/requisitions').send({
+      approvalDeadline: futureDeadline(),
       departmentId,
       urgency: 'NORMAL',
       reason: 'BOM transportation test',

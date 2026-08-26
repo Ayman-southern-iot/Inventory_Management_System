@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ErrorCode, Role, SettingKey } from '@ims/shared';
 import { createTestApp, httpClient, type HttpClient, type TestApp } from './app';
-import { createUser, login, resetData } from './factories';
+import { createDepartment, createUser, futureDeadline, login, resetData } from './factories';
 import { SettingsService } from '../src/modules/settings/settings.service';
 import { CONFIG, type AppConfig } from '../src/config';
 
@@ -205,7 +205,11 @@ describe('signatures', () => {
     const im = await signIn([Role.GENERAL, Role.INVENTORY_MANAGER]);
     const requester = await signIn([Role.GENERAL]);
 
+    // D-006: department, deadline and reason are required at submit.
+    const department = await createDepartment(ctx.db);
     const draft = await requester.client.post('/requisitions').send({
+      departmentId: department.id,
+      approvalDeadline: futureDeadline(),
       urgency: 'NORMAL',
       reason: 'Signature test',
       items: [{ productId: null, itemName: 'Widget', quantity: 1, estimatedUnitPrice: 100, note: null }],

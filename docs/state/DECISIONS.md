@@ -725,3 +725,23 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   than a route on `UsersController`, because that class is `@Roles(ADMIN)` at the class level
   and a non-admin route one decorator away from the admin surface is how that decorator gets
   removed by accident. Candidates are deliberately **not** filtered by existing delegations.
+
+## Phase 07 — QA round 2 defect burndown
+
+- 2026-08-26 — Department, approval deadline and reason are required **at submit**, never at save
+  (D-006) — Ayman's ruling. Requirements §3 lists the four request-level fields but never calls
+  any of them mandatory, so this is DERIVED, not REQUIRED. The deadline is the load-bearing one:
+  §5's reminder flow pings an approver who has not acted "by its approval deadline", so a
+  requisition without one can never trigger the reminder it is entitled to and nothing notices.
+  Enforced in `RequisitionsService.submit` as `REQUISITION_INCOMPLETE`, carrying `details.missing`
+  so the form can mark the offending fields. Drafts stay freely incomplete, which is the point of
+  a draft.
+- 2026-08-26 — Project stays optional, and a requisition with no project means **personal
+  development** (D-006) — Ayman's ruling. It is an answer, not an omission, so it is a display
+  label over a null `project_id` rather than a seeded Project row: no migration, no data change,
+  and reporting keeps a single "no project" bucket to group on.
+- 2026-08-26 — Fixtures that submit now carry a department, deadline and reason; the two specs
+  that deliberately needed a null deadline (`approval-deadline.int-spec`) or a null department
+  (`reports.int-spec`) construct that state by clearing the column after submit — those states
+  still exist in rows written before the rule, and the assertions about them are unchanged. Only
+  the route to the state moved, because the old route is now a 409.

@@ -27,7 +27,7 @@ import type { Db } from '../src/database/create-db';
 import { PdfRendererService } from '../src/modules/pdf/pdf-renderer.service';
 import { renderBomHtml } from '../src/modules/boms/bom-pdf.template';
 import { httpClient, nextClientIp, type HttpClient, type TestApp } from './app';
-import { createUser, login, resetData, seedSubthresholdApprover } from './factories';
+import { createUser, login, resetData, seedSubthresholdApprover , futureDeadline} from './factories';
 
 /**
  * A stand-in signature file id. The template is a pure function of the detail plus the resolved
@@ -197,6 +197,7 @@ describe('BOMs PDF', () => {
     approvedAmount: number | null = null,
   ) => {
     const created = await requester.client.post('/requisitions').send({
+      approvalDeadline: futureDeadline(),
       departmentId,
       urgency: 'NORMAL',
       reason: 'PDF test requisition',

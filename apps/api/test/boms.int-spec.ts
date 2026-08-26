@@ -13,7 +13,7 @@ import {
   Role,
 } from '@ims/shared';
 import { createTestApp, httpClient, type HttpClient, type TestApp } from './app';
-import { createUser, login, resetData, seedSubthresholdApprover } from './factories';
+import { createUser, login, resetData, seedSubthresholdApprover , futureDeadline} from './factories';
 
 interface Actor {
   id: string;
@@ -92,6 +92,7 @@ describe('BOMs', () => {
    */
   const approveRequisition = async (amount: number, lineName = 'Widget') => {
     const created = await requester.client.post('/requisitions').send({
+      approvalDeadline: futureDeadline(),
       departmentId,
       urgency: 'NORMAL',
       reason: 'Test requisition',
@@ -242,6 +243,7 @@ describe('BOMs', () => {
     it('returns 409 when any source requisition is not APPROVED', async () => {
       // Take a requisition only to IM_REVIEW, leaving the approver chain open.
       const created = await requester.client.post('/requisitions').send({
+        approvalDeadline: futureDeadline(),
         departmentId,
         urgency: 'NORMAL',
         items: [

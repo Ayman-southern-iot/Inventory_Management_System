@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ErrorCode, Role, type RequisitionFunding } from '@ims/shared';
 import { createTestApp, httpClient, type HttpClient, type TestApp } from './app';
-import { createDepartment, createUser, login, resetData, seedSubthresholdApprover } from './factories';
+import { createDepartment, createUser, login, resetData, seedSubthresholdApprover , futureDeadline} from './factories';
 import { createStockFixture, type StockFixture } from './stock-factories';
 
 /**
@@ -923,6 +923,7 @@ describe('funds and purchasing', () => {
   /** Drives a requisition all the way to BOM_GENERATED, which is where this module takes over. */
   async function requisitionOnBom(amount: number): Promise<{ id: string; itemId: string }> {
     const created = await requester.client.post('/requisitions').send({
+      approvalDeadline: futureDeadline(),
       departmentId,
       urgency: 'NORMAL',
       reason: 'Funds lifecycle test',
@@ -970,6 +971,7 @@ describe('funds and purchasing', () => {
     transportationDescription: string,
   ): Promise<{ id: string; itemId: string }> {
     const created = await requester.client.post('/requisitions').send({
+      approvalDeadline: futureDeadline(),
       departmentId,
       urgency: 'NORMAL',
       reason: 'Funds lifecycle test',
@@ -1074,6 +1076,7 @@ describe('funds and purchasing', () => {
   /** A verified purchase with two lines, for the all-or-nothing rollback test. */
   async function verifiedTwoLines(): Promise<{ id: string }> {
     const created = await requester.client.post('/requisitions').send({
+      approvalDeadline: futureDeadline(),
       departmentId,
       urgency: 'NORMAL',
       reason: 'Two-line delivery',

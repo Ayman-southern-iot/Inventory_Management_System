@@ -39,6 +39,15 @@ export const ErrorCode = {
 
   // Requisitions and approvals
   REQUISITION_INVALID_TRANSITION: 'REQUISITION_INVALID_TRANSITION',
+  /**
+   * A draft is allowed to be incomplete; a submission is not. Ayman's ruling, 2026-08-26 (D-006):
+   * department, approval deadline and reason are required *at submit only*, so the requester can
+   * still save a half-finished draft. Project stays optional.
+   *
+   * Carries `details.missing` — the field names — because the SPA marks the offending inputs, and
+   * a single "fill it in" message cannot say which one.
+   */
+  REQUISITION_INCOMPLETE: 'REQUISITION_INCOMPLETE',
   APPROVAL_ALREADY_ACTED: 'APPROVAL_ALREADY_ACTED',
   NOT_YOUR_APPROVAL: 'NOT_YOUR_APPROVAL',
   APPROVER_SLOT_UNASSIGNED: 'APPROVER_SLOT_UNASSIGNED',

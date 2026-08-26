@@ -383,3 +383,15 @@ export async function seedSubthresholdApprover(ctx: TestApp, approverId: string)
     userAgent: 'factories.test.ts',
   });
 }
+
+/**
+ * A deadline comfortably in the future, for fixtures that need to reach a submitted state.
+ *
+ * D-006 (Ayman's ruling, 2026-08-26) made the approval deadline mandatory at submit, so every
+ * fixture that submits now needs one. A relative date rather than a constant, because a hardcoded
+ * future date silently becomes a past date and takes the suite red on an arbitrary morning —
+ * and once D-003 lands, a past deadline is refused at submit too.
+ */
+export function futureDeadline(daysAhead = 30): string {
+  return new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0, 10);
+}

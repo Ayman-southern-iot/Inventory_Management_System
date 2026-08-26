@@ -1029,6 +1029,10 @@ export const t = {
     REQUISITION_INVALID_TRANSITION:
       'That is no longer possible for this requisition. Refresh to see its current stage.',
     APPROVAL_ALREADY_ACTED: 'Someone already acted on this approval. Refresh to see the outcome.',
+    // The server names the missing fields in details.missing; the form marks them. This is the
+    // fallback for anywhere that shows the bare message. Drafts are unaffected by design.
+    REQUISITION_INCOMPLETE:
+      'Department, approval deadline and reason are needed before this can be submitted. Your draft has been kept.',
     NOT_YOUR_APPROVAL: 'That approval is not assigned to you.',
     APPROVER_SLOT_UNASSIGNED:
       'An approver slot has not been assigned yet. An administrator must set it in Settings → Approver slots before this can be submitted.',

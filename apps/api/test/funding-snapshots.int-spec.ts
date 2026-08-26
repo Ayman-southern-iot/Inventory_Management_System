@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { Role, type RequisitionFunding } from '@ims/shared';
 import { createTestApp, httpClient, type HttpClient, type TestApp } from './app';
-import { createDepartment, createUser, login, resetData, seedSubthresholdApprover } from './factories';
+import { createDepartment, createUser, login, resetData, seedSubthresholdApprover , futureDeadline} from './factories';
 
 /**
  * Regression coverage for the append-only funding_snapshots history used by the detail page.
@@ -167,6 +167,7 @@ describe('funding snapshots', () => {
 
   async function createRequisition(amount: number): Promise<{ id: string; itemId: string }> {
     const response = await requester.client.post('/requisitions').send({
+      approvalDeadline: futureDeadline(),
       departmentId,
       urgency: 'NORMAL',
       reason: 'Funding snapshot test',

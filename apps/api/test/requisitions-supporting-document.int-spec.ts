@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ApprovalAction, ApprovalStage, ErrorCode, Role } from '@ims/shared';
 import { createTestApp, httpClient, type HttpClient, type TestApp } from './app';
-import { createUser, login, resetData } from './factories';
+import { createUser, login, resetData , futureDeadline} from './factories';
 
 interface Actor {
   id: string;
@@ -52,6 +52,7 @@ describe('requisition supporting document', () => {
 
   const draft = async (author: Actor = requester) =>
     author.client.post('/requisitions').send({
+      approvalDeadline: futureDeadline(),
       urgency: 'NORMAL',
       reason: 'With a quote sheet',
       items: [
