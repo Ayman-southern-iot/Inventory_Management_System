@@ -331,7 +331,7 @@ export function RequisitionDetailPage() {
                         {detail.reason ? (
                           <div className="mt-4">
                             <p className="text-xs font-medium uppercase tracking-wide text-ink-subtle">
-                              {t.requisitions.noteLabel}
+                              {t.requisitions.reason}
                             </p>
                             <p className="mt-1 whitespace-pre-wrap text-sm text-ink-muted">
                               {detail.reason}

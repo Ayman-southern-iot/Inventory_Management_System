@@ -124,7 +124,7 @@ export const t = {
     department: 'Department',
     designation: 'Designation',
     phaseNotice:
-      'Foundation is in place. Inventory, borrowing, requisitions and BOM arrive in later phases.',
+      'Inventory, borrowing, requisitions and Bills of Materials are all live. Your roles decide what appears in the sidebar.',
   },
 
   users: {
@@ -229,7 +229,9 @@ export const t = {
   },
 
   inventory: {
-    title: 'Inventory',
+    // 'Products', not 'Inventory': this page is reached from the sidebar item labelled Products,
+    // and its siblings are Categories and Locations. The heading was the odd one out (D-010).
+    title: 'Products',
     subtitle: 'The stock register. Every movement is recorded and cannot be edited afterwards.',
     // list
     searchPlaceholder: 'Search by name or storage ID',
@@ -747,7 +749,6 @@ export const t = {
     lineItemsHeading: 'Line items',
     // Field labels for the unlabelled grey text. Adds clarity to "why this requisition" and
     // the transportation breakdown without a heavy redesign.
-    noteLabel: 'Note',
     transportationDescriptionLabel: 'Description',
     // money
     requested: 'Requested',
