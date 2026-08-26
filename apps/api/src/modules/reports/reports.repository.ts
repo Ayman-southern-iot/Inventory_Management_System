@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
 import { APPROVAL_STANDING_STATUSES } from '@ims/shared';
-import type { ExpenseReportQuery } from '@ims/shared';
+import type { ExpenseReportQuery, InventoryReportQuery } from '@ims/shared';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
 
@@ -154,6 +154,53 @@ export class ReportsRepository {
 
     return rows.rows;
   }
+
+  /**
+   * Current stock by product, one row per placement (EX-02, requirements §10).
+   *
+   * A read, and only a read. Nothing here touches `stock_placements` or `stock_ledger` as
+   * anything but a SELECT — writing is `StockService`'s alone (rules/40-database.md), and a
+   * report has no business being the exception that proves it.
+   *
+   * LEFT JOIN rather than INNER: a product holding nothing is a real answer to "what do we
+   * have", and dropping it would make the export quietly disagree with the products list it is
+   * exported from. The service folds these rows back up per product.
+   *
+   * Ordered here rather than in each formatter, so the PDF, the CSV and the JSON read in the
+   * same sequence. Sorting the same data in three places is how three views start disagreeing.
+   */
+  async inventory(query: InventoryReportQuery): Promise<InventoryRow[]> {
+    const categoryId = query.categoryId ?? null;
+    const zoneId = query.zoneId ?? null;
+
+    const rows = await sql<InventoryRow>`
+      SELECT
+        p.id               AS product_id,
+        p.product_code     AS product_code,
+        p.name             AS name,
+        c.name             AS category_name,
+        p.unit             AS unit,
+        p.is_active        AS is_active,
+        z.name             AS zone_name,
+        -- The compartment's human label is \`code\` ("1A", "3C"), not \`name\` — only the zone
+        -- carries a name. Getting this wrong fails at run time, not at compile time.
+        cm.code            AS compartment_name,
+        sp.quantity        AS quantity,
+        sp.reserved_qty    AS reserved_qty,
+        sp.quarantined_qty AS quarantined_qty
+      FROM products p
+      LEFT JOIN categories c ON c.id = p.category_id
+      LEFT JOIN stock_placements sp ON sp.product_id = p.id
+      LEFT JOIN storage_compartments cm ON cm.id = sp.compartment_id
+      LEFT JOIN storage_zones z ON z.id = cm.zone_id
+      WHERE (${query.includeInactive} OR p.is_active)
+        AND (${categoryId}::uuid IS NULL OR p.category_id = ${categoryId}::uuid)
+        AND (${zoneId}::uuid IS NULL OR z.id = ${zoneId}::uuid)
+      ORDER BY p.name ASC, z.name ASC NULLS LAST, cm.code ASC NULLS LAST
+    `.execute(this.db);
+
+    return rows.rows;
+  }
 }
 
 export function toNumbers(row: ExpenseRow) {
@@ -167,4 +214,19 @@ export function toNumbers(row: ExpenseRow) {
     spent: money(row.spent),
     returned: money(row.returned),
   };
+}
+
+/** One product-placement pair; a product with stock in three compartments yields three rows. */
+export interface InventoryRow {
+  product_id: string;
+  product_code: string;
+  name: string;
+  category_name: string | null;
+  unit: string;
+  is_active: boolean;
+  zone_name: string | null;
+  compartment_name: string | null;
+  quantity: number | null;
+  reserved_qty: number | null;
+  quarantined_qty: number | null;
 }

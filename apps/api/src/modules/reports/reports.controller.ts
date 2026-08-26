@@ -2,8 +2,11 @@ import { Controller, Get, Inject, Query, Res, StreamableFile } from '@nestjs/com
 import {
   Role,
   expenseReportQuerySchema,
+  inventoryReportQuerySchema,
   type ExpenseReport,
   type ExpenseReportQuery,
+  type InventoryReport,
+  type InventoryReportQuery,
 } from '@ims/shared';
 import type { Response } from 'express';
 import { CONFIG, type AppConfig } from '../../config';
@@ -11,6 +14,7 @@ import { zodPipe } from '../../common/zod-validation.pipe';
 import { AuthenticatedThrottle } from '../../common/throttling';
 import { Roles } from '../auth/auth.decorators';
 import { PdfRendererService } from '../pdf/pdf-renderer.service';
+import { inventoryReportToCsv, inventoryReportToHtml } from './inventory.export';
 import { expenseReportToCsv, expenseReportToHtml } from './reports.export';
 import { ReportsService } from './reports.service';
 
@@ -67,6 +71,50 @@ export class ReportsController {
     const pdf = await this.pdf.render(html, 'landscape');
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="expenses-${Date.now()}.pdf"`);
+    return new StreamableFile(pdf);
+  }
+
+  /* ------------------------------------------------------- inventory (EX-02) */
+
+  /**
+   * requirements §10 asks for two exports: the BOM, which shipped in phase 04, and **inventory
+   * records**, which never did. It was the only REQUIRED obligation in the document with no
+   * implementation, filed by QA under D-024 without its own defect id.
+   *
+   * Same three-endpoint shape as the expense report above, and for the same reason: the JSON the
+   * screen reads and the two files Accounts receives all come from one `ReportsService.inventory`
+   * call, so the printed copy cannot drift from what the IM was looking at when they printed it.
+   */
+  @Get('inventory')
+  async inventory(
+    @Query(zodPipe(inventoryReportQuerySchema)) query: InventoryReportQuery,
+  ): Promise<InventoryReport> {
+    return this.reports.inventory(query);
+  }
+
+  @Get('inventory/export.csv')
+  async inventoryCsv(
+    @Query(zodPipe(inventoryReportQuerySchema)) query: InventoryReportQuery,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const report = await this.reports.inventory(query);
+    const body = inventoryReportToCsv(report);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="inventory-${Date.now()}.csv"`);
+    return new StreamableFile(Buffer.from(body, 'utf-8'));
+  }
+
+  /** Portrait, not landscape: five columns fit, and the store room prints on A4 portrait. */
+  @Get('inventory/export.pdf')
+  async inventoryPdf(
+    @Query(zodPipe(inventoryReportQuerySchema)) query: InventoryReportQuery,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const report = await this.reports.inventory(query);
+    const html = inventoryReportToHtml(report, this.config.reportingTimeZone);
+    const pdf = await this.pdf.render(html, 'portrait');
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="inventory-${Date.now()}.pdf"`);
     return new StreamableFile(pdf);
   }
 }

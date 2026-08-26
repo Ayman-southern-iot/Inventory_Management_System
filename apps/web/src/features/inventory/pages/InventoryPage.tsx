@@ -14,6 +14,10 @@ import { flattenCategoryTree, indentFor } from '../category-tree';
 import { SEARCH_DEBOUNCE_MS } from '../constants';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { ProductFormDialog } from '../components/ProductFormDialog';
+import { inventoryExportPath } from '@/features/reports/api';
+import { useExportDownload } from '@/features/reports/use-export-download';
+import { messageForError } from '@/lib/error-message';
+import { useToast } from '@/components/ui/Toast';
 
 export function InventoryPage() {
   const navigate = useNavigate();
@@ -51,6 +55,37 @@ export function InventoryPage() {
     [categories.data],
   );
 
+  /**
+   * EX-02, requirements §10: inventory records exportable as PDF for Accounts. One hook per
+   * button, matching the expense report — a slow PDF render must not disable the CSV button.
+   *
+   * The export carries the filters currently on screen, so the IM exports what they are looking
+   * at rather than a different report that happens to share a name. Paging is deliberately not
+   * passed: a printed stock report is the whole filtered set, not page 3 of it.
+   */
+  const csvExport = useExportDownload();
+  const pdfExport = useExportDownload();
+  const toast = useToast();
+
+  async function runInventoryExport(format: 'csv' | 'pdf'): Promise<void> {
+    try {
+      await (format === 'csv' ? csvExport : pdfExport).download(
+        inventoryExportPath(
+          {
+            includeInactive,
+            inStockOnly,
+            ...(categoryId ? { categoryId } : {}),
+          },
+          format,
+        ),
+        `inventory-${new Date().toISOString().slice(0, 10)}.${format}`,
+      );
+    } catch (error) {
+      // These figures go to Accounts on paper. A silent failure is what D-024 was.
+      toast.error(messageForError(error));
+    }
+  }
+
   const resetToFirstPage = () => setPage(1);
 
   return (
@@ -60,9 +95,30 @@ export function InventoryPage() {
         subtitle={t.inventory.subtitle}
         action={
           canManageStock ? (
-            <Button icon={<Plus aria-hidden className="size-4" />} onClick={() => setFormOpen(true)}>
-              {t.inventory.newProduct}
-            </Button>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {/* EX-02: requirements §10 wants inventory records on paper for Accounts. Guarded
+                  by the same role check as the rest of this bar — the API refuses a General user
+                  regardless, and offering a button that 403s is not a courtesy. */}
+              <Button
+                variant="ghost"
+                size="sm"
+                isLoading={csvExport.pending}
+                onClick={() => void runInventoryExport('csv')}
+              >
+                {t.inventory.downloadCsv}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                isLoading={pdfExport.pending}
+                onClick={() => void runInventoryExport('pdf')}
+              >
+                {t.inventory.downloadPdf}
+              </Button>
+              <Button icon={<Plus aria-hidden className="size-4" />} onClick={() => setFormOpen(true)}>
+                {t.inventory.newProduct}
+              </Button>
+            </div>
           ) : undefined
         }
       />

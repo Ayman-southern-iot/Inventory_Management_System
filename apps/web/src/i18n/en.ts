@@ -232,6 +232,9 @@ export const t = {
     // 'Products', not 'Inventory': this page is reached from the sidebar item labelled Products,
     // and its siblings are Categories and Locations. The heading was the odd one out (D-010).
     title: 'Products',
+    // EX-02: requirements section 10 asks for inventory records exportable for Accounts.
+    downloadCsv: 'Export CSV',
+    downloadPdf: 'Export PDF',
     subtitle: 'The stock register. Every movement is recorded and cannot be edited afterwards.',
     // list
     searchPlaceholder: 'Search by name or storage ID',

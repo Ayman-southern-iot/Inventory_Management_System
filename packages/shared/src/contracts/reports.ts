@@ -86,3 +86,68 @@ export const expenseReportSchema = z.object({
   totals: expenseBucketSchema.omit({ key: true, label: true }),
 });
 export type ExpenseReport = z.infer<typeof expenseReportSchema>;
+
+/* =========================================================== inventory report */
+
+/**
+ * EX-02. requirements §10: "Bill of Materials and inventory records can be exported as PDF for
+ * the Inventory Manager to submit physical copies to the accounts department."
+ *
+ * The BOM half shipped in phase 04. This is the inventory half — the only REQUIRED obligation in
+ * the document that had no implementation at all. QA filed it under D-024 without its own defect
+ * ID, which is how it stayed invisible through two rounds.
+ *
+ * `docs/reference/09-bom.md` describes the shape: current stock by product with its location
+ * breakdown. Filters mirror the products list so the IM can export what they are looking at
+ * rather than a different report that happens to share a name.
+ */
+export const inventoryReportQuerySchema = z.object({
+  categoryId: z.string().uuid().optional(),
+  zoneId: z.string().uuid().optional(),
+  /** Deactivated products are excluded by default; history still needs them on request. */
+  includeInactive: z.coerce.boolean().default(false),
+  /** Drops products holding nothing, which is most of a mature catalogue. */
+  inStockOnly: z.coerce.boolean().default(false),
+});
+export type InventoryReportQuery = z.infer<typeof inventoryReportQuerySchema>;
+
+/** Where one product physically sits, and how much of it is there. */
+export const inventoryReportPlacementSchema = z.object({
+  zoneName: z.string(),
+  compartmentName: z.string(),
+  quantity: z.number().int(),
+  reserved: z.number().int(),
+  quarantined: z.number().int(),
+});
+export type InventoryReportPlacement = z.infer<typeof inventoryReportPlacementSchema>;
+
+export const inventoryReportRowSchema = z.object({
+  productId: z.string().uuid(),
+  productCode: z.string(),
+  name: z.string(),
+  categoryName: z.string().nullable(),
+  unit: z.string(),
+  isActive: z.boolean(),
+  /** Totals across every placement below, so the row reconciles against its own breakdown. */
+  totalQuantity: z.number().int(),
+  totalReserved: z.number().int(),
+  totalQuarantined: z.number().int(),
+  /** `quantity − reserved − quarantined`: what someone could actually be handed today. */
+  totalAvailable: z.number().int(),
+  placements: z.array(inventoryReportPlacementSchema),
+});
+export type InventoryReportRow = z.infer<typeof inventoryReportRowSchema>;
+
+export const inventoryReportSchema = z.object({
+  /** ISO instant the report was taken. A stock report is only true at a moment. */
+  generatedAt: z.string(),
+  rows: z.array(inventoryReportRowSchema),
+  totals: z.object({
+    productCount: z.number().int(),
+    totalQuantity: z.number().int(),
+    totalReserved: z.number().int(),
+    totalQuarantined: z.number().int(),
+    totalAvailable: z.number().int(),
+  }),
+});
+export type InventoryReport = z.infer<typeof inventoryReportSchema>;

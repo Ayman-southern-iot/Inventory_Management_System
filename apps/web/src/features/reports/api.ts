@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import type { ExpenseReport, ExpenseReportQuery } from '@ims/shared';
+import type { ExpenseReport, ExpenseReportQuery, InventoryReportQuery } from '@ims/shared';
 import { api } from '@/api/client';
 import { queryKeys } from '@/api/keys';
 import { toSearchParams } from '@/api/search-params';
@@ -31,4 +31,22 @@ export function expenseExportPath(query: ExpenseReportQuery, format: 'csv' | 'pd
     params.set(key, String(value));
   }
   return `/reports/expenses/export.${format}?${params.toString()}`;
+}
+
+/**
+ * The inventory export path (EX-02, requirements §10).
+ *
+ * Same shape and same caveat as `expenseExportPath` above: relative to the API base, for
+ * `api.blob()` to prefix and authenticate. Never put it in an `href` — that is what D-024 was.
+ */
+export function inventoryExportPath(
+  query: InventoryReportQuery,
+  format: 'csv' | 'pdf',
+): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (value === undefined || value === null || value === '') continue;
+    params.set(key, String(value));
+  }
+  return `/reports/inventory/export.${format}?${params.toString()}`;
 }
