@@ -7,8 +7,11 @@ import type {
   RecordPurchaseInput,
   RequisitionFunding,
   SendToAccountsInput,
+  UndoSendToAccountsInput,
   UnverifyPurchaseInput,
   VerifyPurchaseInput,
+  VoidFundReceiptInput,
+  VoidPurchaseInput,
 } from '@ims/shared';
 import { api } from '@/api/client';
 import { queryKeys } from '@/api/keys';
@@ -80,6 +83,39 @@ export function useUnverifyPurchase(id: string) {
     api.post<RequisitionFunding>(`/requisitions/${id}/unverify-purchase`, input, {
       idempotencyKey: randomId(),
     }),
+  );
+}
+
+/**
+ * The three reversals added in phase 08. All idempotency-keyed for the same reason as
+ * `useUnverifyPurchase`: the one failure mode a Back button has is being clicked twice, and the
+ * second click must not undo a second entry the IM never looked at.
+ */
+export function useUndoSendToAccounts(id: string) {
+  return useFundsMutation<UndoSendToAccountsInput>(id, (input) =>
+    api.post<RequisitionFunding>(`/requisitions/${id}/undo-send-to-accounts`, input, {
+      idempotencyKey: randomId(),
+    }),
+  );
+}
+
+export function useVoidReceipt(id: string) {
+  return useFundsMutation<{ receiptId: string; reason: string }>(id, ({ receiptId, reason }) =>
+    api.post<RequisitionFunding>(
+      `/requisitions/${id}/fund-receipts/${receiptId}/void`,
+      { reason } satisfies VoidFundReceiptInput,
+      { idempotencyKey: randomId() },
+    ),
+  );
+}
+
+export function useVoidPurchase(id: string) {
+  return useFundsMutation<{ purchaseId: string; reason: string }>(id, ({ purchaseId, reason }) =>
+    api.post<RequisitionFunding>(
+      `/requisitions/${id}/purchases/${purchaseId}/void`,
+      { reason } satisfies VoidPurchaseInput,
+      { idempotencyKey: randomId() },
+    ),
   );
 }
 

@@ -148,7 +148,6 @@ export function FundsPanel({ requisition }: { requisition: RequisitionDetail }) 
                     key={purchase.id}
                     requisitionId={requisition.id}
                     purchase={purchase}
-                    canAct={canAct}
                   />
                 ))
               )}
@@ -220,6 +219,9 @@ const ACTION_LABEL: Record<FundsAction, string> = {
   purchase: t.funds.recordPurchase,
   verify: t.funds.verifyPurchase,
   unverify: t.funds.unverifyPurchase,
+  'undo-send': t.funds.undoSendToAccounts,
+  'void-receipt': t.funds.voidReceipt,
+  'void-purchase': t.funds.voidPurchase,
   stock: t.funds.receiveToStock,
 };
 
@@ -246,13 +248,33 @@ function nextAction(status: RequisitionStatus): FundsAction | null {
 }
 
 /**
- * The "Back" button. Only one step back — at PURCHASE_VERIFIED we let the IM return to PURCHASED
- * so they can re-record. The server refuses if any money has been returned to Accounts, so this
- * never silently rewinds a refund.
+ * The "Back" button, at every stage that has a way back.
+ *
+ * Ayman's ruling, 2026-08-26: an IM who clicks one stage too far needs to be able to return.
+ * One step per press and repeatable — at the two money stages that means undoing the most recent
+ * *entry*, not the whole stage, because a requisition funded in three instalments must not lose
+ * two of them to one click.
+ *
+ * `STOCKED` and a borrowed-out requisition deliberately return null. Stock has moved by then, and
+ * putting it back is a stock adjustment rather than a status flip.
+ *
+ * Mirrors the server's own guards exactly. Where the two disagree the user gets a button that
+ * 409s, which is worse than no button.
  */
 function previousAction(status: RequisitionStatus): FundsAction | null {
-  if (status === RequisitionStatus.PURCHASE_VERIFIED) return 'unverify';
-  return null;
+  switch (status) {
+    case RequisitionStatus.SENT_TO_ACCOUNTS:
+      return 'undo-send';
+    case RequisitionStatus.FUNDS_PARTIAL:
+    case RequisitionStatus.FUNDS_RECEIVED:
+      return 'void-receipt';
+    case RequisitionStatus.PURCHASED:
+      return 'void-purchase';
+    case RequisitionStatus.PURCHASE_VERIFIED:
+      return 'unverify';
+    default:
+      return null;
+  }
 }
 
 /* ------------------------------------------------------------ fragments */

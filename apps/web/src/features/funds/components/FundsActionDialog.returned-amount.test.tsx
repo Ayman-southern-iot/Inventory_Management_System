@@ -23,6 +23,12 @@ vi.mock('../api', async (importOriginal) => {
     useRecordPurchase: vi.fn(),
     useVerifyPurchase: vi.fn(),
     useUnverifyPurchase: vi.fn(),
+    // Phase 08 added three reversal hooks to this dialog. They go through useQueryClient like
+    // the rest, so leaving them live would need the provider this file deliberately avoids.
+    useUndoSendToAccounts: vi.fn(),
+    useVoidReceipt: vi.fn(),
+    useVoidPurchase: vi.fn(),
+    useAttachInvoice: vi.fn(),
   };
 });
 
@@ -100,6 +106,18 @@ function renderVerifyDialog(fundingProp: RequisitionFunding | null) {
   );
   vi.mocked(fundsApi.useUnverifyPurchase).mockReturnValue(
     idle as unknown as ReturnType<typeof fundsApi.useUnverifyPurchase>,
+  );
+  vi.mocked(fundsApi.useUndoSendToAccounts).mockReturnValue(
+    idle as unknown as ReturnType<typeof fundsApi.useUndoSendToAccounts>,
+  );
+  vi.mocked(fundsApi.useVoidReceipt).mockReturnValue(
+    idle as unknown as ReturnType<typeof fundsApi.useVoidReceipt>,
+  );
+  vi.mocked(fundsApi.useVoidPurchase).mockReturnValue(
+    idle as unknown as ReturnType<typeof fundsApi.useVoidPurchase>,
+  );
+  vi.mocked(fundsApi.useAttachInvoice).mockReturnValue(
+    idle as unknown as ReturnType<typeof fundsApi.useAttachInvoice>,
   );
   vi.mocked(fundsApi.useVerifyPurchase).mockReturnValue({
     mutateAsync: verify,

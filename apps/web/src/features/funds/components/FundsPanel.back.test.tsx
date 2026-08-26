@@ -168,15 +168,37 @@ describe('FundsPanel — single Back button', () => {
     expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument();
   });
 
-  it('omits the Back button at PURCHASED — the server accepts no inverse step', () => {
-    renderPanel(detail({ status: RequisitionStatus.PURCHASED }));
+  /**
+   * These two used to assert the opposite — that PURCHASED and FUNDS_RECEIVED had no way back,
+   * which was true until phase 08 and is the exact thing Ayman asked for on 2026-08-26: "I
+   * accidentally accept the record money received and go to the record purchase, but there is no
+   * way of going back." Re-grounded rather than deleted; the assertions are inverted because the
+   * rule they encode was replaced by a ruling, not because they were failing.
+   */
+  it.each([
+    ['SENT_TO_ACCOUNTS', RequisitionStatus.SENT_TO_ACCOUNTS],
+    ['FUNDS_PARTIAL', RequisitionStatus.FUNDS_PARTIAL],
+    ['FUNDS_RECEIVED', RequisitionStatus.FUNDS_RECEIVED],
+    ['PURCHASED', RequisitionStatus.PURCHASED],
+    ['PURCHASE_VERIFIED', RequisitionStatus.PURCHASE_VERIFIED],
+  ])('offers Back at %s', (_label, status) => {
+    renderPanel(detail({ status }));
 
-    // We can verify by absence: only the forward button is present, no Back button.
+    expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument();
+  });
+
+  /**
+   * The one place there is deliberately no way back. Stock has moved by STOCKED, and putting it
+   * back is a stock adjustment through StockService — not a status flip, and not this button.
+   */
+  it('offers no Back once the goods are in stock', () => {
+    renderPanel(detail({ status: RequisitionStatus.STOCKED }));
+
     expect(screen.queryByRole('button', { name: 'Back' })).toBeNull();
   });
 
-  it('omits the Back button at FUNDS_RECEIVED — too early to undo', () => {
-    renderPanel(detail({ status: RequisitionStatus.FUNDS_RECEIVED }));
+  it('offers no Back at BOM_GENERATED, where voiding the BOM is the way back', () => {
+    renderPanel(detail({ status: RequisitionStatus.BOM_GENERATED }));
 
     expect(screen.queryByRole('button', { name: 'Back' })).toBeNull();
   });

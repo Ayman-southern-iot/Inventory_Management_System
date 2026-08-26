@@ -1,5 +1,4 @@
-import { useRef } from 'react';
-import { Paperclip, Download } from 'lucide-react';
+import { Download } from 'lucide-react';
 import type { Purchase } from '@ims/shared';
 import { api } from '@/api/client';
 import { Badge } from '@/components/ui/primitives';
@@ -8,10 +7,14 @@ import { useToast } from '@/components/ui/Toast';
 import { t } from '@/i18n/en';
 import { messageForError } from '@/lib/error-message';
 import { formatBdt, formatDateTime } from '@/lib/format';
-import { invoicePath, useAttachInvoice } from '../api';
+import { invoicePath } from '../api';
 
 /**
- * One purchase, with its invoice.
+ * One purchase in the funding panel, with a link to its invoice.
+ *
+ * Read-only since phase 08. Attaching now happens inside the verify-purchase form, which is the
+ * step that *requires* the invoice — the IM was previously refused by Verify, then had to close
+ * it and come back here to attach, then reopen Verify.
  *
  * The download is a blob fetch rather than an anchor href: the endpoint is bearer-authenticated
  * and a plain link carries no token. The object URL is revoked as soon as the click is handed to
@@ -20,27 +23,11 @@ import { invoicePath, useAttachInvoice } from '../api';
 export function InvoiceRow({
   requisitionId,
   purchase,
-  canAct,
 }: {
   requisitionId: string;
   purchase: Purchase;
-  canAct: boolean;
 }) {
   const toast = useToast();
-  const attach = useAttachInvoice(requisitionId);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  async function onPick(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file) return;
-    try {
-      await attach.mutateAsync({ purchaseId: purchase.id, file });
-      toast.success(t.funds.invoiceAttached);
-    } catch (error) {
-      toast.error(messageForError(error));
-    }
-  }
 
   async function onDownload() {
     try {
@@ -84,27 +71,6 @@ export function InvoiceRow({
           </Button>
         ) : (
           <Badge tone="pending">{t.funds.invoiceMissing}</Badge>
-        )}
-
-        {canAct && (
-          <>
-            <input
-              ref={inputRef}
-              type="file"
-              accept="application/pdf,image/png,image/jpeg"
-              className="sr-only"
-              onChange={(event) => void onPick(event)}
-            />
-            <Button
-              variant="secondary"
-              size="sm"
-              isLoading={attach.isPending}
-              onClick={() => inputRef.current?.click()}
-              icon={<Paperclip aria-hidden className="size-4" />}
-            >
-              {purchase.hasInvoice ? t.funds.replaceInvoice : t.funds.attachInvoice}
-            </Button>
-          </>
         )}
       </div>
     </li>

@@ -6,14 +6,18 @@ import { TextAreaField, TextField } from '@/components/ui/Field';
 import { useToast } from '@/components/ui/Toast';
 import { t } from '@/i18n/en';
 import { fieldErrorsFor, messageForError } from '@/lib/error-message';
-import { formatBdt } from '@/lib/format';
+import { formatBdt, formatDateTime } from '@/lib/format';
 import {
   useRecordPurchase,
   useRecordReceipt,
   useSendToAccounts,
+  useUndoSendToAccounts,
   useUnverifyPurchase,
   useVerifyPurchase,
+  useVoidPurchase,
+  useVoidReceipt,
 } from '../api';
+import { InvoiceAttachButton } from './InvoiceAttachButton';
 import { ReceiveToStockForm } from './ReceiveToStockForm';
 
 export type FundsAction =
@@ -22,7 +26,26 @@ export type FundsAction =
   | 'purchase'
   | 'verify'
   | 'unverify'
+  /* Phase 08 — the way back from each money stage. */
+  | 'undo-send'
+  | 'void-receipt'
+  | 'void-purchase'
   | 'stock';
+
+/** The reversals. Each takes a mandatory reason, which is what the Save guard keys on. */
+const REVERSALS: readonly FundsAction[] = ['unverify', 'undo-send', 'void-receipt', 'void-purchase'];
+
+/**
+ * What to call the free-text box. A reversal asks *why*, and says so — the same field labelled
+ * "Note" reads as optional, and on these four it is the record of a decision.
+ */
+const REASON_LABEL: Partial<Record<FundsAction, string>> = {
+  verify: t.funds.returnNote,
+  unverify: t.funds.unverifyReason,
+  'undo-send': t.funds.undoSendReason,
+  'void-receipt': t.funds.voidReceiptReason,
+  'void-purchase': t.funds.voidPurchaseReason,
+};
 
 const TITLES: Record<FundsAction, string> = {
   'send-to-accounts': t.funds.sendToAccounts,
@@ -30,8 +53,31 @@ const TITLES: Record<FundsAction, string> = {
   purchase: t.funds.recordPurchase,
   verify: t.funds.verifyPurchase,
   unverify: t.funds.unverifyPurchase,
+  'undo-send': t.funds.undoSendToAccounts,
+  'void-receipt': t.funds.voidReceipt,
+  'void-purchase': t.funds.voidPurchase,
   stock: t.funds.receiveToStock,
 };
+
+/**
+ * The entry a Back press would undo: the most recent live one.
+ *
+ * `listReceipts` and `listPurchases` both order oldest-first, so the last element is the newest —
+ * and voided rows never reach the client, so "live" needs no filtering here. Naming it in the
+ * dialog is the whole point: "Back" above a list of three receipts does not say which of them is
+ * about to disappear.
+ */
+function mostRecentReceipt(funding: RequisitionFunding | null) {
+  return funding && funding.receipts.length > 0
+    ? funding.receipts[funding.receipts.length - 1]
+    : undefined;
+}
+
+function mostRecentPurchase(funding: RequisitionFunding | null) {
+  return funding && funding.purchases.length > 0
+    ? funding.purchases[funding.purchases.length - 1]
+    : undefined;
+}
 
 /** Today, in the browser's calendar — the default for every "when did this happen" field. */
 function today(): string {
@@ -80,6 +126,9 @@ export function FundsActionDialog({
   const recordPurchase = useRecordPurchase(requisition.id);
   const verify = useVerifyPurchase(requisition.id);
   const unverify = useUnverifyPurchase(requisition.id);
+  const undoSend = useUndoSendToAccounts(requisition.id);
+  const voidReceipt = useVoidReceipt(requisition.id);
+  const voidPurchase = useVoidPurchase(requisition.id);
 
   // Form state, reset whenever the dialog opens so a previous attempt never leaks into the next.
   const [note, setNote] = useState('');
@@ -103,6 +152,11 @@ export function FundsActionDialog({
    */
   const outstandingBalance = funding ? funding.outstanding : null;
 
+  /** The entry a void would take out, named in the hint so the IM can see what they are undoing. */
+  const voidingReceipt = mostRecentReceipt(funding);
+  const voidingPurchase = mostRecentPurchase(funding);
+  const needsReason = action !== null && REVERSALS.includes(action);
+
   useEffect(() => {
     if (!action) return;
     setNote('');
@@ -122,7 +176,10 @@ export function FundsActionDialog({
     recordReceipt.isPending ||
     recordPurchase.isPending ||
     verify.isPending ||
-    unverify.isPending;
+    unverify.isPending ||
+    undoSend.isPending ||
+    voidReceipt.isPending ||
+    voidPurchase.isPending;
 
   async function onSubmit() {
     if (!action) return;
@@ -183,6 +240,27 @@ export function FundsActionDialog({
           });
           toast.success(t.funds.purchaseUnverified);
           break;
+        case 'undo-send':
+          await undoSend.mutateAsync({ reason: note.trim() });
+          toast.success(t.funds.sendToAccountsUndone);
+          break;
+        case 'void-receipt': {
+          // Re-read at submit rather than captured on open: the panel refetches funding on every
+          // mutation, so an entry recorded in another tab between opening and submitting would
+          // otherwise be voided instead of the one named in the hint.
+          const receipt = mostRecentReceipt(funding);
+          if (!receipt) return;
+          await voidReceipt.mutateAsync({ receiptId: receipt.id, reason: note.trim() });
+          toast.success(t.funds.receiptVoided);
+          break;
+        }
+        case 'void-purchase': {
+          const purchase = mostRecentPurchase(funding);
+          if (!purchase) return;
+          await voidPurchase.mutateAsync({ purchaseId: purchase.id, reason: note.trim() });
+          toast.success(t.funds.purchaseVoided);
+          break;
+        }
         default:
           return;
       }
@@ -215,7 +293,13 @@ export function FundsActionDialog({
           <Button variant="secondary" onClick={onClose} disabled={busy}>
             {t.common.cancel}
           </Button>
-          <Button onClick={() => void onSubmit()} isLoading={busy}>
+          {/* Every reversal takes a mandatory reason (the schema's `min(1)`), so Save stays
+              disabled until one is typed rather than round-tripping to a 400. */}
+          <Button
+            onClick={() => void onSubmit()}
+            isLoading={busy}
+            disabled={needsReason && note.trim().length === 0}
+          >
             {t.common.save}
           </Button>
         </>
@@ -308,6 +392,42 @@ export function FundsActionDialog({
 
         {action === 'verify' && (
           <>
+            {/* The invoices live here rather than in the panel's purchase list, because this is
+                the step that refuses without them (INVOICE_MISSING). Every purchase on the
+                requisition gets a row, so a three-vendor buy is three invoices in one place. */}
+            {funding && funding.purchases.length > 0 && (
+              <div className="rounded-[--radius-control] border border-border">
+                <p className="border-b border-border px-3 py-2 text-xs font-semibold uppercase tracking-wide text-ink-subtle">
+                  {t.funds.invoices}
+                </p>
+                <ul className="divide-y divide-border">
+                  {funding.purchases.map((purchase) => (
+                    <li
+                      key={purchase.id}
+                      className="flex flex-wrap items-center justify-between gap-2 px-3 py-2"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm text-ink">
+                          {purchase.vendor} · {formatBdt(purchase.totalAmount)}
+                        </p>
+                        <p className="text-xs">
+                          {purchase.hasInvoice ? (
+                            <span className="text-success">{t.funds.invoiceOnFile}</span>
+                          ) : (
+                            <span className="text-pending">{t.funds.invoiceMissing}</span>
+                          )}
+                        </p>
+                      </div>
+                      <InvoiceAttachButton
+                        requisitionId={requisition.id}
+                        purchase={purchase}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             {funding && (
               <p className="text-sm text-ink-muted">
                 {t.funds.unspent}: <strong>{formatBdt(funding.unspent)}</strong>
@@ -337,14 +457,30 @@ export function FundsActionDialog({
           <p className="text-sm text-ink-muted">{t.funds.unverifyPurchaseHint}</p>
         )}
 
+        {action === 'undo-send' && (
+          <p className="text-sm text-ink-muted">{t.funds.undoSendToAccountsHint}</p>
+        )}
+
+        {/* Both void hints name the entry — amount and date, or amount and vendor — so nobody
+            undoes the wrong instalment or the wrong vendor's purchase. */}
+        {action === 'void-receipt' && voidingReceipt && (
+          <p className="text-sm text-ink-muted">
+            {t.funds.voidReceiptHint
+              .replace('{amount}', formatBdt(voidingReceipt.amount))
+              .replace('{when}', formatDateTime(voidingReceipt.receivedAt))}
+          </p>
+        )}
+
+        {action === 'void-purchase' && voidingPurchase && (
+          <p className="text-sm text-ink-muted">
+            {t.funds.voidPurchaseHint
+              .replace('{amount}', formatBdt(voidingPurchase.totalAmount))
+              .replace('{vendor}', voidingPurchase.vendor)}
+          </p>
+        )}
+
         <TextAreaField
-          label={
-            action === 'verify'
-              ? t.funds.returnNote
-              : action === 'unverify'
-                ? t.funds.unverifyReason
-                : t.common.note
-          }
+          label={REASON_LABEL[action ?? 'receipt'] ?? t.common.note}
           value={note}
           onChange={(event) => setNote(event.target.value)}
         />

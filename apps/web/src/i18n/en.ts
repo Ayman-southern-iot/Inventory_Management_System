@@ -348,12 +348,38 @@ export const t = {
     attachInvoice: 'Attach invoice',
     replaceInvoice: 'Replace invoice',
     downloadInvoice: 'Download invoice',
+    // The invoice block inside the verify form. Verification is refused without them, so this is
+    // where they belong rather than in the panel list the IM had to go back to.
+    invoices: 'Invoices',
+    invoiceOnFile: 'Invoice attached',
     verifyPurchase: 'Verify purchase',
     unverifyPurchase: 'Back to purchased',
     unverifyPurchaseHint:
       'Returns this requisition to "Purchased" so the invoice and purchase rows can be re-recorded.',
     unverifyReason: 'Why are you un-verifying?',
     purchaseUnverified: 'Purchase un-verified',
+    /*
+     * Phase 08 — the rest of the way back. Every title names the stage being returned *to*, and
+     * every hint names the exact entry being undone, because "Back" one row above a list of three
+     * receipts does not say which of them is about to disappear.
+     */
+    undoSendToAccounts: 'Back to BOM',
+    undoSendToAccountsHint:
+      'Takes this requisition off the Accounts queue and returns it to "BOM generated". Only possible while no money has arrived.',
+    undoSendReason: 'Why are you taking it back?',
+    sendToAccountsUndone: 'Taken back from Accounts',
+    voidReceipt: 'Undo money received',
+    voidReceiptHint:
+      'Voids {amount} received on {when}. The entry is kept and marked, not deleted, and the funded total drops by that much.',
+    voidReceiptReason: 'Why is this receipt being voided?',
+    receiptVoided: 'Receipt voided',
+    voidPurchase: 'Undo purchase',
+    voidPurchaseHint:
+      'Voids the {amount} purchase from {vendor}. The entry is kept and marked, not deleted. Anything already added to inventory blocks this.',
+    voidPurchaseReason: 'Why is this purchase being voided?',
+    purchaseVoided: 'Purchase voided',
+    /** Shown in place of Back at the two stages that cannot be undone. */
+    noWayBack: 'Added to inventory. This cannot be undone here.',
     receiveToStock: 'Add to inventory',
     borrowToUser: 'Issue to a user',
     // fields
