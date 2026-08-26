@@ -89,7 +89,11 @@ export class ReportsRepository {
         ? sql`max(to_char(date_trunc('month', r.submitted_at AT TIME ZONE ${timeZone}::text), 'FMMonth YYYY'))`
         : query.groupBy === 'department'
           ? sql`coalesce(max(d.name), 'No department')`
-          : sql`coalesce(max(p.name), 'No project')`;
+          // Ayman's ruling, 2026-08-26: a requisition with no project is personal development,
+          // not an unlabelled gap. Same bucket, honest name. "No department" keeps its wording
+          // because D-006 now requires a department at submit, so that bucket only ever holds
+          // rows written before the rule.
+          : sql`coalesce(max(p.name), 'Personal development')`;
 
     const rows = await sql<ExpenseRow>`
       WITH scoped AS (

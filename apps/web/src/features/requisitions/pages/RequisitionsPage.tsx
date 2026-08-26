@@ -204,7 +204,7 @@ export function RequisitionsPage({ mode }: { mode: Mode }) {
                     </td>
                     <td className="px-4 py-2.5 text-ink">
                       {mode === 'mine'
-                        ? (requisition.projectName ?? t.common.none)
+                        ? (requisition.projectName ?? t.requisitions.noProject)
                         : requisition.requesterName}
                       {requisition.departmentName ? (
                         <span className="block text-xs text-ink-subtle">

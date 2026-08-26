@@ -164,7 +164,9 @@ export function RequisitionDetailPage() {
           <>
             <PageHeader
               title={detail.requisitionNo}
-              subtitle={`${detail.requesterName}${detail.departmentName ? ` · ${detail.departmentName}` : ''}${detail.projectName ? ` · ${detail.projectName}` : ''}`}
+              // A missing project is not a gap to hide: it means personal development
+              // (Ayman's ruling, 2026-08-26), so it is always named.
+              subtitle={`${detail.requesterName}${detail.departmentName ? ` · ${detail.departmentName}` : ''} · ${detail.projectName ?? t.requisitions.noProject}`}
               action={
                 <div className="flex flex-wrap gap-2">
                   {detail.status === RequisitionStatus.DRAFT && isOwner(detail) ? (

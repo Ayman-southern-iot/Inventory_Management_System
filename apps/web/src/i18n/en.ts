@@ -720,7 +720,14 @@ export const t = {
     detailsHint: 'These apply to the whole request.',
     department: 'Department',
     project: 'Project',
-    noProject: 'No project',
+    /**
+     * Ayman's ruling, 2026-08-26: a requisition with no project is personal development, which
+     * is an answer rather than a blank. Project therefore stays optional (D-006) while the label
+     * stops reading like something the requester forgot to fill in. It is a label over a null
+     * project_id, not a seeded Project row, so nothing is migrated and reporting keeps one
+     * bucket to group on.
+     */
+    noProject: 'Personal development',
     urgency: 'Urgency',
     approvalDeadline: 'Approval deadline',
     approvalDeadlineHint: 'Approvers are reminded once this passes. Pick today or later.',
