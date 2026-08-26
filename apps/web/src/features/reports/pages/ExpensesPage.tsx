@@ -194,6 +194,8 @@ export function ExpensesPage() {
                     t.expenses.approved,
                     t.expenses.funded,
                     t.expenses.spent,
+                    t.expenses.spentOnPurchases,
+                    t.expenses.spentOnTransportation,
                     t.expenses.returned,
                     t.expenses.netCash,
                   ]}
@@ -206,6 +208,8 @@ export function ExpensesPage() {
                       <Amount value={bucket.approved} />
                       <Amount value={bucket.funded} />
                       <Amount value={bucket.spent} />
+                      <Amount value={bucket.purchased} />
+                      <Amount value={bucket.transportation} />
                       <Amount value={bucket.returned} />
                       <Amount value={bucket.netCash} emphasis />
                     </tr>
@@ -219,6 +223,8 @@ export function ExpensesPage() {
                     <Amount value={data.totals.approved} />
                     <Amount value={data.totals.funded} />
                     <Amount value={data.totals.spent} />
+                    <Amount value={data.totals.purchased} />
+                    <Amount value={data.totals.transportation} />
                     <Amount value={data.totals.returned} />
                     <Amount value={data.totals.netCash} emphasis />
                   </tr>

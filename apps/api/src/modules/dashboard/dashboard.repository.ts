@@ -159,7 +159,7 @@ export class DashboardRepository {
     // Two queries rather than one with a correlated subquery: they aggregate over different
     // tables at different grains, and the builder keeps both checked against the schema. The
     // raw-SQL version of this had a status-enum-to-text[] cast that only failed at runtime.
-    const [totals, purchased] = await Promise.all([
+    const [totals, purchased, carried] = await Promise.all([
       this.db
         .selectFrom('requisitions')
         .where('requester_id', '=', userId)
@@ -178,14 +178,44 @@ export class DashboardRepository {
         .innerJoin('requisitions', 'requisitions.id', 'purchases.requisition_id')
         .where('requisitions.requester_id', '=', userId)
         .where('purchases.voided_at', 'is', null)
-        .select((eb) => eb.fn.sum<string>('purchases.total_amount').as('spent'))
+        .select((eb) => eb.fn.sum<string>('purchases.total_amount').as('purchased'))
+        .executeTakeFirst(),
+      /**
+       * Transportation, once per requisition that has actually bought something.
+       *
+       * It is spent money with no `purchases` row — it buys carriage, not stock — so a spend
+       * figure that reads only that table is short by exactly the carriage. Reported by Ayman on
+       * 2026-08-26: a 1,000 requisition of which 500 was a van showed 250 spent, not 750.
+       *
+       * `DISTINCT` on the requisition id, not a join: a requisition bought from three vendors has
+       * three purchase rows and one van, and joining would charge the van three times.
+       */
+      this.db
+        .selectFrom('requisitions')
+        .where('requester_id', '=', userId)
+        .where('transportation_cost', 'is not', null)
+        .where((eb) =>
+          eb.exists(
+            eb
+              .selectFrom('purchases')
+              .select('purchases.id')
+              .whereRef('purchases.requisition_id', '=', 'requisitions.id')
+              .where('purchases.voided_at', 'is', null),
+          ),
+        )
+        .select((eb) => eb.fn.sum<string>('transportation_cost').as('transportation'))
         .executeTakeFirst(),
     ]);
+
+    const purchases = money(purchased?.purchased);
+    const carriage = money(carried?.transportation);
 
     return {
       requested: money(totals?.requested),
       approved: money(totals?.approved),
-      spent: money(purchased?.spent),
+      purchased: purchases,
+      transportation: carriage,
+      spent: round2(purchases + carriage),
     };
   }
 }

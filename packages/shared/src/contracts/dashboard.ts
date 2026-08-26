@@ -75,7 +75,19 @@ export type BorrowingRecord = z.infer<typeof borrowingRecordSchema>;
 export const spendRecordSchema = z.object({
   requested: z.number(),
   approved: z.number(),
+  /**
+   * Everything that left the company on this person's requisitions: invoices **plus**
+   * transportation. `purchased + transportation === spent`, always.
+   *
+   * Transportation has no `purchases` row of its own — it buys carriage, not stock — so a figure
+   * that reads only that table is short by exactly the carriage, silently and permanently. Ayman
+   * found it on 2026-08-26: a 1,000 requisition of which 500 was a van reported 250 spent.
+   */
   spent: z.number(),
+  /** The invoice half of `spent`. */
+  purchased: z.number(),
+  /** The carriage half. Counted once per requisition that has actually bought something. */
+  transportation: z.number(),
 });
 export type SpendRecord = z.infer<typeof spendRecordSchema>;
 

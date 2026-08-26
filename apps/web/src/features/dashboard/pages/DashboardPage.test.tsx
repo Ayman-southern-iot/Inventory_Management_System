@@ -63,6 +63,10 @@ function record(overrides: Partial<PersonalRecord> = {}): PersonalRecord {
     spend: {
       requested: 120_000,
       approved: 95_000,
+      // 76,000 of invoices plus 12,500 of carriage. Kept as three distinct numbers so a figure
+      // rendered under the wrong label cannot pass by coincidence.
+      purchased: 76_000,
+      transportation: 12_500,
       spent: 88_500,
     },
     ...overrides,
@@ -141,6 +145,21 @@ describe('the personal record', () => {
     expect(figureIn(MONEY, t.dashboard.spendRequested)).toContain('120,000');
   });
 
+  /**
+   * The bug Ayman reported on 2026-08-26: a 1,000 requisition of which 500 was a van showed 250
+   * spent, because transportation has no `purchases` row behind it. Spent now covers both, and
+   * the two halves are shown so the total can be reconciled against the invoices rather than
+   * merely believed.
+   */
+  it('breaks spent into purchases and transportation, and they add up', () => {
+    renderPage(record());
+
+    expect(figureIn(MONEY, t.dashboard.spendPurchased)).toContain('76,000');
+    expect(figureIn(MONEY, t.dashboard.spendTransportation)).toContain('12,500');
+    // 76,000 + 12,500 = 88,500, which is what the Spent tile says.
+    expect(figureIn(MONEY, t.dashboard.spendSpent)).toContain('88,500');
+  });
+
   /** A wall of zeroes says less than one sentence. */
   it('says so plainly when a person has done nothing yet', () => {
     renderPage(
@@ -154,7 +173,7 @@ describe('the personal record', () => {
           damagedUnits: 0,
           notWorkingUnits: 0,
         },
-        spend: { requested: 0, approved: 0, spent: 0 },
+        spend: { requested: 0, approved: 0, purchased: 0, transportation: 0, spent: 0 },
       }),
     );
 

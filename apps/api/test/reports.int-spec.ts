@@ -238,6 +238,10 @@ describe('expense report', () => {
       const rows = parseCsv(csvResponse.body as string);
       // header + 1 data row + totals
       expect(rows).toHaveLength(3);
+      // "On purchases" and "On transportation" split the Spent column, added 2026-08-26 when
+      // Ayman found that Spent read only `purchases` and so was short by the carriage on every
+      // requisition that had any. The export has to carry the breakdown for the same reason the
+      // screen does: Spent cannot be reconciled against a pile of invoices without it.
       expect(rows[0]).toEqual([
         'Bucket',
         'Requisitions',
@@ -245,16 +249,33 @@ describe('expense report', () => {
         'Approved',
         'Funded',
         'Spent',
+        'On purchases',
+        'On transportation',
         'Returned',
         'Net cash',
       ]);
-      // The data row agrees with the JSON bucket (last column is `netCash`).
-      expect(Number(rows[1]![1])).toBe(json.buckets[0]!.requisitionCount);
-      expect(Number(rows[1]![5])).toBeCloseTo(json.buckets[0]!.spent, 2);
-      expect(Number(rows[1]![7])).toBeCloseTo(json.buckets[0]!.netCash, 2);
+      // Columns are found by header name, not by position. Positional indexes silently start
+      // reading the neighbouring column the moment one is inserted, and the assertion still
+      // passes often enough to be believed.
+      const columnOf = (header: string) => {
+        const index = rows[0]!.indexOf(header);
+        expect(index, `no "${header}" column in the CSV`).toBeGreaterThanOrEqual(0);
+        return index;
+      };
+      const cell = (row: number, header: string) => Number(rows[row]![columnOf(header)]);
+
+      // The data row agrees with the JSON bucket.
+      expect(cell(1, 'Requisitions')).toBe(json.buckets[0]!.requisitionCount);
+      expect(cell(1, 'Spent')).toBeCloseTo(json.buckets[0]!.spent, 2);
+      expect(cell(1, 'Net cash')).toBeCloseTo(json.buckets[0]!.netCash, 2);
+      // The split adds up to the whole, in the export exactly as on screen.
+      expect(cell(1, 'On purchases') + cell(1, 'On transportation')).toBeCloseTo(
+        json.buckets[0]!.spent,
+        2,
+      );
       // Totals row == bucket row here because there is only one bucket, and equals the JSON totals.
-      expect(Number(rows[2]![5])).toBeCloseTo(json.totals.spent, 2);
-      expect(Number(rows[2]![7])).toBeCloseTo(json.totals.netCash, 2);
+      expect(cell(2, 'Spent')).toBeCloseTo(json.totals.spent, 2);
+      expect(cell(2, 'Net cash')).toBeCloseTo(json.totals.netCash, 2);
     });
 
     it('CSV export honours the date filter', async () => {

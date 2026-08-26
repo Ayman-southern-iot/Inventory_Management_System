@@ -68,8 +68,25 @@ export const expenseBucketSchema = z.object({
   requested: z.number(),
   approved: z.number(),
   funded: z.number(),
-  /** Sum of purchase invoice totals — what the company actually bought, and the expense figure. */
+  /**
+   * Everything that left the company: invoices **plus** transportation.
+   *
+   * Transportation has no `purchases` row — it buys carriage, not stock — so a spend figure that
+   * reads only that table is short by exactly the carriage, silently and permanently. Reported by
+   * Ayman on 2026-08-26 from a requisition where 500 of a 1,000 request was a van: the panel had
+   * it right and this report did not.
+   *
+   * `purchased + transportation === spent`, always. The two halves are reported separately below
+   * so an auditor adding up invoice totals can see where the difference went.
+   */
   spent: z.number(),
+  /** The invoice half of `spent` — the figure that matches the purchase rows. */
+  purchased: z.number(),
+  /**
+   * The carriage half of `spent`. Counted once the requisition has a purchase in the window:
+   * nothing has been carried until something has been bought.
+   */
+  transportation: z.number(),
   /** Money refunded to Accounts. Kept separate so it is never mistaken for an expense. */
   returned: z.number(),
   /** `funded − returned` — cash out of pocket, not the purchase expense. */

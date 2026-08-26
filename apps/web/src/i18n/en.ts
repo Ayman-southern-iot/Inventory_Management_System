@@ -157,7 +157,13 @@ export const t = {
     spendRequested: 'Requested',
     spendApproved: 'Approved',
     spendSpent: 'Actually spent',
-    spendHint: 'Spent counts what was purchased against your requisitions, not what was approved.',
+    // The two halves of "actually spent", shown because transportation has no invoice behind it:
+    // an auditor adding up purchase totals would otherwise be short by exactly the carriage and
+    // have nowhere on the page to find it.
+    spendPurchased: 'On purchases',
+    spendTransportation: 'On transportation',
+    spendHint:
+      'Spent is what actually left the company on your requisitions: the purchases plus the transportation. Not what was requested or approved.',
 
     /** Shown in place of a block when the person has nothing in it yet. */
     nothingYet: 'Nothing yet.',
@@ -483,11 +489,19 @@ export const t = {
     approved: 'Approved',
     funded: 'Funded',
     spent: 'Spent',
+    /**
+     * The two halves of `Spent`. Transportation has no invoice behind it — it buys carriage, not
+     * stock — so somebody reconciling `Spent` against a pile of purchase invoices would be short
+     * by exactly the carriage with nowhere on the page to find it. Ayman reported precisely that
+     * on 2026-08-26, on a 1,000 requisition of which 500 was a van.
+     */
+    spentOnPurchases: 'On purchases',
+    spentOnTransportation: 'On transportation',
     returned: 'Returned',
     /**
-     * `Net cash` is funded minus returned — what actually left the bank account. It is *not*
-     * the purchase expense (that is the `spent` column). The two columns are kept apart so a
-     * reader never has to guess which one describes the goods.
+     * `Net cash` is funded minus returned — what actually left the bank account. With
+     * transportation now inside `Spent`, the two agree once a requisition has settled, which is
+     * the check a reader should be able to do in their head.
      */
     netCash: 'Net cash',
     total: 'Total',

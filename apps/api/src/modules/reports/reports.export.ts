@@ -39,6 +39,8 @@ export function expenseReportToCsv(report: ExpenseReport): string {
     'Approved',
     'Funded',
     'Spent',
+    'On purchases',
+    'On transportation',
     'Returned',
     'Net cash',
   ];
@@ -51,6 +53,8 @@ export function expenseReportToCsv(report: ExpenseReport): string {
       bucket.approved.toFixed(2),
       bucket.funded.toFixed(2),
       bucket.spent.toFixed(2),
+      bucket.purchased.toFixed(2),
+      bucket.transportation.toFixed(2),
       bucket.returned.toFixed(2),
       bucket.netCash.toFixed(2),
     ].join(','),
@@ -64,6 +68,8 @@ export function expenseReportToCsv(report: ExpenseReport): string {
     totals.approved.toFixed(2),
     totals.funded.toFixed(2),
     totals.spent.toFixed(2),
+    totals.purchased.toFixed(2),
+    totals.transportation.toFixed(2),
     totals.returned.toFixed(2),
     totals.netCash.toFixed(2),
   ].join(',');
@@ -99,6 +105,8 @@ export function expenseReportToHtml(report: ExpenseReport, timeZone: string): st
           <td class="num">${formatBdt(bucket.approved)}</td>
           <td class="num">${formatBdt(bucket.funded)}</td>
           <td class="num">${formatBdt(bucket.spent)}</td>
+          <td class="num">${formatBdt(bucket.purchased)}</td>
+          <td class="num">${formatBdt(bucket.transportation)}</td>
           <td class="num">${formatBdt(bucket.returned)}</td>
           <td class="num"><strong>${formatBdt(bucket.netCash)}</strong></td>
         </tr>`,
@@ -155,6 +163,8 @@ export function expenseReportToHtml(report: ExpenseReport, timeZone: string): st
               <td class="num">${formatBdt(totals.approved)}</td>
               <td class="num">${formatBdt(totals.funded)}</td>
               <td class="num">${formatBdt(totals.spent)}</td>
+              <td class="num">${formatBdt(totals.purchased)}</td>
+              <td class="num">${formatBdt(totals.transportation)}</td>
               <td class="num">${formatBdt(totals.returned)}</td>
               <td class="num">${formatBdt(totals.netCash)}</td>
             </tr>

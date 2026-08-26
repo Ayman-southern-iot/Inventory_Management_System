@@ -129,6 +129,13 @@ export function DashboardPage() {
                 <Figure label={t.dashboard.spendRequested} value={formatBdt(data.spend.requested)} />
                 <Figure label={t.dashboard.spendApproved} value={formatBdt(data.spend.approved)} />
                 <Figure label={t.dashboard.spendSpent} value={formatBdt(data.spend.spent)} />
+                {/* The two halves of "actually spent". Transportation has no invoice behind it,
+                    so without this row the figure cannot be reconciled against the purchases. */}
+                <Figure label={t.dashboard.spendPurchased} value={formatBdt(data.spend.purchased)} />
+                <Figure
+                  label={t.dashboard.spendTransportation}
+                  value={formatBdt(data.spend.transportation)}
+                />
               </RecordBlock>
             </div>
           )}
