@@ -77,6 +77,44 @@
     -webkit-font-smoothing: antialiased;
   }
 
+  /*
+   * No spinner arrows on a number input, anywhere.
+   *
+   * Set here rather than per field so a new numeric input cannot ship with them by omission.
+   * They are worth removing on their own account — two tiny hit targets nobody aims for, next to
+   * money — and they are also the visible half of the wheel-scroll bug: the same increment
+   * mechanism the arrows drive is what a stray page scroll triggers over a focused field.
+   *
+   * Hiding them does NOT stop the wheel, so `Field.tsx`'s blur-on-wheel guard stays. This is
+   * cosmetic; that is the actual fix.
+   */
+  input[type='number']::-webkit-inner-spin-button,
+  input[type='number']::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    appearance: none;
+    margin: 0;
+  }
+
+  /* Firefox, and the standard property for everything else. */
+  input[type='number'] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+
+  /*
+   * Every numeric input reads left-to-right like the text beside it.
+   *
+   * The item rows had their quantity and unit price right-aligned while the transportation
+   * amount was left, so two amount fields on one form disagreed about where typing starts.
+   * Alignment is settled here; `tabular-nums` stays at the call sites, because that is digit
+   * *width* and has nothing to do with which edge the text sits against.
+   *
+   * Read-only figures are untouched: a column of totals still right-aligns so the digits stack.
+   */
+  input[type='number'] {
+    text-align: left;
+  }
+
   /* Accessibility floor (rules/30-frontend.md): focus must always be visible. */
   :focus-visible {
     outline: 2px solid var(--color-brand);

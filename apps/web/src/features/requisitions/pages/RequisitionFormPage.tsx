@@ -14,6 +14,7 @@ import {
 import { Button } from '@/components/ui/Button';
 import { DateField } from '@/components/ui/DateField';
 import { SelectField, TextAreaField, TextField } from '@/components/ui/Field';
+import { Switch } from '@/components/ui/Switch';
 import { PageHeader, Panel } from '@/components/ui/primitives';
 import { LoadingState } from '@/components/ui/states';
 import { useToast } from '@/components/ui/Toast';
@@ -106,6 +107,12 @@ export function RequisitionFormPage() {
    * does not resend a stale id.
    */
   const [pendingSupportingDocumentId, setPendingSupportingDocumentId] = useState<string | null>(null);
+  /**
+   * Collapsed by default: most requisitions have no transportation cost, and an empty pair of
+   * fields on every form is noise. Opened below when an existing draft already carries one, so
+   * editing never hides a figure the requester entered.
+   */
+  const [transportationOpen, setTransportationOpen] = useState(false);
 
   const form = useForm<SaveRequisitionInput>({
     resolver: zodResolver(saveRequisitionSchema),
@@ -171,6 +178,22 @@ export function RequisitionFormPage() {
   }, [effectiveTransportation, transportationDescription, form]);
 
   /**
+   * Closing the transportation section clears both of its fields.
+   *
+   * The important half is the amount: a figure left behind a closed section would keep counting
+   * toward the requested total, and toward the approver threshold, with nothing on screen to say
+   * why the number is what it is. Turning the section off has to mean the cost is not part of
+   * the request.
+   */
+  function setTransportationOpenAndClear(next: boolean) {
+    setTransportationOpen(next);
+    if (!next) {
+      form.setValue('transportationCost', null, { shouldValidate: true });
+      form.setValue('transportationDescription', null, { shouldValidate: true });
+    }
+  }
+
+  /**
    * D-004: the reset has to wait for the two dropdowns' own queries, not just the requisition.
    * A `<select>` handed a value with no matching `<option>` keeps "", so resetting while the
    * option lists are still in flight silently discarded the user's saved department and project
@@ -205,6 +228,10 @@ export function RequisitionFormPage() {
       transportationCost: existing.data.transportationCost ?? null,
       transportationDescription: existing.data.transportationDescription ?? null,
     });
+
+    // A draft that already carries a cost opens the section, so editing never hides a figure the
+    // requester entered — and never quietly drops it when they save.
+    if ((existing.data.transportationCost ?? 0) > 0) setTransportationOpen(true);
   }, [isEditing, existing.data, optionListsSettled, form]);
 
   async function persist(values: SaveRequisitionInput): Promise<string | null> {
@@ -441,8 +468,8 @@ export function RequisitionFormPage() {
                 <tr className="border-b border-border">
                   {[
                     { label: t.requisitions.itemName, width: 'w-[44%]', align: 'text-left' },
-                    { label: t.requisitions.quantity, width: 'w-[13%]', align: 'text-right' },
-                    { label: t.requisitions.unitPrice, width: 'w-[19%]', align: 'text-right' },
+                    { label: t.requisitions.quantity, width: 'w-[13%]', align: 'text-left' },
+                    { label: t.requisitions.unitPrice, width: 'w-[19%]', align: 'text-left' },
                     { label: t.requisitions.lineTotal, width: 'w-[17%]', align: 'text-right' },
                     { label: '', width: 'w-[7%]', align: 'text-left' },
                   ].map((column, columnIndex) => (
@@ -507,16 +534,17 @@ export function RequisitionFormPage() {
             the form clears the description when the amount drops to 0 so the totals stay
             honest. */}
         <Panel className="shadow-[--shadow-panel]">
-          <header className="border-b border-border px-5 py-4">
-            <h2 className="text-base font-semibold text-ink">
-              {t.requisitions.transportation.heading}
-            </h2>
-            <p className="mt-0.5 text-sm text-ink-muted">
-              {t.requisitions.transportation.hint}
-            </p>
-          </header>
+          <div className="px-5 py-4">
+            <Switch
+              checked={transportationOpen}
+              onChange={setTransportationOpenAndClear}
+              label={t.requisitions.transportation.heading}
+              hint={t.requisitions.transportation.hint}
+            />
+          </div>
 
-          <div className="grid gap-5 p-5 sm:grid-cols-3">
+          {transportationOpen ? (
+          <div className="grid gap-5 border-t border-border p-5 sm:grid-cols-2">
             <TextField
               label={t.requisitions.transportation.amount}
               type="number"
@@ -534,18 +562,19 @@ export function RequisitionFormPage() {
               })}
             />
 
-            <div className="sm:col-span-2">
-              <TextField
-                label={t.requisitions.transportation.description}
-                placeholder={t.requisitions.transportation.descriptionPlaceholder}
-                error={errors.transportationDescription?.message}
-                disabled={effectiveTransportation === 0}
-                {...form.register('transportationDescription', {
-                  setValueAs: (value) => (value === '' ? null : value),
-                })}
-              />
-            </div>
+            {/* No longer disabled behind a zero amount: the switch above already says whether
+                this section applies, and a field that is visible but dead is a worse answer than
+                one that is not there. */}
+            <TextField
+              label={t.requisitions.transportation.description}
+              placeholder={t.requisitions.transportation.descriptionPlaceholder}
+              error={errors.transportationDescription?.message}
+              {...form.register('transportationDescription', {
+                setValueAs: (value) => (value === '' ? null : value),
+              })}
+            />
           </div>
+          ) : null}
         </Panel>
 
         </form>

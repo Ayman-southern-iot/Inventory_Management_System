@@ -831,6 +831,9 @@ export const t = {
     cancelledToast: 'Requisition cancelled.',
     // tracker (task 3.6)
     trackerHeading: 'Progress',
+    // Shown on a draft, where there is no chain yet. Says why rather than just that.
+    trackerEmpty:
+      'Not submitted yet. The approval chain is worked out when you submit, and appears here.',
     seeWhy: 'See why',
     rejectedBy: 'Rejected by',
     approvedBy: 'Approved by',

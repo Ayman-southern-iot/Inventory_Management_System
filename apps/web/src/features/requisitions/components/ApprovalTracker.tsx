@@ -142,11 +142,24 @@ export function ApprovalTracker({ requisition }: { requisition: RequisitionDetai
   return (
     <div>
       <h2 className="mb-3 text-base font-semibold text-ink">{t.requisitions.trackerHeading}</h2>
-      <ol className="flex flex-col">
-        {ordered.map((approval) => (
-          <TrackerNode key={approval.id} approval={approval} requisition={requisition} />
-        ))}
-      </ol>
+      {/*
+        A requisition has no approvals until it is submitted — the chain is seeded at submit, not
+        at create. Without this the panel rendered a heading over nothing, which reads as a broken
+        screen rather than as "there is nothing to show yet".
+
+        Worth saying explicitly because the commonest way to arrive here is a submit that was
+        refused: `8ab180d` requires a department, an approval deadline and a reason at submit, and
+        a requisition missing any of them stays a draft.
+      */}
+      {ordered.length === 0 ? (
+        <p className="text-sm text-ink-muted">{t.requisitions.trackerEmpty}</p>
+      ) : (
+        <ol className="flex flex-col">
+          {ordered.map((approval) => (
+            <TrackerNode key={approval.id} approval={approval} requisition={requisition} />
+          ))}
+        </ol>
+      )}
     </div>
   );
 }

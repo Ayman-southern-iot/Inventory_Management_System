@@ -1,4 +1,5 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
 import { t } from '@/i18n/en';
 import { cn } from '@/lib/cn';
@@ -60,6 +61,9 @@ export function DateField({
   const id = useId();
   const today = useMemo(startOfToday, []);
   const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
 
   const [open, setOpen] = useState(false);
   /** The day the user is considering. Only `onChange` on Set makes it real. */
@@ -76,12 +80,68 @@ export function DateField({
     setViewMonth(parts ? Number(parts[1]) - 1 : today.month);
   }, [open, value, today.year, today.month]);
 
+  /**
+   * Where the popover goes, measured against the trigger in viewport coordinates.
+   *
+   * The popover is rendered through a portal (see the bottom of this file), so it is a child of
+   * `document.body` rather than of the field. That is the fix for it being cut off: `Panel`
+   * carries `overflow-hidden` to keep its own children inside its rounded corners, and anything
+   * absolutely positioned inside a Panel gets clipped by it. A portal has no such ancestor.
+   *
+   * It also flips above the trigger when there is not enough room below, which the old
+   * `top-full` could not do — a field near the bottom of a long form put the calendar off the
+   * end of the window.
+   */
+  const reposition = useCallback(() => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+
+    const rect = trigger.getBoundingClientRect();
+    const popoverHeight = popoverRef.current?.offsetHeight ?? 0;
+    const GAP = 4;
+
+    // Below unless it would overflow the viewport *and* there is more room above.
+    const roomBelow = window.innerHeight - rect.bottom;
+    const flipUp = popoverHeight > 0 && roomBelow < popoverHeight + GAP && rect.top > roomBelow;
+
+    setPosition({
+      top: flipUp ? rect.top - popoverHeight - GAP : rect.bottom + GAP,
+      // Kept inside the right edge on a narrow window, and never off the left.
+      left: Math.max(GAP, Math.min(rect.left, window.innerWidth - 288 - GAP)),
+    });
+  }, []);
+
+  // Before paint, so the popover never renders at the wrong place for a frame.
+  useLayoutEffect(() => {
+    if (!open) {
+      setPosition(null);
+      return;
+    }
+    reposition();
+  }, [open, reposition]);
+
+  // Scrolling or resizing moves the trigger; the popover has to follow it. `capture` so a
+  // scrolling ancestor counts, not just the window.
+  useEffect(() => {
+    if (!open) return;
+    window.addEventListener('scroll', reposition, true);
+    window.addEventListener('resize', reposition);
+    return () => {
+      window.removeEventListener('scroll', reposition, true);
+      window.removeEventListener('resize', reposition);
+    };
+  }, [open, reposition]);
+
   // Close on an outside click or Escape. Escape matters more than it looks: this sits inside a
   // form, and a picker you can only dismiss by clicking away is a trap for keyboard users.
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (event: MouseEvent) => {
-      if (!containerRef.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      // The popover is portalled out of the field, so "inside" has to mean either of them —
+      // otherwise the first click on a day would close the thing it landed in.
+      if (containerRef.current?.contains(target) || popoverRef.current?.contains(target)) return;
+      setOpen(false);
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setOpen(false);
@@ -131,6 +191,7 @@ export function DateField({
           same intent, and hunting for the one live pixel is the commonest complaint about
           date inputs. */}
       <button
+        ref={triggerRef}
         type="button"
         id={id}
         onClick={() => setOpen((wasOpen) => !wasOpen)}
@@ -161,15 +222,20 @@ export function DateField({
         </p>
       ) : null}
 
-      {open ? (
-        <div
-          role="dialog"
-          aria-label={label}
-          className={cn(
-            'absolute left-0 top-full z-20 mt-1 w-72 rounded-[--radius-panel] border border-border',
-            'bg-surface p-4 shadow-[--shadow-overlay]',
-          )}
-        >
+      {open
+        ? createPortal(
+            <div
+              ref={popoverRef}
+              role="dialog"
+              aria-label={label}
+              style={{ top: position?.top ?? 0, left: position?.left ?? 0 }}
+              className={cn(
+                'fixed z-50 w-72 rounded-[--radius-panel] border border-border',
+                'bg-surface p-4 shadow-[--shadow-overlay]',
+                // Hidden until measured, so it cannot flash at 0,0 on the first frame.
+                position ? 'visible' : 'invisible',
+              )}
+            >
           <div className="mb-3 flex items-center justify-between">
             <button
               type="button"
@@ -271,8 +337,10 @@ export function DateField({
               {t.requisitions.setDeadline}
             </button>
           </div>
-        </div>
-      ) : null}
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

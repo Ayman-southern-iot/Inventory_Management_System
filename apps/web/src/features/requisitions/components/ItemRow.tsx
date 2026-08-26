@@ -151,7 +151,7 @@ export function ItemRow({
               min={1}
               step="1"
               placeholder="0"
-              className="text-right tabular-nums"
+              className="tabular-nums"
               error={errors.quantity}
               name={field.name}
               ref={field.ref}
@@ -177,7 +177,7 @@ export function ItemRow({
               min={0}
               step="0.01"
               placeholder="0.00"
-              className="text-right tabular-nums"
+              className="tabular-nums"
               error={errors.estimatedUnitPrice}
               name={field.name}
               ref={field.ref}
