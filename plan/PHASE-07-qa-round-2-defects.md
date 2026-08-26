@@ -43,28 +43,46 @@ Status values: `TODO` · `IN PROGRESS` · `DONE` (gate green, handoff block issu
 
 | # | Item | Sev | SPEC | Status | Commit |
 |---|---|---|---|---|---|
-| P-01 | EX-02 inventory records export | High | REQUIRED §10 | TODO | |
-| P-02 | D-002 picker truncates past 100 | Medium | NO-BASIS (shipped surface) | TODO | |
-| P-03 | D-003 past deadline accepted server-side | Medium | NO-BASIS (shipped surface) | TODO | |
+| P-01 | EX-02 inventory records export | High | REQUIRED §10 | **DONE** | `3323e7f` |
+| P-02 | D-002 picker truncates past 100 | Medium | NO-BASIS (shipped surface) | **DONE** | `f9d8bc0` |
+| P-03 | D-003 past deadline accepted server-side | Medium | NO-BASIS (shipped surface) | **DONE** | `f9d8bc0` |
 | P-04 | D-004 draft edit drops Department/Project | Medium | NO-BASIS (shipped surface) | **DONE** | `2bb58d2` |
 | P-05 | D-005 raw zod string shown to user | Low | NO-BASIS (shipped surface) | **DONE** | `a44050f` |
 | P-06 | D-006 request-level fields all optional | Medium | DERIVED (ruling 2026-08-26) | **DONE** | `8ab180d` |
 | P-07 | D-009 dashboard "arrive in later phases" | Cosmetic | NO-BASIS (shipped surface) | **DONE** | `6ab88f9` |
 | P-08 | D-010 Products nav vs Inventory heading | Cosmetic | NO-BASIS (shipped surface) | **DONE** | `6ab88f9` |
-| P-09 | D-011 three date formats | Cosmetic | NO-BASIS (shipped surface) | TODO | |
-| P-10 | D-012 every page shares a browser title | Cosmetic | NO-BASIS (shipped surface) | TODO | |
-| P-11 | D-013 per-role authorisation unverified | Medium | REQUIRED §2 (verification) | TODO | |
-| P-12 | D-015 failed submit silently drafts | Medium | NO-BASIS (shipped surface) | TODO | |
+| P-09 | D-011 three date formats | Cosmetic | NO-BASIS (shipped surface) | **DONE** | `7c740db` |
+| P-10 | D-012 every page shares a browser title | Cosmetic | NO-BASIS (shipped surface) | **DONE** | `541d632` |
+| P-11 | D-013 per-role authorisation unverified | Medium | REQUIRED §2 (verification) | **DONE** | `749722a` |
+| P-12 | D-015 failed submit silently drafts | Medium | NO-BASIS (shipped surface) | **DONE** | `f9d8bc0` |
 | P-13 | D-017 totals shown from invalid input | Low | NO-BASIS (shipped surface) | **DONE** | `2bb58d2` |
 | P-14 | D-018 Reason labelled NOTE | Cosmetic | REQUIRED §3 (field name) | **DONE** | `6ab88f9` |
 | P-15 | D-019 list re-sorts with no indicator | Low | NO-BASIS (shipped surface) | **DONE** | `d4a3864` |
-| P-16 | D-025 funding validation has no feedback | Medium | NO-BASIS (shipped surface) | TODO | |
-| P-17 | D-026 BOM preview totals never recompute | Medium | NO-BASIS (shipped surface) | TODO | |
-| P-18 | D-027 linked project absent from web BOM | Medium | REQUIRED §9 | TODO | |
-| P-19 | D-029 BOM history repeats one event | Cosmetic | NO-BASIS (shipped surface) | TODO | |
-| P-20 | D-031 settings audit has no before/after | Medium | DERIVED (§11 control) | TODO | |
+| P-16 | D-025 funding validation has no feedback | Medium | NO-BASIS (shipped surface) | **DONE** | `cc91359` |
+| P-17 | D-026 BOM preview totals never recompute | Medium | NO-BASIS (shipped surface) | **DONE** | `cc91359` |
+| P-18 | D-027 linked project absent from web BOM | Medium | REQUIRED §9 | **DONE** | `61a2008` |
+| P-19 | D-029 BOM history repeats one event | Cosmetic | NO-BASIS (shipped surface) | **DONE** | `61a2008` |
+| P-20 | D-031 settings audit has no before/after | Medium | DERIVED (§11 control) | **DONE** | `f3e7017` |
 | P-21 | oversized JSON body returns 500 not 413 | Medium | NO-BASIS (shipped surface) | **DONE** | `4efbf75` |
 | P-22 | no project means personal development | n/a | DERIVED (ruling 2026-08-26) | **DONE** | `5d5eef6` |
+
+## Closing state — 2026-08-26
+
+All 22 items landed. Final gate, measured after the last edit of the phase:
+
+```text
+pnpm typecheck                      exit=0, clean
+pnpm lint                           20 errors — baseline 20, unchanged
+pnpm test                           shared 13 · api 58 · web 163 — baseline web 132
+pnpm --filter @ims/api test:int     606 pass / 0 fail (45 files) — baseline 516/1
+```
+
+The integration suite is fully green for the first time. Nothing was skipped, deleted or
+weakened to get there. Three specs had their **setup** re-grounded, where D-006 and D-003 closed
+the route they previously used to reach a state that still legitimately exists in older rows;
+every assertion in them is unchanged, and both cases are recorded in `DECISIONS.md`.
+
+**Not pushed.** These commits exist on one machine only.
 
 ## Execution order and batching
 
