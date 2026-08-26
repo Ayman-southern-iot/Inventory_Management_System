@@ -76,10 +76,47 @@ export class AllExceptionsFilter implements ExceptionFilter {
       };
     }
 
+    const middlewareStatus = this.exposedClientErrorStatus(exception);
+    if (middlewareStatus !== undefined) {
+      return {
+        status: middlewareStatus,
+        body: {
+          code: this.codeForStatus(middlewareStatus),
+          message: (exception as Error).message,
+        },
+      };
+    }
+
     return {
       status: HttpStatus.INTERNAL_SERVER_ERROR,
       body: { code: ErrorCode.INTERNAL, message: 'Something went wrong' },
     };
+  }
+
+  /**
+   * Recognises an `http-errors` instance thrown by express middleware, which is NOT a Nest
+   * `HttpException` and so used to fall through to the generic INTERNAL below. body-parser
+   * raises one for an oversized body (413, `entity.too.large`) and for a malformed one
+   * (400, `entity.parse.failed`); both were reported to the client as "the server broke".
+   *
+   * Deliberately narrow. `expose` is http-errors' own signal that the message is safe to hand a
+   * client — it sets it true for 4xx and false for 5xx — and that is exactly the line we want,
+   * so a 5xx raised by a dependency still becomes a generic INTERNAL and leaks nothing.
+   */
+  private exposedClientErrorStatus(exception: unknown): number | undefined {
+    if (!(exception instanceof Error)) return undefined;
+    const candidate = exception as Error & {
+      status?: unknown;
+      statusCode?: unknown;
+      expose?: unknown;
+    };
+    if (candidate.expose !== true) return undefined;
+
+    const status =
+      typeof candidate.status === 'number' ? candidate.status : candidate.statusCode;
+    if (typeof status !== 'number' || !Number.isInteger(status)) return undefined;
+
+    return status >= 400 && status <= 499 ? status : undefined;
   }
 
   /**
