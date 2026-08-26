@@ -80,11 +80,11 @@ Status values: `TODO` · `IN PROGRESS` · `DONE` (gate green, handoff block issu
 | # | Item | SPEC | Status | Commit |
 |---|---|---|---|---|
 | C-1 | Lifecycle tracker: derive stage state from status, not from append-only events | NO-BASIS (defect in shipped surface) | DONE | `8633384` |
-| A-0 | Migration 0028 — void columns on `fund_receipts` and `purchases` | DERIVED (ruling 2026-08-26) | TODO | |
-| A-1 | Exclude voided rows from all four read sites | DERIVED | TODO | |
-| A-2 | `undo-send-to-accounts` → `BOM_GENERATED` (no rows voided) | DERIVED | TODO | |
-| A-3 | Void one fund receipt; status re-derives from the remaining sum | DERIVED | TODO | |
-| A-4 | Void one purchase; status re-derives from what remains | DERIVED | TODO | |
+| A-0 | Migration 0028 — void columns on `fund_receipts` and `purchases` | DERIVED (ruling 2026-08-26) | DONE | `215b3cf` |
+| A-1 | Exclude voided rows from all four read sites | DERIVED | DONE | `215b3cf` |
+| A-2 | `undo-send-to-accounts` → `BOM_GENERATED` (no rows voided) | DERIVED | DONE | `215b3cf` |
+| A-3 | Void one fund receipt; status re-derives from the remaining sum | DERIVED | DONE | `215b3cf` |
+| A-4 | Void one purchase; status re-derives from what remains | DERIVED | DONE | `215b3cf` |
 | A-5 | `FundsPanel`: a Back button at every reversible stage, with a naming confirm | DERIVED | TODO | |
 | B-1 | Invoice attach moves into the Verify purchase form; `InvoiceRow` becomes download-only | DERIVED | TODO | |
 | D-1 | `GET /dashboard/me` — requisition, borrowing and spend counters for the caller | DERIVED | TODO | |
