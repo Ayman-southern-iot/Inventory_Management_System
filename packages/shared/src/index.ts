@@ -15,3 +15,4 @@ export * from './contracts/notifications.js';
 export * from './contracts/funds.js';
 export * from './contracts/reports.js';
 export * from './contracts/files.js';
+export * from './contracts/dashboard.js';

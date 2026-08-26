@@ -22,6 +22,7 @@ import { MaintenanceModule } from './modules/maintenance/maintenance.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { FundsModule } from './modules/funds/funds.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { HealthController } from './modules/health/health.controller';
 
@@ -89,6 +90,7 @@ const throttlerOptions = [
     NotificationsModule,
     FundsModule,
     ReportsModule,
+    DashboardModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

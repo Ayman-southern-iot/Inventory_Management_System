@@ -126,6 +126,41 @@ export const t = {
     designation: 'Designation',
     phaseNotice:
       'Inventory, borrowing, requisitions and Bills of Materials are all live. Your roles decide what appears in the sidebar.',
+
+    /*
+     * The personal record. Every label says whose figures these are without repeating "your" on
+     * each tile — the section headings carry it, so the numbers stay scannable.
+     */
+    yourRecord: 'Your record',
+    yourRecordHint: 'Everything you have raised, borrowed and spent. Only you see these figures.',
+
+    requisitionsHeading: 'Requisitions',
+    raised: 'Raised',
+    approvedCount: 'Approved',
+    rejectedCount: 'Rejected',
+    inFlight: 'In progress',
+    draftsCount: 'Drafts',
+    cancelledCount: 'Cancelled',
+
+    borrowingHeading: 'Borrowing',
+    borrowedCount: 'Borrowed',
+    returnedCount: 'Fully returned',
+    stillOut: 'Still out',
+    // Units, not requests: three of five cables back damaged is three, and the copy has to be
+    // unambiguous about that or the number reads as "three separate borrowings".
+    partiallyDamagedUnits: 'Returned partly damaged',
+    damagedUnits: 'Returned damaged',
+    notWorkingUnits: 'Returned not working',
+    unitsSuffix: 'units',
+
+    spendHeading: 'Money',
+    spendRequested: 'Requested',
+    spendApproved: 'Approved',
+    spendSpent: 'Actually spent',
+    spendHint: 'Spent counts what was purchased against your requisitions, not what was approved.',
+
+    /** Shown in place of a block when the person has nothing in it yet. */
+    nothingYet: 'Nothing yet.',
   },
 
   users: {

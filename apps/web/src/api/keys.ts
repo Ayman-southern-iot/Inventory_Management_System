@@ -112,6 +112,11 @@ export const queryKeys = {
     all: () => ['funds'] as const,
     funding: (requisitionId: string) => ['funds', 'funding', requisitionId] as const,
   },
+  dashboard: {
+    all: () => ['dashboard'] as const,
+    /** The signed-in person's own record. No id in the key: there is only ever one. */
+    me: () => ['dashboard', 'me'] as const,
+  },
   reports: {
     all: () => ['reports'] as const,
     expenses: (query: ExpenseReportQuery) => ['reports', 'expenses', query] as const,
