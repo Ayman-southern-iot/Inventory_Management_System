@@ -21,7 +21,6 @@ import {
   NotFoundError,
   ValidationFailedError,
 } from '../../common/errors';
-import { calendarDayOf } from '../../common/calendar';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NOTIFICATION_LINKS } from '../notifications/notifications.links';
@@ -229,14 +228,23 @@ export class RequisitionsService {
     }
     if (missing.length > 0) throw new RequisitionIncompleteError(missing);
 
-    // D-003: the field's own helper text says "Pick today or later" and the browser enforced it,
-    // but the API did not — so a requisition could be submitted already Overdue and trip the §5
-    // reminder at the moment of submission. Compared against the business calendar, never a bare
-    // `new Date()`: at +06 a UTC day boundary would reject a deadline that is still today here.
-    // Only at submit; a draft is allowed to hold a stale deadline the requester has not revisited.
-    const deadline = calendarDayOf(existing.approval_deadline);
-    if (deadline !== null && deadline < this.repo.today()) {
-      throw new ApprovalDeadlineInPastError(deadline, this.repo.today());
+    /**
+     * D-003: the field's helper text says the deadline cannot be in the past and the browser
+     * enforces it; the API did not, so a requisition could be submitted already overdue and trip
+     * the §5 reminder at the moment of submission.
+     *
+     * An instant comparison since migration 0027, per Ayman's ruling of 2026-08-26: "previous
+     * time and date not accepted". A deadline of 09:00 today **is** in the past at 17:00 today,
+     * which the old calendar-day comparison could not see — it passed anything dated today.
+     *
+     * No time zone arithmetic is needed any more, which is the quiet benefit of the column being
+     * an instant: two instants compare directly, and there is no day boundary to get wrong.
+     *
+     * Submit only. A draft may hold a stale deadline its author has not revisited.
+     */
+    const deadline = existing.approval_deadline;
+    if (deadline !== null && deadline.getTime() < Date.now()) {
+      throw new ApprovalDeadlineInPastError(deadline.toISOString(), new Date().toISOString());
     }
 
     // Frozen at submit: items total + transportation cost. The cost is what the requester

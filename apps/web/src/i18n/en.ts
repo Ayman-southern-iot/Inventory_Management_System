@@ -740,6 +740,10 @@ export const t = {
     approvalDeadlineHint:
       'Approvers are reminded once this passes, so a date already gone would chase them the moment you submit. Pick today or later.',
     setDeadline: 'Set deadline',
+    timeLabel: 'Time',
+    hourLabel: 'Hour',
+    minuteLabel: 'Minute',
+    meridiemLabel: 'AM or PM',
     summaryHeading: 'Summary',
     approverCountOne: '1 approver',
     approverCountOther: '{n} approvers',
@@ -751,7 +755,7 @@ export const t = {
     approverNoteAtOrAbove:
       'needed. This is at or above the {threshold} threshold, so expect a second sign-off before anything is bought.',
     reasonCounter: '{n}/{max}',
-    selectDate: 'Select a date',
+    selectDate: 'Select date & time',
     reason: 'Reason',
     reasonHint: 'Why this is needed. The approvers read this first.',
     // items zone

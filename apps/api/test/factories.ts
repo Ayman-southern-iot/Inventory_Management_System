@@ -393,5 +393,8 @@ export async function seedSubthresholdApprover(ctx: TestApp, approverId: string)
  * and once D-003 lands, a past deadline is refused at submit too.
  */
 export function futureDeadline(daysAhead = 30): string {
-  return new Date(Date.now() + daysAhead * 86_400_000).toISOString().slice(0, 10);
+  // A full ISO instant since migration 0027 — `approval_deadline` is a `timestamptz` now, and
+  // the contract rejects a bare `YYYY-MM-DD`. The `.slice(0, 10)` this used to carry is exactly
+  // what 202 specs failed on the first time the migration ran.
+  return new Date(Date.now() + daysAhead * 86_400_000).toISOString();
 }

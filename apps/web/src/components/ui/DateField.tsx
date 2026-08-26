@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { t } from '@/i18n/en';
 import { cn } from '@/lib/cn';
-import { formatDate } from '@/lib/format';
+import { formatDateTime } from '@/lib/format';
 
 /**
  * A date picker built out of buttons.
@@ -18,13 +18,21 @@ import { formatDate } from '@/lib/format';
  * and then closing without applying leaves the field exactly as it was, which is what makes it
  * safe to explore the calendar on a form you have half filled in.
  *
- * A calendar day, not an instant. `approval_deadline` is a Postgres `date`, and `532a4ba`
- * (D-014) exists precisely because treating these as instants shifted every date a day backwards
- * east of Greenwich. Everything here is built from local Y/M/D parts and emits `YYYY-MM-DD`;
- * `new Date('2026-08-13')` is never used, because that parses as UTC midnight.
+ * Emits an ISO instant. Migration 0027 made `approval_deadline` a `timestamptz` so the requester
+ * can pick a time of day as well as a date.
+ *
+ * Every value is assembled from local Y/M/D/h/m parts through the `Date(y, m, d, h, min)`
+ * constructor, never by parsing a string: `new Date('2026-08-13')` is UTC midnight and renders
+ * as the 12th at +06, which is exactly the shift D-014 was about.
  */
 
 const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'] as const;
+
+/** A 12-hour clock, per Ayman's ruling 2026-08-26. */
+const HOURS = Array.from({ length: 12 }, (_, index) => String(index + 1).padStart(2, '0'));
+/** Quarter hours. A deadline is a rough intention, not an appointment; 60 options is noise. */
+const MINUTES = ['00', '15', '30', '45'] as const;
+const MERIDIEMS = ['AM', 'PM'] as const;
 
 /** `YYYY-MM-DD` from local parts. `toISOString()` would convert to UTC and lose the day. */
 function toIsoDate(year: number, month: number, day: number): string {
@@ -41,7 +49,7 @@ function startOfToday(): { year: number; month: number; day: number; iso: string
 
 interface DateFieldProps {
   label: string;
-  /** `YYYY-MM-DD`, or null for empty. */
+  /** An ISO instant, or null for empty. */
   value: string | null;
   onChange: (value: string | null) => void;
   hint?: string;
@@ -66,18 +74,33 @@ export function DateField({
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
 
   const [open, setOpen] = useState(false);
-  /** The day the user is considering. Only `onChange` on Set makes it real. */
-  const [draft, setDraft] = useState<string | null>(value);
+  /** The calendar day under consideration, as YYYY-MM-DD. Time is held separately below. */
+  const [draft, setDraft] = useState<string | null>(null);
+  /** 1-12, 0/15/30/45, and the meridiem — a 12-hour clock, per Ayman's ruling 2026-08-26. */
+  const [hour12, setHour12] = useState(5);
+  const [minute, setMinute] = useState(0);
+  const [meridiem, setMeridiem] = useState<'AM' | 'PM'>('PM');
   const [viewYear, setViewYear] = useState(today.year);
   const [viewMonth, setViewMonth] = useState(today.month);
 
   // Reopening starts from the committed value, never from an abandoned draft.
   useEffect(() => {
     if (!open) return;
-    setDraft(value);
-    const parts = value?.split('-');
-    setViewYear(parts ? Number(parts[0]) : today.year);
-    setViewMonth(parts ? Number(parts[1]) - 1 : today.month);
+
+    const committed = value ? new Date(value) : null;
+    if (committed && !Number.isNaN(committed.getTime())) {
+      setDraft(toIsoDate(committed.getFullYear(), committed.getMonth(), committed.getDate()));
+      const rawHour = committed.getHours();
+      setHour12(rawHour % 12 === 0 ? 12 : rawHour % 12);
+      setMinute(committed.getMinutes());
+      setMeridiem(rawHour >= 12 ? 'PM' : 'AM');
+      setViewYear(committed.getFullYear());
+      setViewMonth(committed.getMonth());
+    } else {
+      setDraft(null);
+      setViewYear(today.year);
+      setViewMonth(today.month);
+    }
   }, [open, value, today.year, today.month]);
 
   /**
@@ -163,6 +186,49 @@ export function DateField({
   // find every day greyed out is a worse answer than not offering the trip.
   const atCurrentMonth = viewYear === today.year && viewMonth === today.month;
 
+  /**
+   * The draft as a real instant — the value Set would commit.
+   *
+   * Built from local parts via the `Date(y, m, d, h, min)` constructor, never by parsing a
+   * string. `new Date('2026-08-13T17:00')` is implementation-defined across browsers and
+   * `new Date('2026-08-13')` is UTC midnight, which is the shift D-014 was about.
+   */
+  const draftInstant = useMemo(() => {
+    if (!draft) return null;
+    const [year, month, day] = draft.split('-').map(Number);
+    // 12 AM is hour 0 and 12 PM is hour 12 — the two the naive `% 12` gets wrong.
+    const hour24 =
+      meridiem === 'AM' ? (hour12 === 12 ? 0 : hour12) : hour12 === 12 ? 12 : hour12 + 12;
+    return new Date(year!, month! - 1, day!, hour24, minute, 0, 0);
+  }, [draft, hour12, minute, meridiem]);
+
+  /**
+   * Ayman's ruling, 2026-08-26: "previous time and date not accepted, it should not also be
+   * selectable". So a time is disabled, not merely refused, once it has passed — and only on
+   * today, because on any later day every hour is still ahead.
+   *
+   * Stricter than the reference design, which disables past dates but leaves this morning's
+   * hours pickable on today's date.
+   */
+  const draftIsToday = draft === today.iso;
+
+  function isPastTime(candidateHour12: number, candidateMinute: number, candidateMeridiem: 'AM' | 'PM') {
+    if (!draftIsToday) return false;
+    const hour24 =
+      candidateMeridiem === 'AM'
+        ? candidateHour12 === 12
+          ? 0
+          : candidateHour12
+        : candidateHour12 === 12
+          ? 12
+          : candidateHour12 + 12;
+    const candidate = new Date(today.year, today.month, today.day, hour24, candidateMinute);
+    return candidate.getTime() < Date.now();
+  }
+
+  /** Set is refused outright when the assembled instant is already behind us. */
+  const draftIsPast = draftInstant !== null && draftInstant.getTime() < Date.now();
+
   function shiftMonth(direction: -1 | 1) {
     const next = viewMonth + direction;
     if (next < 0) {
@@ -208,7 +274,7 @@ export function DateField({
       >
         <Calendar aria-hidden className="size-4 shrink-0 text-ink-subtle" />
         <span className={cn('tabular-nums', !value && 'text-ink-subtle')}>
-          {value ? formatDate(value) : (placeholder ?? t.common.dash)}
+          {value ? formatDateTime(value) : (placeholder ?? t.common.dash)}
         </span>
       </button>
 
@@ -310,6 +376,39 @@ export function DateField({
             })}
           </div>
 
+          {/*
+            The time row. Buttons in a listbox, not `<select>` and not number inputs — a focused
+            native control changes value on a wheel scroll, which is the whole reason this
+            component exists rather than `<input type="datetime-local">`.
+          */}
+          <div className="mt-3 flex items-center gap-1.5 border-t border-border pt-3">
+            <span className="mr-1 text-[0.625rem] font-semibold uppercase tracking-wider text-ink-subtle">
+              {t.requisitions.timeLabel}
+            </span>
+            <TimeSelect
+              label={t.requisitions.hourLabel}
+              value={String(hour12).padStart(2, '0')}
+              options={HOURS}
+              isDisabled={(option) => isPastTime(Number(option), minute, meridiem)}
+              onSelect={(option) => setHour12(Number(option))}
+            />
+            <span className="font-mono text-sm font-semibold text-ink-subtle">:</span>
+            <TimeSelect
+              label={t.requisitions.minuteLabel}
+              value={String(minute).padStart(2, '0')}
+              options={MINUTES}
+              isDisabled={(option) => isPastTime(hour12, Number(option), meridiem)}
+              onSelect={(option) => setMinute(Number(option))}
+            />
+            <TimeSelect
+              label={t.requisitions.meridiemLabel}
+              value={meridiem}
+              options={MERIDIEMS}
+              isDisabled={(option) => isPastTime(hour12, minute, option as 'AM' | 'PM')}
+              onSelect={(option) => setMeridiem(option as 'AM' | 'PM')}
+            />
+          </div>
+
           <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
             <button
               type="button"
@@ -324,9 +423,12 @@ export function DateField({
             </button>
             <button
               type="button"
-              disabled={!draft}
+              // Refused outright when the assembled instant has already passed, so the button
+              // cannot commit something the server would reject at submit.
+              disabled={!draftInstant || draftIsPast}
               onClick={() => {
-                onChange(draft);
+                if (!draftInstant) return;
+                onChange(draftInstant.toISOString());
                 setOpen(false);
               }}
               className={cn(
@@ -341,6 +443,97 @@ export function DateField({
             document.body,
           )
         : null}
+    </div>
+  );
+}
+
+/**
+ * One segment of the time — hour, minute, or meridiem.
+ *
+ * A button that opens a list of buttons, not a `<select>`. A focused native select changes value
+ * on a wheel scroll exactly as a number input does, and this component exists to be immune to
+ * that. It is also the only way to grey out an option that has already passed, which
+ * `<option disabled>` does inconsistently across browsers.
+ */
+function TimeSelect({
+  label,
+  value,
+  options,
+  isDisabled,
+  onSelect,
+}: {
+  label: string;
+  value: string;
+  options: readonly string[];
+  isDisabled: (option: string) => boolean;
+  onSelect: (option: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (!ref.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    return () => document.removeEventListener('mousedown', onPointerDown);
+  }, [open]);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        aria-label={label}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((wasOpen) => !wasOpen)}
+        className={cn(
+          'flex items-center gap-1 rounded-[--radius-control] border border-border-strong',
+          'bg-surface px-2 py-1.5 font-mono text-xs font-semibold text-ink hover:border-brand',
+        )}
+      >
+        {value}
+        <ChevronDown aria-hidden className="size-3 text-ink-subtle" />
+      </button>
+
+      {open ? (
+        <ul
+          role="listbox"
+          aria-label={label}
+          className={cn(
+            'absolute left-0 top-full z-10 mt-1 max-h-40 min-w-14 overflow-y-auto rounded-[--radius-control]',
+            'border border-border bg-surface p-1 shadow-[--shadow-overlay]',
+          )}
+        >
+          {options.map((option) => {
+            const disabled = isDisabled(option);
+            return (
+              <li key={option}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={option === value}
+                  disabled={disabled}
+                  onClick={() => {
+                    onSelect(option);
+                    setOpen(false);
+                  }}
+                  className={cn(
+                    'w-full rounded-[--radius-control] px-2.5 py-1.5 text-center font-mono text-xs',
+                    'text-ink hover:bg-brand-subtle',
+                    option === value && 'bg-brand text-on-brand hover:bg-brand',
+                    disabled &&
+                      'cursor-not-allowed text-ink-subtle opacity-40 hover:bg-transparent',
+                  )}
+                >
+                  {option}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
     </div>
   );
 }

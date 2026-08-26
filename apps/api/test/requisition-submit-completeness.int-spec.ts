@@ -29,7 +29,9 @@ describe('a submission must carry its request-level fields', () => {
     return { id: user.id, client: http.as(session.accessToken) };
   };
 
-  const tomorrow = () => new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+  // An instant since migration 0027. The .slice(0, 10) this used to carry is what the contract
+  // now rejects.
+  const tomorrow = () => new Date(Date.now() + 86_400_000).toISOString();
 
   const COMPLETE = () => ({
     departmentId,
@@ -145,7 +147,7 @@ describe('a submission must carry its request-level fields', () => {
    * reminder at the moment of submission.
    */
   it('refuses to submit a deadline that has already passed', async () => {
-    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString();
     const { created, submitted } = await createThenSubmit({ approvalDeadline: yesterday });
 
     expect(submitted.status).toBe(409);
@@ -156,26 +158,39 @@ describe('a submission must carry its request-level fields', () => {
     expect(fetched.body.status).toBe(RequisitionStatus.DRAFT);
   });
 
-  it('accepts a deadline of today, which is what "today or later" means', async () => {
-    // Deliberately the business calendar's today, not UTC's: at +06 they differ for the first
-    // six hours of every day, and a UTC comparison would refuse a deadline that is still today
-    // in Dhaka. That is D-014's bug class.
-    const todayInDhaka = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Asia/Dhaka',
-    }).format(new Date());
-    const { submitted } = await createThenSubmit({ approvalDeadline: todayInDhaka });
+  it('accepts a deadline later today', async () => {
+    const inAnHour = new Date(Date.now() + 3_600_000).toISOString();
+    const { submitted } = await createThenSubmit({ approvalDeadline: inAnHour });
 
     expect(submitted.status).toBe(200);
   });
 
+  /**
+   * The rule that migration 0027 made expressible, and Ayman's ruling of 2026-08-26 required:
+   * "previous time and date not accepted".
+   *
+   * The old calendar-day comparison could not see this. It asked whether the deadline's *day*
+   * was before today's, so 09:00 this morning passed at 17:00 this afternoon — a requisition
+   * submitted against a deadline that had already gone, which is the exact thing D-003 exists to
+   * refuse. Only the column carrying a time makes the distinction possible at all.
+   */
+  it('refuses a deadline earlier today, which the old date-only rule let through', async () => {
+    const anHourAgo = new Date(Date.now() - 3_600_000).toISOString();
+    const { submitted } = await createThenSubmit({ approvalDeadline: anHourAgo });
+
+    expect(submitted.status).toBe(409);
+    expect(submitted.body.code).toBe(ErrorCode.APPROVAL_DEADLINE_IN_PAST);
+  });
+
   it('lets a draft keep a stale deadline until it is submitted', async () => {
+    const longGone = new Date(2020, 0, 1, 12, 0).toISOString();
     const created = await requester.client.post('/requisitions').send({
       ...COMPLETE(),
-      approvalDeadline: '2020-01-01',
+      approvalDeadline: longGone,
     });
 
     expect(created.status).toBe(201);
-    expect(created.body.approvalDeadline).toBe('2020-01-01');
+    expect(Date.parse(created.body.approvalDeadline)).toBe(Date.parse(longGone));
   });
 
   it('submits when all three are present', async () => {

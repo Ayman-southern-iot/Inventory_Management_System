@@ -423,7 +423,7 @@ export class RequisitionsRepository {
       this.fundsRepo.listSnapshotsForRequisition(id),
     ]);
 
-    const base = toRequisition(row, this.today());
+    const base = toRequisition(row);
     const supportingDocument =
       row.supporting_document_file_id && row.supporting_document_original_name
         ? {
@@ -656,9 +656,8 @@ export class RequisitionsRepository {
       .select((eb) => eb.fn.countAll<number>().as('count'))
       .executeTakeFirst();
 
-    const today = this.today();
     return {
-      items: rows.map((row) => toRequisition(row, today)),
+      items: rows.map((row) => toRequisition(row)),
       page: query.page,
       limit: query.limit,
       total: Number(counted?.count ?? 0),
@@ -705,12 +704,21 @@ interface RequisitionRow {
   updated_at: Date;
 }
 
-function toRequisition(row: RequisitionRow, today: string): Requisition {
-  const deadline = row.approval_deadline
-    ? typeof row.approval_deadline === 'string'
-      ? row.approval_deadline
-      : row.approval_deadline.toISOString().slice(0, 10)
-    : null;
+/**
+ * No `today` parameter since migration 0027: `isOverdue` compares two instants, so there is no
+ * business calendar to pass in. `RequisitionsRepository.today()` stays, because the borrowing
+ * side still has genuine `date` columns that need it.
+ */
+function toRequisition(row: RequisitionRow): Requisition {
+  /**
+   * An instant since migration 0027, carried to the client as a full ISO string rather than
+   * sliced to ten characters. The slice was correct while this was a ; keeping it now
+   * would throw away the time of day the requester chose.
+   */
+  const deadline =
+    row.approval_deadline instanceof Date
+      ? row.approval_deadline.toISOString()
+      : (row.approval_deadline ?? null);
 
   const awaitingDecision: string[] = [
     RequisitionStatus.IM_REVIEW,
@@ -738,11 +746,17 @@ function toRequisition(row: RequisitionRow, today: string): Requisition {
     decidedAt: row.decided_at ? row.decided_at.toISOString() : null,
     transportationCost: money(row.transportation_cost),
     transportationDescription: row.transportation_description,
-    // Derived, never stored: a persisted flag is wrong the moment the date rolls over.
+    /**
+     * Derived, never stored: a persisted flag is wrong the moment the clock passes it.
+     *
+     * Compared as instants since 0027. It used to compare calendar-day strings against
+     * , which could not see a deadline that had passed earlier the same day — exactly
+     * the case the time of day exists to express.
+     */
     isOverdue:
       awaitingDecision.includes(row.status) &&
       deadline !== null &&
-      deadline < today,
+      Date.parse(deadline) < Date.now(),
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
   };

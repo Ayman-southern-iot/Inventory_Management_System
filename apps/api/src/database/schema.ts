@@ -319,7 +319,11 @@ export interface RequisitionsTable {
   department_id: string | null;
   project_id: string | null;
   urgency: Generated<string>;
-  approval_deadline: ColumnType<Date | string | null, string | null, string | null>;
+  /**
+   * An instant since migration 0027, not a calendar day. Ayman's ruling 2026-08-26: the
+   * requester picks a date and a time. Reads back as a Date because pg parses timestamptz.
+   */
+  approval_deadline: ColumnType<Date | null, Date | string | null, Date | string | null>;
   reason: string | null;
   /** Frozen at submit. Never recomputed, so a later settings change cannot rewrite history. */
   requested_amount: Money | null;

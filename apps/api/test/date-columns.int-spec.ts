@@ -68,11 +68,14 @@ describe('date columns survive a round trip', () => {
   });
 
   /**
-   * A date far enough out that no test run can drift onto it, and deliberately not the 1st or
-   * the 31st: a one-day shift has to stay inside the same month, so a month-boundary bug cannot
-   * mask it as a formatting difference.
+   * An instant since migration 0027, when the requester gained a time of day.
+   *
+   * Far enough out that no test run can drift onto it, deliberately not the 1st or the 31st so a
+   * one-day shift stays inside the same month, and at **00:30 local** — the half hour where a
+   * value that round-trips through UTC lands on the previous day. The old date-only fixture
+   * could only catch a shift; this one catches it at the boundary where it is most likely.
    */
-  const DEADLINE = '2027-03-18';
+  const DEADLINE = new Date(2027, 2, 18, 0, 30, 0, 0).toISOString();
 
   it('returns the approval deadline exactly as it was written', async () => {
     // Guard: the defect is invisible at UTC+0 or west of it. Fail loudly rather than silently.
@@ -85,12 +88,16 @@ describe('date columns survive a round trip', () => {
       ],
     });
     expect(created.status).toBe(201);
-    expect(created.body.approvalDeadline).toBe(DEADLINE);
+    // Compared as instants, not strings: Postgres may hand back a different but equivalent
+    // offset, and the guarantee is the moment, not its spelling.
+    expect(Date.parse(created.body.approvalDeadline)).toBe(Date.parse(DEADLINE));
 
     // The write's own response is where the shift first shows, but the stored value has to be
     // checked independently — a correct echo over a wrong row would be the worse bug.
     const fetched = await requester.client.get(`/requisitions/${created.body.id}`);
-    expect(fetched.body.approvalDeadline).toBe(DEADLINE);
+    expect(Date.parse(fetched.body.approvalDeadline)).toBe(Date.parse(DEADLINE));
+    // And the local calendar day is still the 18th, which is the half D-014 was about.
+    expect(new Date(fetched.body.approvalDeadline).getDate()).toBe(18);
   });
 
   it('does not lose a further day on every save', async () => {
@@ -114,7 +121,7 @@ describe('date columns survive a round trip', () => {
     }
 
     const after = await requester.client.get(`/requisitions/${created.body.id}`);
-    expect(after.body.approvalDeadline).toBe(DEADLINE);
+    expect(Date.parse(after.body.approvalDeadline)).toBe(Date.parse(DEADLINE));
   });
 
   /**
@@ -135,7 +142,7 @@ describe('date columns survive a round trip', () => {
     const created = await inWindow.client.post('/requisitions').send({
       departmentId: department.id,
       reason: 'Overdue calendar boundary',
-      approvalDeadline: '2026-09-30',
+      approvalDeadline: new Date(2026, 8, 30, 12, 0).toISOString(),
       items: [
         { itemName: 'Widget', quantity: 1, estimatedUnitPrice: 500, productId: null, note: null },
       ],
@@ -158,28 +165,43 @@ describe('date columns survive a round trip', () => {
       .execute();
 
     const fetched = await inWindow.client.get(`/requisitions/${created.body.id}`);
-    expect(fetched.body.approvalDeadline).toBe('2026-08-23');
-    // UTC says the 23rd is today, so `deadline < today` is false and the flag stays down.
-    // Dhaka says it is already the 24th, so the deadline has passed and the approvers are late.
+
+    /**
+     * Since 0027 this is an instant, so the calendar-day ambiguity the original bug lived in no
+     * longer exists — `isOverdue` compares two moments and there is no day boundary to get
+     * wrong. The assertion stays because the guarantee still matters: a deadline that has passed
+     * is flagged, and the faked clock (02:00 on the 24th in Dhaka) is past the stored deadline.
+     */
+    expect(new Date(fetched.body.approvalDeadline).getDate()).toBe(23);
     expect(fetched.body.isOverdue).toBe(true);
   });
+
+  /**
+   * Still a calendar day, and deliberately so.
+   *
+   * Migration 0027 gave *only* `approval_deadline` a time, because only that field drives the §5
+   * reminder. `borrow_requests.expected_return_date` remains a `date` — an item is due back on a
+   * day, not at an hour — so this half of D-014's guard is unchanged and still asserts an exact
+   * string round trip.
+   */
+  const RETURN_DATE = '2027-03-18';
 
   it('returns the borrowing expected-return date exactly as it was written', async () => {
     const raised = await requester.client.post('/borrowing').send({
       productId: fixture.productId,
       compartmentId: fixture.compartmentA,
       quantity: 1,
-      expectedReturnDate: DEADLINE,
+      expectedReturnDate: RETURN_DATE,
       isReturnable: true,
       purpose: 'Round-trip check',
     });
     expect(raised.status).toBe(201);
-    expect(raised.body.expectedReturnDate).toBe(DEADLINE);
+    expect(raised.body.expectedReturnDate).toBe(RETURN_DATE);
 
     const listed = await im.client.get('/borrowing?page=1&limit=25&mine=false');
     const found = listed.body.items.find(
       (b: { id: string; expectedReturnDate: string | null }) => b.id === raised.body.id,
     );
-    expect(found?.expectedReturnDate).toBe(DEADLINE);
+    expect(found?.expectedReturnDate).toBe(RETURN_DATE);
   });
 });

@@ -170,9 +170,18 @@ export const saveRequisitionSchema = z
     departmentId: z.string().uuid().nullable().default(null),
     projectId: z.string().uuid().nullable().default(null),
     urgency: requisitionUrgencySchema.default(RequisitionUrgency.NORMAL),
+    /**
+     * An instant, not a calendar day, since Ayman's ruling of 2026-08-26: the requester picks a
+     * date *and* a time. Migration 0027 changed the column to `timestamptz` and backfilled every
+     * existing row to 23:59:59 on its stated day, Asia/Dhaka.
+     *
+     * Validated as a real parseable instant rather than by shape. A regex would accept
+     * `2026-13-45T99:00:00Z`, and this value decides when an approver gets chased.
+     */
     approvalDeadline: z
       .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD')
+      .datetime({ offset: true })
+      .refine((value) => !Number.isNaN(Date.parse(value)), 'Not a valid date and time')
       .nullable()
       .default(null),
     reason: z.string().trim().max(2000).nullable().default(null),

@@ -82,12 +82,19 @@ describe('DateField', () => {
     expect(onChange).not.toHaveBeenCalled();
 
     await user.click(within(dialog).getByRole('button', { name: t.requisitions.setDeadline }));
-    expect(onChange).toHaveBeenCalledWith('2026-08-20');
+
+    // An ISO instant since migration 0027, at the default 5:00 PM local.
+    const committed = new Date(onChange.mock.calls[0]![0] as string);
+    expect(committed.getFullYear()).toBe(2026);
+    expect(committed.getMonth()).toBe(7);
+    expect(committed.getDate()).toBe(20);
+    expect(committed.getHours()).toBe(17);
+    expect(committed.getMinutes()).toBe(0);
   });
 
   it('leaves the value alone when the popover is dismissed after a pick', async () => {
     const user = userEvent.setup();
-    const { onChange } = renderField('2026-08-18');
+    const { onChange } = renderField(new Date(2026, 7, 18, 17, 0).toISOString());
     const dialog = await openCalendar(user);
 
     await user.click(within(dialog).getByRole('button', { name: '25' }));
@@ -100,7 +107,7 @@ describe('DateField', () => {
 
   it('clears through to the caller', async () => {
     const user = userEvent.setup();
-    const { onChange } = renderField('2026-08-18');
+    const { onChange } = renderField(new Date(2026, 7, 18, 17, 0).toISOString());
     const dialog = await openCalendar(user);
 
     await user.click(within(dialog).getByRole('button', { name: t.common.clear }));
@@ -108,7 +115,7 @@ describe('DateField', () => {
   });
 
   it('shows the selected day in the local calendar, not a UTC-shifted one', () => {
-    renderField('2026-08-13');
+    renderField(new Date(2026, 7, 13, 17, 0).toISOString());
 
     // D-014: `new Date('2026-08-13')` parses as UTC midnight and renders as the 12th at +06.
     const trigger = screen.getByRole('button', { name: /needed by/i });
@@ -121,5 +128,74 @@ describe('DateField', () => {
     // The reason this component exists rather than `<input type="date">`. Asserted structurally:
     // there is no input to scroll over.
     expect(document.querySelector('input')).toBeNull();
+  });
+
+  /* ------------------------------------------------------------------- time */
+
+  const openList = async (user: ReturnType<typeof userEvent.setup>, name: string) => {
+    const dialog = screen.getByRole('dialog', { name: /needed by/i });
+    await user.click(within(dialog).getByRole('button', { name }));
+    return within(dialog).getByRole('listbox', { name });
+  };
+
+  it('offers a 12-hour clock in quarter hours', async () => {
+    const user = userEvent.setup();
+    renderField();
+    await openCalendar(user);
+
+    expect(within(await openList(user, t.requisitions.hourLabel)).getAllByRole('option')).toHaveLength(12);
+
+    const minutes = await openList(user, t.requisitions.minuteLabel);
+    expect(within(minutes).getAllByRole('option').map((option) => option.textContent)).toEqual([
+      '00',
+      '15',
+      '30',
+      '45',
+    ]);
+  });
+
+  it('commits the chosen time, not only the day', async () => {
+    const user = userEvent.setup();
+    const { onChange } = renderField();
+    const dialog = await openCalendar(user);
+
+    await user.click(within(dialog).getByRole('button', { name: '20' }));
+    await user.click(within(await openList(user, t.requisitions.hourLabel)).getByRole('option', { name: '09' }));
+    await user.click(within(await openList(user, t.requisitions.meridiemLabel)).getByRole('option', { name: 'AM' }));
+    await user.click(within(dialog).getByRole('button', { name: t.requisitions.setDeadline }));
+
+    const committed = new Date(onChange.mock.calls[0]![0] as string);
+    expect(committed.getHours()).toBe(9);
+    expect(committed.getDate()).toBe(20);
+  });
+
+  /**
+   * Ayman's ruling, 2026-08-26: "previous time and date not accepted, it should not also be
+   * selectable". The clock is fixed at 09:00 on the 15th, so on the 15th the whole morning has
+   * gone — and on any later day nothing has.
+   */
+  it('disables a time that has already passed today', async () => {
+    const user = userEvent.setup();
+    renderField();
+    const dialog = await openCalendar(user);
+
+    await user.click(within(dialog).getByRole('button', { name: '15' }));
+
+    const meridiems = await openList(user, t.requisitions.meridiemLabel);
+    // The default hour is 05, so 05 AM is behind 09:00 while 05 PM is ahead of it.
+    expect(within(meridiems).getByRole('option', { name: 'AM' })).toBeDisabled();
+    expect(within(meridiems).getByRole('option', { name: 'PM' })).toBeEnabled();
+  });
+
+  it('leaves every time selectable on a later day', async () => {
+    const user = userEvent.setup();
+    renderField();
+    const dialog = await openCalendar(user);
+
+    await user.click(within(dialog).getByRole('button', { name: '20' }));
+
+    const meridiems = await openList(user, t.requisitions.meridiemLabel);
+    expect(within(meridiems).getByRole('option', { name: 'AM' })).toBeEnabled();
+    expect(within(meridiems).getByRole('option', { name: 'PM' })).toBeEnabled();
   });
 });

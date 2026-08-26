@@ -32,7 +32,7 @@ export interface OverdueApproval {
   requisition_no: string;
   assigned_user_id: string;
   assignee_name: string;
-  approval_deadline: Date | string;
+  approval_deadline: Date;
   stage: string;
 }
 
@@ -111,7 +111,10 @@ export class ApprovalDeadlineJob {
         -- and the two agree only while both containers happen to be pinned the same way --
         -- the API's zone comes from an unversioned infra/.env. A requisition reading
         -- "Overdue" while no reminder ever fires is the failure requirements 5 exists to stop.
-        AND r.approval_deadline < (now() AT TIME ZONE ${this.config.reportingTimeZone}::text)::date
+        -- An instant comparison since 0027. The deadline carries a time of day now, so
+        -- truncating either side to a calendar day would ignore the half of it the requester
+        -- actually chose. The job ticks every 10 minutes, so a 5pm deadline is chased by 5:10pm.
+        AND r.approval_deadline < now()
         AND (
           (ra.stage = ${ApprovalStage.INVENTORY_MANAGER}::approval_stage
              AND r.status = ${RequisitionStatus.IM_REVIEW}::requisition_status)
