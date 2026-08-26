@@ -24,6 +24,7 @@ import { useDepartments } from '@/features/admin/api';
 import { useProjects } from '@/features/projects/api';
 import { useProducts } from '@/features/inventory/api';
 import { ItemRow } from '../components/ItemRow';
+import { lineTotalOf } from '../lineTotal';
 import { SupportingDocumentField } from '../components/SupportingDocumentField';
 import {
   useCreateRequisition,
@@ -127,8 +128,11 @@ export function RequisitionFormPage() {
 
   const itemsTotal = useMemo(
     () =>
+      // D-017: a line that is not costable contributes nothing, rather than contributing the
+      // product of two rejected numbers. The line itself renders a dash, so the user can see
+      // which one is holding the total back instead of reading a confident wrong figure.
       (items ?? []).reduce(
-        (sum, item) => sum + (item?.quantity ?? 0) * (item?.estimatedUnitPrice ?? 0),
+        (sum, item) => sum + (lineTotalOf(item?.quantity, item?.estimatedUnitPrice) ?? 0),
         0,
       ),
     [items],
@@ -154,8 +158,21 @@ export function RequisitionFormPage() {
     }
   }, [effectiveTransportation, transportationDescription, form]);
 
+  /**
+   * D-004: the reset has to wait for the two dropdowns' own queries, not just the requisition.
+   * A `<select>` handed a value with no matching `<option>` keeps "", so resetting while the
+   * option lists are still in flight silently discarded the user's saved department and project
+   * — the values were on the record and in the page header, but not in the form they were
+   * editing.
+   *
+   * Gated on *settled*, not on *data present*: if either query fails, `isPending` still goes
+   * false and every other field populates. Blocking on `.data` would leave the whole form empty
+   * behind a failed lookup, which trades one defect for a worse one.
+   */
+  const optionListsSettled = !departments.isPending && !projects.isPending;
+
   useEffect(() => {
-    if (!isEditing || !existing.data) return;
+    if (!isEditing || !existing.data || !optionListsSettled) return;
     form.reset({
       departmentId: existing.data.departmentId,
       projectId: existing.data.projectId,
@@ -172,7 +189,7 @@ export function RequisitionFormPage() {
       transportationCost: existing.data.transportationCost ?? null,
       transportationDescription: existing.data.transportationDescription ?? null,
     });
-  }, [isEditing, existing.data, form]);
+  }, [isEditing, existing.data, optionListsSettled, form]);
 
   async function persist(values: SaveRequisitionInput): Promise<string | null> {
     if (isEditing && requisitionId) {

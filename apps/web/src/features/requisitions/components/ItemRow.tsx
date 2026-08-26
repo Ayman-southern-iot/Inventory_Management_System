@@ -8,6 +8,7 @@ import { t } from '@/i18n/en';
 import { cn } from '@/lib/cn';
 import { formatBdt } from '@/lib/format';
 import { QuantityField } from '@/features/inventory/components/QuantityField';
+import { lineTotalOf } from '../lineTotal';
 
 interface Props {
   index: number;
@@ -60,7 +61,8 @@ export function ItemRow({
   }, [products, itemName]);
 
   const linked = productId ? products.find((product) => product.id === productId) : undefined;
-  const lineTotal = (quantity ?? 0) * (unitPrice ?? 0);
+  // null while the line is not costable — see lineTotalOf (D-017).
+  const lineTotal = lineTotalOf(quantity, unitPrice);
 
   return (
     <div className="grid grid-cols-1 items-start gap-3 border-b border-border px-5 py-4 last:border-b-0 sm:grid-cols-12">
@@ -152,7 +154,9 @@ export function ItemRow({
 
       <div className="sm:col-span-2 sm:pt-6">
         <p className="text-xs text-ink-subtle">{t.requisitions.lineTotal}</p>
-        <p className="text-right tabular-nums font-medium text-ink">{formatBdt(lineTotal)}</p>
+        <p className="text-right tabular-nums font-medium text-ink">
+          {lineTotal === null ? t.common.dash : formatBdt(lineTotal)}
+        </p>
       </div>
 
       <div className="sm:col-span-1 sm:pt-6">
