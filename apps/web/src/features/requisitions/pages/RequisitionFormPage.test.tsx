@@ -19,6 +19,10 @@ vi.mock('../api', () => ({
   }),
   useUpdateRequisition: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useSubmitRequisition: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useApprovalPolicy: () => ({
+    data: { expenseThresholdBdt: 15_000, approversBelowThreshold: 1, approversAtOrAboveThreshold: 2 },
+    isPending: false,
+  }),
   useUploadOrphanSupportingDocument: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUploadSupportingDocument: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useRemoveSupportingDocument: () => ({ mutateAsync: vi.fn(), isPending: false }),

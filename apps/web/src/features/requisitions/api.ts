@@ -1,6 +1,7 @@
 import { randomId } from '@/lib/random-id';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
+  ApprovalPolicy,
   CreateDelegationInput,
   DecideRequisitionInput,
   Delegation,
@@ -199,5 +200,21 @@ export function useUploadOrphanSupportingDocument() {
       form.append('file', file);
       return api.upload<SupportingDocument>('/uploads/supporting-document', form);
     },
+  });
+}
+
+/**
+ * The approval rules in force, for the form's live approver note.
+ *
+ * Long `staleTime`: an admin changing the expense threshold mid-session is rare, and refetching
+ * a policy on every window focus while someone fills in a form is noise. It is read once on
+ * mount and that is enough — the server re-reads it at submit anyway, so the note is a preview
+ * and never the decision.
+ */
+export function useApprovalPolicy() {
+  return useQuery({
+    queryKey: queryKeys.requisitions.approvalPolicy(),
+    queryFn: ({ signal }) => api.get<ApprovalPolicy>('/requisitions/approval-policy', signal),
+    staleTime: 5 * 60_000,
   });
 }

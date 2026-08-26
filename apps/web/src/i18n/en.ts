@@ -20,6 +20,7 @@ export const t = {
     close: 'Close',
     search: 'Search',
     retry: 'Try again',
+    clear: 'Clear',
     loading: 'Loading…',
     none: '—',
     yes: 'Yes',
@@ -736,7 +737,21 @@ export const t = {
     noProject: 'Personal development',
     urgency: 'Urgency',
     approvalDeadline: 'Approval deadline',
-    approvalDeadlineHint: 'Approvers are reminded once this passes. Pick today or later.',
+    approvalDeadlineHint:
+      'Approvers are reminded once this passes, so a date already gone would chase them the moment you submit. Pick today or later.',
+    setDeadline: 'Set deadline',
+    summaryHeading: 'Summary',
+    approverCountOne: '1 approver',
+    approverCountOther: '{n} approvers',
+    // Two halves of one sentence; the count is prepended by the component so it can be bolded.
+    // 'at or above', never 'over' -- the boundary is inclusive (OQ-01), so a requisition for
+    // exactly the threshold needs the higher count.
+    approverNoteBelow:
+      'needed at this amount. At or above {threshold} it becomes {higher}, so a larger request takes longer to clear.',
+    approverNoteAtOrAbove:
+      'needed. This is at or above the {threshold} threshold, so expect a second sign-off before anything is bought.',
+    reasonCounter: '{n}/{max}',
+    selectDate: 'Select a date',
     reason: 'Reason',
     reasonHint: 'Why this is needed. The approvers read this first.',
     // items zone

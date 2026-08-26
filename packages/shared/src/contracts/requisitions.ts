@@ -401,3 +401,33 @@ export const delegationSchema = z.object({
   isCurrentlyEffective: z.boolean(),
 });
 export type Delegation = z.infer<typeof delegationSchema>;
+
+/* ------------------------------------------------------- approval policy */
+
+/**
+ * The approval rules in force right now, readable by any authenticated user.
+ *
+ * The requisition form has to tell the requester how many approvers their amount will need,
+ * live, as they type. The only route exposing the threshold was `@Roles(ADMIN) /admin/settings`,
+ * so the form had no way to know — and a threshold hardcoded into the SPA would go stale the
+ * first time an admin changed it, which is exactly what requirements §11 makes changeable at
+ * runtime to avoid.
+ *
+ * Read-only and deliberately narrow: the three values the form needs, and nothing else from
+ * `app_settings`. Administering settings stays on the admin controller.
+ */
+export const approvalPolicySchema = z.object({
+  expenseThresholdBdt: z.number(),
+  /** Requisitions **below** the threshold. */
+  approversBelowThreshold: z.number().int(),
+  /** Requisitions **at or above** it — the boundary is inclusive (OQ-01). */
+  approversAtOrAboveThreshold: z.number().int(),
+});
+export type ApprovalPolicy = z.infer<typeof approvalPolicySchema>;
+
+/** How many approvers an amount needs. One rule, so the form and the server cannot disagree. */
+export function approversRequiredFor(amount: number, policy: ApprovalPolicy): number {
+  return amount < policy.expenseThresholdBdt
+    ? policy.approversBelowThreshold
+    : policy.approversAtOrAboveThreshold;
+}

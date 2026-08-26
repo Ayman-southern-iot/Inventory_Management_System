@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useFieldArray, useForm, useWatch } from 'react-hook-form';
+import { Controller, useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Plus, Send } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import {
   PAGINATION_MAX_LIMIT,
   RequisitionStatus,
@@ -12,11 +12,13 @@ import {
   type SaveRequisitionInput,
 } from '@ims/shared';
 import { Button } from '@/components/ui/Button';
+import { DateField } from '@/components/ui/DateField';
 import { SelectField, TextAreaField, TextField } from '@/components/ui/Field';
 import { PageHeader, Panel } from '@/components/ui/primitives';
 import { LoadingState } from '@/components/ui/states';
 import { useToast } from '@/components/ui/Toast';
 import { t } from '@/i18n/en';
+import { cn } from '@/lib/cn';
 import { messageForError } from '@/lib/error-message';
 import { formatBdt } from '@/lib/format';
 import { ROUTES } from '@/routes/paths';
@@ -25,10 +27,12 @@ import { useProjects } from '@/features/projects/api';
 import { useAllProducts } from '@/features/inventory/api';
 import { ItemRow } from '../components/ItemRow';
 import { lineTotalOf } from '../lineTotal';
+import { RequisitionSummary } from '../components/RequisitionSummary';
 import { SupportingDocumentField } from '../components/SupportingDocumentField';
 import {
   useCreateRequisition,
   useRequisition,
+  useApprovalPolicy,
   useSubmitRequisition,
   useUpdateRequisition,
 } from '../api';
@@ -39,6 +43,13 @@ import {
  * only fires for `undefined`. Coerce at the boundary where the empty string is produced.
  */
 const emptyToNull = { setValueAs: (value: string) => (value === '' ? null : value) };
+
+/**
+ * The Reason cap. Well under the schema's own 2000, deliberately: approvers read this first and
+ * skim, so a short box asks for a sentence rather than an essay. Enforced by `maxLength` and
+ * counted below the field, from this one constant so the two cannot disagree.
+ */
+const REASON_MAX_LENGTH = 280;
 
 const EMPTY_ITEM = {
   productId: null,
@@ -170,6 +181,10 @@ export function RequisitionFormPage() {
    * false and every other field populates. Blocking on `.data` would leave the whole form empty
    * behind a failed lookup, which trades one defect for a worse one.
    */
+  const approvalPolicy = useApprovalPolicy();
+  /** Watched rather than read on blur: the counter has to move as the requester types. */
+  const reasonLength = (useWatch({ control: form.control, name: 'reason' }) ?? '').length;
+
   const optionListsSettled = !departments.isPending && !projects.isPending;
 
   useEffect(() => {
@@ -258,13 +273,17 @@ export function RequisitionFormPage() {
   const { errors, isSubmitting } = form.formState;
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="mx-auto max-w-6xl">
       <PageHeader
         title={isEditing ? t.requisitions.editDraft : t.requisitions.newRequisition}
         subtitle={t.requisitions.subtitle}
       />
 
-      <form noValidate className="flex flex-col gap-6">
+      {/* Two columns above `lg`, stacked below it. The summary is sticky rather than pinned to
+          the bottom of the viewport: the running total matters most while the item rows are
+          being typed, which is exactly when a bottom bar would sit on top of them. */}
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_19rem]">
+        <form noValidate className="flex flex-col gap-5">
         {/* ---------------------------------------------- zone 1: the request */}
         <Panel className="shadow-[--shadow-panel]">
           <header className="border-b border-border px-5 py-4">
@@ -305,13 +324,23 @@ export function RequisitionFormPage() {
               ))}
             </SelectField>
 
-            <TextField
-              label={t.requisitions.approvalDeadline}
-              type="date"
-              hint={t.requisitions.approvalDeadlineHint}
-              error={errors.approvalDeadline?.message}
-              min={todayLocal()}
-              {...form.register('approvalDeadline')}
+            {/* Not `<input type="date">`. See DateField: the native control cannot show a past
+                date as unreachable before it is clicked, renders differently per browser, and
+                changes value on a stray wheel scroll. Controller-wrapped because the picker
+                commits a value on Set rather than emitting a DOM change event. */}
+            <Controller
+              control={form.control}
+              name="approvalDeadline"
+              render={({ field }) => (
+                <DateField
+                  label={t.requisitions.approvalDeadline}
+                  hint={t.requisitions.approvalDeadlineHint}
+                  error={errors.approvalDeadline?.message}
+                  placeholder={t.requisitions.selectDate}
+                  value={field.value ?? null}
+                  onChange={field.onChange}
+                />
+              )}
             />
 
             <div className="sm:col-span-2">
@@ -319,8 +348,22 @@ export function RequisitionFormPage() {
                 label={t.requisitions.reason}
                 hint={t.requisitions.reasonHint}
                 error={errors.reason?.message}
+                maxLength={REASON_MAX_LENGTH}
                 {...form.register('reason')}
               />
+              {/* Counts down against the same limit `maxLength` enforces, so the number and the
+                  behaviour cannot disagree. Right-aligned under the field, out of the way until
+                  it is nearly spent. */}
+              <p
+                className={cn(
+                  'mt-1 text-right text-xs tabular-nums',
+                  reasonLength > REASON_MAX_LENGTH * 0.9 ? 'text-pending' : 'text-ink-subtle',
+                )}
+              >
+                {t.requisitions.reasonCounter
+                  .replace('{n}', String(reasonLength))
+                  .replace('{max}', String(REASON_MAX_LENGTH))}
+              </p>
             </div>
           </div>
         </Panel>
@@ -465,57 +508,23 @@ export function RequisitionFormPage() {
           </div>
         </Panel>
 
-        {/* Final total bar — items + transportation + grand total. Replaces the old single-line
-            total once transportation became part of the requested amount. */}
-        <div className="rounded-[--radius-panel] border border-border bg-surface px-5 py-4 shadow-[--shadow-panel]">
-          <dl className="flex flex-col gap-1.5 text-sm">
-            <div className="flex items-baseline justify-between">
-              <dt className="text-ink-muted">{t.requisitions.transportation.itemsTotal}</dt>
-              <dd className="tabular-nums text-ink-muted">{formatBdt(itemsTotal)}</dd>
-            </div>
-            <div className="flex items-baseline justify-between">
-              <dt className="text-ink-muted">{t.requisitions.transportation.transportationTotal}</dt>
-              <dd className="tabular-nums text-ink-muted">{formatBdt(effectiveTransportation)}</dd>
-            </div>
-            <div className="mt-1 flex items-baseline justify-between border-t border-border pt-2">
-              <dt className="font-medium text-ink">{t.requisitions.transportation.requested}</dt>
-              <dd className="text-2xl font-semibold tabular-nums text-ink">
-                {formatBdt(requestedTotal)}
-              </dd>
-            </div>
-          </dl>
-        </div>
+        </form>
 
-        <div className="sticky bottom-0 z-10 mt-6 flex items-center justify-between gap-3 rounded-[--radius-panel] border border-border bg-surface px-5 py-4 shadow-[--shadow-panel]">
-          <p className="text-xs text-ink-subtle">{t.requisitions.submitHint}</p>
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              isLoading={isSubmitting}
-              onClick={form.handleSubmit(onSaveDraft)}
-            >
-              {t.requisitions.saveDraft}
-            </Button>
-            <Button
-              type="button"
-              icon={<Send aria-hidden className="size-4" />}
-              isLoading={isSubmitting}
-              onClick={form.handleSubmit(onSubmitForApproval)}
-            >
-              {t.requisitions.submit}
-            </Button>
-          </div>
-        </div>
-      </form>
+        {/* The totals and both actions moved in here. They used to sit at the bottom of the
+            form, which meant the figure that decides how many approvers you need was off screen
+            for the whole time you were creating it. */}
+        <RequisitionSummary
+          itemsTotal={itemsTotal}
+          transportationTotal={effectiveTransportation}
+          requestedTotal={requestedTotal}
+          policy={approvalPolicy.data}
+          isSubmitting={isSubmitting}
+          onSaveDraft={form.handleSubmit(onSaveDraft)}
+          onSubmit={form.handleSubmit(onSubmitForApproval)}
+        />
+      </div>
     </div>
   );
-}
-
-/** Local-date YYYY-MM-DD so the native picker rejects past dates without a TZ round-trip. */
-function todayLocal(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 /** Keeps `RequisitionFormPage` readable by holding the per-row wiring in one place. */

@@ -78,6 +78,7 @@ export const queryKeys = {
     list: (query: ListRequisitionsQuery) => ['requisitions', 'list', query] as const,
     detail: (id: string) => ['requisitions', 'detail', id] as const,
     awaitingCount: () => ['requisitions', 'awaiting-count'] as const,
+    approvalPolicy: () => ['requisitions', 'approval-policy'] as const,
   },
   delegations: {
     mine: () => ['delegations', 'mine'] as const,

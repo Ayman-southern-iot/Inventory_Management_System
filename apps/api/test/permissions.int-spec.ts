@@ -7,6 +7,7 @@ import {
   createUser,
   login,
   resetData,
+  restoreSeededSettings,
   uniqueDepartmentName,
   uniqueEmail,
 } from './factories';
@@ -104,6 +105,17 @@ describe('permission boundaries', () => {
   });
 
   afterAll(async () => {
+    /**
+     * The `as ADMIN` block below drives every admin route for real, and `PUT /admin/settings`
+     * genuinely writes `EXPENSE_THRESHOLD_BDT: 12_345`. `resetData` only nulls
+     * `app_settings.updated_by`, never `value`, so that figure leaked into every spec booting
+     * after this one in the shared suite database.
+     *
+     * Harmless until something asserted the absolute threshold — `approval-policy.int-spec.ts`
+     * is the first to, and it failed on 12345 rather than the seeded 15000. Same class as the
+     * leak `86eaa18` fixed in the audit spec.
+     */
+    await restoreSeededSettings(ctx);
     await ctx.close();
   });
 

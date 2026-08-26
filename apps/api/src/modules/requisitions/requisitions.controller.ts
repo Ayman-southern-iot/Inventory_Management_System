@@ -25,6 +25,7 @@ import {
   type DecideRequisitionInput,
   type Delegation,
   type ListRequisitionsQuery,
+  type ApprovalPolicy,
   type Paginated,
   type Requisition,
   type RequisitionDetail,
@@ -76,6 +77,21 @@ export class RequisitionsController {
   @Get('awaiting-count')
   async awaitingCount(@CurrentUser() actor: RequestUser): Promise<{ count: number }> {
     return { count: await this.repo.countAwaiting(actor.id) };
+  }
+
+  /**
+   * The approval rules in force, for the requisition form's live "how many approvers?" note.
+   *
+   * No `@Roles`: anyone may raise a requisition, so anyone needs to know what their amount will
+   * require. Read-only and narrow — three values, not the settings table. Administering them
+   * stays on `@Roles(ADMIN) /admin/settings`.
+   *
+   * Declared above `@Get(':id')` because Nest matches in declaration order and would otherwise
+   * read "approval-policy" as a requisition id.
+   */
+  @Get('approval-policy')
+  async approvalPolicy(): Promise<ApprovalPolicy> {
+    return this.requisitions.approvalPolicy();
   }
 
   @Get(':id')

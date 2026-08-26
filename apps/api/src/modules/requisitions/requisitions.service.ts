@@ -8,6 +8,7 @@ import {
   Role,
   SettingKey,
   WITHDRAWABLE_STATUSES,
+  type ApprovalPolicy,
   type DecideRequisitionInput,
   type SaveRequisitionInput,
   type WithdrawApprovalInput,
@@ -64,6 +65,25 @@ export class RequisitionsService {
     private readonly notifications: NotificationsService,
     private readonly users: UsersService,
   ) {}
+
+  /**
+   * The approval rules in force, for the form's live approver note.
+   *
+   * Reads the same settings `submit()` reads, so the number the requester is shown before
+   * submitting is the number they will actually get. Anything that recomputed this
+   * independently would eventually disagree with the server, and the requester would only find
+   * out at the moment of submission.
+   */
+  async approvalPolicy(): Promise<ApprovalPolicy> {
+    const [expenseThresholdBdt, approversBelowThreshold, approversAtOrAboveThreshold] =
+      await Promise.all([
+        this.settings.get(SettingKey.EXPENSE_THRESHOLD_BDT),
+        this.settings.get(SettingKey.APPROVER_SLOTS_BELOW_THRESHOLD),
+        this.settings.get(SettingKey.APPROVER_SLOTS_AT_OR_ABOVE_THRESHOLD),
+      ]);
+
+    return { expenseThresholdBdt, approversBelowThreshold, approversAtOrAboveThreshold };
+  }
 
   async createDraft(input: SaveRequisitionInput, requesterId: string) {
     const id = await this.db.transaction().execute(async (tx) => {
