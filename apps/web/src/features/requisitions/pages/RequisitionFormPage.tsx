@@ -429,23 +429,63 @@ export function RequisitionFormPage() {
             </div>
           ) : null}
 
-          {fields.map((field, index) => (
-            <ItemRowContainer
-              key={field.id}
-              index={index}
-              form={form}
-              products={products}
-              onPickProduct={(product) =>
-                update(index, {
-                  ...form.getValues(`items.${index}`),
-                  productId: product?.id ?? null,
-                  ...(product ? { itemName: product.name } : {}),
-                })
-              }
-              onRemove={() => remove(index)}
-              canRemove={fields.length > 1}
-            />
-          ))}
+          {/*
+            A real table, with the column names in one `<thead>` rather than repeated on every
+            row. `table-fixed` plus explicit widths keeps the columns from resizing as the
+            requester types — a header like "Unit price (BDT)" otherwise wraps to two lines the
+            moment a long item name lands beside it, and every row below shifts.
+          */}
+          <div className="px-5 pb-1 pt-4">
+            <table className="w-full table-fixed border-collapse">
+              <thead>
+                <tr className="border-b border-border">
+                  {[
+                    { label: t.requisitions.itemName, width: 'w-[44%]', align: 'text-left' },
+                    { label: t.requisitions.quantity, width: 'w-[13%]', align: 'text-right' },
+                    { label: t.requisitions.unitPrice, width: 'w-[19%]', align: 'text-right' },
+                    { label: t.requisitions.lineTotal, width: 'w-[17%]', align: 'text-right' },
+                    { label: '', width: 'w-[7%]', align: 'text-left' },
+                  ].map((column, columnIndex) => (
+                    <th
+                      key={column.label || `actions-${columnIndex}`}
+                      scope="col"
+                      className={cn(
+                        'pb-2 text-[0.6875rem] font-semibold uppercase tracking-wide text-ink-subtle',
+                        column.width,
+                        column.align,
+                        columnIndex < 4 && 'pr-3',
+                      )}
+                    >
+                      {/* The last column holds the delete button and has no name to give. */}
+                      {column.label || <span className="sr-only">{t.requisitions.removeItem}</span>}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {fields.map((field, index) => (
+                  <ItemRowContainer
+                    key={field.id}
+                    index={index}
+                    form={form}
+                    products={products}
+                    onPickProduct={(product) =>
+                      update(index, {
+                        ...form.getValues(`items.${index}`),
+                        productId: product?.id ?? null,
+                        ...(product ? { itemName: product.name } : {}),
+                      })
+                    }
+                    onRemove={() => remove(index)}
+                    canRemove={fields.length > 1}
+                  />
+                ))}
+              </tbody>
+            </table>
+
+            {/* Said once, under the table, instead of under every row. */}
+            <p className="mt-2 text-xs text-ink-subtle">{t.requisitions.itemNameHint}</p>
+          </div>
 
           {errors.items?.message ? (
             <p role="alert" className="px-4 py-2 text-xs text-danger">

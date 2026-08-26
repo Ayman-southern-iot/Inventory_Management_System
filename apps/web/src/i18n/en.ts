@@ -761,6 +761,7 @@ export const t = {
     removeItem: 'Remove',
     itemName: 'Item',
     itemNameHint: 'Pick from the catalogue, or type anything we do not stock yet.',
+    itemNamePlaceholder: 'Search the catalogue, or type a new item',
     quantity: 'Quantity',
     unitPrice: 'Unit price (BDT)',
     lineTotal: 'Line total',

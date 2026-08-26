@@ -82,9 +82,9 @@ describe('RequisitionFormPage', () => {
     await user.selectOptions(screen.getByLabelText(t.requisitions.department), '');
 
     // One item is the minimum the schema accepts.
-    await user.type(screen.getByLabelText(t.requisitions.itemName), 'Test widget');
-    await user.type(screen.getByLabelText(t.requisitions.quantity), '2');
-    await user.type(screen.getByLabelText(t.requisitions.unitPrice), '100');
+    await user.type(screen.getByLabelText(`${t.requisitions.itemName} 1`), 'Test widget');
+    await user.type(screen.getByLabelText(`${t.requisitions.quantity} 1`), '2');
+    await user.type(screen.getByLabelText(`${t.requisitions.unitPrice} 1`), '100');
 
     await user.click(screen.getByRole('button', { name: t.requisitions.saveDraft }));
 
@@ -102,9 +102,9 @@ describe('RequisitionFormPage', () => {
     const total = screen.getByText(t.requisitions.total).parentElement!.querySelector('span:last-child')!;
     expect(total.textContent).toBe('0.00');
 
-    await user.type(screen.getByLabelText(t.requisitions.itemName), 'test widget');
-    await user.type(screen.getByLabelText(t.requisitions.quantity), '4');
-    await user.type(screen.getByLabelText(t.requisitions.unitPrice), '399.99');
+    await user.type(screen.getByLabelText(`${t.requisitions.itemName} 1`), 'test widget');
+    await user.type(screen.getByLabelText(`${t.requisitions.quantity} 1`), '4');
+    await user.type(screen.getByLabelText(`${t.requisitions.unitPrice} 1`), '399.99');
 
     expect(total.textContent).toBe('1,599.96');
   });

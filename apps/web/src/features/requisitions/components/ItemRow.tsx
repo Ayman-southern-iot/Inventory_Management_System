@@ -2,12 +2,10 @@ import { useMemo, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { Controller, type Control, type UseFormRegister } from 'react-hook-form';
 import type { Product, SaveRequisitionInput } from '@ims/shared';
-import { Button } from '@/components/ui/Button';
-import { TextField } from '@/components/ui/Field';
+import { CellInput } from '@/components/ui/Field';
 import { t } from '@/i18n/en';
 import { cn } from '@/lib/cn';
 import { formatBdt } from '@/lib/format';
-import { QuantityField } from '@/features/inventory/components/QuantityField';
 import { lineTotalOf } from '../lineTotal';
 
 interface Props {
@@ -26,7 +24,13 @@ interface Props {
 }
 
 /**
- * One requisition line.
+ * One requisition line, as a real table row.
+ *
+ * It was a twelve-column grid where each cell carried its own `<label>`, blanked on every row
+ * after the first. An empty label still occupies its line box, so rows two onward sat higher
+ * than row one, and the line total and delete button needed `pt-6` nudges to look level. That is
+ * what the reference design gets right by being a table: the column header is the label, once,
+ * and every cell below it simply lines up.
  *
  * The catalogue is a *suggestion*, not a constraint: the requester types freely and picks a
  * product only if one matches. Requirements §3 is explicit that something we do not stock yet
@@ -63,82 +67,117 @@ export function ItemRow({
   const linked = productId ? products.find((product) => product.id === productId) : undefined;
   // null while the line is not costable — see lineTotalOf (D-017).
   const lineTotal = lineTotalOf(quantity, unitPrice);
+  const rowLabel = String(index + 1);
 
   return (
-    <div className="grid grid-cols-1 items-start gap-3 border-b border-border px-5 py-4 last:border-b-0 sm:grid-cols-12">
-      <div className="relative sm:col-span-5">
-        <TextField
-          label={index === 0 ? t.requisitions.itemName : ''}
-          hint={index === 0 ? t.requisitions.itemNameHint : undefined}
-          error={errors.itemName}
-          autoComplete="off"
-          {...register(`items.${index}.itemName` as const, {
-            onChange: () => {
-              // Editing the text breaks the link to the catalogue entry — otherwise the
-              // requisition would claim a product whose name no longer matches.
-              if (productId) onPickProduct(null);
-              setShowSuggestions(true);
-            },
-          })}
-          onFocus={() => setShowSuggestions(true)}
-          // A click on a suggestion has to land before the list closes.
-          onBlur={() => window.setTimeout(() => setShowSuggestions(false), 150)}
-        />
+    <tr className="border-b border-border last:border-b-0">
+      <td className="py-2.5 pr-3 align-top">
+        {/* `relative` on the cell, so the suggestion list is positioned against this column
+            rather than the table. A `<td>` can hold a positioning context; the row cannot. */}
+        <div className="relative">
+          <CellInput
+            label={`${t.requisitions.itemName} ${rowLabel}`}
+            placeholder={t.requisitions.itemNamePlaceholder}
+            error={errors.itemName}
+            autoComplete="off"
+            {...register(`items.${index}.itemName` as const, {
+              onChange: () => {
+                // Editing the text breaks the link to the catalogue entry — otherwise the
+                // requisition would claim a product whose name no longer matches.
+                if (productId) onPickProduct(null);
+                setShowSuggestions(true);
+              },
+            })}
+            onFocus={() => setShowSuggestions(true)}
+            // A click on a suggestion has to land before the list closes.
+            onBlur={() => window.setTimeout(() => setShowSuggestions(false), 150)}
+          />
 
-        {showSuggestions && matches.length > 0 ? (
-          <ul className="absolute z-20 mt-1 w-full overflow-hidden rounded-[--radius-control] border border-border bg-surface shadow-[--shadow-overlay]">
-            {matches.map((product) => (
-              <li key={product.id}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onPickProduct(product);
-                    setShowSuggestions(false);
-                  }}
-                  className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-surface-muted"
-                >
-                  <span>
-                    <span className="font-medium text-ink">{product.name}</span>
-                    <span className="ml-2 font-mono text-xs text-ink-subtle">
-                      {product.productCode}
-                    </span>
-                  </span>
-                  <span
-                    className={cn(
-                      'text-xs',
-                      product.totalAvailable > 0 ? 'text-success' : 'text-ink-subtle',
-                    )}
+          {showSuggestions && matches.length > 0 ? (
+            <ul className="absolute z-20 mt-1 w-full overflow-hidden rounded-[--radius-control] border border-border bg-surface shadow-[--shadow-overlay]">
+              {matches.map((product) => (
+                <li key={product.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onPickProduct(product);
+                      setShowSuggestions(false);
+                    }}
+                    className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-surface-muted"
                   >
-                    {product.totalAvailable} {product.unit}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </div>
+                    <span>
+                      <span className="font-medium text-ink">{product.name}</span>
+                      <span className="ml-2 font-mono text-xs text-ink-subtle">
+                        {product.productCode}
+                      </span>
+                    </span>
+                    <span
+                      className={cn(
+                        'text-xs',
+                        product.totalAvailable > 0 ? 'text-success' : 'text-ink-subtle',
+                      )}
+                    >
+                      {product.totalAvailable} {product.unit}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
 
-      <div className="sm:col-span-2">
-        <QuantityField
+          {/* Under the name, where it describes the thing above it. One line, so it cannot push
+              the row's height around the way the old per-row hint did. */}
+          <p className="mt-1 truncate text-xs">
+            {linked ? (
+              <span className="text-success">
+                {t.requisitions.inStockHint.replace('{n}', String(linked.totalAvailable))}
+              </span>
+            ) : itemName.trim() ? (
+              <span className="text-ink-subtle">{t.requisitions.freeText}</span>
+            ) : null}
+          </p>
+        </div>
+      </td>
+
+      <td className="py-2.5 pr-3 align-top">
+        <Controller
           control={control}
           name={`items.${index}.quantity` as const}
-          label={index === 0 ? t.requisitions.quantity : ''}
-          error={errors.quantity}
-          min={1}
+          render={({ field }) => (
+            <CellInput
+              label={`${t.requisitions.quantity} ${rowLabel}`}
+              type="number"
+              inputMode="numeric"
+              min={1}
+              step="1"
+              placeholder="0"
+              className="text-right tabular-nums"
+              error={errors.quantity}
+              name={field.name}
+              ref={field.ref}
+              onBlur={field.onBlur}
+              value={field.value === undefined || field.value === null ? '' : String(field.value)}
+              onChange={(event) =>
+                field.onChange(event.target.value === '' ? undefined : Number(event.target.value))
+              }
+            />
+          )}
         />
-      </div>
+      </td>
 
-      <div className="sm:col-span-2">
+      <td className="py-2.5 pr-3 align-top">
         <Controller
           control={control}
           name={`items.${index}.estimatedUnitPrice` as const}
           render={({ field }) => (
-            <TextField
-              label={index === 0 ? t.requisitions.unitPrice : ''}
+            <CellInput
+              label={`${t.requisitions.unitPrice} ${rowLabel}`}
               type="number"
               inputMode="decimal"
               min={0}
               step="0.01"
+              placeholder="0.00"
+              className="text-right tabular-nums"
               error={errors.estimatedUnitPrice}
               name={field.name}
               ref={field.ref}
@@ -150,51 +189,29 @@ export function ItemRow({
             />
           )}
         />
-      </div>
+      </td>
 
-      <div className="sm:col-span-2 sm:pt-6">
-        <p className="text-xs text-ink-subtle">{t.requisitions.lineTotal}</p>
-        <p className="text-right tabular-nums font-medium text-ink">
-          {lineTotal === null ? t.common.dash : formatBdt(lineTotal)}
-        </p>
-      </div>
+      {/* Top-padded to sit on the inputs' baseline rather than the cell's top edge. */}
+      <td className="whitespace-nowrap py-2.5 pr-2 pt-4 text-right align-top text-sm font-medium tabular-nums text-ink">
+        {lineTotal === null ? t.common.dash : formatBdt(lineTotal)}
+      </td>
 
-      <div className="sm:col-span-1 sm:pt-6">
-        <Button
+      <td className="py-2.5 pt-3.5 align-top">
+        <button
           type="button"
-          variant="ghost"
-          size="sm"
-          aria-label={`${t.requisitions.removeItem} ${index + 1}`}
-          icon={<Trash2 aria-hidden className="size-4" />}
+          aria-label={`${t.requisitions.removeItem} ${rowLabel}`}
           onClick={onRemove}
           disabled={!canRemove}
-        />
-      </div>
-
-      <div className="sm:col-span-12">
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          {linked ? (
-            <>
-              <span className="rounded-full bg-info-subtle px-2 py-0.5 text-info">
-                {t.requisitions.fromCatalogue}
-              </span>
-              {/* Advisory, and deliberately not a blocker — the requester may need more than
-                  we hold, or a second one. */}
-              {linked.totalAvailable > 0 ? (
-                <span className="text-success">
-                  {t.requisitions.inStockHint.replace('{n}', String(linked.totalAvailable))} ·{' '}
-                  <span className="text-ink-subtle">{t.requisitions.inStockAdvisory}</span>
-                </span>
-              ) : null}
-            </>
-          ) : (
-            <span className="rounded-full bg-surface-muted px-2 py-0.5 text-ink-muted">
-              {t.requisitions.freeText}
-            </span>
+          className={cn(
+            'flex size-8 items-center justify-center rounded-[--radius-control] text-ink-subtle',
+            'hover:bg-danger-subtle hover:text-danger',
+            'disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent',
+            'disabled:hover:text-ink-subtle',
           )}
-        </div>
-      </div>
-    </div>
+        >
+          <Trash2 aria-hidden className="size-4" />
+        </button>
+      </td>
+    </tr>
   );
 }
-

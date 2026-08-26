@@ -82,6 +82,61 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
   );
 });
 
+interface CellInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'id'> {
+  /** Not rendered. Becomes the accessible name, since the visible label is the column header. */
+  label: string;
+  error?: string;
+}
+
+/**
+ * An input for a table cell, where the column header is the visible label.
+ *
+ * `TextField` cannot do this job. It always renders a `<label>`, so a table of rows either
+ * repeats the label on every row or passes an empty string and leaves an invisible element
+ * still taking up vertical space — which is what pushed the item rows out of alignment and made
+ * the line total and delete button need `pt-6` nudges to sit level with the inputs.
+ *
+ * The label still exists, as `aria-label`. A `<th>` alone does not reliably name an input inside
+ * the cell across screen readers, and rules/30's accessibility floor is not negotiable just
+ * because the label is drawn somewhere else.
+ *
+ * Keeps `TextField`'s wheel guard: a focused number input treats the wheel as increment, so an
+ * ordinary page scroll would rewrite whichever unit price the cursor sat over.
+ */
+export const CellInput = forwardRef<HTMLInputElement, CellInputProps>(function CellInput(
+  { label, error, className, onWheel, ...rest },
+  ref,
+) {
+  const id = useId();
+  return (
+    <>
+      <input
+        ref={ref}
+        id={id}
+        aria-label={label}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? `${id}-error` : undefined}
+        className={cn(CONTROL, 'h-9', className)}
+        onWheel={(event) => {
+          if (
+            event.currentTarget.type === 'number' &&
+            document.activeElement === event.currentTarget
+          ) {
+            event.currentTarget.blur();
+          }
+          onWheel?.(event);
+        }}
+        {...rest}
+      />
+      {error ? (
+        <p id={`${id}-error`} role="alert" className="mt-1 text-xs text-danger">
+          {error}
+        </p>
+      ) : null}
+    </>
+  );
+});
+
 interface SelectFieldProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'id'> {
   label: string;
   hint?: string;

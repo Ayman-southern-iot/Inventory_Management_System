@@ -120,7 +120,9 @@ export function DateField({
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
 
   return (
-    <div className="flex flex-col gap-1.5" ref={containerRef}>
+    // `relative` is load-bearing: the popover below is absolutely positioned and would
+    // otherwise anchor to whatever distant ancestor happens to be positioned.
+    <div className="relative flex flex-col gap-1.5" ref={containerRef}>
       <label htmlFor={id} className="text-sm font-medium text-ink">
         {label}
       </label>
@@ -164,7 +166,7 @@ export function DateField({
           role="dialog"
           aria-label={label}
           className={cn(
-            'absolute z-20 mt-[4.75rem] w-[17.5rem] rounded-[--radius-panel] border border-border',
+            'absolute left-0 top-full z-20 mt-1 w-72 rounded-[--radius-panel] border border-border',
             'bg-surface p-4 shadow-[--shadow-overlay]',
           )}
         >
