@@ -38,7 +38,7 @@ and 6.3 (restore drill, measured) landed 2026-07-31, and `PROGRESS.md` carried a
 
 ## Needs the operator
 
-1. **`git push` is still not authorised — 146 commits ahead of `main`, 73 ahead of `origin`.**
+1. **`git push` is still not authorised — 147 commits ahead of `main`, 74 ahead of `origin`.**
    Everything since QA round 2 exists on this machine only. The single largest risk.
 2. **Demo mode is ON in production** — login lists five accounts with a shared password.
 3. Offsite backups (**G-16**) and a drill against the real compose stack (**G-17**); the drill

@@ -8,7 +8,7 @@
 - **2026-08-27 — OQ-32 closed, the BOM PDF audited, and phase 06 found already done.** One
   commit. **Working tree clean** apart from `IMS_QA_Test_Plan.xlsx`, `docs/policy/` and
   `promt.md`, all untracked and all awaiting a decision on whether they belong in the repo.
-  Branch `fix/lan-secure-context`, **146 commits ahead of `main`, 73 ahead of `origin`.**
+  Branch `fix/lan-secure-context`, **147 commits ahead of `main`, 74 ahead of `origin`.**
   - **Next task:** none queued. The ranked candidates are in `NOW.md`; the first wants a ruling
     rather than a patch (G-14's prevention half).
   - **Verified green:** typecheck clean · unit shared 13 / api 58 / web 245 · integration
