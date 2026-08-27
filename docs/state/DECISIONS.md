@@ -808,3 +808,36 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   I had described the status quo wrongly as optional. `funds.service.ts` has always thrown
   `INVOICE_MISSING`; the rule is unchanged and the attach control moved into the form that
   enforces it.
+- 2026-08-27 — **Transportation is spent money only while a live purchase stands (OQ-32).**
+  The reversals (`215b3cf`) landed before the transportation fix (`f7c7f72`) and were never
+  reconciled, so three surfaces answered "what did the van cost?" three ways once a purchase was
+  voided: the expenses report and the personal dashboard dropped the carriage, because their
+  `EXISTS` clause already said `voided_at IS NULL`; the funding panel kept it, because it read
+  `requisitions.transportation_cost` unconditionally. Measured on Ayman's 1,000 / 500-carriage /
+  250-purchased requisition, after voiding the purchase: funding said `transportation 500,
+  spentInclTransportation 500, unspent 500`; the report and the dashboard both said `0`. Neither
+  answer was decided — both were accidents of how each query happened to be written.
+  **The rule:** the transportation cost is an *estimate typed on the draft*, not a recorded
+  expense — there is no "carriage paid" row anywhere in the schema — so the only thing that ever
+  makes it real is being attributed to something bought. Void the last purchase and nothing has
+  been bought, so nothing has been carried, and the full grant is back in the IM's hands to hand
+  back. Keeping the old behaviour would have told an IM holding 1,000 in cash that 500 of it was
+  already gone on a van that never moved, and the return guard would then have refused a full
+  return of money nobody spent.
+  **This is not only about the void.** The same defect fired one step earlier and had never been
+  noticed: a requisition funded 1,000 with *nothing yet bought* already reported
+  `transportation 500 / unspent 500`. The void case is that case reached backwards.
+  Implemented as `FundsRepository.hasLivePurchase()` — `EXISTS`, not `sumPurchases() > 0`, since a
+  purchase recorded at a total of zero is still a delivery — applied in `funding()` (which gates on
+  `listPurchases` being empty, that list already excluding voided rows), in
+  `computeCurrentFunding()` so the funding snapshots agree, and written out explicitly in
+  `verifyPurchase()` where it is true by construction, so the rule reads the same in all three
+  places. A split-vendor requisition keeps its carriage while any purchase still stands: the van
+  was hired once for a delivery still on the record.
+  **The BOM stops at this rule, deliberately.** It prints what was asked for, not what was spent,
+  so nothing on it moves when the money does — asserted byte-for-byte across record-purchase and
+  void, because a buy list that changes after Accounts was handed it stops matching the paperwork.
+  Classification: **NO-BASIS** — requirements §5 and §9 never mention transportation, and no
+  recorded decision covered the reversal case. It changes what the system decides, so it was put
+  to Ayman before it was written; Ayman's instinct ("the carriage follows the last live purchase
+  out") and this analysis agree.

@@ -5,12 +5,48 @@
 
 ## Current position
 
+- **2026-08-27 — OQ-32 closed, the BOM PDF audited, and phase 06 found already done.** One
+  commit. **Working tree clean** apart from `IMS_QA_Test_Plan.xlsx`, `docs/policy/` and
+  `promt.md`, all untracked and all awaiting a decision on whether they belong in the repo.
+  Branch `fix/lan-secure-context`, **146 commits ahead of `main`, 73 ahead of `origin`.**
+  - **Next task:** none queued. The ranked candidates are in `NOW.md`; the first wants a ruling
+    rather than a patch (G-14's prevention half).
+  - **Verified green:** typecheck clean · unit shared 13 / api 58 / web 245 · integration
+    **663 pass / 0 fail (49 files)**, baseline 656 · `pnpm lint` **20 pre-existing errors**,
+    unchanged · `guard-hardcoding.sh --scan-all` **10**, against a documented baseline of 7.
+  - **Shipped (OQ-32):** transportation is spent money only while a live purchase stands. Three
+    surfaces had answered differently and none of them by decision — the expenses report and
+    `/dashboard/me` dropped the carriage on a void because their `EXISTS` already said
+    `voided_at IS NULL`; `funding()` and `computeCurrentFunding()` kept it because they read the
+    column unconditionally. Now one rule, via `FundsRepository.hasLivePurchase()`. Reasoning and
+    the measured before/after figures are in `DECISIONS.md` under 2026-08-27.
+  - **Found by the same repro, fixed with it:** the defect bit one step *earlier* than the void.
+    A requisition funded 1,000 with nothing yet bought already reported `transportation 500 /
+    unspent 500` — the funding panel charged a van that had not moved, and the return guard would
+    have refused a full return of money nobody had spent. Nobody had noticed.
+  - **Audited, correct already:** the BOM PDF. It reconciles on Ayman's figures (items 500 +
+    carriage 500 = grand total 1,000, matching the header) and is byte-identical after a purchase
+    is recorded and after it is voided. Two tests added; no code change. D-030-the-decision was
+    renamed to OQ-32 before commit — `D-nnn` is the QA defect numbering and `D-030` already
+    exists.
+  - **Phase 06 was already complete; PROGRESS.md was lying.** 6.2 and 6.3 landed 2026-07-31 —
+    `stock-reconciliation.job.ts` checks both invariants including `reserved_qty` per G-14, its
+    acceptance criterion is covered by `stock-service.int-spec.ts:452`, and the restore drill is
+    written up in `BACKUP-DRILL.md` with measured times (1.086s dump, 1.668s restore). The "next
+    task: 6.2" line in the 2026-08-26 block below sat directly under "phases 00–06 complete" and
+    contradicted it; `NOW.md` inherited the error and this session was sent to redo finished work.
+  - **Found, not fixed:** G-14's *prevention* half is still open even though the gap is marked
+    CLOSED. `decide` and `cancel` were collapsed onto one transaction; `create` was not, because
+    `StockService.reserve` never got the `existingTx` parameter `release` and `issue` have. A
+    crash between the reserve commit and the insert commit still strands a reservation — detected
+    at 02:00, not prevented. Left alone: it widens the one-writer boundary and wants a ruling.
+
 - **2026-08-26 — Phase 08: reversible money stages, lifecycle truth, personal dashboard, and a
   money audit that found two real arithmetic bugs.** Ten commits.
   **Working tree clean** apart from `IMS_QA_Test_Plan.xlsx` and `docs/policy/`, both untracked
   and both awaiting a decision on whether they belong in the repo.
   Branch `fix/lan-secure-context`, **145 commits ahead of `main`, 72 ahead of `origin`.**
-  - **Next task:** transportation on a **voided** purchase. The reversals (`215b3cf`) landed
+  - **Next task (done 2026-08-27):** transportation on a **voided** purchase. The reversals (`215b3cf`) landed
     before the transportation fix (`f7c7f72`) and the two were never reconciled — voiding a
     purchase drops its total from `spent`, but whether the carriage follows is untested in both
     the report and the dashboard. Reproduce in `money-audit.int-spec.ts`, then fix. Then the BOM
@@ -196,10 +232,12 @@
 - **Phase:** 00–06 complete. **Phase 07 complete (2026-08-26)** — the QA round 2 defect list,
   22 of 22, ledger in `plan/PHASE-07-qa-round-2-defects.md`. `EX-02` shipped with it, so no
   REQUIRED obligation in the requirements document is now unimplemented.
-- **Next task:** **6.2, the nightly invariant job** (`SUM(stock_ledger) = stock_placements.quantity`
-  per product). Extend it to `reserved_qty` at the same time, per G-14 — it currently cannot see a
-  stranded reservation, which is the whole failure mode G-14 describes. Then **6.3, the backup and
-  restore drill**, which is the highest-value remaining task given the no-data-loss requirement.
+- **Next task:** ~~**6.2, the nightly invariant job**, extended to `reserved_qty` per G-14, then
+  **6.3, the backup and restore drill**.~~ **WRONG WHEN WRITTEN, and it cost a session.** Both
+  had already landed on 2026-07-31 — this bullet sat directly under "00–06 complete" and
+  contradicted it, `NOW.md` inherited it, and a later session was sent to redo finished work.
+  Corrected 2026-08-27. Do not resurrect a "next task" line inside a dated historical block:
+  the current one lives at the top of this file and in `NOW.md`, nowhere else.
 - **Blocking the operator, not the code:** demo mode is still ON in production (the login page
   lists Admin with a shared password); offsite backups (G-16) and the restore drill (G-17) are
   still outstanding; and **`git push` remains unauthorised — 63 commits exist on one machine
@@ -237,7 +275,7 @@
 | 03 | Requisitions — form, approvals, tracker, notifications | ✅ done and verified | 9 migrations, 277 tests |
 | 04 | BOM — generation, snapshot, letterhead PDF | ✅ done and verified | 10 migrations |
 | 05 | Funds, purchasing, signatures, finished BOM | done and verified | 19 migrations, 351 int tests |
-| 06 | Hardening — invariant job, backups, monitoring, runbook | 6.1 done; 6.2-6.7 open | |
+| 06 | Hardening — invariant job, backups, monitoring, runbook | ✅ done and verified | 6.1–6.7; re-verified 2026-08-27 |
 | 07 | QA round 2 defect burndown | ✅ done and verified | 22 of 22, plus EX-02 |
 | 08 | Reversible money stages, lifecycle truth, personal dashboard | ✅ done and verified | migration 0028, 656 int tests |
 

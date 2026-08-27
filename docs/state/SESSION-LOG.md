@@ -12,6 +12,58 @@ Format:
 **Next:** the single next action, specific enough to start without thinking
 ```
 
+## 2026-08-27 — Phase 08 tail, and a phase 06 that was already done
+**Did:**
+- Closed **OQ-32**. Reproduced first, as asked: on Ayman's 1,000 / 500-carriage / 250-purchased
+  requisition, voiding the purchase left `funding()` saying `transportation 500, unspent 500`
+  while the expenses report and `/dashboard/me` both said `0`. Two screens, two answers, neither
+  decided — one was the `EXISTS (… voided_at IS NULL)` clause, the other an unconditional column
+  read. Now one rule via `FundsRepository.hasLivePurchase()`, applied in `funding()`,
+  `computeCurrentFunding()` and `verifyPurchase()`.
+- The same repro caught a defect nobody had reported: it fires **before** any void. A requisition
+  funded 1,000 with nothing yet bought already charged the 500 van, so the panel understated cash
+  in hand and the return guard would have refused a full return of unspent money.
+- Audited the BOM PDF against the same scenario — the last surface in it that prints money and
+  had never been walked with these figures. No defect: it reconciles (500 + 500 = 1,000, matching
+  the header) and is byte-identical after a purchase and after a void. Two tests, no code change.
+- Verified phase 06 tasks 6.2 and 6.3 rather than rebuilding them: both landed 2026-07-31.
+
+**Decisions:**
+- **Transportation is spent money only while a live purchase stands** (in `DECISIONS.md` under
+  2026-08-27). It is an estimate typed on the draft, not a recorded expense — no "carriage paid"
+  row exists anywhere — so only attribution to something bought makes it real. A split-vendor
+  requisition keeps its carriage while any purchase stands. Classified NO-BASIS; the requirements
+  never mention transportation. Ayman set the direction, this analysis agreed.
+- **The BOM stops at that rule, deliberately.** It prints what was asked for, not what was spent.
+- **`D-nnn` is the QA defect numbering and is not available for decisions.** I labelled this one
+  D-030 and caught the collision with the existing defect D-030 before committing. Renamed to
+  OQ-32 everywhere. Added to the NOW.md landmines so the next session does not repeat it.
+
+**Landmines:**
+- **`PROGRESS.md` sent this session to redo finished work.** A "next task: 6.2" bullet sat inside
+  a dated historical block, directly beneath "phases 00–06 complete", contradicting its own
+  neighbour; `NOW.md` inherited it and so did the session brief. Corrected in place with a note
+  rather than deleted, because the failure mode is worth remembering. **A "next task" line belongs
+  at the top of PROGRESS.md and in NOW.md — nowhere else.**
+- **G-14 is marked CLOSED and is only half closed.** `decide` and `cancel` now ride one
+  transaction; `create` still reserves in one and inserts in another, because
+  `StockService.reserve` is the only one of the three without an `existingTx` parameter. A crash
+  between the commits still strands a reservation. The 02:00 job detects it; nothing prevents it.
+  Not fixed — it widens the one-writer boundary, which is why G-14 declined it unreviewed.
+- **`guard-hardcoding.sh --scan-all` is at 10 against a documented baseline of 7.** The three
+  extra are in files this session never touched, so they accreted between 2026-08-23 and now.
+  Neither fixed nor investigated.
+- Pre-2026-08-27 `funding_snapshots` rows still carry the old unconditional carriage figure, so a
+  historical requisition's FUNDS_RECEIVED pill will show 500 where a new one shows 0. Left as
+  historical fact — rewriting a snapshot destroys the evidence the rule changed — but unasserted.
+- The funding panel's Transportation figure now reads 0 before purchase. I checked in the source
+  that the declared amount still prints on the requisition detail page, but **did not load the
+  page in a browser.**
+
+**Next:** Nothing is queued. Ask Ayman before starting. If a technical task is wanted, the ranked
+list is at the top of `NOW.md`, and the first of them — G-14's prevention half — needs a ruling on
+widening the one-writer boundary before any code is written.
+
 ## 2026-08-26 — Phase 08
 **Did:**
 - Every money stage between approval and add-to-inventory is now reversible. `undo-send-to-accounts`,

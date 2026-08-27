@@ -352,9 +352,14 @@ export const requisitionFundingSchema = z.object({
   /** Sum of purchase totals. */
   spent: z.number(),
   /**
-   * Transportation cost declared on the requisition. Part of `approved_amount` at submit time but
-   * never reaches `purchases` (it is not a stock movement), so it has to be folded into spent
-   * manually when computing `unspent` and `spentInclTransportation`.
+   * Transportation **charged** — the cost declared on the requisition, but only while a live
+   * purchase stands (OQ-32). Part of `approved_amount` at submit time and never reaching
+   * `purchases` (it is not a stock movement), so it is folded into `unspent` and
+   * `spentInclTransportation` by hand.
+   *
+   * Zero before anything has been bought and zero again once the last purchase is voided:
+   * nothing has been carried until something has been bought. The amount the requester declared
+   * is on the requisition itself as `transportationCost` and does not move.
    */
   transportation: z.number(),
   /** `spent + transportation`. The figure the verify-purchase dialog compares against funded. */

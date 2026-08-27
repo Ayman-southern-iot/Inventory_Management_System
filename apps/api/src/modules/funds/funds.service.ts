@@ -516,8 +516,16 @@ export class FundsService {
       // shows it as unspent and the IM is asked to hand back money that was already spent on
       // getting the goods here. Treat it as spent for unspent math; `transportation_cost`
       // stays null when the IM never declared any.
+      //
+      // Gated on a live purchase for one rule everywhere (OQ-32). Reaching PURCHASED means one
+      // exists, and voiding the last one leaves that status, so this cannot be false here — it
+      // is written out anyway so the rule reads the same in all three places rather than being
+      // true here by an argument someone has to reconstruct.
+      const bought = await this.repo.hasLivePurchase(requisitionId, tx);
       const transportation =
-        requisition.transportation_cost === null ? 0 : round2(Number(requisition.transportation_cost));
+        !bought || requisition.transportation_cost === null
+          ? 0
+          : round2(Number(requisition.transportation_cost));
       if (returned > 0) {
         // All three sums read under the lock that will write the status, so the ceiling cannot
         // move underneath a concurrent return.
@@ -1210,8 +1218,15 @@ export class FundsService {
     const approved = requisition.approved_amount === null ? null : Number(requisition.approved_amount);
     const requested =
       requisition.requested_amount === null ? null : Number(requisition.requested_amount);
+    // Charged only while a live purchase stands (OQ-32). `listPurchases` already excludes voided
+    // rows, so this array being empty *is* "nothing has been bought" — void the last purchase and
+    // the carriage goes with it, exactly as it does on the expenses report and the dashboard.
+    // Before the rule, a requisition funded 1,000 with nothing yet bought reported 500 of it
+    // already spent on a van that had not moved.
     const transportation =
-      requisition.transportation_cost === null ? 0 : round2(Number(requisition.transportation_cost));
+      purchases.length === 0 || requisition.transportation_cost === null
+        ? 0
+        : round2(Number(requisition.transportation_cost));
 
     return {
       requisitionId,

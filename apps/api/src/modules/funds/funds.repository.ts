@@ -259,6 +259,26 @@ export class FundsRepository {
     return money(row?.total ?? null);
   }
 
+  /**
+   * Whether any purchase still stands on this requisition.
+   *
+   * The predicate that decides whether the transportation cost is spent money (OQ-32). It is an
+   * estimate typed on the draft, not a recorded expense — nothing anywhere says "the carriage was
+   * paid" — so the only thing that ever makes it real is being attributed to something bought.
+   * `EXISTS` rather than `sumPurchases() > 0`: a purchase recorded at a total of zero is still a
+   * purchase, and a delivery that happened.
+   */
+  async hasLivePurchase(requisitionId: string, executor: Db | Tx = this.db): Promise<boolean> {
+    const row = await executor
+      .selectFrom('purchases')
+      .where('requisition_id', '=', requisitionId)
+      .where('voided_at', 'is', null)
+      .select('id')
+      .limit(1)
+      .executeTakeFirst();
+    return row !== undefined;
+  }
+
   /* -------------------------------------------------- receiving to stock */
 
   /**
@@ -604,8 +624,9 @@ export class FundsRepository {
    * matches what `funding()` would have returned to the API at that instant.
    *
    * `transportation` is read from `requisitions.transportation_cost` because it never appears
-   * in `purchases` — it was already "spent" when the goods physically arrived (vehicles, fuel,
-   * porter). See `funding()` for the same fold.
+   * in `purchases` — it buys carriage, not stock. Charged only once a live purchase stands
+   * (OQ-32): before that nothing has been bought, so nothing has been carried. See `funding()`
+   * for the same fold.
    */
   async insertSnapshot(
     tx: Tx,
@@ -673,15 +694,20 @@ export class FundsRepository {
         unspent: 0,
       };
     }
-    const [funded, spent, returned] = await Promise.all([
+    const [funded, spent, returned, bought] = await Promise.all([
       this.sumReceipts(requisitionId, tx),
       this.sumPurchases(requisitionId, tx),
       this.sumReturns(requisitionId, tx),
+      this.hasLivePurchase(requisitionId, tx),
     ]);
     const approved = requisition.approved_amount === null ? null : Number(requisition.approved_amount);
     const requested = requisition.requested_amount === null ? null : Number(requisition.requested_amount);
+    // Charged only while something bought still stands (OQ-32) — the same rule the expenses
+    // report and the personal dashboard apply through their own EXISTS clause.
     const transportation =
-      requisition.transportation_cost === null ? 0 : Number(requisition.transportation_cost);
+      !bought || requisition.transportation_cost === null
+        ? 0
+        : Number(requisition.transportation_cost);
     const unspent = Math.max(0, Math.round((funded - spent - transportation - returned) * 100) / 100);
     return {
       requestedAmount: requested,
