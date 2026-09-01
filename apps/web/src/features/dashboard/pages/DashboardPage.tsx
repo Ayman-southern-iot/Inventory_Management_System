@@ -4,7 +4,7 @@ import { t } from '@/i18n/en';
 import { formatBdt } from '@/lib/format';
 import { useAuth } from '@/features/auth/auth-context';
 import { usePersonalRecord } from '../api';
-import { Figure, Group, RecordBlock } from '../components/RecordBlock';
+import { AmountRow, Figure, Group, RecordBlock } from '../components/RecordBlock';
 
 /**
  * The signed-in person's own record.
@@ -152,22 +152,22 @@ export function DashboardPage() {
               <RecordBlock
                 title={t.dashboard.spendHeading}
                 hint={t.dashboard.spendHint}
-                columns={2}
+                asList
                 isEmpty={data.requisitions.raised === 0}
               >
-                <Figure
+                <AmountRow
                   label={t.dashboard.spendRequested}
                   value={formatBdt(data.spend.requested)}
                 />
-                <Figure
+                <AmountRow
                   label={t.dashboard.spendApproved}
                   value={formatBdt(data.spend.approved)}
                 />
-                <Figure
+                <AmountRow
                   label={t.dashboard.spendPurchased}
                   value={formatBdt(data.spend.purchased)}
                 />
-                <Figure
+                <AmountRow
                   label={t.dashboard.spendTransportation}
                   value={formatBdt(data.spend.transportation)}
                 />

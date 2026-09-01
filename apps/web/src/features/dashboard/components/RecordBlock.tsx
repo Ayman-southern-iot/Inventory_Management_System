@@ -58,6 +58,7 @@ export function RecordBlock({
   isEmpty,
   grouped,
   columns = 3,
+  asList,
   children,
 }: {
   title: string;
@@ -72,6 +73,15 @@ export function RecordBlock({
   grouped?: boolean;
   /** Figures per row. Four figures in a three-column grid leave a lonely orphan on row two. */
   columns?: 2 | 3;
+  /**
+   * One figure per row, label left and amount right, the way a bill reads.
+   *
+   * Money labels are long — "Total Money in Purchasing" — and four of them in a grid inside a
+   * third of the page wrapped onto two lines each and left the card looking crammed. Down the
+   * page each label has the full width to itself and the amounts share a right edge, which is
+   * where anybody reads a column of money from anyway.
+   */
+  asList?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -87,6 +97,8 @@ export function RecordBlock({
           <p className="mt-4 text-sm text-ink-subtle">{t.dashboard.nothingYet}</p>
         ) : grouped ? (
           <div className="mt-4 flex flex-col gap-5">{children}</div>
+        ) : asList ? (
+          <dl className="mt-4 flex flex-col">{children}</dl>
         ) : (
           <dl
             className={cn(
@@ -131,6 +143,21 @@ export function Group({
       >
         {children}
       </dl>
+    </div>
+  );
+}
+
+/**
+ * One line of a money statement: what it is on the left, how much on the right.
+ *
+ * The amounts are `tabular-nums` and right-aligned so the digits line up column-wise — four
+ * figures you are meant to compare are unreadable when the decimal points wander.
+ */
+export function AmountRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-4 border-b border-border py-2.5 last:border-b-0">
+      <dt className="text-sm text-ink-muted">{label}</dt>
+      <dd className="shrink-0 text-lg font-semibold tabular-nums text-ink">{value}</dd>
     </div>
   );
 }
