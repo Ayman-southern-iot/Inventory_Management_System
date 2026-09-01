@@ -34,16 +34,23 @@ export function FundsPanel({ requisition }: { requisition: RequisitionDetail }) 
   const funding = useFunding(requisition.id, reached);
 
   /**
-   * Live BOM for this requisition, when one exists. The record-purchase dialog needs the
-   * IM's quantity override per line (so the label and wire payload reflect what the IM
-   * actually planned, not the original requisition quantity). When no live BOM exists,
-   * `bomQuantities` is an empty map and the dialog falls back to wire quantity.
+   * Live BOM for this requisition, when one exists.
+   *
+   * The record-purchase dialog needs both figures the IM settled at BOM time: the quantity
+   * (so the label and the payload reflect what was actually planned, not the original
+   * requisition quantity) and the unit cost (so the form opens on the agreed price for the IM
+   * to adjust, rather than on empty boxes). Carried as one map rather than two, because two
+   * maps keyed the same way are two things to keep in step.
+   *
+   * Empty when no live BOM exists, and the dialog falls back to the requisition line.
    */
   const bom = useBomForRequisition(requisition.id);
-  const bomQuantities = useMemo(() => {
-    if (!bom.data) return new Map<string, number>();
-    const map = new Map<string, number>();
-    for (const line of bom.data.lines) map.set(line.requisitionItemId, line.quantity);
+  const bomLines = useMemo(() => {
+    const map = new Map<string, { quantity: number; unitCost: number }>();
+    if (!bom.data) return map;
+    for (const line of bom.data.lines) {
+      map.set(line.requisitionItemId, { quantity: line.quantity, unitCost: line.unitCost });
+    }
     return map;
   }, [bom.data]);
 
@@ -175,7 +182,7 @@ export function FundsPanel({ requisition }: { requisition: RequisitionDetail }) 
         action={action}
         requisition={requisition}
         funding={funding.data ?? null}
-        bomQuantities={bomQuantities}
+        bomLines={bomLines}
         onClose={() => setAction(null)}
       />
     </Panel>

@@ -6,6 +6,8 @@ import { TextField } from '@/components/ui/Field';
 import { useToast } from '@/components/ui/Toast';
 import { useAllProducts, useCategoryTree, useZones } from '@/features/inventory/api';
 import { t } from '@/i18n/en';
+import { cn } from '@/lib/cn';
+import { focusFirstInvalid } from '@/lib/focus-invalid';
 import { messageForError } from '@/lib/error-message';
 import { CATALOGUE_QUERY } from '@/features/requisitions/pages/RequisitionFormPage';
 import { nearestCatalogueMatch, exactCatalogueMatch, rankMatches } from '@/lib/catalogueMatch';
@@ -74,6 +76,13 @@ export function ReceiveToStockForm({
     .filter((line) => line.outstandingQuantity > 0);
 
   const [lines, setLines] = useState<Record<string, LineState>>({});
+  /**
+   * QA-023 asked for this as defence in depth: the compartment was enforced only by the API,
+   * so an omitted one came back as a failed POST that the page-level error boundary turned
+   * into a full-screen "Something went wrong" — losing every other line the IM had filled in.
+   * Keyed by purchase line, because each row is its own little form.
+   */
+  const [lineErrors, setLineErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const initial: Record<string, LineState> = {};
@@ -116,6 +125,20 @@ export function ReceiveToStockForm({
   async function onSubmit() {
     const selected = outstanding.filter((line) => lines[line.id]?.include);
     if (selected.length === 0) return;
+
+    // Where the units are going is not optional: this writes to a physical shelf, and a
+    // placement with no compartment is not a smaller mistake than a wrong one.
+    const missing: Record<string, string> = {};
+    for (const line of selected) {
+      const state = lines[line.id]!;
+      if (!state.compartmentId) missing[line.id] = t.requisitions.fieldRequired;
+    }
+    setLineErrors(missing);
+    if (Object.keys(missing).length > 0) {
+      focusFirstInvalid();
+      toast.error(t.requisitions.fixHighlighted);
+      return;
+    }
 
     try {
       await receive.mutateAsync({
@@ -189,6 +212,7 @@ export function ReceiveToStockForm({
                 <div className="mt-3 flex flex-col gap-3">
                   <TextField
                     label={t.funds.quantity}
+                    required
                     type="number"
                     min={1}
                     max={line.outstandingQuantity}
@@ -197,11 +221,31 @@ export function ReceiveToStockForm({
                   />
 
                   <label className="flex flex-col gap-1">
-                    <span className="text-sm font-medium text-ink">{t.funds.compartment}</span>
+                    <span className="text-sm font-medium text-ink">
+                      {t.funds.compartment}
+                      <span aria-hidden className="ml-0.5 text-danger">
+                        *
+                      </span>
+                    </span>
                     <select
                       value={state.compartmentId}
-                      onChange={(event) => update(line.id, { compartmentId: event.target.value })}
-                      className="rounded-[--radius-control] border border-border bg-surface px-2.5 py-1.5 text-sm"
+                      aria-required
+                      aria-invalid={lineErrors[line.id] ? true : undefined}
+                      onChange={(event) => {
+                        update(line.id, { compartmentId: event.target.value });
+                        // Clear the mark as soon as it is answered, or a corrected row keeps
+                        // wearing a refusal it has already satisfied.
+                        setLineErrors((current) => {
+                          if (!current[line.id]) return current;
+                          const next = { ...current };
+                          delete next[line.id];
+                          return next;
+                        });
+                      }}
+                      className={cn(
+                        'rounded-[--radius-control] border bg-surface px-2.5 py-1.5 text-sm',
+                        lineErrors[line.id] ? 'border-danger' : 'border-border',
+                      )}
                     >
                       <option value="">{t.common.none}</option>
                       {compartments.map((compartment) => (
@@ -210,6 +254,11 @@ export function ReceiveToStockForm({
                         </option>
                       ))}
                     </select>
+                    {lineErrors[line.id] ? (
+                      <p role="alert" className="text-xs text-danger">
+                        {lineErrors[line.id]}
+                      </p>
+                    ) : null}
                   </label>
 
                   {/* A free-text requisition line becomes a real product here, once. Either it

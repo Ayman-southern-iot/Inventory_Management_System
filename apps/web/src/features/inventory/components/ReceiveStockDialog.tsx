@@ -61,6 +61,7 @@ export function ReceiveStockDialog({ open, onClose, productId, zones }: Props) {
 
   return (
     <Dialog
+      schema={receiveStockSchema}
       open={open}
       onClose={onClose}
       title={t.inventory.receiveStock}

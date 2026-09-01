@@ -76,7 +76,15 @@ export function ItemRow({
    */
   const matches = useMemo(() => rankMatches(products, itemName), [products, itemName]);
 
-  const isOpen = open && products.length > 0;
+  /**
+   * Gated on there being a term, not on the catalogue being non-empty.
+   *
+   * Nothing typed, nothing shown (Ayman, 2026-09-01). But a term that matches nothing still
+   * opens the list, because that is where "nothing in the catalogue matches, it will be
+   * requested as a new item" is said — and that sentence is the whole defence against somebody
+   * concluding we do not stock a thing and inventing their own name for it.
+   */
+  const isOpen = open && itemName.trim().length > 0;
 
   /**
    * The catalogue entry the typed text is probably meant to be, while still unlinked.

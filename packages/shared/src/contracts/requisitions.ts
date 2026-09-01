@@ -145,6 +145,43 @@ export const RequisitionEventType = {
 export type RequisitionEventType =
   (typeof RequisitionEventType)[keyof typeof RequisitionEventType];
 
+/* ------------------------------------------------- required to submit (D-006) */
+
+/**
+ * The fields a requisition must carry before it can be submitted.
+ *
+ * Ayman's ruling, 2026-08-26 (D-006): required at **submit**, never at save — a draft is
+ * allowed to be half-finished, which is the entire point of a draft. `projectId` is
+ * deliberately absent: no project means personal development, which is an answer rather than
+ * an omission.
+ *
+ * Lives in `shared` because both ends enforce it and they must not drift. The API refuses the
+ * submit (`REQUISITION_INCOMPLETE`); the form refuses to *send* it, marking the offending
+ * inputs instead — reaching the API at all means a draft has already been created and given a
+ * reference number, which is how QA ended up with orphan drafts (D-015).
+ */
+export const REQUISITION_SUBMIT_REQUIRED = ['departmentId', 'approvalDeadline', 'reason'] as const;
+
+export type RequisitionSubmitField = (typeof REQUISITION_SUBMIT_REQUIRED)[number];
+
+/**
+ * Which of the required fields are not satisfied, in form order.
+ *
+ * A whitespace-only reason counts as missing — it satisfies "not null" and answers nothing,
+ * and the approver reading it is the one who pays for the ambiguity.
+ */
+export function missingForSubmit(value: {
+  departmentId?: string | null;
+  approvalDeadline?: string | null;
+  reason?: string | null;
+}): RequisitionSubmitField[] {
+  const missing: RequisitionSubmitField[] = [];
+  if (!value.departmentId) missing.push('departmentId');
+  if (!value.approvalDeadline) missing.push('approvalDeadline');
+  if (typeof value.reason !== 'string' || value.reason.trim() === '') missing.push('reason');
+  return missing;
+}
+
 /* -------------------------------------------------------------- line items */
 
 export const requisitionItemInputSchema = z.object({
@@ -330,6 +367,15 @@ export const requisitionSchema = z.object({
   reason: z.string().nullable(),
   /** The three money figures (domain-context.md). `funded` arrives with Phase 05. */
   requestedAmount: z.number().nullable(),
+  /**
+   * Items + transportation as they stand, recomputed on every read.
+   *
+   * `requestedAmount` is null until submit freezes it, so a DRAFT has no figure to show and
+   * both the list and the detail page have to show *something* above a costed table (D-016,
+   * QA-009). This is that something, and it comes from the database so the two screens cannot
+   * arrive at different totals for the same draft.
+   */
+  provisionalAmount: z.number(),
   approvedAmount: z.number().nullable(),
   requiredApproverCount: z.number().int().nullable(),
   thresholdAtSubmit: z.number().nullable(),

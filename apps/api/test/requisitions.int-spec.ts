@@ -109,6 +109,54 @@ describe('requisitions and approvals', () => {
       assignedUserId: string;
     };
 
+  /**
+   * QA-009. A draft has no `requested_amount` — it is written at submit — and both the list and
+   * the detail page had to show something above a costed table. The list showed `?? 0`, so a
+   * draft holding real money sat in the REQUESTED column reading 0, next to submitted rows
+   * showing their actual totals. A hard 0 does not read as "not fixed yet".
+   *
+   * Computed by the server, not summed in the browser, so the two screens cannot disagree —
+   * the money audit exists because that is the failure that actually happens.
+   */
+  describe('the provisional total (QA-009)', () => {
+    it('totals a draft’s lines and carriage while requestedAmount is still null', async () => {
+      const created = await draft(0, {
+        transportationCost: 500,
+        transportationDescription: 'Van hire',
+        items: [
+          { itemName: 'Widget', quantity: 3, estimatedUnitPrice: 2_500, productId: null, note: null },
+          { itemName: 'Gadget', quantity: 1, estimatedUnitPrice: 2_000, productId: null, note: null },
+        ],
+      });
+      expect(created.status).toBe(201);
+
+      const detail = (await requester.client.get(`/requisitions/${created.body.id}`)).body;
+      expect(detail.requestedAmount).toBeNull();
+      // 7,500 + 2,000 of items, plus the 500 van.
+      expect(detail.provisionalAmount).toBe(10_000);
+    });
+
+    it('keeps reporting it after submit, alongside the frozen figure', async () => {
+      const created = await draft(4_000);
+      const submitted = await requester.client.post(`/requisitions/${created.body.id}/submit`).send();
+      expect(submitted.status).toBe(200);
+
+      // Both present and equal: nothing has been edited since submit. The frozen figure is what
+      // every screen shows once it exists (D-016); this one just stops being the fallback.
+      expect(submitted.body.requestedAmount).toBe(4_000);
+      expect(submitted.body.provisionalAmount).toBe(4_000);
+    });
+
+    it('is zero for a draft with no lines rather than absent', async () => {
+      const created = await draft(0, {
+        items: [{ itemName: 'Free', quantity: 1, estimatedUnitPrice: 0, productId: null, note: null }],
+      });
+
+      const detail = (await requester.client.get(`/requisitions/${created.body.id}`)).body;
+      expect(detail.provisionalAmount).toBe(0);
+    });
+  });
+
   describe('submit freezes the policy (task 3.3)', () => {
     it('records the threshold and approver count in force at submit', async () => {
       const created = await draft(20_000);

@@ -79,7 +79,12 @@ describe('RequisitionFormPage', () => {
     // test that never touches the select would pass against the unfixed code and prove nothing.
     // The change event is what puts '' into form state, which is what zod rejects.
     await user.selectOptions(screen.getByLabelText(t.requisitions.project), '');
-    await user.selectOptions(screen.getByLabelText(t.requisitions.department), '');
+    // By role and accessible name: the label gained a decorative required marker, and the
+    // point of marking it `aria-hidden` is that the name a user is announced stays clean.
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: t.requisitions.department }),
+      '',
+    );
 
     // One item is the minimum the schema accepts.
     await user.type(screen.getByLabelText(`${t.requisitions.itemName} 1`), 'Test widget');

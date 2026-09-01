@@ -105,7 +105,7 @@ export const t = {
     adminSettings: 'Settings',
     adminAuditLog: 'Audit log',
     account: 'My account',
-    inventoryProducts: 'Products',
+    inventoryProducts: 'Inventory',
     inventoryCategories: 'Categories',
     inventoryLocations: 'Locations',
     boms: 'Bills of Materials',
@@ -271,9 +271,10 @@ export const t = {
   },
 
   inventory: {
-    // 'Products', not 'Inventory': this page is reached from the sidebar item labelled Products,
-    // and its siblings are Categories and Locations. The heading was the odd one out (D-010).
-    title: 'Products',
+    // 'Inventory', matching the sidebar item it is reached from (Ayman, 2026-09-01). D-010 made
+    // the heading follow the sidebar rather than differ from it; that still holds, the sidebar
+    // has simply been renamed. Its siblings are Categories and Locations.
+    title: 'Inventory',
     // EX-02: requirements section 10 asks for inventory records exportable for Accounts.
     downloadCsv: 'Export CSV',
     downloadPdf: 'Export PDF',
@@ -432,6 +433,18 @@ export const t = {
     invoiceNo: 'Invoice number',
     purchasedAt: 'Date purchased',
     unitCost: 'Unit cost',
+    unitCostPositive: 'Enter a unit cost greater than zero.',
+    // The ceiling is what has been funded, not what was approved: you cannot spend cash you
+    // have not received (Ayman, 2026-08-31).
+    overspendBlocked: 'This would commit {committed} against {funded} funded. Lower a unit cost, or record a further fund receipt first.',
+    plannedQuantity: 'Planned: {n}',
+    lineTotal: 'Line total',
+    transportationActual: 'Transportation for this delivery',
+    transportationActualHint: 'What the carriage actually cost. Adjust it up or down; it counts towards what has been funded.',
+    purchaseTotal: 'This purchase',
+    fundedLabel: 'Funded',
+    leftToSpend: 'Left to spend',
+    overspendInline: 'This is more than has been funded. Lower a quantity, a unit cost or the transportation until it is not negative.',
     quantity: 'Quantity',
     returnedAmount: 'Amount going back to Accounts',
     returnedAmountHint: 'Prefilled with the unspent balance. Set it to zero if nothing is going back.',
@@ -837,6 +850,12 @@ export const t = {
       'needed. This is at or above the {threshold} threshold, so expect a second sign-off before anything is bought.',
     reasonCounter: '{n}/{max}',
     selectDate: 'Select date & time',
+    // UX-6: the facts an approver decides on, labelled rather than left as a grey subtitle.
+    raisedBy: 'Raised by',
+    // Not 'Submitted': the lifecycle tracker already uses that word for the stage, and a
+    // date labelled the same as a stage reads as the stage on a page that shows both.
+    submittedOn: 'Submitted on',
+    neededBy: 'Needed by',
     reason: 'Reason',
     reasonHint: 'Why this is needed. The approvers read this first.',
     // items zone
@@ -871,15 +890,23 @@ export const t = {
     transportationDescriptionLabel: 'Description',
     // money
     requested: 'Requested',
-    // Pre-approval, this column is seeded with the requested figure so the BOM has a number
-    // to print; an approver may revise it down. We label it "Sanctioned" so the UI does not
-    // claim an approver signed off before one has.
-    sanctioned: 'Sanctioned',
+    // The column is seeded with the requested figure at submit so the BOM has a number to
+    // print, but the screen does not show it until an approver has actually decided — a
+    // figure captioned "approved" before anyone approved is a claim the record cannot support
+    // (UX-5). The detail page renders an em dash until then; this label is for after.
+    approvedAmount: 'Approved amount',
     // A draft has no frozen figure yet, so what is shown is the sum of the lines below and
     // must say so — the alternative was rendering a hard 0 above a costed table (D-016).
     requestedHintDraft: 'Provisional — fixed when you submit.',
-    sanctionedHintPending: 'Defaults to the requested amount; approvers may revise down.',
-    sanctionedHintRevised: 'An approver revised this from the requested amount.',
+    // QA-009: a draft has no frozen amount, and the list rendered `?? 0` — a hard 0 beside
+    // rows showing real money reads as 'this costs nothing', not 'this is not fixed yet'.
+    provisionalTag: 'provisional',
+    // QA-008: the toast named all three required fields whether or not they were missing,
+    // because one string cannot know which failed. The fields carry the answer now; the toast
+    // only points at them.
+    fieldRequired: 'Required.',
+    fixHighlighted: 'Fill in the highlighted fields before submitting.',
+    approvedAmountHintRevised: 'An approver revised this down from the requested amount.',
     total: 'Total',
     thresholdNote: 'Threshold at submit',
     approverCount: 'Approvers required',
@@ -888,6 +915,16 @@ export const t = {
     submit: 'Submit for approval',
     submitHint: 'Once submitted the amounts and the approver list are fixed.',
     cancelRequest: 'Cancel request',
+    // The template's inline decision card. `approve` / `reject` below label its buttons.
+    yourDecision: 'Your decision',
+    yourDecisionHint: 'Approving moves this requisition to the next approver in the chain.',
+    decisionNoteOptional: 'Optional — the requester and the next approver both see it.',
+    itemsSubtotalLabel: 'Items subtotal',
+    // The approver count moved into the progress rail, where it explains the chain beside it.
+    approverCountHint: '{n} approvers required — threshold at submit was {threshold}.',
+    // Revise sits behind a button, the way transportation does on the requisition form.
+    reviseAmountOpen: 'Revise the approved amount',
+    reviseAmountCancel: 'Cancel revision',
     approve: 'Approve',
     approveWithSignature: 'Approve with signature',
     approveWithoutSignature: 'Approve without signature',
@@ -903,12 +940,18 @@ export const t = {
     withdraw: 'Withdraw approval',
     withdrawReason: 'Why are you withdrawing? (You can still approve or reject again afterwards.)',
     decisionNote: 'Note',
-    reviseAmount: 'Revise the sanctioned amount',
+    reviseAmount: 'Revise the approved amount',
     reviseAmountHint: 'Leave blank to approve the full requested amount.',
-    reviseAmountOptIn: 'Revise the sanctioned amount',
+    reviseAmountOptIn: 'Revise the approved amount',
     reviseAmountOptInHint: 'Tick to enter a different figure; leave unticked to approve the full requested amount.',
+    // QA-034: one line, one unit — there is no smaller quantity to buy, so a lower figure
+    // would approve an amount that cannot purchase the thing being asked for. Reject or
+    // approve in full are the only honest options, and the screen says why.
+    reviseAmountIndivisible: 'This is a single item, so the amount cannot be revised down — approve it in full or reject it.',
+    // Was "...and it cannot be reopened", which stopped being true when withdraw shipped and
+    // was telling people a rejection was final for months.
     rejectWarning:
-      'Rejecting ends the whole request. The other approvers will not be asked, and it cannot be reopened.',
+      'Rejecting ends the whole request — the other approvers will not be asked. You can take your rejection back afterwards if you change your mind.',
     // results
     draftSaved: 'Draft saved.',
     // D-015: submitting is save-then-submit, so a refused submit still leaves a saved draft
@@ -1064,6 +1107,8 @@ export const t = {
     // list
     bomNo: 'BOM number',
     sources: 'Sources',
+    openRequisition: 'Open the requisition',
+    openRequisitionBlocked: 'Render the PDF first — Accounts is sent the document, so it has to exist before the requisition goes to them.',
     noSources: '—',
     generatedAt: 'Generated',
     generatedBy: 'By',
@@ -1079,6 +1124,14 @@ export const t = {
     bomSubtotal: 'BOM subtotal',
     totalAmount: 'Total amount',
     variance: 'Variance',
+    // QA-019: the builder compared items-only against an approved figure that includes the
+    // carriage, so every requisition with transportation showed a phantom variance of exactly
+    // the van. The carriage is now its own line and the total counts it.
+    bomTransportation: 'Transportation',
+    bomCommitted: 'BOM total',
+    overspentHeading: 'This BOM commits more than was approved',
+    overspentLine: '{no}: {committed} committed against {approved} approved — {over} over.',
+    overspentHint: 'Lower a quantity or a unit cost until it fits. Transportation counts towards the approved amount.',
     voidBanner: 'Voided',
     voidedAt: 'Voided at',
     voidedBy: 'By',
@@ -1196,6 +1249,16 @@ export const t = {
     STOCK_RESERVED: 'Those units are reserved for a pending borrow and cannot be moved or removed.',
     BOM_OVER_BUDGET:
       'This BOM was over budget and bounced. Adjust the unit costs and try again.',
+    // The screen names the offending requisition and the shortfall from details.overspent;
+    // this is the fallback wherever only the bare message is shown.
+    BOM_SPANS_MULTIPLE_REQUESTERS:
+      'A BOM covers one requester. Un-tick the requisitions that belong to someone else and generate a separate BOM for them.',
+    // The screen names the shortfall from details; this is the fallback wherever only the
+    // bare message is shown.
+    PURCHASE_EXCEEDS_FUNDED:
+      'This purchase would spend more than has been funded. Lower a unit cost, or record a further fund receipt first.',
+    BOM_EXCEEDS_APPROVED_AMOUNT:
+      'This BOM commits more than was approved. Lower a quantity or a unit cost until it fits, or send the requisition back to be restated.',
     BOM_QUANTITY_EXCEEDS_SOURCE:
       'That quantity is more than the requisition asks for. Shrink it to {max} or less.',
     ALL_BOM_LINES_REMOVED:
@@ -1234,7 +1297,7 @@ export const t = {
     SIGNATURE_NOT_UPLOADED:
       'You have not uploaded a signature yet. Add one from your profile, or approve without a signature.',
     APPROVED_EXCEEDS_REQUESTED:
-      'You cannot sanction more than the {requested} requested. Approve up to that, or send the requisition back so the requester can restate it.',
+      'You cannot approve more than the {requested} requested. Approve up to that, or send the requisition back so the requester can restate it.',
     DELEGATION_ALREADY_LIVE:
       'You already have a delegation covering part of that period. An approver can have only one delegate at a time — revoke the existing one first.',
     INTERNAL: 'Something went wrong on the server.',

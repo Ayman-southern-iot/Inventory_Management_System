@@ -26,7 +26,16 @@ export function rankMatches<T extends { name: string; productCode: string }>(
   term: string,
 ): T[] {
   const needle = term.trim().toLowerCase();
-  if (!needle) return [...products];
+  /**
+   * Nothing until something is typed (Ayman, 2026-09-01).
+   *
+   * This used to return the whole catalogue so the field read as a search box rather than a
+   * hint that appears once you guess enough characters. On a catalogue of any size that is a
+   * wall of options in front of somebody who already knows what they want. The ranking below is
+   * unchanged and is what does the work: exact, then code, then starts-with, then contains —
+   * so "a" offers apple and abc, and "ap" narrows to apple.
+   */
+  if (!needle) return [];
 
   const scored: Array<{ product: T; score: number }> = [];
 

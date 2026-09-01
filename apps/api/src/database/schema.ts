@@ -549,6 +549,12 @@ export interface PurchasesTable {
   invoice_no: string | null;
   purchased_at: Timestamp;
   total_amount: Money;
+  /**
+   * The carriage actually paid for this delivery (migration 0029). The requisition still holds
+   * the figure the requester *planned*; this is what it came to. Summed over live purchases
+   * wherever spend is reported.
+   */
+  transportation_cost: ColumnType<string, string | undefined, string>;
   note: string | null;
   recorded_by: string;
   /** Attached at the verify step (5.5). One invoice per purchase, not per requisition. */

@@ -174,6 +174,15 @@ export const bomCandidateSchema = z.object({
   departmentName: z.string().nullable(),
   projectName: z.string().nullable(),
   approvedAmount: z.number().nullable(),
+  /**
+   * The carriage the requester declared, which is already inside `approvedAmount`.
+   *
+   * The builder needs it separately to answer the question the whole screen exists to ask:
+   * does what we are about to buy fit inside what was approved? The line totals alone cannot,
+   * because the approved figure includes the van and the lines do not — comparing them was
+   * QA-019, a permanent phantom variance of exactly the transportation cost.
+   */
+  transportationCost: z.number().nullable(),
   items: z.array(
     z.object({
       requisitionItemId: z.string().uuid(),

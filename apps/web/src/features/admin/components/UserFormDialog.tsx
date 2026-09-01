@@ -102,6 +102,7 @@ export function UserFormDialog({ open, onClose, departments, editing }: Props) {
 
   return (
     <Dialog
+      schema={isEditing ? (updateUserSchema as never) : createUserSchema}
       open={open}
       onClose={onClose}
       title={isEditing ? t.users.editUser : t.users.newUser}

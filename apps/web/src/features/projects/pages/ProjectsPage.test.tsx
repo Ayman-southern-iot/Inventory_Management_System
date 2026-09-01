@@ -118,6 +118,8 @@ describe('ProjectsPage', () => {
 
     const dialog = screen.getByRole('dialog');
     expect(dialog).toBeInTheDocument();
-    expect(screen.getByLabelText(t.projects.nameLabel)).toBeInTheDocument();
+    // By accessible name: the field now carries a required marker, which is aria-hidden and
+    // so leaves the announced name unchanged but does change the label's text content.
+    expect(screen.getByRole('textbox', { name: t.projects.nameLabel })).toBeInTheDocument();
   });
 });

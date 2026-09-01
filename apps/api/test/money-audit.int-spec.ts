@@ -316,6 +316,109 @@ describe('the money adds up, end to end', () => {
     expect(response.status).toBe(400);
   });
 
+  /* ------------------------------------------------ the funded ceiling */
+
+  /**
+   * A purchase may not spend more than has been funded. Ayman's ruling, 2026-08-31, reported
+   * from the screen: a purchase entered against this very requisition produced
+   *
+   *   Approved 40,500 · Funded 40,500 · Spent 60,000 · Transportation 500 · Unspent 0
+   *
+   * Nothing checked. `unspent` floors at zero, so the overspend did not even show as negative —
+   * it showed as *nothing left*, on the record Accounts reconciles against.
+   *
+   * Funded rather than approved, because you cannot spend cash you have not received.
+   */
+  describe('a purchase cannot spend more than has been funded', () => {
+    it('refuses a purchase above the money in hand', async () => {
+      const req = await approvedRequisition();
+      await bomFor(req);
+      await fundFor(req);
+
+      // Funded 1,000, of which 500 is already committed to the van. Five units at 400 is
+      // 2,000 of goods — 2,500 committed against 1,000 received.
+      const response = await im.client.post(`/requisitions/${req.id}/purchases`).send({
+        vendor: 'Techshop BD',
+        invoiceNo: 'INV-OVER',
+        purchasedAt: new Date().toISOString(),
+        note: null,
+        transportationCost: TRANSPORT,
+        lines: [{ requisitionItemId: req.itemId, quantity: UNITS, unitCost: 400 }],
+      });
+
+      expect(response.status).toBe(409);
+      expect(response.body.code).toBe('PURCHASE_EXCEEDS_FUNDED');
+      expect(response.body.details.committed).toBe(2_500);
+      expect(response.body.details.funded).toBe(REQUESTED);
+      expect(response.body.details.transportation).toBe(TRANSPORT);
+    });
+
+    /**
+     * The carriage counts towards the ceiling, and this is the case that proves it: 1,000 of
+     * goods fits 1,000 funded exactly on its own, and does not once the van is paid for.
+     */
+    it('counts the carriage against the ceiling, not just the goods', async () => {
+      const req = await approvedRequisition();
+      await bomFor(req);
+      await fundFor(req);
+
+      const response = await im.client.post(`/requisitions/${req.id}/purchases`).send({
+        vendor: 'Techshop BD',
+        invoiceNo: 'INV-EXACT',
+        purchasedAt: new Date().toISOString(),
+        note: null,
+        transportationCost: TRANSPORT,
+        lines: [{ requisitionItemId: req.itemId, quantity: UNITS, unitCost: 200 }],
+      });
+
+      expect(response.status).toBe(409);
+      expect(response.body.details.committed).toBe(REQUESTED + TRANSPORT);
+    });
+
+    it('allows a purchase that fits once the carriage is counted', async () => {
+      const req = await approvedRequisition();
+      await bomFor(req);
+      await fundFor(req);
+
+      // 250 of goods plus the 500 van is 750, inside the 1,000 funded — the audit scenario.
+      const response = await im.client.post(`/requisitions/${req.id}/purchases`).send({
+        vendor: 'Techshop BD',
+        invoiceNo: 'INV-FITS',
+        purchasedAt: new Date().toISOString(),
+        note: null,
+        transportationCost: TRANSPORT,
+        lines: [{ requisitionItemId: req.itemId, quantity: UNITS, unitCost: UNIT_ACTUAL }],
+      });
+
+      expect(response.status).toBe(201);
+    });
+
+    /** A second purchase is measured against what the first already took. */
+    it('counts what earlier purchases already committed', async () => {
+      const req = await approvedRequisition();
+      await bomFor(req);
+      await fundFor(req);
+
+      // 250 of goods plus the 500 van is 750 committed, so 250 is left. A second purchase of
+      // exactly 250 would *fit* — equal to the ceiling is inside it, as it is for the BOM — so
+      // this one asks for 500 and is the first taka over.
+      await recordPurchase(req, 'First vendor', UNITS);
+
+      const second = await im.client.post(`/requisitions/${req.id}/purchases`).send({
+        vendor: 'Second vendor',
+        invoiceNo: 'INV-SECOND',
+        purchasedAt: new Date().toISOString(),
+        note: null,
+        // The van was already charged on the first purchase.
+        transportationCost: 0,
+        lines: [{ requisitionItemId: req.itemId, quantity: UNITS, unitCost: UNIT_ESTIMATE }],
+      });
+
+      expect(second.status).toBe(409);
+      expect(second.body.details.alreadySpent).toBe(ITEMS_ACTUAL);
+    });
+  });
+
   /* ------------------------------------------- the carriage on a reversal */
 
   /**
@@ -391,22 +494,30 @@ describe('the money adds up, end to end', () => {
   });
 
   /**
-   * A split-vendor requisition keeps its carriage while any purchase still stands — the van was
-   * hired once for a delivery that is still on the record. Voiding one of two purchases is not
-   * "nothing was bought".
+   * Carriage follows the delivery that paid for it, not the requisition.
+   *
+   * Migration 0029 sharpened OQ-32. The carriage used to live on the requisition, so the rule
+   * could only be "any live purchase keeps it" — void the one that actually paid the van and
+   * the cost survived on a purchase that never did. Recorded per delivery, voiding a purchase
+   * takes its own carriage with it and leaves the others theirs.
    */
-  it('keeps the carriage while a second purchase still stands', async () => {
+  it('takes a voided purchase\u2019s own carriage, and leaves the others theirs', async () => {
     const req = await fundedOnly();
 
-    const first = await recordPurchase(req, 'Techshop BD', 2);
-    await recordPurchase(req, 'Second vendor', 3);
+    // Two deliveries, two vans: 250 of goods and a 300 van, then 250 and a 200 van.
+    const first = await recordPurchase(req, 'Techshop BD', 2, 300);
+    await recordPurchase(req, 'Second vendor', 3, 200);
+
+    const before = await fundingOf(req.id);
+    expect(before.transportation).toBe(500);
 
     await voidPurchaseById(req.id, first);
 
-    const funding = await fundingOf(req.id);
-    expect(funding.spent).toBe(UNIT_ACTUAL * 3);
-    expect(funding.transportation).toBe(TRANSPORT);
-    expect(funding.spentInclTransportation).toBe(UNIT_ACTUAL * 3 + TRANSPORT);
+    const after = await fundingOf(req.id);
+    // The second delivery's goods and the second delivery's van, and nothing of the first.
+    expect(after.spent).toBe(UNIT_ACTUAL * 3);
+    expect(after.transportation).toBe(200);
+    expect(after.spentInclTransportation).toBe(UNIT_ACTUAL * 3 + 200);
   });
 
   /* ---------------------------------------------------- the same money, printed */
@@ -430,8 +541,10 @@ describe('the money adds up, end to end', () => {
     expect(html).toMatch(/Items subtotal[\s\S]{0,80}500\.00/);
     expect(html).toMatch(/<tr class="transportation">/);
     expect(html).toMatch(/Grand total[\s\S]{0,80}1,000\.00/);
-    expect(html).toMatch(/Total Money Requested[\s\S]{0,120}1,000\.00/);
-    expect(html).toMatch(/Approved Money[\s\S]{0,120}1,000\.00/);
+    // One money figure in the header, and it is the approved one (Ayman, 2026-08-29). Here
+    // requested and approved are equal at 1,000, so this asserts the label as much as the sum.
+    expect(html).toMatch(/Approved amount[\s\S]{0,120}1,000\.00/);
+    expect(html).not.toContain('Total Money Requested');
     expect(html).toContain('Van hire to the warehouse');
   });
 
@@ -541,12 +654,21 @@ describe('the money adds up, end to end', () => {
     req: { id: string; itemId: string },
     vendor: string,
     units: number,
+    /**
+     * The carriage this delivery actually cost (migration 0029). Defaults to the declared
+     * figure, which is what the form pre-fills so the IM edits rather than retypes.
+     *
+     * A second vendor on the same requisition passes 0 unless it had its own delivery —
+     * otherwise one van is charged twice.
+     */
+    carriage: number = TRANSPORT,
   ): Promise<string> {
     const purchase = await im.client.post(`/requisitions/${req.id}/purchases`).send({
       vendor,
       invoiceNo: `INV-${vendor}`,
       purchasedAt: new Date().toISOString(),
       note: null,
+      transportationCost: carriage,
       lines: [{ requisitionItemId: req.itemId, quantity: units, unitCost: UNIT_ACTUAL }],
     });
     expect(purchase.status).toBe(201);

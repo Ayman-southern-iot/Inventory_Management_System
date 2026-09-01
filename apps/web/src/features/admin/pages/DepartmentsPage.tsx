@@ -163,6 +163,7 @@ export function DepartmentsPage() {
       </Panel>
 
       <Dialog
+      schema={createDepartmentSchema}
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
         title={editing ? t.departments.editDepartment : t.departments.newDepartment}

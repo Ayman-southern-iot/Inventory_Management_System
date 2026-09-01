@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Check, Pencil, Send, Undo2, X } from 'lucide-react';
+import { ArrowLeft, Pencil, Send, Undo2 } from 'lucide-react';
 import {
   ApprovalAction,
   ApprovalStage,
   RequisitionStatus,
+  WITHDRAWABLE_STATUSES,
   type Approval,
   type RequisitionDetail as Detail,
 } from '@ims/shared';
@@ -16,9 +17,10 @@ import { t } from '@/i18n/en';
 import { messageForError } from '@/lib/error-message';
 import { ROUTES } from '@/routes/paths';
 import { useAuth } from '@/features/auth/auth-context';
+import { DecisionCard } from '../components/DecisionCard';
 import { ApprovalTracker } from '../components/ApprovalTracker';
 import { LifecycleTracker } from '../components/LifecycleTracker';
-import { SupportingDocumentCard } from '../components/SupportingDocumentCard';
+import { RequisitionFacts } from '../components/RequisitionFacts';
 import { FundsPanel } from '@/features/funds/components/FundsPanel';
 import { DecisionDialog } from '../components/DecisionDialog';
 import {
@@ -37,14 +39,46 @@ const STATUS_TONE: Partial<Record<RequisitionStatus, 'neutral' | 'success' | 'pe
   [RequisitionStatus.CANCELLED]: 'neutral',
 };
 
-function Figure({ label, value, hint }: { label: string; value: string; hint?: string }) {
+/**
+ * One line of the totals block: label on the left, amount on the right.
+ *
+ * A bill is read down the right-hand edge, so the amounts share a column and the labels never
+ * push them out of alignment. `emphasis` is the figure the requisition actually comes to.
+ */
+function TotalRow({
+  label,
+  value,
+  hint,
+  emphasis,
+}: {
+  label: string;
+  value: string;
+  hint?: string | null;
+  emphasis?: boolean;
+}) {
   return (
-    // Numeric figures right-align to match the items-table Line Total below — visual
-    // // consistency across the card.
-    <div className="min-w-[8rem] text-right">
-      <dt className="text-xs font-medium uppercase tracking-wide text-ink-subtle">{label}</dt>
-      <dd className="mt-0.5 text-lg font-semibold tabular-nums text-ink">{value}</dd>
-      {hint ? <p className="mt-0.5 text-xs text-ink-subtle">{hint}</p> : null}
+    <div className="flex items-baseline justify-between gap-6">
+      <div className="min-w-0">
+        <dt
+          className={
+            emphasis
+              ? 'text-sm font-semibold text-ink'
+              : 'text-sm text-ink-muted'
+          }
+        >
+          {label}
+        </dt>
+        {hint ? <p className="mt-0.5 text-xs text-ink-subtle">{hint}</p> : null}
+      </div>
+      <dd
+        className={
+          emphasis
+            ? 'shrink-0 text-lg font-semibold tabular-nums text-ink'
+            : 'shrink-0 text-sm font-medium tabular-nums text-ink'
+        }
+      >
+        {value}
+      </dd>
     </div>
   );
 }
@@ -58,17 +92,6 @@ export function RequisitionDetailPage() {
   const requisition = useRequisition(requisitionId);
   const detailData = requisition.data;
 
-  /**
-   * What the requested figure will be when submit freezes it: the server's own line totals plus
-   * transportation, which is exactly what `RequisitionsService.submit` adds up. Only rendered
-   * while `requestedAmount` is null (D-016).
-   */
-  const provisionalTotal = useMemo(
-    () =>
-      (detailData?.items ?? []).reduce((sum, item) => sum + item.estimatedLineTotal, 0) +
-      (detailData?.transportationCost ?? 0),
-    [detailData],
-  );
 
   /**
    * Three states, not two (D-021). The old condition picked "an approver revised this" whenever
@@ -76,16 +99,56 @@ export function RequisitionDetailPage() {
    * revision — on a financial record. A revision is the amounts *differing*; an approval that
    * changed nothing needs no caption at all.
    */
-  const sanctionedHint = useMemo(() => {
-    if (!detailData) return undefined;
-    if (detailData.approvedAmount === null) return undefined;
-    if (detailData.approvals.every((a) => a.action !== ApprovalAction.APPROVED)) {
-      return t.requisitions.sanctionedHintPending;
+  /**
+   * The approved figure, and whether there is one to show at all.
+   *
+   * `approved_amount` is seeded with the requested figure at submit so the BOM has a number to
+   * print, which meant the screen showed a concrete "Sanctioned 20,000" while the requisition
+   * was still sitting in somebody's queue (UX-5). Nobody had approved anything. The column keeps
+   * its seed — the BOM still needs it — but the screen now waits for an approver to actually
+   * decide before it will name a figure approved.
+   *
+   * The predicate is an approver having APPROVED, not the status reaching APPROVED: above the
+   * threshold the first of two approvals is a real decision on the amount, and if that approver
+   * revised it down, the revised figure is the honest thing to show while the second is pending.
+   */
+  /**
+   * What the goods come to, before getting them here.
+   *
+   * Taken as (requested − carriage) rather than by re-adding the line totals: `requested` is
+   * the figure submit froze and the one the approvers are judging, so deriving from it keeps
+   * the three lines of the totals block arithmetically consistent with each other even if an
+   * item is edited afterwards.
+   */
+  const itemsSubtotal = useMemo(() => {
+    const total = detailData?.requestedAmount ?? detailData?.provisionalAmount ?? 0;
+    return Math.round((total - (detailData?.transportationCost ?? 0)) * 100) / 100;
+  }, [detailData]);
+
+  const approved = useMemo(() => {
+    if (!detailData) return { value: t.common.none, hint: undefined as string | undefined };
+    const decided = detailData.approvals.some((a) => a.action === ApprovalAction.APPROVED);
+    if (!decided || detailData.approvedAmount === null) {
+      return { value: t.common.none, hint: undefined };
     }
-    return detailData.requestedAmount !== null &&
-      detailData.approvedAmount !== detailData.requestedAmount
-      ? t.requisitions.sanctionedHintRevised
-      : undefined;
+    const revised =
+      detailData.requestedAmount !== null &&
+      detailData.approvedAmount !== detailData.requestedAmount;
+    return {
+      value: detailData.approvedAmount.toLocaleString(),
+      hint: revised ? t.requisitions.approvedAmountHintRevised : undefined,
+    };
+  }, [detailData]);
+
+  /**
+   * QA-034: one line of one unit cannot be part-bought, so there is no lower amount that still
+   * buys it. The approve dialog hides its revise control for these rather than offering a figure
+   * the BOM stage could never spend.
+   */
+  const isAdjustable = useMemo(() => {
+    const items = detailData?.items ?? [];
+    if (items.length === 0) return false;
+    return items.length > 1 || (items[0]?.quantity ?? 0) > 1;
   }, [detailData]);
   const submit = useSubmitRequisition();
   const cancel = useCancelRequisition();
@@ -118,10 +181,12 @@ export function RequisitionDetailPage() {
     const detail = requisition.data;
     // IM rejections land the requisition on IM_REVIEW when withdrawn; approver decisions
     // (approval or rejection) return it to AWAITING_APPROVAL.
-    const canWithdraw =
-      detail.status === RequisitionStatus.IM_REVIEW ||
-      detail.status === RequisitionStatus.AWAITING_APPROVAL ||
-      detail.status === RequisitionStatus.APPROVED;
+    //
+    // Taken from the shared list rather than restated here. This condition had been written
+    // out by hand and omitted REJECTED, so a rejection could not be taken back from the
+    // screen — while the API had allowed exactly that since withdraw shipped, and its own
+    // comment says so. The two drifted because they were two lists.
+    const canWithdraw = WITHDRAWABLE_STATUSES.includes(detail.status as RequisitionStatus);
     if (!canWithdraw) return undefined;
     return detail.approvals.find(
       (approval) =>
@@ -209,23 +274,6 @@ export function RequisitionDetailPage() {
                     </Button>
                   ) : null}
 
-                  {actionable ? (
-                    <>
-                      <Button
-                        variant="secondary"
-                        icon={<X aria-hidden className="size-4 text-danger" />}
-                        onClick={() => setDeciding({ approval: actionable, approve: false })}
-                      >
-                        {t.requisitions.reject}
-                      </Button>
-                      <Button
-                        icon={<Check aria-hidden className="size-4" />}
-                        onClick={() => setDeciding({ approval: actionable, approve: true })}
-                      >
-                        {t.requisitions.approve}
-                      </Button>
-                    </>
-                  ) : null}
 
                   {!actionable && withdrawable ? (
                     <Button
@@ -256,110 +304,40 @@ export function RequisitionDetailPage() {
                 {/* Status box + (optional) supporting-document card on the right. When no
                     document is attached, the card column collapses and the status content
                     fills the full width. */}
-                <Panel>
-                  {/* Top zone: status pills, figures, note, supporting document. */}
-                  <div className="p-5">
-                    <div
-                      className={`flex flex-col gap-5 ${
-                        detail.supportingDocument ? 'md:flex-row md:items-start' : ''
-                      }`}
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="mb-4 flex flex-wrap items-center gap-2">
-                          <Badge tone={STATUS_TONE[detail.status] ?? 'info'}>
-                            {t.requisitions.status[detail.status]}
-                          </Badge>
-                          {/* Send-back tag — derived from the events log on the server. Stays
-                              on the DRAFT pill until the requester re-submits, at which point
-                              the badge flips to "Revised" so the IM knows a fresh chain is in
-                              play. */}
-                          {detail.requiresRevisionTag ? (
-                            <Badge tone="pending" title={t.requisitions.statusTags.draftForReviseHint}>
-                              {t.requisitions.statusTags.draftForRevise}
-                            </Badge>
-                          ) : null}
-                          {detail.revisedAfterSendBack ? (
-                            <Badge tone="info" title={t.requisitions.statusTags.draftRevisedHint}>
-                              {t.requisitions.statusTags.draftRevised}
-                            </Badge>
-                          ) : null}
-                          <Badge tone="neutral">
-                            {t.requisitions.urgencyLabel[detail.urgency]}
-                          </Badge>
-                          {detail.isOverdue ? (
-                            <Badge tone="danger">{t.borrowing.overdue}</Badge>
-                          ) : null}
-                        </div>
-
-                        <dl className="flex flex-wrap justify-end gap-x-10 gap-y-3 sm:justify-start">
-                          <Figure
-                            label={t.requisitions.requested}
-                            // `requestedAmount` is null until submit freezes it. `?? 0` put a hard
-                            // REQUESTED 0 directly above a line-item table totalling the real
-                            // amount (D-016). Before it is frozen, show the sum of those same
-                            // lines — the line totals come from the server, so this is the
-                            // addition submit does, not a second implementation of the
-                            // arithmetic — and label it provisional. Once frozen, the stored
-                            // figure wins: an item edited later must not move what the approvers
-                            // were shown.
-                            value={(detail.requestedAmount ?? provisionalTotal).toLocaleString()}
-                            hint={
-                              detail.requestedAmount === null
-                                ? t.requisitions.requestedHintDraft
-                                : undefined
-                            }
-                          />
-                          <Figure
-                            label={t.requisitions.sanctioned}
-                            // Nothing is sanctioned before submit, and 0 is a figure — an em dash
-                            // is the absence of one.
-                            value={
-                              detail.approvedAmount === null
-                                ? t.common.none
-                                : detail.approvedAmount.toLocaleString()
-                            }
-                            hint={sanctionedHint}
-                          />
-                          {detail.requiredApproverCount !== null ? (
-                            <Figure
-                              label={t.requisitions.approverCount}
-                              value={String(detail.requiredApproverCount)}
-                              // Shows *why* it needed that many, even after the setting has moved on.
-                              hint={`${t.requisitions.thresholdNote}: ${(detail.thresholdAtSubmit ?? 0).toLocaleString()}`}
-                            />
-                          ) : null}
-                        </dl>
-
-                        {detail.reason ? (
-                          <div className="mt-4">
-                            <p className="text-xs font-medium uppercase tracking-wide text-ink-subtle">
-                              {t.requisitions.reason}
-                            </p>
-                            <p className="mt-1 whitespace-pre-wrap text-sm text-ink-muted">
-                              {detail.reason}
-                            </p>
-                          </div>
-                        ) : null}
-                      </div>
-
-                      {detail.supportingDocument ? (
-                        <div className="flex shrink-0 justify-center md:justify-end">
-                          <SupportingDocumentCard
-                            document={detail.supportingDocument}
-                            url={detail.supportingDocumentUrl}
-                          />
-                        </div>
-                      ) : null}
-                    </div>
+                <Panel className="p-5">
+                  <div className="mb-4 flex flex-wrap items-center gap-2">
+                    <Badge tone={STATUS_TONE[detail.status] ?? 'info'}>
+                      {t.requisitions.status[detail.status]}
+                    </Badge>
+                    {/* Send-back tag — derived from the events log on the server. Stays on the
+                        DRAFT pill until the requester re-submits, at which point the badge flips
+                        to "Revised" so the IM knows a fresh chain is in play. */}
+                    {detail.requiresRevisionTag ? (
+                      <Badge tone="pending" title={t.requisitions.statusTags.draftForReviseHint}>
+                        {t.requisitions.statusTags.draftForRevise}
+                      </Badge>
+                    ) : null}
+                    {detail.revisedAfterSendBack ? (
+                      <Badge tone="info" title={t.requisitions.statusTags.draftRevisedHint}>
+                        {t.requisitions.statusTags.draftRevised}
+                      </Badge>
+                    ) : null}
+                    <Badge tone="neutral">{t.requisitions.urgencyLabel[detail.urgency]}</Badge>
+                    {detail.isOverdue ? (
+                      <Badge tone="danger">{t.borrowing.overdue}</Badge>
+                    ) : null}
                   </div>
 
-                  {/* Internal divider separates the stats zone from the items table so they
-                      read as one card without two outlines. The "Line items" heading gives
-                      the table a label that connects it to the figures above. */}
-                  <div className="border-t border-border px-5 py-4">
-                    <h2 className="mb-3 text-sm font-semibold text-ink">
-                      {t.requisitions.lineItemsHeading}
-                    </h2>
+                  {/* Who / what / when — including the reason and the attachment, which used to
+                      sit outside this block and made the card read as three things competing for
+                      one space rather than one summary. */}
+                  <RequisitionFacts detail={detail} />
+                </Panel>
+
+                <Panel className="p-5">
+                  <h2 className="mb-3 text-sm font-semibold text-ink">
+                    {t.requisitions.lineItemsHeading}
+                  </h2>
                     <Table
                       headers={[
                         t.requisitions.itemName,
@@ -396,44 +374,76 @@ export function RequisitionDetailPage() {
                         </tr>
                       ))}
                     </Table>
-                  </div>
 
-                  {/* Transportation breakdown — only when the requester added one. The
-                      amount is already part of the REQUESTED figure above; this zone
-                      breaks it down so the approver can see what they were paying for.
-                      Description is always present when the row exists (DB enforces
-                      both-or-neither). */}
-                  {detail.transportationCost !== null && detail.transportationCost > 0 ? (
-                    <div className="border-t border-border px-5 py-4">
-                      <div className="flex items-baseline justify-between gap-4">
-                        <div>
-                          <p className="text-sm font-medium text-ink">
-                            {t.requisitions.transportation.detailHeading}
-                          </p>
-                          {detail.transportationDescription ? (
-                            <div className="mt-1">
-                              <p className="text-xs font-medium uppercase tracking-wide text-ink-subtle">
-                                {t.requisitions.transportationDescriptionLabel}
-                              </p>
-                              <p className="mt-0.5 text-sm text-ink-muted">
-                                {detail.transportationDescription}
-                              </p>
-                            </div>
-                          ) : null}
-                        </div>
-                        <p className="text-right text-lg font-semibold tabular-nums text-ink">
-                          {(detail.transportationCost ?? 0).toLocaleString()}
-                        </p>
-                      </div>
-                    </div>
-                  ) : null}
+
+                  {/* The totals, as the approving-view template stacks them: each line under
+                      the table it belongs to, the payable figure last and heaviest. They used to
+                      sit above the table as three loose figures competing with the summary. */}
+                  <dl className="mt-4 flex flex-col gap-2 border-t border-border pt-3">
+                    <TotalRow
+                      label={t.requisitions.itemsSubtotalLabel}
+                      value={itemsSubtotal.toLocaleString()}
+                    />
+                    {detail.transportationCost !== null && detail.transportationCost > 0 ? (
+                      <TotalRow
+                        label={t.requisitions.transportation.detailHeading}
+                        // The description belongs beside the amount it explains, not in a block
+                        // of its own — the approver is asking "what is this 500 for".
+                        hint={detail.transportationDescription}
+                        value={detail.transportationCost.toLocaleString()}
+                      />
+                    ) : null}
+                    <TotalRow
+                      label={t.requisitions.requested}
+                      hint={
+                        detail.requestedAmount === null
+                          ? t.requisitions.requestedHintDraft
+                          : undefined
+                      }
+                      value={(detail.requestedAmount ?? detail.provisionalAmount).toLocaleString()}
+                      emphasis
+                    />
+                    {/* An em dash until an approver has actually decided — see the `approved`
+                        memo. 0 is a figure; the absence of one has to look like an absence. */}
+                    <TotalRow
+                      label={t.requisitions.approvedAmount}
+                      hint={approved.hint}
+                      value={approved.value}
+                    />
+                  </dl>
                 </Panel>
+
+                {/* Last in the left column, so the decision reads as the conclusion of what
+                    is above it. Shown only to the person actually being asked. */}
+                {actionable ? (
+                  <DecisionCard
+                    approval={actionable}
+                    requestedAmount={detail.requestedAmount}
+                    isAdjustable={isAdjustable}
+                    onReject={() => setDeciding({ approval: actionable, approve: false })}
+                  />
+                ) : null}
               </div>
 
               <Panel className="p-5">
-                <ApprovalTracker requisition={detail} />
+                {/* The count explains the chain listed under it, so it is handed to the tracker
+                    and rendered beneath its heading rather than floating above it. */}
+                <ApprovalTracker
+                  requisition={detail}
+                  hint={
+                    detail.requiredApproverCount === null
+                      ? undefined
+                      : t.requisitions.approverCountHint
+                          .replace('{n}', String(detail.requiredApproverCount))
+                          .replace(
+                            '{threshold}',
+                            (detail.thresholdAtSubmit ?? 0).toLocaleString(),
+                          )
+                  }
+                />
               </Panel>
             </div>
+
 
             {/* Full horizontal lifecycle tracker — sits above the funds panel because money
                 is only meaningful once the requisition has been approved. */}
@@ -447,6 +457,7 @@ export function RequisitionDetailPage() {
             <DecisionDialog
               deciding={deciding}
               requestedAmount={detail.requestedAmount}
+              isAdjustable={isAdjustable}
               onClose={() => setDeciding(null)}
             />
           </>

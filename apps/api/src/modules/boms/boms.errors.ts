@@ -71,6 +71,75 @@ export class BomOverBudgetError extends DomainError {
 }
 
 /**
+ * A BOM was asked to cover more than one requester. Refused because the BOM number carries the
+ * requester's name, and a document naming the wrong person is worse than one naming nobody.
+ * Several requisitions from the same requester are still batched onto one BOM.
+ */
+/** One requester on the attempted BOM, and which of its requisitions are theirs. */
+export interface BomRequesterGroup {
+  requesterName: string;
+  requisitionNos: string[];
+}
+
+export class BomSpansMultipleRequestersError extends DomainError {
+  /**
+   * Grouped by requester and named by requisition, not by person.
+   *
+   * Listing names alone reads badly the moment two staff share one: the message says "these
+   * belong to Gina and Gina" and names nothing anybody can act on. The requisition numbers are
+   * unique, are what the IM has on screen, and are what they will un-tick.
+   */
+  constructor(groups: readonly BomRequesterGroup[]) {
+    const described = groups
+      .map((group) => group.requesterName + ' (' + group.requisitionNos.join(', ') + ')')
+      .join('; ');
+    super(
+      ErrorCode.BOM_SPANS_MULTIPLE_REQUESTERS,
+      'A BOM covers one requester. ' + described,
+      HttpStatus.CONFLICT,
+      { groups },
+    );
+  }
+}
+
+/** One source requisition whose share of the BOM comes to more than it was approved for. */
+export interface OverspentSource {
+  requisitionNo: string;
+  approved: number;
+  items: number;
+  transportation: number;
+  committed: number;
+}
+
+/**
+ * The BOM commits more than a requisition's approved amount. Ayman's ruling, 2026-08-29.
+ *
+ * Nothing downstream can absorb an overspend — Accounts funds against the approved figure —
+ * so a BOM above it commits money nobody sanctioned, and the shortfall only surfaces at
+ * purchase time with the goods already ordered. The way out is at this screen: adjust the
+ * quantity and the unit cost until it fits, or send the requisition back to be restated.
+ *
+ * Per requisition rather than across the batch, because the approved amount is a promise made
+ * about one requisition by its own approvers — one requester's underspend must not quietly
+ * fund another's overspend.
+ */
+export class BomExceedsApprovedAmountError extends DomainError {
+  constructor(overspent: readonly OverspentSource[]) {
+    super(
+      ErrorCode.BOM_EXCEEDS_APPROVED_AMOUNT,
+      overspent
+        .map(
+          (row) =>
+            `${row.requisitionNo} commits ${row.committed} (${row.items} of items plus ${row.transportation} transportation) against an approved ${row.approved}`,
+        )
+        .join('; '),
+      HttpStatus.CONFLICT,
+      { overspent },
+    );
+  }
+}
+
+/**
  * The IM asked for a `quantity` larger than the source requisition item permits. The IM is
  * allowed to *shrink* a BOM line down (or drop it) — but they cannot conjure stock. This
  * 409 is the precise reason; the error payload names the line so the form can highlight it.

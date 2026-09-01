@@ -52,6 +52,7 @@ export function BomVoidDialog({
 
   return (
     <Dialog
+      schema={voidBomSchema}
       open={open}
       onClose={onClose}
       title={t.boms.voidTitle}

@@ -12,6 +12,8 @@ import {
   type DecideRequisitionInput,
   type SaveRequisitionInput,
   type WithdrawApprovalInput,
+  missingForSubmit,
+  type RequisitionSubmitField,
 } from '@ims/shared';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
@@ -21,6 +23,7 @@ import {
   NotFoundError,
   ValidationFailedError,
 } from '../../common/errors';
+import { documentNumber, nameTokenFor } from '../../common/document-number';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NOTIFICATION_LINKS } from '../notifications/notifications.links';
@@ -40,11 +43,20 @@ import {
   NotYourApprovalError,
   ApprovedExceedsRequestedError,
   SelfApprovalForbiddenError,
-  SelfApprovalNoSubstituteError,
   SignatureNotUploadedError,
   SubthresholdApproverUnassignedError,
 } from './requisitions.errors';
 import type { SendBackForRevisionInput } from '@ims/shared';
+
+/**
+ * Field key to the name the API says out loud. Deliberately not i18n: this is the message a
+ * non-browser caller sees, and the SPA picks its own copy from the error code.
+ */
+const SUBMIT_FIELD_LABELS: Record<RequisitionSubmitField, string> = {
+  departmentId: 'Department',
+  approvalDeadline: 'Approval deadline',
+  reason: 'Reason',
+};
 
 @Injectable()
 export class RequisitionsService {
@@ -86,7 +98,7 @@ export class RequisitionsService {
 
   async createDraft(input: SaveRequisitionInput, requesterId: string) {
     const id = await this.db.transaction().execute(async (tx) => {
-      const requisitionNo = await this.nextRequisitionNo(tx);
+      const requisitionNo = await this.nextRequisitionNo(tx, requesterId);
       const created = await this.repo.insertDraft(tx, requisitionNo, input, requesterId);
       await this.repo.replaceItems(tx, created, input.items);
 
@@ -220,13 +232,18 @@ export class RequisitionsService {
     // D-006, Ayman's ruling 2026-08-26. Required at *submit*, never at save: a draft is allowed
     // to be half-finished, which is the whole point of a draft. Project is not on this list —
     // no project means personal development, which is an answer and not an omission.
-    const missing: string[] = [];
-    if (!existing.department_id) missing.push('Department');
-    if (!existing.approval_deadline) missing.push('Approval deadline');
-    if (typeof existing.reason !== 'string' || existing.reason.trim() === '') {
-      missing.push('Reason');
+    //
+    // The rule itself lives in `shared` so the form and this guard cannot drift on what
+    // "required" means. The form refuses to send an incomplete submit at all; this stays as the
+    // authority, because a form is a suggestion and an API is a rule.
+    const missing = missingForSubmit({
+      departmentId: existing.department_id,
+      approvalDeadline: existing.approval_deadline ? String(existing.approval_deadline) : null,
+      reason: existing.reason,
+    });
+    if (missing.length > 0) {
+      throw new RequisitionIncompleteError(missing.map((field) => SUBMIT_FIELD_LABELS[field]));
     }
-    if (missing.length > 0) throw new RequisitionIncompleteError(missing);
 
     /**
      * D-003: the field's helper text says the deadline cannot be in the past and the browser
@@ -264,28 +281,39 @@ export class RequisitionsService {
     // (SUBTHRESHOLD_APPROVER_USER_ID) instead of the historical "count + slot 1" setup.
     // That setup shared slot 1 with the at-or-above case, which made "below" brittle when
     // an admin reassigned the company default for slot 1.
-    // requirements §10: nobody approves their own requisition, so the requester is excluded
-    // from every slot the chain resolves and a substitute is taken instead (OQ-07).
+    /**
+     * Somebody raising a requisition does not approve their own stage — their stage is simply
+     * not created. Ayman's ruling, 2026-09-01.
+     *
+     * This replaces substitution (OQ-07), which stood one other person in for the requester at
+     * every stage they occupied. Substitution had a failure mode that made the system unusable
+     * for the people who run it: with one Inventory Manager, that IM could never submit
+     * anything at all — there was nobody to substitute, so submit refused outright.
+     *
+     * The comment that used to sit here cited "requirements §10: nobody approves their own
+     * requisition". **No such rule exists.** The transcription's own notes say so: "No
+     * self-approval rule. Nothing prohibits an approver approving their own request. The entire
+     * substitution mechanism is derived." The citation was wrong and is removed rather than
+     * moved.
+     *
+     * Skipped, not auto-approved: the audit trail never shows a person approving their own
+     * money. The stage is absent, which is the honest record of what happened.
+     */
     const isSubThreshold = requestedAmount < threshold;
     const approverIds: string[] = isSubThreshold
-      ? [await this.subthresholdApproverId(existing.requester_id, existing.department_id)]
+      ? await this.subthresholdApproverIds(existing.requester_id)
       : await (async () => {
           const approverCount = await this.settings.get(
             SettingKey.APPROVER_SLOTS_AT_OR_ABOVE_THRESHOLD,
           );
-          try {
-            return await this.approverSlots.resolveForDepartment(
-              existing.department_id,
-              approverCount,
-              existing.requester_id,
-            );
-          } catch (error) {
-            // "No substitute exists" is a different problem from "a slot is empty", and the web
-            // app picks its copy by code — collapsing them here would tell an admin to fill in
-            // a slot that is already filled.
-            if (error instanceof SelfApprovalNoSubstituteError) throw error;
-            throw new ApproverSlotUnassignedError(approverCount);
-          }
+          const resolved = await this.approverSlots
+            .resolveForDepartment(existing.department_id, approverCount)
+            .catch(() => {
+              throw new ApproverSlotUnassignedError(approverCount);
+            });
+          // Their own slot drops out; the others still have to sign. A two-approver
+          // requisition raised by one of them needs the other one, not nobody.
+          return resolved.filter((id) => id !== existing.requester_id);
         })();
 
     // For the at-or-above branch, `approverCount` is what we ask of the slot chain. We
@@ -293,22 +321,41 @@ export class RequisitionsService {
     // has been downstream of this name for several releases.
     const approverCount = isSubThreshold ? 1 : approverIds.length;
 
-    // requirements §10 again: the IM stage is an approval, so an IM raising a requisition cannot
-    // be assigned to review it. Excluding them first tells the two failures apart — "there is no
-    // IM at all" and "the only IM is you" need different things from an administrator.
-    const inventoryManagerId = await this.repo.findAnyActiveUserWithRole(
-      Role.INVENTORY_MANAGER,
+    /**
+     * The IM stage, unless the IM is the one asking.
+     *
+     * An IM raising their own requisition skips it: they are the person who would have checked
+     * "do we already have this", and they know. Previously this looked for a *different* IM and
+     * refused when there was none — so in an office with one Inventory Manager, that IM could
+     * not raise a requisition at all.
+     */
+    const requesterIsInventoryManager = await this.repo.userHasRole(
       existing.requester_id,
+      Role.INVENTORY_MANAGER,
     );
-    if (!inventoryManagerId) {
-      const anyInventoryManager = await this.repo.findAnyActiveUserWithRole(
-        Role.INVENTORY_MANAGER,
-      );
-      if (anyInventoryManager) throw new SelfApprovalNoSubstituteError('inventory_manager');
+
+    const inventoryManagerId = requesterIsInventoryManager
+      ? null
+      : await this.repo.findAnyActiveUserWithRole(Role.INVENTORY_MANAGER);
+
+    if (!requesterIsInventoryManager && !inventoryManagerId) {
       throw new ConflictError('No active Inventory Manager exists to review this requisition');
     }
 
-    const submitStatus = RequisitionStatus.IM_REVIEW;
+    /**
+     * Where it lands.
+     *
+     * Skipping stages can leave nothing to wait for: an Inventory Manager who is also the
+     * designated sub-threshold approver, raising a small requisition of their own, has no stage
+     * left. Ayman's ruling for that case (2026-09-01) is that it stands approved — it is below
+     * the threshold and it is their own money to authorise.
+     */
+    const submitStatus =
+      inventoryManagerId === null && approverIds.length === 0
+        ? RequisitionStatus.APPROVED
+        : inventoryManagerId === null
+          ? RequisitionStatus.AWAITING_APPROVAL
+          : RequisitionStatus.IM_REVIEW;
 
     await this.db.transaction().execute(async (tx) => {
       await this.repo.markSubmitted(tx, id, {
@@ -352,7 +399,7 @@ export class RequisitionsService {
       const submitFigures = await this.fundsRepo.computeCurrentFunding(tx, id);
       await this.fundsRepo.insertSnapshot(tx, {
         requisitionId: id,
-        status: RequisitionStatus.IM_REVIEW,
+        status: submitStatus,
         requestedAmount: submitFigures.requestedAmount,
         approvedAmount: submitFigures.approvedAmount,
         transportation: submitFigures.transportation,
@@ -378,12 +425,21 @@ export class RequisitionsService {
         tx,
       );
 
-      // The IM is the only person who can act right now; the approvers wait their turn and are
-      // told when the IM clears it. Telling everyone at submit would train them to ignore this.
+      /*
+       * Told: whoever can act right now, and nobody else.
+       *
+       * Normally that is the IM alone — the approvers wait their turn and hear when the IM
+       * clears it, because telling everyone at submit trains them to ignore the message. When
+       * the IM is the requester their stage does not exist, so the approvers are up
+       * immediately and are the ones to tell. When nothing is left to wait for, there is
+       * nobody to notify and the requisition is already approved.
+       */
+      const awaiting = inventoryManagerId ? [inventoryManagerId] : approverIds;
+      if (awaiting.length > 0) {
       await this.notifications.notify(
         {
           type: 'requisition.awaiting_your_approval',
-          userIds: [inventoryManagerId],
+          userIds: awaiting,
           ref: existing.requisition_no,
           link: NOTIFICATION_LINKS.requisition(id),
           entityType: 'requisition',
@@ -396,6 +452,7 @@ export class RequisitionsService {
         },
         tx,
       );
+      }
     });
 
     this.logger.log(
@@ -941,10 +998,19 @@ export class RequisitionsService {
    * correctly filled in. The user is also checked for `is_active`, so a freshly-deactivated
    * approver does not silently win the assignment (Phase 05 inactive-slot guard).
    */
-  private async subthresholdApproverId(
-    requesterId: string,
-    departmentId: string | null,
-  ): Promise<string> {
+  /**
+   * The single designated sub-threshold approver — or nobody, when that person is the one
+   * asking.
+   *
+   * Ayman's ruling, 2026-09-01. Substitution used to stand the slot chain in for them; that
+   * chain is configured for requisitions *at or above* the threshold and borrowing it here made
+   * a small requisition need a signature the policy never asked for. Below the threshold the
+   * policy names one person, and when that person is the requester their own stage is simply
+   * absent — the requisition stands approved on submit.
+   *
+   * Returns a list so the caller can treat "one approver" and "none" the same way.
+   */
+  private async subthresholdApproverIds(requesterId: string): Promise<string[]> {
     const userId = await this.settings.get(SettingKey.SUBTHRESHOLD_APPROVER_USER_ID);
     if (userId === null) {
       throw new SubthresholdApproverUnassignedError('unset');
@@ -953,27 +1019,7 @@ export class RequisitionsService {
     if (!active) {
       throw new SubthresholdApproverUnassignedError('inactive');
     }
-    if (userId !== requesterId) return userId;
-
-    // The designated sub-threshold approver is raising the requisition themselves. There is no
-    // "next" sub-threshold approver — the setting holds exactly one — so fall back to the slot
-    // chain, which is what requirements §10's "next configured approver" points at once the
-    // single designated one is out. Refuses with its own code if that chain cannot help either.
-    try {
-      const [substitute] = await this.approverSlots.resolveForDepartment(
-        departmentId,
-        1,
-        requesterId,
-      );
-      if (!substitute) throw new SelfApprovalNoSubstituteError('approver');
-      return substitute;
-    } catch (error) {
-      // An unfilled slot 1 is a real problem, but "Approver slot 1 is not assigned" is the wrong
-      // sentence here: this requisition is below the threshold and does not use the slot chain
-      // except as a stand-in. Say what actually needs configuring.
-      if (error instanceof SelfApprovalNoSubstituteError) throw error;
-      throw new SelfApprovalNoSubstituteError('approver');
-    }
+    return userId === requesterId ? [] : [userId];
   }
 
   /**
@@ -1002,8 +1048,27 @@ export class RequisitionsService {
     return delegated ? assignedUserId : null;
   }
 
-  private async nextRequisitionNo(tx: Db): Promise<string> {
+  /**
+   * `REQ-000015-GINA`. Ayman's ruling, 2026-08-29: the number says whose it is, so a stack of
+   * printouts sorts by hand without opening any of them.
+   *
+   * The name is decoration and the serial is the identity — see `document-number.ts`. Rows
+   * created before this change keep their plain `REQ-000014`, which is why the column has no
+   * format constraint and nothing in the codebase parses one: both shapes are valid forever, and
+   * rewriting historical numbers would break every audit row, notification and printout that
+   * already quotes them.
+   */
+  private async nextRequisitionNo(tx: Db, requesterId: string): Promise<string> {
     const row = await sql<{ n: string }>`SELECT nextval('requisition_no_seq') AS n`.execute(tx);
-    return `REQ-${String(Number(row.rows[0]?.n ?? 1)).padStart(6, '0')}`;
+    const requester = await tx
+      .selectFrom('users')
+      .where('id', '=', requesterId)
+      .select(['full_name', 'email'])
+      .executeTakeFirst();
+    return documentNumber(
+      'REQ',
+      Number(row.rows[0]?.n ?? 1),
+      nameTokenFor(requester?.full_name ?? null, requester?.email ?? null),
+    );
   }
 }

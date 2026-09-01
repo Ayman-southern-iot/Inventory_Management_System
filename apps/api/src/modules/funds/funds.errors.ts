@@ -162,3 +162,34 @@ export class MoneyRowNotFoundError extends DomainError {
     );
   }
 }
+
+/**
+ * A purchase that would spend more than has been received.
+ *
+ * Ayman's ruling, 2026-08-31. Nothing checked before: a 60,000 purchase against 40,500 funded
+ * was accepted, and the funding panel then reported Spent 60,000 beside Funded 40,500 with
+ * Unspent floored at zero — a state the money cannot actually be in, on a record Accounts
+ * reconciles against.
+ *
+ * Funded rather than approved, because you cannot spend cash you have not received. The
+ * carriage counts towards the ceiling: it is spent the moment a purchase exists.
+ */
+export class PurchaseExceedsFundedError extends DomainError {
+  constructor(values: {
+    committed: number;
+    funded: number;
+    alreadySpent: number;
+    transportation: number;
+  }) {
+    super(
+      ErrorCode.PURCHASE_EXCEEDS_FUNDED,
+      'This purchase would commit ' +
+        values.committed +
+        ' against ' +
+        values.funded +
+        ' funded.',
+      HttpStatus.CONFLICT,
+      values,
+    );
+  }
+}

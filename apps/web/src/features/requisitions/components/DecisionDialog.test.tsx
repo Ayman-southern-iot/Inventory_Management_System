@@ -11,6 +11,7 @@ import {
   RequisitionStatus,
   RequisitionUrgency,
 } from '@ims/shared';
+import { t } from '@/i18n/en';
 import { DecisionDialog } from './DecisionDialog';
 
 // Mocks for hooks DecisionDialog pulls from elsewhere.
@@ -74,7 +75,10 @@ function approval(): Approval {
   };
 }
 
-function renderDialog(deciding: { approval: Approval; approve: boolean } | null) {
+function renderDialog(
+  deciding: { approval: Approval; approve: boolean } | null,
+  isAdjustable = true,
+) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -83,6 +87,7 @@ function renderDialog(deciding: { approval: Approval; approve: boolean } | null)
       <DecisionDialog
         deciding={deciding}
         requestedAmount={100_000}
+        isAdjustable={isAdjustable}
         onClose={() => undefined}
       />
     </QueryClientProvider>,
@@ -96,15 +101,28 @@ describe('DecisionDialog', () => {
     removeSpy.mockClear();
     toastSpy.mockClear();
   });
-  it('does not render the sanctioned-amount input when the gate is off', () => {
+  it('does not render the approved-amount input when the gate is off', () => {
     renderDialog({ approval: approval(), approve: true });
 
-    // The opt-in checkbox is labelled "Revise the sanctioned amount".
-    expect(screen.getByLabelText(/revise the sanctioned amount/i)).toBeInTheDocument();
+    // The opt-in checkbox is labelled "Revise the approved amount".
+    expect(screen.getByLabelText(/revise the approved amount/i)).toBeInTheDocument();
     // The amount field is hidden by default — proves the gate is unmounting the input.
     expect(
-      screen.queryByRole('spinbutton', { name: /revise the sanctioned amount/i }),
+      screen.queryByRole('spinbutton', { name: /revise the approved amount/i }),
     ).not.toBeInTheDocument();
+  });
+
+  /**
+   * QA-034. One line of one unit has no smaller quantity to buy, so a revised-down figure
+   * approves an amount that cannot purchase the thing asked for. The control goes; the reason
+   * stays on screen, because an approver who has revised one before would read a bare absence
+   * as the feature being broken.
+   */
+  it('offers no revise control for a requisition that cannot be part-bought', () => {
+    renderDialog({ approval: approval(), approve: true }, false);
+
+    expect(screen.queryByLabelText(/revise the approved amount/i)).not.toBeInTheDocument();
+    expect(screen.getByText(t.requisitions.reviseAmountIndivisible)).toBeInTheDocument();
   });
 
   it('submits approvedAmount: null when the gate stays off', async () => {
@@ -126,10 +144,10 @@ describe('DecisionDialog', () => {
     const user = userEvent.setup();
     renderDialog({ approval: approval(), approve: true });
 
-    await user.click(screen.getByLabelText(/revise the sanctioned amount/i));
+    await user.click(screen.getByLabelText(/revise the approved amount/i));
 
     const amountInput = await screen.findByRole('spinbutton', {
-      name: /revise the sanctioned amount/i,
+      name: /revise the approved amount/i,
     });
     await user.clear(amountInput);
     await user.type(amountInput, '85000');
@@ -145,7 +163,7 @@ describe('DecisionDialog', () => {
       approval: { ...approval(), stage: ApprovalStage.INVENTORY_MANAGER },
       approve: true,
     });
-    expect(screen.queryByLabelText(/revise the sanctioned amount/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/revise the approved amount/i)).not.toBeInTheDocument();
   });
 
   it('hides the signature uploader when not approving', () => {

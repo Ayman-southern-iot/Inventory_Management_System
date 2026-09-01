@@ -79,6 +79,7 @@ function detail(overrides: Partial<RequisitionDetail>): RequisitionDetail {
     approvalDeadline: null,
     reason: null,
     requestedAmount: 12_500,
+    provisionalAmount: 12_500,
     approvedAmount: 10_000,
     requiredApproverCount: null,
     thresholdAtSubmit: null,

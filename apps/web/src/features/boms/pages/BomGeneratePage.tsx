@@ -118,28 +118,82 @@ export function BomGeneratePage() {
   );
 
   /**
+   * The carriage on the picked requisitions.
+   *
+   * QA-019: `subtotal` is items only, `approvedTotal` includes the transportation the requester
+   * declared — `requested = items + carriage` at submit. Subtracting one from the other reported
+   * a variance of exactly minus the van on every requisition that had one, permanently, even
+   * when every unit cost matched its estimate to the penny. Both sides count it now.
+   */
+  const transportationTotal = useMemo(
+    () =>
+      round2(
+        (candidates.data ?? [])
+          .filter((c) => pickedIds.has(c.requisitionId))
+          .reduce((sum, c) => sum + (c.transportationCost ?? 0), 0),
+      ),
+    [candidates.data, pickedIds],
+  );
+
+  /** What the BOM actually commits: what is being bought, plus getting it here. */
+  const committedTotal = round2(subtotal + transportationTotal);
+
+  /**
+   * Which picked requisitions commit more than they were approved for. Ayman's ruling,
+   * 2026-08-29: the BOM cannot be generated until every one of them fits.
+   *
+   * Per requisition, not across the batch, and computed from the *edited* lines rather than the
+   * original estimates — adjusting quantity and unit cost until it fits is the whole point of
+   * this screen, and a check that ignored the edits (QA-039) told the IM a BOM could not be
+   * generated while the figures on screen plainly showed it fitting.
+   */
+  const overspent = useMemo(() => {
+    const rows: Array<{
+      requisitionId: string;
+      no: string;
+      approved: number;
+      committed: number;
+      itemCount: number;
+    }> = [];
+    for (const candidate of candidates.data ?? []) {
+      if (!pickedIds.has(candidate.requisitionId)) continue;
+      const approved = candidate.approvedAmount ?? 0;
+      // Nothing was frozen for this requisition, so there is no ceiling to hold it to.
+      if (approved <= 0) continue;
+      const items = (lines ?? [])
+        .filter((line) => !line?.removed && line?.requisitionId === candidate.requisitionId)
+        .reduce((sum, line) => sum + (line?.unitCost ?? 0) * (line?.quantity ?? 0), 0);
+      const committed = round2(items + (candidate.transportationCost ?? 0));
+      if (committed > approved) {
+        rows.push({
+          requisitionId: candidate.requisitionId,
+          no: candidate.requisitionNo,
+          approved,
+          committed,
+          itemCount: candidate.items.length,
+        });
+      }
+    }
+    return rows;
+  }, [candidates.data, pickedIds, lines]);
+
+  /**
    * 1-item + over-budget detection, per picked candidate. A single-line requisition
    * whose item subtotal exceeds its approved amount at any feasible unit price must
    * bounce — there is no shrink to apply. Multi-item requisitions stay on the
    * normal generate path; the IM can shrink qty or remove lines until it fits.
    */
+  /**
+   * The one requisition a send-back can rescue.
+   *
+   * Send-back exists for the case adjustment cannot solve: a single line of goods that costs
+   * what it costs. Multi-item requisitions have the BOM-customise path instead — drop a line or
+   * shrink a quantity — and the API refuses to bounce them (see `CannotSendBackForRevisionError`).
+   */
   const singleOverBudget = useMemo(() => {
-    if (!candidates.data) return null;
-    for (const candidate of candidates.data) {
-      if (!pickedIds.has(candidate.requisitionId)) continue;
-      if (candidate.items.length !== 1) continue;
-      const item = candidate.items[0]!;
-      const requestedSubtotal = item.quantity * item.estimatedUnitPrice;
-      const approved = candidate.approvedAmount ?? 0;
-      if (requestedSubtotal > approved && approved > 0) {
-        return {
-          id: candidate.requisitionId,
-          no: candidate.requisitionNo,
-        };
-      }
-    }
-    return null;
-  }, [candidates.data, pickedIds]);
+    const target = overspent.find((row) => row.itemCount === 1);
+    return target ? { id: target.requisitionId, no: target.no } : null;
+  }, [overspent]);
 
   function toggleCandidate(candidate: BomCandidate, checked: boolean) {
     setPickedIds((current) => {
@@ -310,7 +364,11 @@ export function BomGeneratePage() {
                     </tbody>
                   </table>
                 </div>
-                <footer className="grid grid-cols-2 gap-x-6 gap-y-1 border-t border-border px-4 py-3 sm:grid-cols-3">
+                {/* Five figures, because three of them were being asked to answer a question
+                    they could not: items alone against an approved amount that already includes
+                    the carriage (QA-019). The carriage is named, the committed total counts it,
+                    and only then does the variance mean over or under. */}
+                <footer className="grid grid-cols-2 gap-x-6 gap-y-1 border-t border-border px-4 py-3 sm:grid-cols-3 lg:grid-cols-5">
                   <TotalsCell
                     label={t.boms.approvedTotal}
                     value={approvedTotal.toLocaleString()}
@@ -318,24 +376,49 @@ export function BomGeneratePage() {
                   <TotalsCell
                     label={t.boms.bomSubtotal}
                     value={round2(subtotal).toLocaleString()}
+                  />
+                  <TotalsCell
+                    label={t.boms.bomTransportation}
+                    value={transportationTotal.toLocaleString()}
+                  />
+                  <TotalsCell
+                    label={t.boms.bomCommitted}
+                    value={committedTotal.toLocaleString()}
                     emphasis
                   />
                   <TotalsCell
                     label={t.boms.variance}
-                    value={`${(round2(subtotal) - approvedTotal).toLocaleString()} (${
+                    value={`${(committedTotal - approvedTotal).toLocaleString()} (${
                       approvedTotal === 0
                         ? 'n/a'
-                        : `${(((round2(subtotal) - approvedTotal) / approvedTotal) * 100).toFixed(1)}%`
+                        : `${(((committedTotal - approvedTotal) / approvedTotal) * 100).toFixed(1)}%`
                     })`}
                   />
                 </footer>
               </Panel>
             ) : null}
 
-            {showSendBack && singleOverBudget ? (
-              <div className="rounded-[--radius-panel] border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-ink">
-                <p className="font-medium">{t.boms.sendBackForRevision}</p>
-                <p className="mt-0.5 text-ink-muted">{t.boms.sendBackHint}</p>
+            {overspent.length > 0 ? (
+              <div className="rounded-[--radius-panel] border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-ink">
+                <p className="font-medium">{t.boms.overspentHeading}</p>
+                <ul className="mt-1 flex flex-col gap-0.5 text-ink-muted">
+                  {overspent.map((row) => (
+                    <li key={row.requisitionId}>
+                      {t.boms.overspentLine
+                        .replace("{no}", row.no)
+                        .replace("{committed}", row.committed.toLocaleString())
+                        .replace("{approved}", row.approved.toLocaleString())
+                        .replace(
+                          "{over}",
+                          round2(row.committed - row.approved).toLocaleString(),
+                        )}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-1.5 text-ink-muted">{t.boms.overspentHint}</p>
+                {showSendBack ? (
+                  <p className="mt-1.5 text-ink-muted">{t.boms.sendBackHint}</p>
+                ) : null}
               </div>
             ) : null}
 
@@ -356,17 +439,21 @@ export function BomGeneratePage() {
                 >
                   {t.boms.sendBackForRevision}
                 </Button>
-              ) : (
-                <Button
-                  type="button"
-                  icon={<Send aria-hidden className="size-4" />}
-                  isLoading={generate.isPending}
-                  disabled={lines.length === 0}
-                  onClick={onSubmit}
-                >
-                  {t.boms.generate}
-                </Button>
-              )}
+              ) : null}
+              <Button
+                type="button"
+                icon={<Send aria-hidden className="size-4" />}
+                isLoading={generate.isPending}
+                // Refused while any picked requisition commits more than it was approved for.
+                // Disabled rather than hidden: the IM is adjusting figures to reach this
+                // button, and a control that vanishes gives them nothing to aim at. QA-039
+                // was the opposite failure — the screen kept offering only send-back after the
+                // IM had already edited the BOM into budget.
+                disabled={lines.length === 0 || overspent.length > 0}
+                onClick={onSubmit}
+              >
+                {t.boms.generate}
+              </Button>
             </div>
           </div>
         )}

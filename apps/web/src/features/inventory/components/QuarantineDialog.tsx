@@ -78,6 +78,7 @@ export function QuarantineDialog({ open, onClose, productId, placement }: Props)
 
   return (
     <Dialog
+      schema={resolveQuarantineSchema}
       open={open}
       onClose={onClose}
       title={t.borrowing.quarantineDialogTitle}

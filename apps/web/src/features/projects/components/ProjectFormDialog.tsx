@@ -56,6 +56,7 @@ export function ProjectFormDialog({ open, onClose }: Props) {
 
   return (
     <Dialog
+      schema={createProjectSchema}
       open={open}
       onClose={onClose}
       title={t.projects.create}

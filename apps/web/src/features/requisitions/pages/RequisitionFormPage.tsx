@@ -5,6 +5,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import {
   PAGINATION_MAX_LIMIT,
+  missingForSubmit,
   RequisitionStatus,
   RequisitionUrgency,
   saveRequisitionSchema,
@@ -13,6 +14,7 @@ import {
 } from '@ims/shared';
 import { Button } from '@/components/ui/Button';
 import { DateField } from '@/components/ui/DateField';
+import { focusFirstInvalid } from '@/lib/focus-invalid';
 import { SelectField, TextAreaField, TextField } from '@/components/ui/Field';
 import { Switch } from '@/components/ui/Switch';
 import { PageHeader, Panel } from '@/components/ui/primitives';
@@ -264,7 +266,48 @@ export function RequisitionFormPage() {
    * Save then submit. Saving first means the server totals the *stored* lines, so what gets
    * frozen is what is on the record rather than whatever the browser last calculated.
    */
+  /**
+   * Everything the requisition is missing, marked on the fields rather than announced in one
+   * toast, with focus moved to the first offender.
+   *
+   * QA-008 reported the toast listing Department and Reason as missing while both were filled;
+   * it names all three regardless, because a single string cannot know which one failed. The
+   * deeper problem is that reaching that message means the draft was already saved and given a
+   * reference number (save-then-submit, D-015) — so an incomplete submit produced an orphan
+   * draft as a side effect of being refused. Checking here stops both.
+   *
+   * `missingForSubmit` is the same function the API guards with, so the form cannot promise
+   * something the server then refuses.
+   */
+  function markMissingForSubmit(values: SaveRequisitionInput): boolean {
+    const missing = missingForSubmit(values);
+    if (missing.length === 0) return false;
+
+    for (const field of missing) {
+      form.setError(field, { type: 'required', message: t.requisitions.fieldRequired });
+    }
+    // The first offender in form order, not the first the browser happens to find: the fields
+    // are not in DOM order on a two-column grid.
+    focusFirstInvalid();
+    toast.error(t.requisitions.fixHighlighted);
+    return true;
+  }
+
+  /**
+   * The schema rejected before the submit handler ever ran.
+   *
+   * The submit-only rule still has to be applied here, or a form failing both shows only the
+   * schema's complaints: the requester fixes the unnamed item, presses Submit again, and is
+   * told about the deadline they could have fixed in the same pass. Every problem at once,
+   * then focus on the first one.
+   */
+  function onInvalidSubmit() {
+    markMissingForSubmit(form.getValues());
+    focusFirstInvalid();
+  }
+
   async function onSubmitForApproval(values: SaveRequisitionInput) {
+    if (markMissingForSubmit(values)) return;
     // Held outside the try so the catch can tell the two failures apart: the save itself failing
     // (nothing exists) and the save succeeding while the submit is refused (a draft exists, and
     // has already taken a reference number).
@@ -321,6 +364,8 @@ export function RequisitionFormPage() {
           <div className="grid gap-5 p-5 sm:grid-cols-2">
             <SelectField
               label={t.requisitions.department}
+              required
+              error={errors.departmentId?.message}
               {...form.register('departmentId', emptyToNull)}
             >
               <option value="">{t.users.noDepartment}</option>
@@ -361,6 +406,7 @@ export function RequisitionFormPage() {
               render={({ field }) => (
                 <DateField
                   label={t.requisitions.approvalDeadline}
+                  required
                   hint={t.requisitions.approvalDeadlineHint}
                   error={errors.approvalDeadline?.message}
                   placeholder={t.requisitions.selectDate}
@@ -373,6 +419,7 @@ export function RequisitionFormPage() {
             <div className="sm:col-span-2">
               <TextAreaField
                 label={t.requisitions.reason}
+                required
                 hint={t.requisitions.reasonHint}
                 error={errors.reason?.message}
                 maxLength={REASON_MAX_LENGTH}
@@ -589,7 +636,7 @@ export function RequisitionFormPage() {
           policy={approvalPolicy.data}
           isSubmitting={isSubmitting}
           onSaveDraft={form.handleSubmit(onSaveDraft)}
-          onSubmit={form.handleSubmit(onSubmitForApproval)}
+          onSubmit={form.handleSubmit(onSubmitForApproval, onInvalidSubmit)}
         />
       </div>
     </div>

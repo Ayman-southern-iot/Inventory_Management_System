@@ -77,6 +77,32 @@ export const ErrorCode = {
   BOM_ALREADY_VOID: 'BOM_ALREADY_VOID',
   BOM_OVER_BUDGET: 'BOM_OVER_BUDGET',
   /**
+   * The BOM commits more than a source requisition's approved amount. Ayman's ruling,
+   * 2026-08-29: the IM and the requester settle the difference in person by adjusting
+   * quantity and unit cost, and the BOM is generated only once it fits.
+   *
+   * Distinct from the retired `BOM_OVER_BUDGET`, which was a tolerance band measured across
+   * the whole batch. This one is exact, per requisition, and counts the transportation the
+   * approved figure already includes. Carries `details.overspent` — one entry per offending
+   * requisition, with its approved, items, transportation and committed figures, so the
+   * screen can say which requisition and by how much.
+   */
+  BOM_EXCEEDS_APPROVED_AMOUNT: 'BOM_EXCEEDS_APPROVED_AMOUNT',
+  /**
+   * A purchase would commit more than has been funded. Ayman, 2026-08-31.
+   *
+   * The ceiling is the money actually received, not the amount approved: a part-funded
+   * requisition can only spend the instalment in hand. Carries `details` with the committed
+   * total, the funded total, what was already spent and the carriage, so the screen can say
+   * how far over it is rather than only that it is over.
+   */
+  PURCHASE_EXCEEDS_FUNDED: 'PURCHASE_EXCEEDS_FUNDED',
+  /**
+   * A BOM was asked to cover requisitions from more than one requester. One requester per BOM
+   * (Ayman, 2026-08-29), because the BOM number names them.
+   */
+  BOM_SPANS_MULTIPLE_REQUESTERS: 'BOM_SPANS_MULTIPLE_REQUESTERS',
+  /**
    * The IM asked for a `quantity` larger than the source requisition item permits. The IM
    * is allowed to *shrink* a BOM line down (or drop it) — but they cannot conjure stock.
    */

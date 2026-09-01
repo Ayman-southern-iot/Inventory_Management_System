@@ -308,22 +308,24 @@ describe('BOMs PDF', () => {
       expect(stub.renderCalls.length).toBe(secondCallCountBefore); // no new render call
     });
 
-    it('renders an over-budget BOM (the generation gate was retired 2026-08-09)', async () => {
-      // The over-budget ceiling no longer bounces a BOM. Approved 5000, subtotal 6000
-      // creates a BOM cleanly and the IM can render it — the PDF is the document the
-      // Accounts team sees, and a slow-down on the cost line is not a reason to deny it.
-      const req = await approveRequisition(5000, 'OverBudget');
+    it('renders a BOM that spends the approved amount to the last taka', async () => {
+      // Was "renders an over-budget BOM": the 2026-08-09 retirement of the ceiling made an
+      // over-budget BOM creatable, so rendering one was worth asserting. The ceiling came back
+      // on 2026-08-29 (Ayman's ruling) and such a BOM can no longer exist, so the premise is
+      // gone. What the test was actually for — a BOM at the very edge of its budget still
+      // renders — is kept, at the boundary the new rule cares about.
+      const req = await approveRequisition(5000, 'AtCeiling');
       const create = await im.client.post('/boms').send({
         requisitionIds: [req.id],
         lines: req.items.map((item) => ({
           requisitionItemId: item.id,
-          unitCost: 6000,
+          unitCost: 5000,
           vendor: 'Acme',
         })),
       });
       expect(create.status).toBe(201);
       expect(create.body.overBudgetBounced).toBe(false);
-      expect(create.body.subtotal).toBe(6000);
+      expect(create.body.subtotal).toBe(5000);
 
       const render = await im.client.post(`/boms/${create.body.id}/render`).send();
       expect(render.status).toBe(200);
@@ -380,7 +382,7 @@ describe('BOMs PDF', () => {
       expect(html).toContain('src="data:image/jpeg;base64,AAAA"');
     });
 
-    it('prints the nine specified header fields, the item table and a subtotal', async () => {
+    it('prints the header fields, the item table and a subtotal', async () => {
       const req = await approveRequisition(5000, 'Widget');
       const bom = (
         await im.client.post('/boms').send(generatePayload(req.id, req.items))
@@ -395,12 +397,16 @@ describe('BOMs PDF', () => {
         'Department',
         'Project',
         'Description',
-        'Total Money Requested',
-        'Approved Money',
-        'Remaining',
+        'Approved amount',
       ]) {
         expect(html, `header is missing "${label}"`).toContain(label);
       }
+
+      // One money figure, and it is the payable one (Ayman, 2026-08-29). The requested and
+      // remaining amounts moved off the document entirely — see the note on the Remaining
+      // test below for what they were for and where they still live.
+      expect(html).not.toContain('Total Money Requested');
+      expect(html).not.toContain('Remaining');
 
       expect(html).toContain(bom.bomNo);
       expect(html).toContain('Widget');
@@ -417,26 +423,33 @@ describe('BOMs PDF', () => {
     });
 
     /**
-     * OQ-18, answered by the operator: Remaining is requested minus approved (their example was
-     * 15,000 requested against 10,000 approved leaving 5,000).
+     * Was "prints Remaining as requested minus approved" (OQ-18).
      *
-     * The figures here stay **below** SETTING_EXPENSE_THRESHOLD_BDT (15,000) on purpose: at or
-     * above it the chain needs two approvers in two different slots, and `approveRequisition`
-     * drives only approver1. 12,000 requested revised to 8,000 exercises exactly the same
-     * subtraction with a one-approver chain.
+     * Reversed by Ayman on 2026-08-29: "bom will only show the approved money so that no
+     * confusion will occur". OQ-18 was reasoning about somebody auditing the approval; this
+     * document goes to Accounts to be paid against, and three figures where one is payable
+     * invites the wrong one being read. The requested and remaining amounts are still computed
+     * and still on the requisition — they have left the printed BOM, not the system.
+     *
+     * The figures stay **below** SETTING_EXPENSE_THRESHOLD_BDT (15,000) on purpose: at or above
+     * it the chain needs two approvers in two slots, and `approveRequisition` drives only
+     * approver1.
      */
-    it('prints Remaining as requested minus approved', async () => {
+    it('prints only the approved amount, not the requested or the remainder', async () => {
       const req = await approveRequisition(12_000, 'Widget', 8_000);
       const bom = (
         await im.client.post('/boms').send(generatePayload(req.id, req.items))
       ).body as BomDetail;
 
+      // The snapshot still carries all three — the document simply prints one of them.
       expect(bom.sources[0]!.requestedAmount).toBe(12_000);
       expect(bom.sources[0]!.approvedAmount).toBe(8_000);
       expect(bom.sources[0]!.remainingAmount).toBe(4_000);
 
       const html = renderBomHtml(bom, CONTEXT);
-      expect(html).toMatch(/Remaining[\s\S]{0,80}4,000\.00/);
+      expect(html).toMatch(/Approved amount[\s\S]{0,80}8,000\.00/);
+      expect(html).not.toContain('12,000.00');
+      expect(html).not.toContain('4,000.00');
     });
 
     it('prints the name and "Approved" for every approver, signed or not', async () => {

@@ -107,7 +107,11 @@ describe('RequisitionFormPage, editing a saved draft', () => {
       </QueryClientProvider>,
     );
 
-    const department = screen.getByLabelText(t.requisitions.department) as HTMLSelectElement;
+    // See the sibling spec: queried by accessible name, which the required marker does not
+    // pollute because it is aria-hidden.
+    const department = screen.getByRole('combobox', {
+      name: t.requisitions.department,
+    }) as HTMLSelectElement;
     const project = screen.getByLabelText(t.requisitions.project) as HTMLSelectElement;
 
     expect(department.value).toBe('dept-1');

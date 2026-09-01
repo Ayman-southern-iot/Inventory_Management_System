@@ -4,18 +4,15 @@ import type { SupportingDocument } from '@ims/shared';
 import { api } from '@/api/client';
 import { t } from '@/i18n/en';
 
-const PAPER_WIDTH = 'w-[140px]';
-const PAPER_HEIGHT = 'h-[180px]';
-
 /**
- * The "paper thumbnail" card shown on the requisition detail page, sitting as the right
- * column of the status box (next to the badges + requested/sanctioned/approvers figures).
+ * The attachment, as one row of the requisition summary.
  *
- * Visual:
- *   - a small white rectangle (~140×180px) with a subtle drop shadow and a folded corner
- *   - inside: a generic file glyph plus, for PDFs, the file name laid out like a title
- *   - below: the original file name + size
- *   - whole thing is a button that opens the bytes in a new tab
+ * Was a 140×180 paper thumbnail with a folded corner, sized to fill a column of its own beside
+ * the money figures. That column is gone — the attachment is a row of the summary grid now —
+ * and a 180px graphic standing in for a filename made the card twice as tall as its content.
+ * The approving-view template uses a chip: icon, name, size, on one line.
+ *
+ * Still a button that opens the bytes in a new tab.
  *
  * Why a button instead of `<a href={url}>`: the download endpoint sits behind
  * `JwtAuthGuard`, so a plain anchor would open the new tab with no Authorization header
@@ -96,46 +93,40 @@ function OpenCard({
     <button
       type="button"
       onClick={() => void open()}
-      className="group inline-flex w-fit flex-col items-center gap-1.5 text-left disabled:cursor-wait"
       disabled={pending}
+      className={[
+        'group inline-flex max-w-full items-center gap-3 rounded-[--radius-control]',
+        'border border-border bg-surface-muted px-3 py-2 text-left',
+        'hover:border-border-strong disabled:opacity-70',
+      ].join(' ')}
     >
-      <div
-        className={`relative ${PAPER_WIDTH} ${PAPER_HEIGHT} rounded-sm border border-border bg-white shadow-[0_4px_12px_-4px_rgba(15,23,42,0.18)] transition-shadow group-hover:shadow-[0_6px_18px_-4px_rgba(15,23,42,0.28)]`}
-      >
-        {/* Folded corner */}
-        <div className="absolute right-0 top-0 h-5 w-5 bg-surface-muted [clip-path:polygon(100%_0,0_0,100%_100%)]" />
-        <div className="absolute right-0 top-0 h-5 w-5 border-l border-b border-border [clip-path:polygon(100%_0,0_0,100%_100%)]" />
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-[--radius-control] bg-brand-subtle">
+        {pending ? (
+          <Loader2 aria-hidden className="size-4 animate-spin text-brand" />
+        ) : (
+          <FileText aria-hidden className="size-4 text-brand" />
+        )}
+      </span>
 
-        <div className="flex h-full flex-col items-center justify-center gap-2 px-3 text-center">
-          {pending ? (
-            <Loader2 aria-hidden className="size-10 animate-spin text-ink-subtle" />
-          ) : (
-            <FileText aria-hidden className="size-10 text-ink-subtle" />
-          )}
-          <span className="line-clamp-3 text-xs font-medium leading-tight text-ink">
-            {document.originalName}
-          </span>
-        </div>
-      </div>
-
-      <div className="flex flex-col items-center text-center">
-        <span className="text-xs font-medium text-ink">
-          {t.requisitions.supportingDocumentCard.label}
+      <span className="min-w-0">
+        {/* One line, ellipsised. A long filename must not stretch the grid column it sits in. */}
+        <span className="block truncate text-sm font-medium text-ink">
+          {document.originalName}
         </span>
-        <span className="flex items-center gap-1 text-[11px] text-ink-subtle">
+        <span className="block text-xs text-ink-subtle">
           <span className="tabular-nums">{formatBytes(document.sizeBytes)}</span>
-          <ExternalLink aria-hidden className="size-3" />
         </span>
         {error ? (
-          <span role="alert" className="mt-0.5 text-[11px] text-danger">
+          <span role="alert" className="block text-xs text-danger">
             {error}
           </span>
         ) : null}
-      </div>
+      </span>
+
+      <ExternalLink aria-hidden className="size-4 shrink-0 text-ink-subtle" />
     </button>
   );
 }
-
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;

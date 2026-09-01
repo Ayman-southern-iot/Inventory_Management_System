@@ -34,6 +34,7 @@ function requisition(overrides: Partial<RequisitionDetail> = {}): RequisitionDet
     approvalDeadline: null,
     reason: null,
     requestedAmount: 100_000,
+    provisionalAmount: 100_000,
     approvedAmount: 100_000,
     requiredApproverCount: 1,
     thresholdAtSubmit: 80_000,

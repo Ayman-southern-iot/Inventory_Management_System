@@ -841,3 +841,101 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   recorded decision covered the reversal case. It changes what the system decides, so it was put
   to Ayman before it was written; Ayman's instinct ("the carriage follows the last live purchase
   out") and this analysis agree.
+- 2026-08-31 — **A purchase may not commit more than has been funded.** Ayman's ruling, reported
+  from the screen: a purchase recorded against a 40,500 requisition showed `Spent 60,000` beside
+  `Funded 40,500` with `Unspent 0`. `recordPurchase` had no ceiling of any kind, and `unspent` is
+  floored at zero, so the overspend did not surface as negative — it surfaced as *nothing left*,
+  on the record Accounts reconciles against. Ceiling is **funded, not approved**: you cannot spend
+  cash you have not received, so a part-funded requisition is capped at the instalment in hand.
+  The carriage counts, because it is spent the moment a purchase exists. Checked inside the
+  transaction that already holds the requisition lock, so two purchases racing cannot both take
+  the same headroom. New `ErrorCode.PURCHASE_EXCEEDS_FUNDED` carrying the committed, funded,
+  already-spent and carriage figures so the screen can say how far over it is.
+- 2026-08-31 — **The carriage is recorded on the purchase that paid it, not on the requisition**
+  (migration 0029). Ayman asked for an adjustable transportation field at purchase time.
+  `requisitions.transportation_cost` could not be it: that is the figure the *requester* declared,
+  frozen at submit, inside `approved_amount`, and what the BOM ceiling measures against —
+  overwriting it would retroactively change what the approvers signed. Per **purchase** rather
+  than per requisition because a split-vendor requisition genuinely has more than one delivery,
+  and a single column has no answer to "which purchase wrote this". The backfill copies the
+  planned figure onto the **earliest live purchase** of each requisition so every existing figure
+  reads exactly as before; putting it on every purchase would multiply one van by the number of
+  vendors. **This simplified OQ-32 rather than complicating it**: "carriage is spent only while a
+  live purchase stands" was an `EXISTS (live purchase)` gate wrapped around the planned figure in
+  three places, and summing a column that only exists on purchases says the same thing with no
+  gate. The report and the dashboard now read the same sum, so they cannot disagree with the
+  funding panel. One consequence, deliberate and tested: voiding a purchase takes **its own**
+  carriage, not the requisition's — void the delivery that paid for the van and that van's cost
+  goes, while a second delivery keeps whatever it recorded.
+- 2026-08-31 — **The purchase form opens on the figures already agreed.** Unit costs come from the
+  BOM (or the requester's estimate), quantities from the BOM, the carriage from what was planned.
+  Typing every price again from blank is what made a missed box so easy — an empty unit cost was
+  filtered out of the payload and reported as "Array must contain at least 1 element(s)", which
+  names a shape rather than a field. The quantity is editable because buying fewer than planned is
+  normal: the shop had six of the ten.
+- 2026-09-01 — **The invoice is optional at verify-purchase.** Ayman, reversing his own ruling of
+  2026-08-26. That earlier decision was taken after I had wrongly described the invoice as
+  optional and he chose the status quo; this is the deliberate change, made knowing what the rule
+  was. Paperwork arriving late should not strand the money: the requisition verifies and the
+  unspent balance goes back to Accounts whether or not the vendor has sent the bill.
+  `countPurchasesWithoutInvoice` and `InvoiceMissingError` are kept — the count is what a future
+  "3 purchases still have no invoice" warning would read, and the code is quoted in audit rows
+  written while the gate was live.
+- 2026-09-01 — **The BOM document paginates.** A long BOM was one table crammed onto page one.
+  Chromium always breaks a long table somewhere; left alone it breaks rows through the middle and
+  never repeats the column headings, so page three of a document somebody pays against is a wall
+  of unlabelled numbers. `thead { display: table-header-group }` repeats the headings,
+  `page-break-inside: avoid` keeps a row whole, and the blocks that are meaningless in halves —
+  signatures, the approved amount, the letterhead — are held together. **No `@page` rule**: page
+  size and margins come from `PDF_PAGE_FORMAT` and `PDF_MARGIN_*_MM` because this office prints
+  onto pre-printed letterhead, and a margin hardcoded in the template would fight the one
+  Puppeteer is given and win silently.
+- 2026-09-01 — **A requester's own approval stage is not created** (migration 0030). Ayman's
+  ruling, replacing the substitution model (OQ-07). Substitution stood somebody else in at every
+  stage the requester occupied and refused the submit when there was nobody to stand in — so with
+  one Inventory Manager, that IM could never raise a requisition at all. **The authority matters
+  here:** the code carried `// requirements §10: nobody approves their own requisition` in two
+  places and a spec header quoting `docs/reference/10-permissions.md` as if it were the
+  requirements. **No such rule exists.** The transcription's own notes: *"No self-approval rule.
+  Nothing prohibits an approver approving their own request. The entire substitution mechanism is
+  derived."* All three citations are corrected. **Skipped, not auto-approved** — the stage is
+  absent, so the audit trail never shows a person signing off their own money. An approver's own
+  slot drops and the others still sign; the IM's stage drops entirely. Where *every* stage belongs
+  to the requester (an IM who is also the designated sub-threshold approver, below threshold) the
+  requisition stands APPROVED on submit — Ayman's answer (c): below the threshold, their own
+  money, their own authority. That made `required_approver_count = 0` reachable, which migration
+  0008's `CHECK (BETWEEN 1 AND 2)` forbade and surfaced as a 500 from the database; **0030 relaxes
+  it to 0–2 and keeps the upper bound at 2** on purpose, because the slot count is admin-editable
+  and a typo of 20 is still a mistake worth catching.
+- 2026-09-01 — **A rejection can be taken back, and always could.** `REJECTED` has been in
+  `WITHDRAWABLE_STATUSES` since withdraw shipped, and the service comment says a withdrawn IM
+  rejection "resurrects the requisition to IM_REVIEW". The detail page restated that list by hand
+  and left `REJECTED` out, so the capability existed and no screen offered it — while the reject
+  dialog said "it cannot be reopened", which had been false for months. The page now reads the
+  shared constant; two lists were how they drifted.
+- 2026-09-01 — **The item field offers nothing until a character is typed.** `rankMatches` already
+  ranked exact → code → starts-with → contains, which is the behaviour Ayman described; only the
+  empty term was wrong, returning the whole catalogue. Reverses a deliberate note ("opening on
+  focus is what makes this behave like a search box"): true, but on a catalogue of any size it is
+  a wall of options in front of somebody who already knows what they want. A term that matches
+  *nothing* still opens the list, because that is where "it will be requested as a new item" is
+  said — the sentence that stops somebody inventing their own name for a thing we stock.
+- 2026-09-01 — **"Left to spend" means what is left after this purchase.** It showed what was
+  available *before* it, printed beside what the purchase commits, so on a fresh requisition both
+  figures read the same and the pair said nothing. My own bug from earlier the same day. It is now
+  `funded − everything committed`, recomputes as quantity, unit cost or carriage change, turns red
+  and blocks submit when negative. "This purchase" counts the carriage, because showing 2,500
+  while 3,400 leaves the account is the same class of mistake.
+- 2026-09-01 — **The sidebar item and its page are called Inventory, not Products.** D-010 made
+  the heading follow the sidebar rather than differ from it; that still holds, the sidebar has
+  simply been renamed. The per-category count stays "12 products" — it describes the catalogue,
+  not the navigation.
+- 2026-09-01 — **The BOM's signature gap is 24pt, not 48pt, and the top margin is the real
+  constraint.** Measured by rendering the template through Chromium at the configured margins: at
+  `PDF_MARGIN_TOP_MM=45` the usable page is 839px and a five-item BOM is 994px — even a *one-item*
+  BOM took two pages. The 48pt gap was 64px of separation stacked on top of the 42pt that
+  `.signature-area` already reserves above the line for the ink, guarding twice against an overlap
+  the reserve alone prevents, and costing two item rows. At 24pt plus tighter meta rows, one item
+  fits one page at the current margins and **five items fit at a 20mm top margin**. The 45mm
+  default exists because the real company pad was never supplied — but the document now draws its
+  own letterhead, so that space is paid for twice. **Left to the operator** (see OQ-34).

@@ -126,6 +126,15 @@ export const purchaseSchema = z.object({
   invoiceNo: z.string().nullable(),
   purchasedAt: z.string(),
   totalAmount: z.number(),
+  /**
+   * The carriage actually paid for this delivery (migration 0029).
+   *
+   * `requisitions.transportationCost` stays the figure the requester *planned* — frozen at
+   * submit, inside the approved amount, and what the BOM ceiling measures against. This is what
+   * it came to. Spend is the sum of these over live purchases, so voiding the last purchase
+   * takes the carriage with it without any separate rule (OQ-32).
+   */
+  transportationCost: z.number(),
   note: z.string().nullable(),
   recordedByName: z.string().nullable(),
   createdAt: z.string(),
@@ -141,6 +150,11 @@ export type Purchase = z.infer<typeof purchaseSchema>;
 
 export const purchaseLineInputSchema = z.object({
   requisitionItemId: uuidSchema,
+  /**
+   * How many were actually bought. Often fewer than planned — the shop had six of the ten, or
+   * the IM chose to take fewer at the price. Capped at the BOM's quantity by the service unless
+   * `overBomQuantity` says otherwise.
+   */
   quantity: z.number().int().positive().max(1_000_000),
   unitCost: moneyAmountSchema,
   /**
@@ -157,6 +171,15 @@ export const recordPurchaseSchema = z
     vendor: z.string().trim().min(1).max(200),
     invoiceNo: z.string().trim().max(120).nullable().default(null),
     purchasedAt: pastDatetimeSchema('The purchase date cannot be in the future'),
+    /**
+     * What the carriage actually cost, adjustable up or down from what was planned.
+     *
+     * Defaults to 0 rather than to the planned figure: a client that does not send the field is
+     * saying "no carriage on this purchase", and inheriting a figure nobody typed is how a van
+     * gets charged twice on a split-vendor requisition. The form pre-fills the planned amount so
+     * the IM edits it rather than retyping it.
+     */
+    transportationCost: moneyAmountSchema.default(0),
     note: z.string().trim().max(500).nullable().default(null),
     lines: z.array(purchaseLineInputSchema).min(1).max(500),
   })

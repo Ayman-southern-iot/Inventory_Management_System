@@ -60,6 +60,7 @@ const MULTI_ITEM: BomCandidate = {
   departmentName: 'Lab',
   projectName: 'P',
   approvedAmount: 40_000,
+  transportationCost: null,
   items: [
     {
       requisitionItemId: 'ri-multi-1',

@@ -5,6 +5,39 @@
 
 ## Current position
 
+- **2026-08-31 → 2026-09-01 — Ayman's QA rounds: the money surface closed, both documents
+  rebuilt, and who approves their own requisition.** Working tree **not yet committed at the time
+  this was written** — see the commit that carries it. `IMS-QA-Report.md`,
+  `IMS_QA_Test_Plan.xlsx`, `approving_view_template.html`, `bom_template.html`, `docs/policy/`
+  and `promt.md` remain untracked (OQ-33).
+  Branch `fix/lan-secure-context`, **149 commits ahead of `main`, 76 ahead of `origin`.**
+  - **Next task:** answer **OQ-34** — pre-printed letterhead or plain paper? One env value
+    (`PDF_MARGIN_TOP_MM`) decides whether five BOM items fit a page. Nothing else is queued.
+  - **Verified green:** typecheck clean · unit shared 13 / api 76 / web 287 · integration
+    **684 pass / 0 fail (49 files)** · `pnpm lint` **20 pre-existing errors**, unchanged ·
+    `guard-hardcoding.sh --scan-all` **8** (down from 10 — the retired PDF thumbnail took two
+    arbitrary pixel values with it).
+  - **Two migrations.** **0029** puts the carriage on the purchase that paid it, backfilling the
+    planned figure onto the earliest live purchase per requisition so every existing total reads
+    unchanged. **0030** lets `required_approver_count` be 0, which the skip rule made reachable
+    and migration 0008 forbade. Both verified down → up.
+  - **Money.** A BOM cannot commit more than its requisition was approved for (per requisition,
+    carriage counted). A purchase cannot spend more than has been **funded** — the hole behind
+    the reported `Spent 60,000 / Funded 40,500 / Unspent 0`. Both refuse server-side, inside the
+    transaction holding the requisition lock.
+  - **Documents.** The requisition detail and the approver view were rebuilt from
+    `approving_view_template.html`; the BOM PDF from `bom_template.html`, with real pagination
+    (repeating headings, unsplit rows), the total in words in lakh/crore, and only the approved
+    figure in its header.
+  - **Approvals.** A requester's own stage is no longer created rather than substituted — the
+    change that lets a sole Inventory Manager raise a requisition at all.
+  - **Reversed this session, three of them Ayman's own rulings:** the BOM over-budget ceiling
+    (retired 2026-08-09, now reinstated in a stricter form), OQ-18's "Remaining" column, the
+    invoice requirement (2026-08-26), and OQ-07's substitution. Every rewritten test records all
+    the positions its rule has held.
+  - **Found, not fixed:** the code cited `requirements §10` for a self-approval rule that does
+    not exist, in two comments and a spec header. Corrected here — but treat any `REQUIRED §n`
+    claim as unverified until checked against `requirements-verbatim.md`.
 - **2026-08-27 — OQ-32 closed, the BOM PDF audited, and phase 06 found already done.** One
   commit. **Working tree clean** apart from `IMS_QA_Test_Plan.xlsx`, `docs/policy/` and
   `promt.md`, all untracked and all awaiting a decision on whether they belong in the repo.

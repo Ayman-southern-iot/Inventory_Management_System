@@ -96,14 +96,35 @@ const itemField = () => screen.getByRole('combobox', { name: `${t.requisitions.i
 const options = () => within(screen.getByRole('listbox')).getAllByRole('option');
 
 describe('the item field as a search bar', () => {
-  it('opens the whole catalogue on focus, before a character is typed', async () => {
+  /**
+   * Was "opens the whole catalogue on focus, before a character is typed".
+   *
+   * Reversed by Ayman on 2026-09-01. The whole catalogue on focus made the field read as a
+   * search box rather than a hint, which was the point — but on a catalogue of any size it is a
+   * wall of options in front of somebody who already knows what they want. The narrowing is what
+   * earns its keep, and the tests below still cover it.
+   */
+  it('offers nothing until a character is typed', async () => {
     const user = userEvent.setup();
     render(<Harness />);
 
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
     await user.click(itemField());
 
-    expect(options()).toHaveLength(CATALOGUE.length);
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+  });
+
+  /** One character is enough — the list appears as soon as there is something to narrow by. */
+  it('offers every match for a single character, and narrows from there', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+
+    await user.type(itemField(), 'a');
+    const wide = options().length;
+    expect(wide).toBeGreaterThan(1);
+
+    await user.type(itemField(), 'rduino n');
+    expect(options().length).toBeLessThan(wide);
   });
 
   /**
@@ -114,7 +135,8 @@ describe('the item field as a search bar', () => {
   it('offers a product with no stock, and says so rather than hiding it', async () => {
     const user = userEvent.setup();
     render(<Harness />);
-    await user.click(itemField());
+    // Typed rather than merely focused: the list no longer opens on an empty term.
+    await user.type(itemField(), 'arduino');
 
     const nano = options().find((option) => option.textContent?.includes('Arduino Nano'));
     expect(nano).toBeDefined();

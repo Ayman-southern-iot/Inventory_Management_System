@@ -63,6 +63,7 @@ const SINGLE_OVER_BUDGET: BomCandidate = {
   departmentName: 'Lab',
   projectName: null,
   approvedAmount: 10_000,
+  transportationCost: null,
   items: [
     {
       requisitionItemId: 'ri-single',
@@ -82,6 +83,7 @@ const MULTI_ITEM: BomCandidate = {
   departmentName: 'Lab',
   projectName: 'P',
   approvedAmount: 40_000,
+  transportationCost: null,
   items: [
     {
       requisitionItemId: 'ri-multi-1',
@@ -138,9 +140,12 @@ describe('BomGeneratePage', () => {
     const pickerRow = screen.getByText('REQ-000100').closest('label')!;
     await user.click(within(pickerRow).getByRole('checkbox'));
 
-    // No "Generate" button — the single-line path doesn't go through the BOM at all.
-    expect(screen.queryByRole('button', { name: t.boms.generate })).not.toBeInTheDocument();
-    // The Send back for revision primary is the only path.
+    // Generate is present but refused. It used to be absent entirely, which is QA-039: once
+    // the IM edited the quantity and unit cost until the BOM fitted, the screen still offered
+    // only send-back, with a footer plainly showing a variance of zero. A control the IM is
+    // working towards has to stay visible, or there is nothing to aim at.
+    expect(screen.getByRole('button', { name: t.boms.generate })).toBeDisabled();
+    // Send back stays available beside it, for the one case adjusting cannot solve.
     expect(
       screen.getByRole('button', { name: t.boms.sendBackForRevision }),
     ).toBeInTheDocument();

@@ -119,6 +119,7 @@ export function BorrowDialog({ open, onClose, product }: Props) {
 
   return (
     <Dialog
+      schema={createBorrowRequestSchema}
       open={open}
       onClose={onClose}
       title={`${t.borrowing.borrow} — ${product.name}`}

@@ -10,7 +10,7 @@ Status: 🔴 blocking · 🟠 needed soon · 🟢 can wait
 |----|--------|----------|--------------------|--------|
 | OQ-05 | 🟢 | Should a BOM over the approved amount by >10% bounce back for re-approval? | Yes, tolerance configurable | Phase 04 |
 | OQ-06 | 🟢 | Line-level partial approval of a requisition? | No — whole request only | Phase 03 |
-| OQ-07 | 🟢 | Self-approval: CFO raises a request and is also Approver 2 | Skip and substitute. **Implemented 2026-07-31 in task 6.6** — it was documented and entirely unimplemented until then. Substitute = the remaining configured slots first, then any other active approver, oldest account first; refuses the submit with `SELF_APPROVAL_NO_SUBSTITUTE` when none exists. The approver *count* is never reduced. Operator may still override the choice of substitute. | Phase 03, built Phase 06 |
+| OQ-07 | ✅ | Self-approval: CFO raises a request and is also Approver 2 | **Superseded 2026-09-01 — substitution is gone; the stage is simply not created.** See Resolved below and DECISIONS.md. Was: skip and substitute, implemented 2026-07-31 in task 6.6, refusing the submit with `SELF_APPROVAL_NO_SUBSTITUTE` when no stand-in existed — which is what stopped a sole Inventory Manager raising anything at all. | Phase 03, rebuilt 2026-09-01 |
 | OQ-10 | 🟢 | Is there an SMTP relay available? | No — in-app notifications only for v1 | Phase 03 |
 | OQ-11 | 🟠 | Company letterhead asset and exact print margins | Placeholder template until supplied | Phase 04 |
 | OQ-12 | 🟠 | How long may a session live before re-authentication is forced? Currently 14 days absolute from login, not extended by rotation. | 14 days | Phase 00 (built), revisit any time |
@@ -38,6 +38,7 @@ Status: 🔴 blocking · 🟠 needed soon · 🟢 can wait
 |----|--------|----------|--------------------|--------|
 | OQ-30 | 🟠 | **Should `POST /boms` and `POST /boms/:id/void` carry `@Roles`, like every sibling route?** Found by a false-passing test while closing D-013. Both are genuinely enforced — `BomsService.assertCanGenerate` / `assertCanVoid` refuse anyone without INVENTORY_MANAGER or ADMIN — so this is **not a hole**, and `permissions-non-admin.int-spec.ts` proves both refuse with 403. The difference is *when*: Nest runs guards before pipes, so every other route refuses before validation, while these two validate first. An unauthorised caller sending a malformed body therefore gets a 400 describing the payload shape rather than a 403. Adding `@Roles` touches permissions, which is a STOP, so it is recorded rather than done. | Leave as-is; it is a real control, just at a different layer. The test sends a schema-valid body and says why. | Nothing — defence in depth |
 | OQ-31 | 🟢 | **Does "no project means personal development" extend to borrowing?** The 2026-08-26 ruling was given in the requisition context and applied there (`5d5eef6`). `t.borrowing.noProject` still reads "No project" on the borrow dialog and the product detail page, so the same null now reads two different ways depending on which screen you are on — which is the shape of D-011 in a different dimension. | Left alone rather than assumed. One line of copy either way. | Nothing |
+| OQ-34 | 🟠 | **Does the BOM print onto pre-printed letterhead paper, or plain?** `PDF_MARGIN_TOP_MM` defaults to **45**, which the config comment explains as a placeholder because the real company pad was never supplied. The document now draws its own letterhead — logo, company name, address — so at 45mm that space is paid for twice: measured, the usable page is 839px and a five-item BOM is 994px. After the 2026-09-01 template tightening a one-item BOM fits one page at 45mm, and **five items fit at 20mm**, which is what Ayman asked for ("in one page of bom pdf there will be 5 item"). | Not changed unilaterally: a config default is an operator decision and 45mm may exist for a physical reason. If they print on plain paper set `PDF_MARGIN_TOP_MM=20`; if they print on a pad, 45mm stays and three items per page is the honest ceiling. | Before go-live |
 | OQ-33 | 🟢 | **Do `IMS_QA_Test_Plan.xlsx` and `docs/policy/` belong in the repo?** Both have sat untracked at the root across four sessions. The workbook is the QA source of truth and is edited outside the repo; `docs/policy/` holds the inventory policy generator and its .docx output. | Left untracked rather than committed on a guess. A binary .xlsx in git is a merge conflict nobody can resolve; a generated .docx is build output. The *generator* arguably belongs in the repo and the .docx does not. | Nothing |
 
 ## Known gaps carried out of Phase 00
@@ -63,6 +64,16 @@ rediscovered as a surprise.
 | G-18 | Integration tests write real uploads into `apps/api/storage/files` because `TEST_ENV` does not pin `FILE_STORAGE_DIR` or `PDF_STORAGE_DIR`. 686 files there against 1 `stored_files` row in dev — the rest are orphaned test artefacts nothing cleans up. **Mechanism identified 2026-08-20:** this is the same unpinned-config-key class that made demo mode and the container Chromium path leak into host test runs. Both keys are now explicitly allowlisted in `test/config/test-env.int-spec.ts` with "known gap G-18; pinning it is the fix and is out of scope here", so the guard test records the decline rather than letting it stay folklore. **The fix is to pin both to a temp dir** — deliberately not taken in that change because it moves where every upload spec writes and wants its own gate. | Harmless in production (tests do not run there) but it inflates every dev backup and hides genuine orphans. | Next harness pass |
 
 ## Resolved
+
+- **OQ-07 — who stands in when the requester is their own approver?** → **Nobody. The stage is not
+  created.** Ayman, 2026-09-01, replacing substitution entirely. Substitution refused the submit when no
+  stand-in existed, so a sole Inventory Manager could never raise a requisition. An approver's own slot now
+  drops and the others still sign; the IM's stage drops entirely; where every stage belongs to the requester
+  the requisition stands approved on submit (Ayman's answer (c) — below the threshold, their own money).
+  Skipped rather than auto-approved, so no audit row shows a person approving themselves. Migration 0030 lets
+  `required_approver_count` be 0. **The requirements never contained a self-approval rule** — the code cited
+  §10 for it in two places and a spec header quoted the design doc as if it were the requirements; all three
+  are corrected. See DECISIONS.md, 2026-09-01.
 
 - **OQ-32 — when a purchase is voided, does its transportation leave `spent` too?** → **Yes,
   and it was never charged before the first purchase either.** Ayman set the direction and the

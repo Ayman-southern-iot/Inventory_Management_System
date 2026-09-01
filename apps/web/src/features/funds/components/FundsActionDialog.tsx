@@ -1,11 +1,18 @@
 import { useEffect, useState } from 'react';
-import type { RequisitionDetail, RequisitionFunding } from '@ims/shared';
+import {
+  recordFundReceiptSchema,
+  recordPurchaseSchema,
+  type RequisitionDetail,
+  type RequisitionFunding,
+} from '@ims/shared';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
 import { TextAreaField, TextField } from '@/components/ui/Field';
 import { useToast } from '@/components/ui/Toast';
 import { t } from '@/i18n/en';
 import { fieldErrorsFor, messageForError } from '@/lib/error-message';
+import { focusFirstInvalid } from '@/lib/focus-invalid';
+import { requiredFields } from '@/lib/required-fields';
 import { formatBdt, formatDateTime } from '@/lib/format';
 import {
   useRecordPurchase,
@@ -102,7 +109,7 @@ export function FundsActionDialog({
   action,
   requisition,
   funding,
-  bomQuantities,
+  bomLines,
   onClose,
 }: {
   action: FundsAction | null;
@@ -117,7 +124,7 @@ export function FundsActionDialog({
    * but mirroring it on the client means the label and the wire payload reflect what
    * the IM actually planned.
    */
-  bomQuantities?: Map<string, number>;
+  bomLines?: Map<string, { quantity: number; unitCost: number }>;
   onClose: () => void;
 }) {
   const toast = useToast();
@@ -138,6 +145,16 @@ export function FundsActionDialog({
   const [vendor, setVendor] = useState('');
   const [invoiceNo, setInvoiceNo] = useState('');
   const [unitCosts, setUnitCosts] = useState<Record<string, string>>({});
+  /**
+   * How many were actually bought, per line.
+   *
+   * The quantity used to be fixed at whatever the BOM said, so an IM who found six of the ten
+   * on the shelf had no way to say so — they had to overstate the purchase and correct it
+   * later, or not record it at all.
+   */
+  const [quantities, setQuantities] = useState<Record<string, string>>({});
+  /** The carriage this delivery actually cost, pre-filled from what was planned. */
+  const [carriage, setCarriage] = useState('');
   const [returnedAmount, setReturnedAmount] = useState(() => defaultReturnedAmount(funding));
   /**
    * D-025: the server names the field it refused; the dialog now marks it instead of only
@@ -168,8 +185,30 @@ export function FundsActionDialog({
     // Pre-fill the receipt with what is still outstanding: the common case is Accounts releasing
     // exactly the remainder, and typing it again is friction.
     setAmount(funding && funding.outstanding > 0 ? String(funding.outstanding) : '');
-    setUnitCosts({});
-  }, [action, funding]);
+    // Opened on the figures already agreed, for the IM to adjust — the BOM unit cost where a
+    // BOM exists, the requester's estimate otherwise. Typing every price again from blank was
+    // what made a missed box so easy, and a form that starts empty tells the IM nothing about
+    // what was planned.
+    const seeded: Record<string, string> = {};
+    for (const item of requisition.items) {
+      const agreed = bomLines?.get(item.id)?.unitCost ?? item.estimatedUnitPrice;
+      seeded[item.id] = agreed > 0 ? String(agreed) : '';
+    }
+    setUnitCosts(seeded);
+
+    const seededQuantities: Record<string, string> = {};
+    for (const item of requisition.items) {
+      seededQuantities[item.id] = String(bomLines?.get(item.id)?.quantity ?? item.quantity);
+    }
+    setQuantities(seededQuantities);
+
+    // The planned figure, for the IM to adjust. Only on a requisition that has not already
+    // charged one: a second delivery on the same requisition usually shipped with the first,
+    // and pre-filling the van again is how it gets paid for twice.
+    const alreadyCharged = funding?.transportation ?? 0;
+    const planned = requisition.transportationCost ?? 0;
+    setCarriage(alreadyCharged > 0 ? '0' : planned > 0 ? String(planned) : '');
+  }, [action, funding, requisition.items, bomLines]);
 
   const busy =
     sendToAccounts.isPending ||
@@ -181,10 +220,113 @@ export function FundsActionDialog({
     voidReceipt.isPending ||
     voidPurchase.isPending;
 
+  /**
+   * What this action cannot be sent without, taken from the contract rather than listed here.
+   *
+   * `requiredFields` reads the same zod schema the API validates with, so a field that becomes
+   * optional stops being marked without anybody remembering to come back and unmark it. The
+   * dialog then only has to say which of its inputs carries which key.
+   */
+  /**
+   * What this purchase would commit, and what there is to commit.
+   *
+   * Ayman's ruling, 2026-08-31: a purchase may not spend more than has been funded. Nothing
+   * checked before — a 60,000 purchase against 40,500 funded was accepted, and the funding
+   * panel then reported Spent 60,000 beside Funded 40,500 with Unspent floored at 0, which is
+   * not a state the money can actually be in.
+   *
+   * Funded rather than approved, because you cannot spend cash you have not received: a
+   * part-funded requisition is capped at the instalment in hand, not at what was sanctioned.
+   * The carriage counts, since it is spent the moment a purchase exists.
+   */
+  /** What the IM has actually typed for a line, falling back to what was planned. */
+  function quantityOf(itemId: string, planned: number): number {
+    const typed = Number(quantities[itemId] ?? '');
+    return Number.isFinite(typed) && typed > 0 ? typed : planned;
+  }
+
+  const purchaseTotal = requisition.items.reduce((sum, item) => {
+    const cost = Number(unitCosts[item.id] ?? '');
+    if (!Number.isFinite(cost) || cost <= 0) return sum;
+    const planned = bomLines?.get(item.id)?.quantity ?? item.quantity;
+    return sum + cost * quantityOf(item.id, planned);
+  }, 0);
+
+  const carriageAmount = Number(carriage === '' ? 0 : carriage);
+  const thisCarriage = Number.isFinite(carriageAmount) && carriageAmount > 0 ? carriageAmount : 0;
+  const alreadySpent = funding?.spent ?? 0;
+  const alreadyCarried = funding?.transportation ?? 0;
+  const fundedSoFar = funding?.funded ?? 0;
+  const wouldCommit =
+    Math.round((alreadySpent + alreadyCarried + purchaseTotal + thisCarriage) * 100) / 100;
+  /**
+   * What is left **after** this purchase, not before it.
+   *
+   * This read funded minus what had already gone, which on a fresh requisition is the whole
+   * grant — so the screen showed "Left to spend: 3,400" beside a purchase committing exactly
+   * 3,400, and the two numbers together said nothing. The figure the IM is watching is whether
+   * there is anything left once they press the button.
+   */
+  const remaining = Math.round((fundedSoFar - wouldCommit) * 100) / 100;
+  const overspends = fundedSoFar > 0 && remaining < 0;
+
+  function missingRequired(): Record<string, string> {
+    const missing: Record<string, string> = {};
+    const blank = (value: string) => value.trim() === '';
+
+    if (action === 'receipt') {
+      const required = requiredFields(recordFundReceiptSchema);
+      if (required.has('amount') && blank(amount)) missing.amount = t.requisitions.fieldRequired;
+      if (required.has('receivedAt') && blank(when)) missing.receivedAt = t.requisitions.fieldRequired;
+    }
+    if (action === 'purchase') {
+      const required = requiredFields(recordPurchaseSchema);
+      if (required.has('vendor') && blank(vendor)) missing.vendor = t.requisitions.fieldRequired;
+      if (required.has('purchasedAt') && blank(when)) missing.purchasedAt = t.requisitions.fieldRequired;
+
+      // Every line needs a unit cost. The payload used to drop costless lines, so leaving one
+      // blank produced an empty `lines` array and the IM was shown zod describing the array
+      // rather than the box they had missed. Marked per line instead.
+      for (const item of requisition.items) {
+        const raw = unitCosts[item.id] ?? '';
+        if (blank(raw)) {
+          missing[`unitCost:${item.id}`] = t.requisitions.fieldRequired;
+        } else if (!Number.isFinite(Number(raw)) || Number(raw) <= 0) {
+          missing[`unitCost:${item.id}`] = t.funds.unitCostPositive;
+        }
+      }
+    }
+    // Every reversal carries a mandatory reason: undoing a money step is audit-worthy and an
+    // unexplained one is worse than none at all.
+    if (needsReason && blank(note)) missing.note = t.requisitions.fieldRequired;
+
+    return missing;
+  }
+
   async function onSubmit() {
     if (!action) return;
     // A retry starts from a clean slate, or a corrected field keeps wearing its old refusal.
     setFieldErrors({});
+
+    // Refused here rather than by the API: these dialogs write money, and a round trip that
+    // ends in a toast teaches the user nothing about which box was empty.
+    const missing = missingRequired();
+    if (Object.keys(missing).length > 0) {
+      setFieldErrors(missing);
+      focusFirstInvalid();
+      toast.error(t.requisitions.fixHighlighted);
+      return;
+    }
+
+    if (action === 'purchase' && overspends) {
+      toast.error(
+        t.funds.overspendBlocked
+          .replace('{committed}', wouldCommit.toLocaleString())
+          .replace('{funded}', fundedSoFar.toLocaleString()),
+      );
+      focusFirstInvalid();
+      return;
+    }
     try {
       switch (action) {
         case 'send-to-accounts':
@@ -207,23 +349,26 @@ export function FundsActionDialog({
             invoiceNo: invoiceNo.trim() || null,
             purchasedAt: new Date(`${when}T00:00:00`).toISOString(),
             note: note.trim() || null,
-            lines: requisition.items
-              .filter((item) => Number(unitCosts[item.id] ?? '') > 0)
-              .map((item) => {
+            transportationCost: thisCarriage,
+            // No filter: a line with no cost is refused above, so anything reaching here is
+            // costed. Filtering was what turned a missed box into an empty-array error.
+            lines: requisition.items.map((item) => {
                 // Prefer the BOM-edited quantity. The IM may have shrunk a 50-unit line
                 // to 30 in the BOM customiser; the wire payload must reflect what was
                 // actually bought, not the original requisition quantity. The server
                 // also re-derives this as a ceiling defense-in-depth.
-                const bomQuantity = bomQuantities?.get(item.id);
-                const quantity = bomQuantity ?? item.quantity;
+                const bomLine = bomLines?.get(item.id);
+                const bomQuantity = bomLine?.quantity;
+                const planned = bomQuantity ?? item.quantity;
                 return {
                   requisitionItemId: item.id,
-                  quantity,
+                  quantity: quantityOf(item.id, planned),
                   unitCost: Number(unitCosts[item.id]),
-                  overBomQuantity: bomQuantity !== undefined && item.quantity > bomQuantity,
+                  overBomQuantity:
+                    bomQuantity !== undefined && quantityOf(item.id, planned) > bomQuantity,
                   overBomNote: null,
                 };
-              }),
+            }),
           });
           toast.success(t.funds.purchaseRecorded);
           break;
@@ -314,6 +459,7 @@ export function FundsActionDialog({
           <>
             <TextField
               label={t.funds.amount}
+              required
               type="number"
               min={0}
               // D-025: the server refuses a receipt above the outstanding balance, so the input
@@ -333,8 +479,10 @@ export function FundsActionDialog({
             />
             <TextField
               label={t.funds.receivedAt}
+              required
               type="date"
               value={when}
+              error={fieldErrors.receivedAt}
               onChange={(event) => setWhen(event.target.value)}
             />
             <TextField
@@ -350,7 +498,9 @@ export function FundsActionDialog({
           <>
             <TextField
               label={t.funds.vendor}
+              required
               value={vendor}
+              error={fieldErrors.vendor}
               onChange={(event) => setVendor(event.target.value)}
             />
             <TextField
@@ -360,8 +510,10 @@ export function FundsActionDialog({
             />
             <TextField
               label={t.funds.purchasedAt}
+              required
               type="date"
               value={when}
+              error={fieldErrors.purchasedAt}
               onChange={(event) => setWhen(event.target.value)}
             />
             <div className="flex flex-col gap-2">
@@ -369,23 +521,114 @@ export function FundsActionDialog({
                 // The label and the wire payload agree on the quantity — BOM-edited if
                 // a BOM exists, otherwise the original requisition quantity. Keeps the
                 // IM from typing a unit cost for 50 units when only 30 were planned.
-                const bomQuantity = bomQuantities?.get(item.id);
+                const bomLine = bomLines?.get(item.id);
+                const bomQuantity = bomLine?.quantity;
                 const quantity = bomQuantity ?? item.quantity;
                 return (
-                  <TextField
-                    key={item.id}
-                    label={`${item.itemName} × ${quantity}`}
-                    hint={t.funds.unitCost}
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={unitCosts[item.id] ?? ''}
-                    onChange={(event) =>
-                      setUnitCosts((previous) => ({ ...previous, [item.id]: event.target.value }))
-                    }
-                  />
+                  <div key={item.id} className="rounded-[--radius-control] border border-border p-3">
+                    <p className="mb-2 text-sm font-medium text-ink">{item.itemName}</p>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <TextField
+                        label={t.funds.quantity}
+                        required
+                        // The planned figure is named rather than enforced in the box: buying
+                        // fewer is normal and buying more needs the BOM override, which the
+                        // server decides.
+                        hint={t.funds.plannedQuantity.replace('{n}', String(quantity))}
+                        type="number"
+                        min={1}
+                        step="1"
+                        value={quantities[item.id] ?? ''}
+                        onChange={(event) => {
+                          const next = event.target.value;
+                          setQuantities((previous) => ({ ...previous, [item.id]: next }));
+                        }}
+                      />
+                      <TextField
+                        label={t.funds.unitCost}
+                        required
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={unitCosts[item.id] ?? ''}
+                        error={fieldErrors[`unitCost:${item.id}`]}
+                        onChange={(event) => {
+                          const next = event.target.value;
+                          setUnitCosts((previous) => ({ ...previous, [item.id]: next }));
+                          // Clear the mark as soon as it is answered, or a corrected line keeps
+                          // wearing a refusal it has already satisfied.
+                          setFieldErrors((current) => {
+                            const key = `unitCost:${item.id}`;
+                            if (!current[key]) return current;
+                            const rest = { ...current };
+                            delete rest[key];
+                            return rest;
+                          });
+                        }}
+                      />
+                      <div className="flex flex-col justify-end">
+                        <p className="text-xs text-ink-subtle">{t.funds.lineTotal}</p>
+                        <p className="text-sm font-medium tabular-nums text-ink">
+                          {(
+                            Number(unitCosts[item.id] ?? '') > 0
+                              ? Number(unitCosts[item.id]) * quantityOf(item.id, quantity)
+                              : 0
+                          ).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 );
               })}
+
+              <TextField
+                label={t.funds.transportationActual}
+                hint={t.funds.transportationActualHint}
+                type="number"
+                min={0}
+                step="0.01"
+                value={carriage}
+                onChange={(event) => setCarriage(event.target.value)}
+              />
+
+              <dl className="flex flex-col gap-1 border-t border-border pt-2 text-sm">
+                <div className="flex items-baseline justify-between gap-4">
+                  <dt className="text-ink-muted">{t.funds.purchaseTotal}</dt>
+                  {/* Goods and carriage together — what leaves the account on this purchase. */}
+                  <dd className="tabular-nums font-medium text-ink">
+                    {(purchaseTotal + thisCarriage).toLocaleString()}
+                  </dd>
+                </div>
+                <div className="flex items-baseline justify-between gap-4">
+                  <dt className="text-ink-muted">{t.funds.fundedLabel}</dt>
+                  <dd className="tabular-nums font-medium text-ink">
+                    {fundedSoFar.toLocaleString()}
+                  </dd>
+                </div>
+                <div className="flex items-baseline justify-between gap-4 border-t border-border pt-1">
+                  <dt
+                    className={
+                      overspends ? 'font-semibold text-danger' : 'font-medium text-ink'
+                    }
+                  >
+                    {t.funds.leftToSpend}
+                  </dt>
+                  <dd
+                    className={
+                      overspends
+                        ? 'tabular-nums font-semibold text-danger'
+                        : 'tabular-nums font-semibold text-ink'
+                    }
+                  >
+                    {remaining.toLocaleString()}
+                  </dd>
+                </div>
+                {overspends ? (
+                  <p role="alert" className="text-xs text-danger">
+                    {t.funds.overspendInline}
+                  </p>
+                ) : null}
+              </dl>
             </div>
           </>
         )}
@@ -481,7 +724,10 @@ export function FundsActionDialog({
 
         <TextAreaField
           label={REASON_LABEL[action ?? 'receipt'] ?? t.common.note}
+          // Mandatory only for a reversal — an ordinary receipt may carry no note at all.
+          required={needsReason}
           value={note}
+          error={fieldErrors.note}
           onChange={(event) => setNote(event.target.value)}
         />
       </div>

@@ -211,7 +211,9 @@ describe('BOMs', () => {
       const response = await im.client.post('/boms').send(payload);
 
       expect(response.status).toBe(201);
-      expect(response.body.bomNo).toMatch(/^BOM-\d{6}$/);
+      // Either shape: the requester suffix arrived 2026-08-29 and older BOMs keep the plain
+      // serial. `bom-transportation.int-spec.ts` is where the suffix itself is asserted.
+      expect(response.body.bomNo).toMatch(/^BOM-\d{6}(-[A-Z0-9]+)?$/);
       expect(response.body.subtotal).toBe(250); // 1 unit * 250
       expect(response.body.isVoid).toBe(false);
       expect(response.body.overBudgetBounced).toBe(false);
@@ -373,30 +375,46 @@ describe('BOMs', () => {
     });
   });
 
-  describe('over-budget tolerance (OQ-05, retired 2026-08-09)', () => {
-    // The over-budget ceiling used to bounce the BOM and flip sources back to
-    // AWAITING_APPROVAL. That gate was removed: a unit cost going up between approval and
-    // BOM generation is a normal slowdown, not a policy violation. The setting
-    // (BOM_OVER_BUDGET_TOLERANCE_PCT) was removed on 2026-08-23 (D-032); the
-    // `over_budget_bounced` column is kept for historical rows, but no BOM generated today
-    // will carry the bounced flag, and no generation will throw BOM_OVER_BUDGET.
-    it('over-budget is generated: subtotal above approved no longer bounces (invariant 4 retired)', async () => {
-      // Approved total per requisition is 5000. Subtotal = 6000 (one unit at 6000). Under
-      // the old gate this would bounce; today it generates cleanly.
+  describe('the approved-amount ceiling (OQ-05, reinstated 2026-08-29)', () => {
+    /**
+     * This block has held all three positions, and the history matters more than the
+     * assertions.
+     *
+     * A tolerance band (OQ-05) bounced an over-budget BOM back to AWAITING_APPROVAL. That was
+     * retired on 2026-08-09 on the argument that a unit cost rising between approval and BOM
+     * generation is a normal slowdown rather than a policy violation, and the tolerance setting
+     * went with it on 2026-08-23 (D-032). Ayman reinstated a ceiling on 2026-08-29 — but not
+     * the old one.
+     *
+     * What is enforced now is exact, per requisition, and counts the transportation the
+     * approved figure already includes. The 2026-08-09 reasoning still stands about *prices*;
+     * it is simply not the decision. In an office this size the IM and the requester settle the
+     * difference in person, adjusting quantity and unit cost until the BOM fits, and only then
+     * is it generated. Nothing downstream absorbs an overspend: Accounts funds against the
+     * approved figure.
+     *
+     * `over_budget_bounced` is still the retired flag and stays false — the BOM is refused
+     * outright rather than created in a bounced state, so there is no row to flag.
+     */
+    it('refuses an over-budget BOM outright, leaving the requisition where it was', async () => {
+      // Approved 5,000, no carriage. One unit at 6,000 commits 6,000.
       const req = await approveRequisition(5000, 'OverBudget');
 
       const response = await im.client
         .post('/boms')
         .send(generatePayload(req.id, req.items, { unitCost: 6000 }));
-      expect(response.status).toBe(201);
-      expect(response.body.overBudgetBounced).toBe(false);
-      expect(response.body.subtotal).toBe(6000);
+      expect(response.status).toBe(409);
+      expect(response.body.code).toBe('BOM_EXCEEDS_APPROVED_AMOUNT');
+      expect(response.body.details.overspent[0].committed).toBe(6000);
+      expect(response.body.details.overspent[0].approved).toBe(5000);
 
-      // The source moves forward to BOM_GENERATED, the same as a within-budget case.
+      // Refused, not bounced: the requisition is untouched and still available to be put on a
+      // BOM once the IM has adjusted it. The retired bounce moved it backwards and wrote an
+      // event; nothing here does either.
       const detail = (await requester.client.get(`/requisitions/${req.id}`)).body;
-      expect(detail.status).toBe(RequisitionStatus.BOM_GENERATED);
+      expect(detail.status).toBe(RequisitionStatus.APPROVED);
       const events = detail.events.map((e: { eventType: string }) => e.eventType);
-      expect(events).toContain(RequisitionEventType.BOM_GENERATED);
+      expect(events).not.toContain(RequisitionEventType.BOM_GENERATED);
       expect(events).not.toContain(RequisitionEventType.BOM_BOUNCED);
     });
 

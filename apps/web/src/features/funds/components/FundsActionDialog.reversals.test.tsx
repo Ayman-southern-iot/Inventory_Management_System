@@ -84,6 +84,8 @@ function purchase(id: string, vendor: string, totalAmount: number) {
     invoiceNo: null,
     purchasedAt: NOW,
     totalAmount,
+    // The carriage recorded with this delivery (migration 0029).
+    transportationCost: 0,
     note: null,
     recordedByName: 'Ina Manager',
     createdAt: NOW,
@@ -107,6 +109,7 @@ function detail(): RequisitionDetail {
     approvalDeadline: null,
     reason: null,
     requestedAmount: 6000,
+    provisionalAmount: 6000,
     approvedAmount: 6000,
     requiredApproverCount: 1,
     thresholdAtSubmit: 2500,
@@ -179,7 +182,7 @@ describe('the Back dialog', () => {
 
     expect(saveButton()).toBeDisabled();
 
-    await user.type(screen.getByLabelText(t.funds.voidReceiptReason), 'Accounts reversed it');
+    await user.type(screen.getByRole('textbox', { name: t.funds.voidReceiptReason }), 'Accounts reversed it');
     expect(saveButton()).toBeEnabled();
   });
 
@@ -215,7 +218,7 @@ describe('the Back dialog', () => {
       }),
     );
 
-    await user.type(screen.getByLabelText(t.funds.voidReceiptReason), 'Duplicate');
+    await user.type(screen.getByRole('textbox', { name: t.funds.voidReceiptReason }), 'Duplicate');
     await user.click(saveButton());
 
     expect(spies.voidReceipt).toHaveBeenCalledWith({
@@ -239,7 +242,7 @@ describe('the Back dialog', () => {
     const user = userEvent.setup();
     const spies = renderDialog('undo-send', funding());
 
-    await user.type(screen.getByLabelText(t.funds.undoSendReason), 'Wrong BOM');
+    await user.type(screen.getByRole('textbox', { name: t.funds.undoSendReason }), 'Wrong BOM');
     await user.click(saveButton());
 
     expect(spies.undoSend).toHaveBeenCalledWith({ reason: 'Wrong BOM' });

@@ -87,6 +87,7 @@ export function ReturnDialog({ borrow, onClose }: { borrow?: BorrowRequest; onCl
 
   return (
     <Dialog
+      schema={returnBorrowSchema}
       open={borrow !== undefined}
       onClose={onClose}
       title={`${t.borrowing.recordReturn}${borrow ? ` — ${borrow.borrowNo}` : ''}`}

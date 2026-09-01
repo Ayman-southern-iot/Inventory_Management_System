@@ -35,7 +35,10 @@ import { renderBomHtml } from './bom-pdf.template';
 import {
   AllBomLinesRemovedError,
   BomAlreadyVoidError,
+  BomExceedsApprovedAmountError,
+  BomSpansMultipleRequestersError,
   BomQuantityExceedsSourceError,
+  type OverspentSource,
   BomRequisitionAlreadyOnLiveBomError,
   BomRequisitionNotApprovedError,
 } from './boms.errors';
@@ -62,7 +65,11 @@ interface LoadedSource {
   requisitionId: string;
   requisitionNo: string;
   approvedAmount: number;
+  /** Already inside `approvedAmount`; needed separately to check what is left for the items. */
+  transportationCost: number;
+  requesterId: string;
   requesterName: string;
+  requesterEmail: string;
   departmentName: string | null;
   projectName: string | null;
   reason: string | null;
@@ -165,13 +172,84 @@ export class BomsService {
     const approvedTotal = round2(
       sources.reduce((sum, source) => sum + source.approvedAmount, 0),
     );
-    // The over-budget ceiling used to bounce the BOM and flip the sources back to
-    // AWAITING_APPROVAL. Removed: the common case where a unit cost goes up between
-    // approval and BOM generation is a normal slowdown, not a policy violation. The
-    // setting is kept for the audit vocabulary and so future soft-warning hooks have
-    // a knob to read.
+
+    /**
+     * A BOM may not commit more than was approved. Ayman's ruling, 2026-08-29.
+     *
+     * The ceiling was removed once before, on the argument that a unit cost rising between
+     * approval and BOM generation is a normal slowdown rather than a policy violation. That is
+     * true of the *price*, and it is not the decision here: in an office this size the IM and
+     * the requester settle the difference in person, adjusting quantity and unit cost until the
+     * BOM fits, and only then is it generated. Nothing downstream can absorb an overspend —
+     * Accounts funds against the approved figure — so a BOM above it commits money nobody
+     * sanctioned and the overspend surfaces at purchase time with the goods already ordered.
+     *
+     * Checked **per requisition, not across the batch**. A batched BOM covering two
+     * requisitions must not let one underspend pay for the other's overspend: the approved
+     * amount is a promise made about one requisition, to one requester, by its own approvers.
+     *
+     * Transportation counts against the ceiling because it is already inside the approved
+     * figure — `requested = items + carriage` at submit. Comparing item totals alone against an
+     * approved amount that includes the van is exactly QA-019, and it understates the spend by
+     * the carriage every time.
+     */
+    // `SourceLine` does not carry its requisition, so attribute the lines here rather than
+    // widening a type six other call sites read.
+    const itemsPerRequisition = new Map<string, number>();
+    for (const entry of live) {
+      const requisitionItemId = input.lines[entry.index]!.requisitionItemId;
+      const owner = sources.find((source) =>
+        source.lines.some((line) => line.requisitionItemId === requisitionItemId),
+      );
+      if (!owner) continue;
+      const running = itemsPerRequisition.get(owner.requisitionId) ?? 0;
+      itemsPerRequisition.set(owner.requisitionId, running + entry.unitCost * entry.quantity);
+    }
+
+    const overspent: OverspentSource[] = [];
+    for (const source of sources) {
+      // An approved amount of zero means nothing was ever frozen for this requisition; there
+      // is no ceiling to enforce and inventing one would block every such BOM.
+      if (source.approvedAmount <= 0) continue;
+      const items = round2(itemsPerRequisition.get(source.requisitionId) ?? 0);
+      const committed = round2(items + source.transportationCost);
+      if (committed > source.approvedAmount) {
+        overspent.push({
+          requisitionNo: source.requisitionNo,
+          approved: source.approvedAmount,
+          items,
+          transportation: source.transportationCost,
+          committed,
+        });
+      }
+    }
+    if (overspent.length > 0) throw new BomExceedsApprovedAmountError(overspent);
+
+    /**
+     * One requester per BOM. Ayman's ruling, 2026-08-29.
+     *
+     * Enforced rather than assumed, because the BOM number now carries the requester's name
+     * (`BOM-000004-GINA`). A document covering two requesters would be named after whichever
+     * of them the query returned first, and a number that misattributes is worse than one that
+     * says nothing — it is a printed, filed, audit-referenced claim about whose money this is.
+     *
+     * Batching several requisitions from the *same* requester is unaffected, which is the case
+     * batching exists for.
+     */
+    const byRequester = new Map<string, { requesterName: string; requisitionNos: string[] }>();
+    for (const source of sources) {
+      const group = byRequester.get(source.requesterId) ?? {
+        requesterName: source.requesterName,
+        requisitionNos: [],
+      };
+      group.requisitionNos.push(source.requisitionNo);
+      byRequester.set(source.requesterId, group);
+    }
+    if (byRequester.size > 1) {
+      throw new BomSpansMultipleRequestersError([...byRequester.values()]);
+    }
+
     const overBudget = false;
-    void approvedTotal;
 
     const lineCount = input.lines.length;
     const sourceNos = sources.map((source) => source.requisitionNo);
@@ -205,7 +283,13 @@ export class BomsService {
         }
       }
 
-      const bomNo = await this.repo.nextBomNo(tx);
+      // Every source shares one requester — guarded above — so the first is the BOM's.
+      const owner = sources[0];
+      const bomNo = await this.repo.nextBomNo(
+        tx,
+        owner?.requesterName ?? null,
+        owner?.requesterEmail ?? null,
+      );
       const bom = await this.repo.insertBom(tx, {
         bomNo,
         generatedBy: actorId,
@@ -705,7 +789,10 @@ export class BomsService {
         'requisitions.requisition_no',
         'requisitions.status',
         'requisitions.approved_amount',
+        'requisitions.transportation_cost',
+        'requisitions.requester_id',
         'requester.full_name as requester_name',
+        'requester.email as requester_email',
         'departments.name as department_name',
         'projects.name as project_name',
         'requisitions.reason',
@@ -771,7 +858,11 @@ export class BomsService {
       requisitionId: source.id,
       requisitionNo: source.requisition_no,
       approvedAmount: source.approved_amount === null ? 0 : Number(source.approved_amount),
+      transportationCost:
+        source.transportation_cost === null ? 0 : Number(source.transportation_cost),
+      requesterId: source.requester_id,
       requesterName: source.requester_name,
+      requesterEmail: source.requester_email,
       departmentName: source.department_name,
       projectName: source.project_name,
       reason: source.reason,

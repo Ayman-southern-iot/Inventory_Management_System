@@ -34,10 +34,17 @@ type FormShape = z.infer<typeof formSchema>;
 interface Props {
   deciding: { approval: Approval; approve: boolean } | null;
   requestedAmount: number | null;
+  /**
+   * Whether the requisition has anything to shrink — more than one line, or one line of more
+   * than one unit. Passed in rather than derived here: the dialog is handed one approval, not
+   * the requisition, and guessing from `requestedAmount` alone cannot tell a 500 lamp from
+   * five 100 lamps (QA-034).
+   */
+  isAdjustable: boolean;
   onClose: () => void;
 }
 
-export function DecisionDialog({ deciding, requestedAmount, onClose }: Props) {
+export function DecisionDialog({ deciding, requestedAmount, isAdjustable, onClose }: Props) {
   const toast = useToast();
   const decide = useDecideRequisition();
 
@@ -94,9 +101,13 @@ export function DecisionDialog({ deciding, requestedAmount, onClose }: Props) {
   }
 
   const isRejecting = deciding?.approve === false;
-  // Only an approver sets the sanctioned figure; the IM's stage is "do we already have it".
-  const canReviseAmount =
+  // Only an approver sets the approved figure; the IM's stage is "do we already have it".
+  const isApproverDeciding =
     deciding?.approve === true && deciding.approval.stage === ApprovalStage.APPROVER;
+  // ...and only where a lower figure could actually buy something (QA-034). An indivisible
+  // requisition still shows the row, carrying the reason — silently dropping the control
+  // reads as a missing feature to an approver who has revised one before.
+  const canReviseAmount = isApproverDeciding && isAdjustable;
   const reviseAmount = form.watch('reviseAmount');
 
   return (
@@ -169,6 +180,10 @@ export function DecisionDialog({ deciding, requestedAmount, onClose }: Props) {
             }}
             onError={(error) => toast.error(messageForError(error))}
           />
+        ) : null}
+
+        {isApproverDeciding && !isAdjustable ? (
+          <p className="text-xs text-ink-subtle">{t.requisitions.reviseAmountIndivisible}</p>
         ) : null}
 
         {canReviseAmount ? (

@@ -127,12 +127,37 @@ function TrackerNode({
             {approval.note}
           </p>
         ) : null}
+
+        {/*
+          An approval note, shown plainly.
+
+          It was stored and never displayed: only a rejection (behind "See why") and a
+          withdrawal rendered one. An approver writing "buy the cheaper one" was writing into a
+          void — neither the requester nor the next approver ever saw it.
+
+          Ash rather than the red a rejection gets or the amber a withdrawal gets: this is a
+          remark on a decision that went through, and colouring it like a problem would make
+          every approval look contested. Nothing renders at all when there is no note, so an
+          ordinary approval keeps its single line.
+        */}
+        {approval.action === ApprovalAction.APPROVED && approval.note ? (
+          <p className="mt-1 rounded-[--radius-control] bg-surface-muted px-3 py-2 text-xs text-ink">
+            {approval.note}
+          </p>
+        ) : null}
       </div>
     </li>
   );
 }
 
-export function ApprovalTracker({ requisition }: { requisition: RequisitionDetail }) {
+export function ApprovalTracker({
+  requisition,
+  hint,
+}: {
+  requisition: RequisitionDetail;
+  /** A note under the heading explaining the chain below it — the approver count and why. */
+  hint?: string;
+}) {
   // IM first, then approvers by slot — the order the chain is actually walked.
   const ordered = [...requisition.approvals].sort((a, b) => {
     if (a.stage !== b.stage) return a.stage === ApprovalStage.INVENTORY_MANAGER ? -1 : 1;
@@ -141,7 +166,8 @@ export function ApprovalTracker({ requisition }: { requisition: RequisitionDetai
 
   return (
     <div>
-      <h2 className="mb-3 text-base font-semibold text-ink">{t.requisitions.trackerHeading}</h2>
+      <h2 className="text-base font-semibold text-ink">{t.requisitions.trackerHeading}</h2>
+      {hint ? <p className="mb-3 mt-0.5 text-xs text-ink-subtle">{hint}</p> : <div className="mb-3" />}
       {/*
         A requisition has no approvals until it is submitted — the chain is seeded at submit, not
         at create. Without this the panel rendered a heading over nothing, which reads as a broken

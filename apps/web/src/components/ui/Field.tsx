@@ -7,6 +7,7 @@ import {
   type TextareaHTMLAttributes,
 } from 'react';
 import { cn } from '@/lib/cn';
+import { useIsRequired } from './RequiredFields';
 
 const CONTROL = cn(
   'w-full rounded-[--radius-control] border border-border bg-surface px-3 text-sm text-ink',
@@ -19,15 +20,29 @@ interface FieldShellProps {
   htmlFor: string;
   hint?: string;
   error?: string;
+  required?: boolean;
   children: ReactNode;
 }
 
-/** Every control gets a real `<label for>` — the accessibility floor, not a nice-to-have. */
-function FieldShell({ label, htmlFor, hint, error, children }: FieldShellProps) {
+/**
+ * Every control gets a real `<label for>` — the accessibility floor, not a nice-to-have.
+ *
+ * `required` marks the label before anything goes wrong. The asterisk is decorative and
+ * `aria-hidden`, because "*" read aloud is noise; the control itself carries `aria-required`,
+ * which is what a screen reader announces. Colour is never the only signal (WCAG 3.3.1): a
+ * failed field gets the red border *and* the message underneath, and the marker is there from
+ * the start so the requirement is known before the submit is refused.
+ */
+function FieldShell({ label, htmlFor, hint, error, required, children }: FieldShellProps) {
   return (
     <div className="flex flex-col gap-1.5">
       <label htmlFor={htmlFor} className="text-sm font-medium text-ink">
         {label}
+        {required ? (
+          <span aria-hidden className="ml-0.5 text-danger">
+            *
+          </span>
+        ) : null}
       </label>
       {children}
       {error ? (
@@ -50,16 +65,18 @@ interface TextFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'id
 }
 
 export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function TextField(
-  { label, hint, error, className, onWheel, ...rest },
+  { label, hint, error, required, className, onWheel, ...rest },
   ref,
 ) {
   const id = useId();
+  const isRequired = useIsRequired(rest.name, required);
   return (
-    <FieldShell label={label} htmlFor={id} hint={hint} error={error}>
+    <FieldShell label={label} htmlFor={id} hint={hint} error={error} required={isRequired}>
       <input
         ref={ref}
         id={id}
         aria-invalid={error ? true : undefined}
+        aria-required={isRequired ? true : undefined}
         aria-describedby={error ? `${id}-error` : hint ? `${id}-hint` : undefined}
         className={cn(CONTROL, 'h-10', className)}
         onWheel={(event) => {
@@ -145,16 +162,18 @@ interface SelectFieldProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>,
 }
 
 export const SelectField = forwardRef<HTMLSelectElement, SelectFieldProps>(function SelectField(
-  { label, hint, error, className, children, ...rest },
+  { label, hint, error, required, className, children, ...rest },
   ref,
 ) {
   const id = useId();
+  const isRequired = useIsRequired(rest.name, required);
   return (
-    <FieldShell label={label} htmlFor={id} hint={hint} error={error}>
+    <FieldShell label={label} htmlFor={id} hint={hint} error={error} required={isRequired}>
       <select
         ref={ref}
         id={id}
         aria-invalid={error ? true : undefined}
+        aria-required={isRequired ? true : undefined}
         className={cn(CONTROL, 'h-10', className)}
         {...rest}
       >
@@ -171,15 +190,17 @@ interface TextAreaFieldProps extends Omit<TextareaHTMLAttributes<HTMLTextAreaEle
 }
 
 export const TextAreaField = forwardRef<HTMLTextAreaElement, TextAreaFieldProps>(
-  function TextAreaField({ label, hint, error, className, rows = 3, ...rest }, ref) {
+  function TextAreaField({ label, hint, error, required, className, rows = 3, ...rest }, ref) {
     const id = useId();
+    const isRequired = useIsRequired(rest.name, required);
     return (
-      <FieldShell label={label} htmlFor={id} hint={hint} error={error}>
+      <FieldShell label={label} htmlFor={id} hint={hint} error={error} required={isRequired}>
         <textarea
           ref={ref}
           id={id}
           rows={rows}
           aria-invalid={error ? true : undefined}
+          aria-required={isRequired ? true : undefined}
           aria-describedby={error ? `${id}-error` : hint ? `${id}-hint` : undefined}
           className={cn(CONTROL, 'py-2', className)}
           {...rest}

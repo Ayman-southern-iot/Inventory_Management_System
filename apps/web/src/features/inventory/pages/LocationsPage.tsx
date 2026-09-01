@@ -244,6 +244,7 @@ export function LocationsPage() {
       </QueryBoundary>
 
       <Dialog
+        schema={createZoneSchema}
         open={zoneDialogOpen}
         onClose={() => setZoneDialogOpen(false)}
         title={editingZone ? t.locations.editZone : t.locations.newZone}
@@ -268,6 +269,7 @@ export function LocationsPage() {
       </Dialog>
 
       <Dialog
+        schema={compartmentFormSchema}
         open={compartmentTarget !== undefined}
         onClose={() => setCompartmentTarget(undefined)}
         title={

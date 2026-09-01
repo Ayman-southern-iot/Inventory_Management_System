@@ -39,6 +39,7 @@ export function ResetPasswordDialog({ user, onClose }: { user?: User; onClose: (
 
   return (
     <Dialog
+      schema={resetPasswordSchema}
       open={user !== undefined}
       onClose={onClose}
       title={`${t.users.resetPassword}${user ? ` — ${user.fullName}` : ''}`}

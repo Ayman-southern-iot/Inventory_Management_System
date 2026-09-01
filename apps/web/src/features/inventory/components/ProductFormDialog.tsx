@@ -98,6 +98,7 @@ export function ProductFormDialog({ open, onClose, editing }: Props) {
 
   return (
     <Dialog
+      schema={isEditing ? (updateProductSchema as never) : createProductSchema}
       open={open}
       onClose={onClose}
       title={isEditing ? t.inventory.editProduct : t.inventory.newProduct}

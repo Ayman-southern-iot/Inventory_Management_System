@@ -125,23 +125,20 @@ export class ReportsRepository {
               AND (${fromDate}::date IS NULL OR pu.purchased_at >= ${fromInstant})
               AND (${toDate}::date IS NULL OR pu.purchased_at < ${toInstant})
           ) AS purchased,
-          -- Transportation is spent money with no purchase row of its own: it buys carriage,
-          -- not stock, so nothing in the purchases table ever accounts for it. Reported here or
-          -- the report contradicts itself - netCash would show 750 out of pocket beside a spend
-          -- of 250 with 250 returned, and the missing 500 would have no name on the page.
-          -- (No backticks in here: this is inside a sql template literal and one would end it.)
+          -- The carriage actually paid, summed from the purchases that paid it.
           --
-          -- Attributed to the purchase, and only once there is one: nothing has been carried
-          -- until something has been bought, and the same date window then decides both. Each
-          -- requisition is one row in this CTE and is grouped exactly once, so there is no
-          -- bucket in which this can be counted twice.
-          (CASE WHEN EXISTS (
-            SELECT 1 FROM purchases pt
-              WHERE pt.requisition_id = r.id
-                AND pt.voided_at IS NULL
-                AND (${fromDate}::date IS NULL OR pt.purchased_at >= ${fromInstant})
-                AND (${toDate}::date IS NULL OR pt.purchased_at < ${toInstant})
-          ) THEN coalesce(r.transportation_cost, 0) ELSE 0 END) AS transportation,
+          -- Was the requisition's *planned* figure wrapped in a CASE WHEN EXISTS (a live
+          -- purchase), which said "carriage is spent only once something is bought" (OQ-32).
+          -- Migration 0029 put the real figure on the purchase, so the sum says the same thing
+          -- and says it about the money that actually left: void the last purchase and there
+          -- are no rows to add up. The date window applies to the purchase, as it did before.
+          -- (No backticks in here: this is inside a sql template literal and one would end it.)
+          (SELECT coalesce(sum(pt.transportation_cost), 0) FROM purchases pt
+            WHERE pt.requisition_id = r.id
+              AND pt.voided_at IS NULL
+              AND (${fromDate}::date IS NULL OR pt.purchased_at >= ${fromInstant})
+              AND (${toDate}::date IS NULL OR pt.purchased_at < ${toInstant})
+          ) AS transportation,
           (SELECT coalesce(sum(fx.amount), 0) FROM fund_returns fx
             WHERE fx.requisition_id = r.id
               AND (${fromDate}::date IS NULL OR fx.returned_at >= ${fromInstant})

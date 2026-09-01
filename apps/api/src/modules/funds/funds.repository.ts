@@ -110,6 +110,8 @@ export class FundsRepository {
       invoiceNo: string | null;
       purchasedAt: Date;
       totalAmount: number;
+      /** The carriage actually paid for this delivery (migration 0029). */
+      transportationCost: number;
       note: string | null;
       recordedBy: string;
     },
@@ -122,6 +124,7 @@ export class FundsRepository {
         invoice_no: values.invoiceNo,
         purchased_at: values.purchasedAt,
         total_amount: values.totalAmount.toFixed(2),
+        transportation_cost: values.transportationCost.toFixed(2),
         note: values.note,
         recorded_by: values.recordedBy,
       })
@@ -172,6 +175,7 @@ export class FundsRepository {
         'purchases.invoice_no',
         'purchases.purchased_at',
         'purchases.total_amount',
+        'purchases.transportation_cost',
         'purchases.note',
         'users.full_name as recorded_by_name',
         'purchases.invoice_file_id',
@@ -239,6 +243,7 @@ export class FundsRepository {
       invoiceNo: row.invoice_no,
       purchasedAt: row.purchased_at.toISOString(),
       totalAmount: money(row.total_amount),
+      transportationCost: money(row.transportation_cost) ?? 0,
       note: row.note,
       recordedByName: row.recorded_by_name,
       createdAt: row.created_at.toISOString(),
@@ -277,6 +282,27 @@ export class FundsRepository {
       .limit(1)
       .executeTakeFirst();
     return row !== undefined;
+  }
+
+  /**
+   * The carriage actually paid, across every purchase that still stands.
+   *
+   * This is what OQ-32 was reaching for. That rule — carriage is spent only while a live
+   * purchase stands — was implemented as an `EXISTS (live purchase)` test wrapped around the
+   * requisition's *planned* figure. Summing a column that only exists on purchases says the
+   * same thing with no gate: void the last purchase and there are no rows left to add up.
+   */
+  async sumPurchaseTransportation(
+    requisitionId: string,
+    executor: Db | Tx = this.db,
+  ): Promise<number> {
+    const row = await executor
+      .selectFrom('purchases')
+      .where('requisition_id', '=', requisitionId)
+      .where('voided_at', 'is', null)
+      .select((eb) => eb.fn.sum<string>('transportation_cost').as('total'))
+      .executeTakeFirst();
+    return money(row?.total ?? null) ?? 0;
   }
 
   /* -------------------------------------------------- receiving to stock */
@@ -694,20 +720,16 @@ export class FundsRepository {
         unspent: 0,
       };
     }
-    const [funded, spent, returned, bought] = await Promise.all([
+    const [funded, spent, returned, transportation] = await Promise.all([
       this.sumReceipts(requisitionId, tx),
       this.sumPurchases(requisitionId, tx),
       this.sumReturns(requisitionId, tx),
-      this.hasLivePurchase(requisitionId, tx),
+      this.sumPurchaseTransportation(requisitionId, tx),
     ]);
     const approved = requisition.approved_amount === null ? null : Number(requisition.approved_amount);
     const requested = requisition.requested_amount === null ? null : Number(requisition.requested_amount);
-    // Charged only while something bought still stands (OQ-32) — the same rule the expenses
-    // report and the personal dashboard apply through their own EXISTS clause.
-    const transportation =
-      !bought || requisition.transportation_cost === null
-        ? 0
-        : Number(requisition.transportation_cost);
+    // Summed from the purchases themselves, so a voided last purchase leaves no carriage
+    // behind it (OQ-32) without a separate gate saying so.
     const unspent = Math.max(0, Math.round((funded - spent - transportation - returned) * 100) / 100);
     return {
       requestedAmount: requested,

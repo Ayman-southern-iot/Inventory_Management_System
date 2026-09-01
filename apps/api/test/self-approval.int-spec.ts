@@ -5,20 +5,28 @@ import { createUser, login, resetData , futureDeadline} from './factories';
 import { SettingsService } from '../src/modules/settings/settings.service';
 
 /**
- * Phase 06 task 6.6 — requirements §10 (docs/reference/10-permissions.md:19):
+ * Nobody is assigned to approve their own requisition — their stage is not created.
  *
- *   "An approver cannot approve their own requisition — the system skips to the next configured
- *    approver and logs the substitution."
+ * Ayman's ruling, 2026-09-01, replacing the substitution model (OQ-07).
  *
- * Before this suite existed the rule was documented and completely unimplemented: the Inventory
- * Manager raising a requisition was assigned their own IM approval and could clear it on the
- * happy path, and an approver holding slot 1 was assigned their own money approval. Both fired
- * without any crafted request.
+ * **On the authority for this.** The old header quoted `docs/reference/10-permissions.md` as if
+ * it were requirements §10. It is not: the requirements document contains no self-approval rule
+ * at all, and the transcription's own notes say so — "No self-approval rule. Nothing prohibits
+ * an approver approving their own request. The entire substitution mechanism is derived." The
+ * whole of this behaviour is DERIVED, which is why it could be changed on a ruling.
  *
- * The tests are written against the substitution *outcome* — who ends up assigned — rather than
- * against the internals, because that is what a self-approval bug actually looks like.
+ * **Why it changed.** Substitution stood somebody else in at every stage the requester
+ * occupied, and refused the submit outright when there was nobody to stand in. In an office
+ * with one Inventory Manager that meant the IM could never raise a requisition — the system was
+ * unusable for one of the people who run it.
+ *
+ * **Skipped, not auto-approved.** The stage is absent rather than recorded as approved by its
+ * own requester, so the audit trail never shows a person signing off their own money.
+ *
+ * The tests read the *outcome* — who ends up assigned — rather than the internals, because that
+ * is what a self-approval bug actually looks like.
  */
-describe('self-approval (requirements §10, OQ-07)', () => {
+describe('a requester never approves their own requisition', () => {
   let ctx: TestApp;
   let settings: SettingsService;
 
@@ -28,7 +36,6 @@ describe('self-approval (requirements §10, OQ-07)', () => {
   let secondIm: Actor;
   let approver1: Actor;
   let approver2: Actor;
-  let approver3: Actor;
 
   interface Actor {
     id: string;
@@ -71,7 +78,6 @@ describe('self-approval (requirements §10, OQ-07)', () => {
     secondIm = await actorFor([Role.GENERAL, Role.INVENTORY_MANAGER]);
     approver1 = await actorFor([Role.GENERAL, Role.APPROVER]);
     approver2 = await actorFor([Role.GENERAL, Role.APPROVER]);
-    approver3 = await actorFor([Role.GENERAL, Role.APPROVER]);
 
     const department = await ctx.db
       .insertInto('departments')
@@ -128,18 +134,21 @@ describe('self-approval (requirements §10, OQ-07)', () => {
 
   /* ------------------------------------------------------- the Inventory Manager */
 
-  it('never assigns an Inventory Manager the review of their own requisition', async () => {
+  it('creates no IM stage when the Inventory Manager is the requester', async () => {
     const submitted = await submitAs(im, 500);
     expect(submitted.status).toBe(200);
 
-    const reviewers = assigneesOf(submitted, 'INVENTORY_MANAGER');
-    expect(reviewers).toHaveLength(1);
-    expect(reviewers).not.toContain(im.id);
-    // The other active IM stands in, rather than the submit being refused outright.
-    expect(reviewers[0]).toBe(secondIm.id);
+    // Not reassigned to the other IM — absent. The IM is the person who would have checked
+    // "do we already have this", and they know.
+    expect(assigneesOf(submitted, 'INVENTORY_MANAGER')).toEqual([]);
+    expect(submitted.body.status).toBe('AWAITING_APPROVAL');
   });
 
-  it('refuses the submit when the only Inventory Manager is the requester', async () => {
+  /**
+   * The failure that made the old model unusable: one Inventory Manager, who therefore could
+   * never raise a requisition, because there was nobody to substitute and submit refused.
+   */
+  it('lets the only Inventory Manager raise a requisition at all', async () => {
     await ctx.db
       .updateTable('users')
       .set({ is_active: false })
@@ -147,68 +156,66 @@ describe('self-approval (requirements §10, OQ-07)', () => {
       .execute();
 
     const submitted = await submitAs(im, 500);
-    expect(submitted.status).toBe(409);
-    // Its own code: "appoint another IM" is a different instruction from "fill in a slot".
-    expect(submitted.body.code).toBe(ErrorCode.SELF_APPROVAL_NO_SUBSTITUTE);
+    expect(submitted.status).toBe(200);
+    expect(assigneesOf(submitted, 'INVENTORY_MANAGER')).toEqual([]);
   });
 
   /* -------------------------------------------------------------- the approvers */
 
-  it('stands another approver in when the requester holds slot 1', async () => {
+  it('drops the requester\u2019s own slot and keeps the others', async () => {
     const submitted = await submitAs(approver1, (await threshold()) + 1000);
     expect(submitted.status).toBe(200);
 
     const approvers = assigneesOf(submitted, 'APPROVER');
     expect(approvers).not.toContain(approver1.id);
-    // Slot 2 keeps its holder, and the count is still two — a self-approval must not quietly
-    // turn an above-threshold requisition into a one-approver one.
-    expect(approvers).toHaveLength(2);
-    expect(approvers.sort()).toEqual([approver2.id, approver3.id].sort());
+    // The other slot holder still has to sign. Their slot is gone, not filled by somebody else,
+    // so the count drops to one rather than staying at two.
+    expect(approvers).toEqual([approver2.id]);
+    expect(submitted.body.requiredApproverCount).toBe(1);
   });
 
-  it('does not seat the same substitute in two slots', async () => {
-    // Both slot holders are the same person, who is also the requester. There is exactly one
-    // other approver, so two distinct non-requester approvers cannot be found.
+  it('leaves no approver stage when the requester holds every slot', async () => {
     await ctx.db
       .updateTable('approver_slots')
       .set({ user_id: approver1.id })
       .where('slot_no', '=', 2)
       .execute();
-    await ctx.db
-      .updateTable('users')
-      .set({ is_active: false })
-      .where('id', '=', approver2.id)
-      .execute();
 
     const submitted = await submitAs(approver1, (await threshold()) + 1000);
-    expect(submitted.status).toBe(409);
-    expect(submitted.body.code).toBe(ErrorCode.SELF_APPROVAL_NO_SUBSTITUTE);
+    expect(submitted.status).toBe(200);
+    expect(assigneesOf(submitted, 'APPROVER')).toEqual([]);
   });
 
-  it('refuses when the requester holds a slot and no other approver exists', async () => {
-    for (const spare of [approver2, approver3]) {
-      await ctx.db
-        .updateTable('users')
-        .set({ is_active: false })
-        .where('id', '=', spare.id)
-        .execute();
-    }
-
-    const submitted = await submitAs(approver1, (await threshold()) + 1000);
-    expect(submitted.status).toBe(409);
-  });
-
-  it('substitutes the sub-threshold approver from the slot chain when they are the requester', async () => {
-    // approver1 is both the designated sub-threshold approver and the requester. The setting
-    // holds exactly one person, so the stand-in has to come from the slot chain.
+  /**
+   * Below the threshold the policy names exactly one approver. When that person is the one
+   * asking, there is nobody left to ask — and Ayman's ruling for that case (2026-09-01) is that
+   * it stands: below the threshold, their own money, their own authority.
+   */
+  it('needs no approver when the sub-threshold approver raises it themselves', async () => {
     const submitted = await submitAs(approver1, 500);
     expect(submitted.status).toBe(200);
 
-    const approvers = assigneesOf(submitted, 'APPROVER');
-    expect(approvers).toHaveLength(1);
-    expect(approvers).not.toContain(approver1.id);
+    expect(assigneesOf(submitted, 'APPROVER')).toEqual([]);
+    // The IM stage still stands — approver1 is not the Inventory Manager.
+    expect(assigneesOf(submitted, 'INVENTORY_MANAGER')).toEqual([im.id]);
+    expect(submitted.body.status).toBe('IM_REVIEW');
   });
 
+  /**
+   * Both stages skipped at once: an Inventory Manager who is also the designated sub-threshold
+   * approver, raising a small requisition of their own. Nothing is left to wait for, so it is
+   * approved on submit rather than sitting in a queue nobody is watching.
+   */
+  it('stands approved on submit when every stage belongs to the requester', async () => {
+    await settings.set(SettingKey.SUBTHRESHOLD_APPROVER_USER_ID, im.id, auditContext);
+
+    const submitted = await submitAs(im, 500);
+    expect(submitted.status).toBe(200);
+
+    expect(assigneesOf(submitted, 'INVENTORY_MANAGER')).toEqual([]);
+    expect(assigneesOf(submitted, 'APPROVER')).toEqual([]);
+    expect(submitted.body.status).toBe('APPROVED');
+  });
   it('leaves the ordinary case completely alone', async () => {
     // A General user raising a requisition holds no slot, so nothing is substituted and the
     // configured chain is used exactly as an administrator set it up.

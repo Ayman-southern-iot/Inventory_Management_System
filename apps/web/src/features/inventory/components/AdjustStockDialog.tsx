@@ -56,6 +56,7 @@ export function AdjustStockDialog({ open, onClose, productId, placements }: Prop
 
   return (
     <Dialog
+      schema={adjustStockSchema}
       open={open}
       onClose={onClose}
       title={t.inventory.adjustStock}

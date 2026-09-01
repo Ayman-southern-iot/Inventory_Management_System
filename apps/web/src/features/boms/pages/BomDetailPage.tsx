@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQueries } from '@tanstack/react-query';
-import { ArrowLeft, XCircle } from 'lucide-react';
-import { Link, useParams } from 'react-router-dom';
+import { ArrowLeft, ArrowRight, XCircle } from 'lucide-react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   RequisitionEventType,
   type BomDetail,
@@ -72,6 +72,10 @@ function BomDetailView({
   detail: BomDetail;
   onVoid: () => void;
 }) {
+  const navigate = useNavigate();
+  // A BOM carries one requester by rule; where it batches several requisitions from that one
+  // person, the first is the one the IM arrived from.
+  const firstSource = detail.sources[0];
   // The action bar is the IM's power zone.
   //  - Voided: nothing to do (the row is the audit trail).
   //  - Bounced: Void is still available so the IM can free its sources;
@@ -129,6 +133,31 @@ function BomDetailView({
 
         {showActions ? (
           <div className="flex flex-wrap items-center justify-end gap-2 border-b border-border px-4 py-3">
+            {/*
+              To the requisition, and only once the PDF exists.
+
+              The next step after this screen is Send to Accounts, and Accounts is sent a
+              document — so offering the way there before the document has been rendered walks
+              the IM to a button they should not press yet. Disabled rather than hidden, with
+              the reason on the tooltip: a control that vanishes reads as broken, and one that
+              explains itself teaches the order of the steps.
+
+              First source only. A BOM carries exactly one requester by rule, and in practice
+              one requisition; where it batches several from the same person, the first is the
+              one the IM came from.
+            */}
+            {firstSource ? (
+              <Button
+                type="button"
+                variant="secondary"
+                icon={<ArrowRight aria-hidden className="size-4" />}
+                disabled={!detail.hasPdf}
+                title={detail.hasPdf ? undefined : t.boms.openRequisitionBlocked}
+                onClick={() => navigate(ROUTES.requisitions.detail(firstSource.requisitionId))}
+              >
+                {t.boms.openRequisition}
+              </Button>
+            ) : null}
             {showRenderAndDownload && detail.hasPdf ? (
               <BomDownloadButton id={detail.id} />
             ) : null}

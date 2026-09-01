@@ -25,9 +25,35 @@ describe('rankMatches', () => {
    * The whole catalogue, not a filtered slice. Opening on focus with nothing typed is what makes
    * this a search box rather than a hint you have to guess your way into.
    */
-  it('returns every product when nothing is typed', () => {
-    expect(rankMatches(CATALOGUE, '')).toHaveLength(CATALOGUE.length);
-    expect(rankMatches(CATALOGUE, '   ')).toHaveLength(CATALOGUE.length);
+  /**
+   * Was "returns every product when nothing is typed".
+   *
+   * Reversed by Ayman on 2026-09-01: nothing typed, nothing offered. The whole catalogue on an
+   * empty term made the field read as a search box rather than a hint you had to guess your way
+   * into — but on a catalogue of any size it is a wall of options in front of somebody who
+   * already knows what they want. The narrowing below is what earns its keep.
+   */
+  it('offers nothing until something is typed', () => {
+    expect(rankMatches(CATALOGUE, '')).toEqual([]);
+    expect(rankMatches(CATALOGUE, '   ')).toEqual([]);
+  });
+
+  /**
+   * One character already narrows — the behaviour the change exists to keep.
+   *
+   * Matched on the name *or* the product code, which is why this asserts on both: searching
+   * "esp" should still find a part whose name is spelled differently but whose code is not.
+   */
+  it('offers every product matching a single character, by name or by code', () => {
+    const matches = rankMatches(CATALOGUE, 'a');
+    expect(matches.length).toBeGreaterThan(0);
+    expect(
+      matches.every(
+        (product) =>
+          product.name.toLowerCase().includes('a') ||
+          product.productCode.toLowerCase().includes('a'),
+      ),
+    ).toBe(true);
   });
 
   it('puts an exact name first, ahead of a longer name starting with the same term', () => {

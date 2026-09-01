@@ -347,14 +347,23 @@ describe('funds and purchasing', () => {
 
   /* --------------------------------------------- invoices and verification */
 
-  it('refuses to verify while a purchase has no invoice', async () => {
+  /**
+   * Was "refuses to verify while a purchase has no invoice".
+   *
+   * Ayman reversed his own 2026-08-26 ruling on 2026-09-01: the invoice is optional. That
+   * earlier decision was taken after I had wrongly described the field as optional and he chose
+   * the status quo; this is the deliberate change, made knowing what the rule was.
+   *
+   * The point of the reversal is that paperwork arriving late should not strand the money — the
+   * requisition verifies, and the unspent balance goes back to Accounts, whether or not the
+   * vendor has sent the bill yet.
+   */
+  it('verifies without an invoice, so late paperwork does not strand the money', async () => {
     const req = await purchased(5000, 4000);
 
-    const early = await im.client.post(`/requisitions/${req.id}/verify-purchase`).send({});
-    expect(early.status).toBe(409);
-    expect(early.body.code).toBe(ErrorCode.INVOICE_MISSING);
-    expect(early.body.message).toContain('invoice');
-    expect(await statusOf(req.id)).toBe('PURCHASED');
+    const verified = await im.client.post(`/requisitions/${req.id}/verify-purchase`).send({});
+    expect(verified.status).toBe(200);
+    expect(await statusOf(req.id)).toBe('PURCHASE_VERIFIED');
   });
 
   it('attaches an invoice and then verifies', async () => {
@@ -381,14 +390,28 @@ describe('funds and purchasing', () => {
   it('folds transportation_cost into the unspent figure at verify-purchase', async () => {
     const req = await requisitionWithTransportation(5000, 100, 'Hiring a van to the warehouse');
     await im.client.post(`/requisitions/${req.id}/send-to-accounts`).send();
-    // Fund 5000 net — the IM has the requisition amount (5000 spent) covered.
+    /**
+     * Funded 5,100 — the goods *and* the van.
+     *
+     * Was 5,000, which covered the goods alone and left the 100 carriage to be paid out of
+     * money that had never arrived. That is no longer a state the system will enter: a purchase
+     * may not commit more than has been funded (Ayman, 2026-08-31), and 5,000 + 100 against
+     * 5,000 received is exactly the overspend that rule exists to refuse.
+     *
+     * The assertion below is unchanged and is still the point of this test: the carriage folds
+     * into `unspent` so the IM is not asked to hand back money already spent on the van. It just
+     * now proves it from a position the money could actually be in.
+     */
     await im.client
       .post(`/requisitions/${req.id}/fund-receipts`)
-      .send({ amount: 5000, receivedAt: new Date().toISOString() });
+      .send({ amount: 5100, receivedAt: new Date().toISOString() });
     const bought = await im.client.post(`/requisitions/${req.id}/purchases`).send({
       vendor: 'Techshop BD',
       invoiceNo: 'INV-1',
       purchasedAt: new Date().toISOString(),
+      // The carriage is recorded with the delivery that paid it (migration 0029), so the
+      // fold this test is about has a figure to fold.
+      transportationCost: 100,
       lines: [{ requisitionItemId: req.itemId, quantity: 1, unitCost: 5000 }],
     });
     expect(bought.status).toBe(201);
@@ -401,8 +424,9 @@ describe('funds and purchasing', () => {
     expect(funding.spent).toBe(5000);
     expect(funding.transportation).toBe(100);
     expect(funding.spentInclTransportation).toBe(5100);
-    // 5000 funded − 5000 purchased − 100 transportation = 100 returned to zero unspent.
-    // The IM already paid the 100 for the van; the fold keeps it from showing as unspent.
+    // 5,100 funded − 5,000 purchased − 100 transportation = 0 unspent. The IM already paid the
+    // 100 for the van; the fold is what keeps it from showing as money still in hand.
+    expect(funding.funded).toBe(5100);
     expect(funding.unspent).toBe(0);
 
     const verified = await im.client.post(`/requisitions/${req.id}/verify-purchase`).send({});

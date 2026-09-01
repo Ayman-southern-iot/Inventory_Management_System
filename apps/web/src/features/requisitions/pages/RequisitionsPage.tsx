@@ -214,11 +214,21 @@ export function RequisitionsPage({ mode }: { mode: Mode }) {
                       ) : null}
                     </td>
                     <td className="px-4 py-2.5 tabular-nums text-ink">
-                      {(requisition.requestedAmount ?? 0).toLocaleString()}
+                      {/* QA-009: a draft has no frozen amount, and `?? 0` put a hard 0 beside
+                          rows showing real money. The provisional total comes from the server
+                          so this column and the detail page cannot disagree. */}
+                      {(
+                        requisition.requestedAmount ?? requisition.provisionalAmount
+                      ).toLocaleString()}
+                      {requisition.requestedAmount === null ? (
+                        <span className="block text-xs text-ink-subtle">
+                          {t.requisitions.provisionalTag}
+                        </span>
+                      ) : null}
                       {requisition.approvedAmount !== null &&
                       requisition.approvedAmount !== requisition.requestedAmount ? (
                         <span className="block text-xs text-ink-subtle">
-                          {t.requisitions.sanctioned}:{' '}
+                          {t.requisitions.approvedAmount}:{' '}
                           {requisition.approvedAmount.toLocaleString()}
                         </span>
                       ) : null}

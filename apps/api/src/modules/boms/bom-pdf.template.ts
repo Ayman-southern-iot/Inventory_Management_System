@@ -1,4 +1,5 @@
 import type { BomDetail, BomLine, RequisitionFootprints } from '@ims/shared';
+import { amountInWords } from '../../common/amount-in-words';
 
 /**
  * Renders a `BomDetail` to the HTML the PDF renderer turns into the document Accounts files.
@@ -77,26 +78,59 @@ function renderLetterhead(company: CompanyIdentity): string {
  * collapsing them into a comma-joined list is what made the old version unreadable.
  */
 function renderHeaderBlock(detail: BomDetail, source: RequisitionFootprints): string {
-  const rows: Array<[string, string]> = [
+  /**
+   * Facts first, then the reason, then the money — three blocks rather than one list of seven
+   * label/value rows.
+   *
+   * A requisition reason runs to a paragraph, and sitting it in a two-column grid beside
+   * "Department" squeezed it into a third of the page. The approved amount had the opposite
+   * problem: the one figure Accounts pays against, indistinguishable from the project name
+   * above it.
+   */
+  const facts: Array<[string, string]> = [
     ['BOM Number', detail.bomNo],
     ['Requisition From', source.requesterName],
     ['Date', formatDate(detail.generatedAt)],
     ['Department', source.departmentName ?? '—'],
     ['Project', source.projectName ?? '—'],
-    ['Description', source.description ?? '—'],
-    ['Total Money Requested', money(source.requestedAmount)],
-    ['Approved Money', money(source.approvedAmount)],
-    // OQ-18: what the approvers did not sanction. Requested 15,000 approved 10,000 leaves 5,000.
-    ['Remaining', money(source.remainingAmount)],
+    ['Reference', source.requisitionNo],
   ];
 
   return [
+    '<section class="source-block">',
     '<table class="header-block">',
-    ...rows.map(
+    ...facts.map(
       ([label, value]) =>
         `  <tr><th>${escape(label)}</th><td>${escape(value)}</td></tr>`,
     ),
     '</table>',
+
+    // The reason, given room to be a paragraph.
+    '<div class="desc-block">',
+    '  <div class="section-label">Description</div>',
+    `  <div class="desc-body">${escape(source.description ?? '—')}</div>`,
+    '</div>',
+
+    /**
+     * One money figure on the document, and it is the approved one. Ayman's ruling, 2026-08-29:
+     * "bom will only show the approved money so that no confusion will occur".
+     *
+     * This reverses OQ-18, which added a "Remaining" line — requested minus approved — so the
+     * reader could see what the approvers had trimmed. The reasoning was sound for somebody
+     * auditing the approval; it is wrong for the person this document is actually for. The BOM
+     * goes to Accounts to be paid against, and printing three figures where one is payable
+     * invites the wrong one being read. The requested and remaining amounts are still on the
+     * requisition, which is where the approval story belongs.
+     *
+     * Safe to be the only figure because a BOM can no longer commit more than this: the
+     * approved-amount ceiling refuses generation above it (`BOM_EXCEEDS_APPROVED_AMOUNT`), so
+     * the grand total below is guaranteed to be at or under the figure printed here.
+     */
+    '<div class="approved-summary">',
+    '  <div class="fin-label">Approved amount</div>',
+    `  <div class="fin-value">${escape(money(source.approvedAmount))}</div>`,
+    '</div>',
+    '</section>',
   ].join('\n');
 }
 
@@ -170,6 +204,17 @@ function renderItems(detail: BomDetail): string {
           '  </tr></tfoot>',
         ]),
     '</table>',
+    /**
+     * The total again, in words.
+     *
+     * This is the document Accounts pays against, and digits on a printout can be altered with
+     * a pen while a misplaced comma is invisible. The words are here to disagree loudly when
+     * either happens. Bangladeshi grouping — lakh and crore — because that is how the people
+     * checking it count.
+     */
+    `<p class="amount-words"><span class="amount-words-label">In words:</span> ${escape(
+      amountInWords(grandTotal),
+    )}</p>`,
   ].join('\n');
 }
 
@@ -300,76 +345,155 @@ function escape(value: string): string {
 /* -------------------------------------------------------------- styles */
 
 function bomStyles(): string {
-  // Page format, margins and orientation all come from the renderer config — never from here.
+  /**
+   * Page format, margins and orientation all come from the renderer config — never from here.
+   * There is deliberately no `@page` rule: `PDF_MARGIN_*_MM` exists because this office prints
+   * onto pre-printed letterhead, and a margin hardcoded here would fight the one Puppeteer is
+   * given and win silently.
+   *
+   * Modelled on `bom_template.html`.
+   */
   return `
-    body { font-family: 'Helvetica', 'Arial', sans-serif; font-size: 10.5pt; color: #1a1a1a; }
+    body { font-family: 'Helvetica', 'Arial', sans-serif; font-size: 10.5pt; color: #1B1A17; }
 
     header.letterhead {
       display: flex; align-items: center; gap: 14pt;
-      padding-bottom: 10pt; margin-bottom: 16pt; border-bottom: 1.5pt solid #1a1a1a;
+      padding-bottom: 8pt; margin-bottom: 12pt; border-bottom: 2pt solid #1B1A17;
     }
     header.letterhead .logo { max-height: 52pt; max-width: 150pt; object-fit: contain; }
     header.letterhead .logo-missing { width: 0; }
     header.letterhead .company { font-size: 15pt; font-weight: 700; letter-spacing: 0.2pt; }
-    header.letterhead .address { font-size: 9pt; color: #555; line-height: 1.35; }
+    header.letterhead .address { font-size: 9pt; color: #6B6862; line-height: 1.35; }
 
-    h1 { font-size: 13pt; margin: 0 0 10pt; text-transform: uppercase; letter-spacing: 0.6pt; }
+    h1 { font-size: 13pt; margin: 0 0 8pt; text-transform: uppercase; letter-spacing: 0.6pt; }
 
-    /* Two columns of label/value, so nine fields cost far less vertical space than nine rows. */
+    .section-label {
+      font-size: 8pt; font-weight: 700; letter-spacing: 0.9pt; text-transform: uppercase;
+      color: #A39D91; margin-bottom: 4pt;
+    }
+
+    /* Two columns of label/value, so six fields cost far less vertical space than six rows. */
     table.header-block {
-      width: 100%; border-collapse: collapse; margin-bottom: 14pt;
-      page-break-inside: avoid;
+      width: 100%; border-collapse: collapse; margin-bottom: 12pt;
     }
     table.header-block th, table.header-block td {
-      padding: 3pt 6pt 3pt 0; text-align: left; vertical-align: top; border: none;
+      padding: 1.5pt 6pt 1.5pt 0; text-align: left; vertical-align: top; border: none;
       font-size: 10pt;
     }
-    table.header-block th { width: 33%; font-weight: 600; color: #555; }
+    table.header-block th { width: 33%; font-weight: 600; color: #6B6862; }
 
-    table.items { width: 100%; border-collapse: collapse; margin-bottom: 18pt; }
+    /* The reason, given room to be a paragraph rather than squeezed beside a department name. */
+    .desc-block { margin-bottom: 8pt; }
+    .desc-body {
+      font-size: 10pt; line-height: 1.5; background: #F7F5F0;
+      border: 0.5pt solid #E4DFD3; border-left: 2.5pt solid #1F3A52;
+      padding: 7pt 10pt; white-space: pre-wrap; word-break: break-word;
+    }
+
+    /* The one figure Accounts pays against, given the weight that says so. */
+    .approved-summary {
+      display: flex; justify-content: space-between; align-items: center;
+      background: #E7EDF1; border-radius: 5pt; padding: 8pt 12pt; margin-bottom: 10pt;
+    }
+    .approved-summary .fin-label {
+      font-size: 8.5pt; font-weight: 700; letter-spacing: 0.7pt; text-transform: uppercase;
+      color: #16293A;
+    }
+    .approved-summary .fin-value {
+      font-size: 15pt; font-weight: 700; color: #16293A;
+      font-variant-numeric: tabular-nums;
+    }
+
+    table.items { width: 100%; border-collapse: collapse; margin-bottom: 10pt; }
     table.items th, table.items td {
       padding: 5pt 6pt; text-align: left; vertical-align: top;
-      border-bottom: 0.5pt solid #ddd;
+      border-bottom: 0.5pt solid #E4DFD3;
     }
     table.items thead th {
-      border-bottom: 1pt solid #1a1a1a; font-weight: 600; font-size: 9.5pt;
-      text-transform: uppercase; letter-spacing: 0.3pt;
+      border-bottom: 1pt solid #1B1A17; font-weight: 700; font-size: 8.5pt;
+      text-transform: uppercase; letter-spacing: 0.5pt; color: #6B6862;
     }
-    table.items .idx { width: 22pt; color: #777; }
+    table.items .idx { width: 22pt; color: #A39D91; }
+    table.items .item-name { font-weight: 600; }
     table.items .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-    table.items tfoot td { border-bottom: none; border-top: 1pt solid #1a1a1a; font-weight: 700; }
+    table.items tfoot td { border-bottom: none; border-top: 1pt solid #1B1A17; font-weight: 700; }
     table.items .total-label { text-align: right; }
-    /* Grand total sits beneath Items subtotal with a heavier top border — Accounts reads the
-       bottom number, so the visual weight signals "this is the figure that matters". */
-    table.items tfoot tr td.total-grand { border-top: 1.5pt double #1a1a1a; }
+    /* The grand total carries the heaviest rule on the page — Accounts reads the bottom
+       number, so the weight signals which figure that is. */
+    table.items tfoot tr td.total-grand {
+      border-top: 1.5pt double #1B1A17; font-size: 12pt; color: #16293A;
+    }
 
-    /* Transportation: a line between the items and the totals that itemizes the rolled-up
-       travel cost on a per-source basis. Distinct from the items so it does not look like one
-       of them. */
-    table.items tr.transportation td { font-size: 9.5pt; color: #555; border-bottom: 0.5pt solid #ddd; }
+    /* Transportation: a line between the items and the totals, itemising the carriage per
+       source. Distinct from the items so it does not read as one of them. */
+    table.items tr.transportation td { font-size: 9.5pt; color: #6B6862; }
     table.items tr.transportation .transportation-source { font-weight: 600; }
-    table.items tr.transportation .transportation-description { font-style: italic; color: #777; }
+    table.items tr.transportation .transportation-description { font-style: italic; color: #A39D91; }
 
-    /* Signatures must never be split across a page break — half a signature block reads as a
-       document that was tampered with. */
-    section.signatures { margin-top: 22pt; page-break-inside: avoid; }
+    /* The amount in words sits directly under the table it restates, tied to it visually so
+       nobody reads it as a separate note. */
+    p.amount-words {
+      margin: 8pt 0 0;
+      font-size: 9.5pt;
+      font-style: italic;
+      color: #3A3833;
+      border-top: 0.5pt solid #E4DFD3;
+      padding-top: 6pt;
+    }
+    p.amount-words .amount-words-label { font-style: normal; font-weight: 700; color: #1B1A17; }
+
+    /* 24pt of separation, on top of the 42pt that the signature-area already reserves above the
+       line for the ink itself. This was 48pt, which put 64px of blank between the total and the
+       signatures on an 839px page — enough to cost two item rows, to guard against an overlap
+       the reserve above already prevents. 22pt was the original and did overlap, because there
+       was no reserve then. */
+    section.signatures { margin-top: 24pt; }
     .signature-row { display: flex; gap: 18pt; flex-wrap: wrap; }
     .signature-cell { flex: 1 1 150pt; max-width: 200pt; }
     /* Fixed height whether or not an image lands, so signed and unsigned cells align. */
     .signature-area { height: 42pt; display: flex; align-items: flex-end; }
     .signature-image { max-height: 40pt; max-width: 100%; object-fit: contain; }
-    .signature-line { border-bottom: 0.75pt solid #1a1a1a; margin-bottom: 4pt; }
-    .signature-name { font-weight: 600; font-size: 10pt; }
-    .signature-designation { font-size: 9pt; color: #555; }
-    .signature-approved { font-size: 9.5pt; font-weight: 600; margin-top: 2pt; }
-    .signature-behalf { font-size: 8.5pt; color: #777; font-style: italic; }
-    .signature-date { font-size: 9pt; color: #555; margin-top: 3pt; }
+    .signature-line { border-bottom: 0.75pt solid #1B1A17; margin-bottom: 4pt; }
+    .signature-name { font-weight: 700; font-size: 10pt; }
+    .signature-designation { font-size: 9pt; color: #6B6862; }
+    .signature-approved { font-size: 9.5pt; font-weight: 700; margin-top: 2pt; color: #2E6A4C; }
+    .signature-behalf { font-size: 8.5pt; color: #A39D91; font-style: italic; }
+    .signature-date { font-size: 9pt; color: #6B6862; margin-top: 3pt; }
 
     .void-banner {
-      padding: 7pt 10pt; border: 1.5pt solid #b00020; background: #fff0f0; color: #b00020;
+      padding: 7pt 10pt; border: 1.5pt solid #AE3A34; background: #FAEAE7; color: #AE3A34;
       font-weight: 700; margin-bottom: 12pt; letter-spacing: 0.4pt;
     }
-    .muted { color: #777; font-size: 8.5pt; }
-    footer { margin-top: 20pt; padding-top: 6pt; border-top: 0.5pt solid #ddd; }
+    .muted { color: #A39D91; font-size: 8.5pt; }
+    footer {
+      margin-top: 20pt; padding-top: 6pt; border-top: 0.5pt solid #E4DFD3;
+      font-size: 8.5pt; color: #A39D91;
+    }
+
+    /**
+     * Pagination.
+     *
+     * Without these a long BOM is one table crammed onto page one: Chromium will break it,
+     * but it breaks rows through the middle and the column headings never appear again, so
+     * page three is a wall of unlabelled numbers on a document somebody pays against.
+     *
+     * table-header-group repeats the headings on every page the table continues onto, and
+     * page-break-inside avoid on a row keeps an item whole. The blocks listed after it are
+     * (no backticks in here: this is inside a template literal and one would end it)
+     * each meaningless split in half — half a signature reads as a tampered document.
+     */
+    thead { display: table-header-group; }
+    tfoot { display: table-footer-group; }
+    tr { page-break-inside: avoid; break-inside: avoid; }
+    table.items { page-break-inside: auto; }
+    header.letterhead,
+    table.header-block,
+    .desc-block,
+    .approved-summary,
+    p.amount-words,
+    section.signatures,
+    .signature-cell,
+    .void-banner,
+    footer { page-break-inside: avoid; break-inside: avoid; }
   `;
 }

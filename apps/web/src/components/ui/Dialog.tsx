@@ -2,6 +2,8 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { t } from '@/i18n/en';
+import type { ZodTypeAny } from 'zod';
+import { RequiredFields } from './RequiredFields';
 
 interface DialogProps {
   open: boolean;
@@ -9,6 +11,12 @@ interface DialogProps {
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
+  /**
+   * The form contract this dialog edits. Every control inside then marks itself required from
+   * the same schema the resolver validates with, instead of each field carrying a hand-kept
+   * `required` that drifts when the contract changes. See `RequiredFields`.
+   */
+  schema?: ZodTypeAny;
 }
 
 const FOCUSABLE =
@@ -19,7 +27,7 @@ const FOCUSABLE =
  * rather than pulled from a library because it is 60 lines and this is the only dialog
  * behaviour the app needs.
  */
-export function Dialog({ open, title, onClose, children, footer }: DialogProps) {
+export function Dialog({ open, title, onClose, children, footer, schema }: DialogProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const restoreFocusTo = useRef<HTMLElement | null>(null);
 
@@ -90,7 +98,9 @@ export function Dialog({ open, title, onClose, children, footer }: DialogProps) 
             <X aria-hidden className="size-4" />
           </button>
         </header>
-        <div className="px-5 py-4">{children}</div>
+        <div className="px-5 py-4">
+          {schema ? <RequiredFields schema={schema}>{children}</RequiredFields> : children}
+        </div>
         {footer ? (
           <footer className="flex justify-end gap-2 border-t border-border px-5 py-3.5">
             {footer}

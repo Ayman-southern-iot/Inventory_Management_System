@@ -13,6 +13,7 @@ import {
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
 import type { Database } from '../../database/schema';
+import { documentNumber, nameTokenFor } from '../../common/document-number';
 
 type Tx = Transaction<Database> | Db;
 
@@ -33,10 +34,20 @@ export class BomsRepository {
 
   /* ----------------------------------------------------------------- writes */
 
-  /** Reserves a BOM number from `bom_no_seq`. Format: `BOM-000001`. */
-  async nextBomNo(tx: Tx): Promise<string> {
+  /**
+   * Reserves a BOM number from `bom_no_seq`. Format: `BOM-000004-GINA`.
+   *
+   * Ayman's ruling, 2026-08-29 — and it is only honest because a BOM carries exactly one
+   * requester's requisitions, which `BomsService` refuses to create otherwise. Batching several
+   * requesters onto one document would leave the number naming whichever of them happened to
+   * be first.
+   *
+   * BOMs numbered before this change keep their plain `BOM-000003`. Both shapes stay valid:
+   * the serial is the identity and nothing parses the format.
+   */
+  async nextBomNo(tx: Tx, requesterName: string | null, requesterEmail: string | null): Promise<string> {
     const row = await sql<{ n: string }>`SELECT nextval('bom_no_seq') AS n`.execute(tx);
-    return `BOM-${String(Number(row.rows[0]?.n ?? 1)).padStart(6, '0')}`;
+    return documentNumber('BOM', Number(row.rows[0]?.n ?? 1), nameTokenFor(requesterName, requesterEmail));
   }
 
   async insertBom(
@@ -178,6 +189,7 @@ export class BomsRepository {
         'departments.name as department_name',
         'projects.name as project_name',
         'requisitions.approved_amount',
+        'requisitions.transportation_cost',
       ])
       // Most recently decided first — that is what the IM is actually working on.
       .orderBy('requisitions.decided_at', 'desc')
@@ -226,6 +238,7 @@ export class BomsRepository {
       departmentName: row.department_name,
       projectName: row.project_name,
       approvedAmount: money(row.approved_amount),
+      transportationCost: money(row.transportation_cost),
       items: itemsByRequisition.get(row.requisition_id) ?? [],
     }));
   }

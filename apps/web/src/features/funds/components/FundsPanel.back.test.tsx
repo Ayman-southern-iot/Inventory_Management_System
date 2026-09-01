@@ -98,6 +98,7 @@ function detail(overrides: Partial<RequisitionDetail> = {}): RequisitionDetail {
     approvalDeadline: null,
     reason: null,
     requestedAmount: 4178,
+    provisionalAmount: 4178,
     approvedAmount: 3000,
     requiredApproverCount: 1,
     thresholdAtSubmit: 2500,

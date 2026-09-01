@@ -146,6 +146,7 @@ export function CategoriesPage() {
       </Panel>
 
       <Dialog
+      schema={createCategorySchema}
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
         title={editing ? t.categories.editCategory : t.categories.newCategory}

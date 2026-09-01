@@ -143,6 +143,23 @@ export class RequisitionsRepository {
     return row?.id;
   }
 
+  /**
+   * Does this person hold this role?
+   *
+   * Asked at submit to decide whether a stage is theirs to skip. Distinct from
+   * `findAnyActiveUserWithRole`, which answers "is there somebody else" — the question that
+   * used to be asked here, and the reason a lone Inventory Manager could not submit anything.
+   */
+  async userHasRole(userId: string, role: Role): Promise<boolean> {
+    const row = await this.db
+      .selectFrom('user_roles')
+      .where('user_id', '=', userId)
+      .where('role', '=', role)
+      .select('user_id')
+      .executeTakeFirst();
+    return row !== undefined;
+  }
+
   /** Cheap guard for the sub-threshold approver path (Phase 05). */
   async isUserActive(userId: string): Promise<boolean> {
     const row = await this.db
@@ -409,6 +426,32 @@ export class RequisitionsRepository {
         'requisitions.transportation_description',
         'requisitions.created_at',
         'requisitions.updated_at',
+      ])
+      .select((eb) => [
+        /**
+         * What the requisition would freeze if it were submitted right now: the lines plus
+         * the carriage.
+         *
+         * QA-009 — a draft has no `requested_amount` (it is written at submit) and the list
+         * rendered `?? 0`, so a draft holding 20,000 of items sat in the REQUESTED column
+         * showing 0, beside submitted rows showing real money. A hard 0 does not read as
+         * "not fixed yet", it reads as "this costs nothing".
+         *
+         * Computed here rather than summed in the browser so the list and the detail page
+         * cannot disagree about the same figure — the money audit exists because two screens
+         * disagreeing is the failure mode that actually happens. `estimated_line_total` is a
+         * GENERATED column, so this is the database's own arithmetic, not a second copy of it.
+         */
+        eb
+          .selectFrom('requisition_items')
+          .whereRef('requisition_items.requisition_id', '=', 'requisitions.id')
+          .select((inner) =>
+            inner.fn.coalesce(
+              inner.fn.sum<string>('requisition_items.estimated_line_total'),
+              sql<string>`0`,
+            ).as('total'),
+          )
+          .as('items_subtotal'),
       ]);
   }
 
@@ -685,6 +728,7 @@ interface RequisitionRow {
   urgency: string;
   approval_deadline: Date | string | null;
   reason: string | null;
+  items_subtotal: string | null;
   requested_amount: string | null;
   approved_amount: string | null;
   required_approver_count: number | null;
@@ -738,6 +782,12 @@ function toRequisition(row: RequisitionRow): Requisition {
     approvalDeadline: deadline,
     reason: row.reason,
     requestedAmount: money(row.requested_amount),
+    // The lines plus the carriage, as they stand right now. Always populated; the frozen
+    // `requestedAmount` still wins wherever one exists (D-016) — this is what a DRAFT shows
+    // instead of a hard 0, and what the detail page shows instead of adding up in the browser.
+    provisionalAmount:
+      Math.round(((money(row.items_subtotal) ?? 0) + (money(row.transportation_cost) ?? 0)) * 100) /
+      100,
     approvedAmount: money(row.approved_amount),
     requiredApproverCount: row.required_approver_count,
     thresholdAtSubmit: money(row.threshold_at_submit),

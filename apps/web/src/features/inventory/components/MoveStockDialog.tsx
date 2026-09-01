@@ -88,6 +88,7 @@ export function MoveStockDialog({ open, onClose, productId, placements, zones }:
 
   return (
     <Dialog
+      schema={moveStockSchema}
       open={open}
       onClose={onClose}
       title={t.inventory.moveStock}

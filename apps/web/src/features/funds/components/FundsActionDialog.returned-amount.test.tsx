@@ -69,6 +69,7 @@ function detail(): RequisitionDetail {
     approvalDeadline: null,
     reason: null,
     requestedAmount: 4178,
+    provisionalAmount: 4178,
     approvedAmount: 3000,
     requiredApproverCount: 1,
     thresholdAtSubmit: 2500,
@@ -147,13 +148,13 @@ describe('FundsActionDialog — verify: returned amount default', () => {
   it('defaults the returned amount to the unspent balance, not zero', () => {
     renderVerifyDialog(funding({ unspent: 300 }));
 
-    expect(screen.getByLabelText(t.funds.returnedAmount)).toHaveValue(300);
+    expect(screen.getByRole('spinbutton', { name: t.funds.returnedAmount })).toHaveValue(300);
   });
 
   it('defaults to zero when nothing is unspent', () => {
     renderVerifyDialog(funding({ unspent: 0 }));
 
-    expect(screen.getByLabelText(t.funds.returnedAmount)).toHaveValue(0);
+    expect(screen.getByRole('spinbutton', { name: t.funds.returnedAmount })).toHaveValue(0);
   });
 
   it('submits the unspent balance when the IM does not touch the field', async () => {
@@ -162,7 +163,7 @@ describe('FundsActionDialog — verify: returned amount default', () => {
 
     // The note is mandatory server-side whenever money goes back, and the prefill is what
     // makes that the default path — so the happy path types one.
-    await user.type(screen.getByLabelText(t.funds.returnNote), 'Bought under budget');
+    await user.type(screen.getByRole('textbox', { name: t.funds.returnNote }), 'Bought under budget');
     await user.click(screen.getByRole('button', { name: t.common.save }));
 
     expect(verify).toHaveBeenCalledWith({

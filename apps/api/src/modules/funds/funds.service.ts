@@ -35,7 +35,7 @@ import {
   CannotVoidReceivedPurchaseError,
   FundingExceedsApprovedError,
   InvalidFundingTransitionError,
-  InvoiceMissingError,
+  PurchaseExceedsFundedError,
   MoneyRowNotFoundError,
   ReceiveExceedsPurchasedError,
   ReturnExceedsUnspentError,
@@ -321,12 +321,41 @@ export class FundsService {
         settled.reduce((sum, line) => sum + line.unitCost * line.quantity, 0),
       );
 
+      /**
+       * A purchase may not spend more than has been funded. Ayman's ruling, 2026-08-31.
+       *
+       * Read under the lock this transaction already holds, so two purchases racing on the
+       * same requisition cannot both see the same headroom and both take it.
+       *
+       * Skipped when nothing has been funded yet: the status guard above already restricts
+       * this to funded requisitions, and inventing a ceiling of zero would refuse every
+       * purchase on a requisition whose receipts were recorded outside the normal flow.
+       */
+      const [alreadyFunded, alreadySpent] = await Promise.all([
+        this.repo.sumReceipts(requisitionId, tx),
+        this.repo.sumPurchases(requisitionId, tx),
+      ]);
+      // This purchase's own carriage plus whatever earlier purchases already committed. The
+      // requisition's planned figure is not used here: what matters is the money going out.
+      const carriage = round2(input.transportationCost ?? 0);
+      const alreadyCarried = await this.repo.sumPurchaseTransportation(requisitionId, tx);
+      const committed = round2(alreadySpent + alreadyCarried + totalAmount + carriage);
+      if (alreadyFunded > 0 && committed > alreadyFunded) {
+        throw new PurchaseExceedsFundedError({
+          committed,
+          funded: round2(alreadyFunded),
+          alreadySpent: round2(alreadySpent),
+          transportation: round2(alreadyCarried + carriage),
+        });
+      }
+
       const purchaseId = await this.repo.insertPurchase(tx, {
         requisitionId,
         vendor: input.vendor,
         invoiceNo: input.invoiceNo,
         purchasedAt: new Date(input.purchasedAt),
         totalAmount,
+        transportationCost: carriage,
         note: input.note,
         recordedBy: actorId,
       });
@@ -507,8 +536,19 @@ export class FundsService {
       const requisition = await this.lock(tx, requisitionId);
       this.assertStatus(requisition.status, 'verified', [RequisitionStatus.PURCHASED]);
 
-      const missing = await this.repo.countPurchasesWithoutInvoice(requisitionId, tx);
-      if (missing > 0) throw new InvoiceMissingError(missing);
+      /*
+       * The invoice is optional. Ayman, 2026-09-01, reversing his own ruling of 2026-08-26.
+       *
+       * That earlier decision was made after I had wrongly described the invoice as optional
+       * and he chose to keep the status quo; this is the deliberate change, made knowing what
+       * the rule was. The attach control stays where it is on the verify form — most purchases
+       * will still have one — but a purchase whose invoice has not arrived no longer blocks
+       * the requisition from being verified and its unspent money from going back.
+       *
+       * `countPurchasesWithoutInvoice` and `InvoiceMissingError` are deliberately kept: the
+       * count is what a future "3 purchases still have no invoice" warning would read, and the
+       * error's code is quoted in audit rows written while the gate was live.
+       */
 
       const returned = round2(input.returnedAmount);
       // Transportation is part of `approved_amount` at submit time but never reaches purchases
@@ -517,15 +557,10 @@ export class FundsService {
       // getting the goods here. Treat it as spent for unspent math; `transportation_cost`
       // stays null when the IM never declared any.
       //
-      // Gated on a live purchase for one rule everywhere (OQ-32). Reaching PURCHASED means one
-      // exists, and voiding the last one leaves that status, so this cannot be false here — it
-      // is written out anyway so the rule reads the same in all three places rather than being
-      // true here by an argument someone has to reconstruct.
-      const bought = await this.repo.hasLivePurchase(requisitionId, tx);
-      const transportation =
-        !bought || requisition.transportation_cost === null
-          ? 0
-          : round2(Number(requisition.transportation_cost));
+      // Summed from the purchases themselves (migration 0029), so this is what the carriage
+      // actually came to rather than what was planned — and a requisition whose only purchase
+      // was voided has no purchases to add up, which is OQ-32 falling out of the arithmetic.
+      const transportation = await this.repo.sumPurchaseTransportation(requisitionId, tx);
       if (returned > 0) {
         // All three sums read under the lock that will write the status, so the ceiling cannot
         // move underneath a concurrent return.
@@ -1206,27 +1241,22 @@ export class FundsService {
     const requisition = await this.requisitions.findById(requisitionId);
     if (!requisition) throw new NotFoundError('Requisition');
 
-    const [receipts, purchases, returns, funded, spent, returned] = await Promise.all([
-      this.repo.listReceipts(requisitionId),
-      this.repo.listPurchases(requisitionId),
-      this.repo.listReturns(requisitionId),
-      this.repo.sumReceipts(requisitionId),
-      this.repo.sumPurchases(requisitionId),
-      this.repo.sumReturns(requisitionId),
-    ]);
+    const [receipts, purchases, returns, funded, spent, returned, transportation] =
+      await Promise.all([
+        this.repo.listReceipts(requisitionId),
+        this.repo.listPurchases(requisitionId),
+        this.repo.listReturns(requisitionId),
+        this.repo.sumReceipts(requisitionId),
+        this.repo.sumPurchases(requisitionId),
+        this.repo.sumReturns(requisitionId),
+        this.repo.sumPurchaseTransportation(requisitionId),
+      ]);
 
     const approved = requisition.approved_amount === null ? null : Number(requisition.approved_amount);
     const requested =
       requisition.requested_amount === null ? null : Number(requisition.requested_amount);
-    // Charged only while a live purchase stands (OQ-32). `listPurchases` already excludes voided
-    // rows, so this array being empty *is* "nothing has been bought" — void the last purchase and
-    // the carriage goes with it, exactly as it does on the expenses report and the dashboard.
-    // Before the rule, a requisition funded 1,000 with nothing yet bought reported 500 of it
-    // already spent on a van that had not moved.
-    const transportation =
-      purchases.length === 0 || requisition.transportation_cost === null
-        ? 0
-        : round2(Number(requisition.transportation_cost));
+    // The carriage actually paid, summed over live purchases (migration 0029). No purchases,
+    // no rows, no carriage — which is OQ-32 without needing a rule of its own.
 
     return {
       requisitionId,

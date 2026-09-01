@@ -43,6 +43,7 @@ function requisition(overrides: Partial<RequisitionDetail> = {}): RequisitionDet
     approvalDeadline: null,
     reason: null,
     requestedAmount: 20000,
+    provisionalAmount: 20000,
     approvedAmount: 20000,
     requiredApproverCount: 2,
     thresholdAtSubmit: 15000,
@@ -202,5 +203,49 @@ describe('ApprovalTracker', () => {
 
     const rows = screen.getAllByRole('listitem').map((node) => node.textContent ?? '');
     expect(rows[1]).toContain(t.requisitions.skipped);
+  });
+
+  /**
+   * An approver's note was stored and never shown: only a rejection (behind "See why") and a
+   * withdrawal rendered one. Somebody writing "buy the cheaper one" on an approval was writing
+   * into a void — neither the requester nor the next approver ever saw it.
+   */
+  it('shows the note an approver left when approving', () => {
+    render(
+      <ApprovalTracker
+        requisition={requisition({
+          approvals: [
+            approval({
+              action: ApprovalAction.APPROVED,
+              actedByUserId: 'user-1',
+              actedByUserName: 'Ayesha Approver',
+              note: 'Buy the cheaper one',
+            }),
+          ],
+        })}
+      />,
+    );
+
+    expect(screen.getByText('Buy the cheaper one')).toBeInTheDocument();
+  });
+
+  /** No note, no panel — an ordinary approval keeps its single line. */
+  it('renders no note panel when the approver left nothing', () => {
+    const { container } = render(
+      <ApprovalTracker
+        requisition={requisition({
+          approvals: [
+            approval({
+              action: ApprovalAction.APPROVED,
+              actedByUserId: 'user-1',
+              actedByUserName: 'Ayesha Approver',
+              note: null,
+            }),
+          ],
+        })}
+      />,
+    );
+
+    expect(container.querySelector('.bg-surface-muted')).toBeNull();
   });
 });

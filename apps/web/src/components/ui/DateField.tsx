@@ -58,8 +58,10 @@ interface DateFieldProps {
   onChange: (value: string | null) => void;
   hint?: string;
   error?: string;
-  /** Shown when nothing is chosen. The field is optional wherever this component is used today. */
+  /** Shown when nothing is chosen. */
   placeholder?: string;
+  /** Marks the label and announces the requirement; see `FieldShell` for why not the native attribute. */
+  required?: boolean;
 }
 
 export function DateField({
@@ -69,6 +71,7 @@ export function DateField({
   hint,
   error,
   placeholder,
+  required,
 }: DateFieldProps) {
   const id = useId();
   const today = useMemo(startOfToday, []);
@@ -207,6 +210,11 @@ export function DateField({
     <div className="relative flex flex-col gap-1.5" ref={containerRef}>
       <label htmlFor={id} className="text-sm font-medium text-ink">
         {label}
+        {required ? (
+          <span aria-hidden className="ml-0.5 text-danger">
+            *
+          </span>
+        ) : null}
       </label>
 
       {/* The whole field opens the calendar, not just the icon — a click on the text is the
@@ -220,6 +228,7 @@ export function DateField({
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-invalid={error ? true : undefined}
+        aria-required={required ? true : undefined}
         aria-describedby={error ? `${id}-error` : hint ? `${id}-hint` : undefined}
         className={cn(
           'flex h-9 w-full items-center gap-2 rounded-[--radius-control] border border-border',

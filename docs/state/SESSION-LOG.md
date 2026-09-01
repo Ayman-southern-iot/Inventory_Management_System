@@ -12,6 +12,55 @@ Format:
 **Next:** the single next action, specific enough to start without thinking
 ```
 
+## 2026-08-31 → 2026-09-01 — Ayman's QA rounds: the money surface, the two documents, and who approves
+**Did:**
+- **Closed the money holes the QA found.** A BOM can no longer commit more than the requisition
+  was approved for (per requisition, carriage counted — `BOM_EXCEEDS_APPROVED_AMOUNT`), and a
+  purchase can no longer spend more than has been funded (`PURCHASE_EXCEEDS_FUNDED`). The second
+  was reported from the screen: `Spent 60,000` beside `Funded 40,500` with `Unspent 0`, because
+  nothing checked and `unspent` floors at zero, so the overspend showed as *nothing left*.
+- **The carriage moved onto the purchase that paid it** (migration 0029). It had been the
+  requester's *planned* figure, frozen inside `approved_amount`; it is now recorded, adjustable,
+  and summed over live purchases — which simplified OQ-32 away, since no purchases means no rows.
+  The report and the dashboard read the same sum, so they cannot disagree with the funding panel.
+- **The requisition detail and the BOM document were rebuilt from Ayman's templates**, and the
+  purchase form gained per-line quantity, live totals and an honest "Left to spend".
+- **A requester's own approval stage is no longer created** (migration 0030), replacing
+  substitution — which had made the system unusable for a sole Inventory Manager.
+- Required fields mark themselves from their own zod schema across ~25 forms; document numbers
+  carry the requester (`REQ-000015-GINA`); the invoice became optional; "Products" became
+  "Inventory".
+
+**Decisions:** eleven, all in DECISIONS.md under 2026-08-31 and 2026-09-01. The load-bearing
+ones: the purchase ceiling is **funded, not approved** (you cannot spend cash you have not
+received); carriage lives on the purchase, **per delivery**, so voiding one takes its own van
+and leaves the others theirs; a requester's stage is **skipped, not auto-approved**, so no audit
+row shows anyone signing off their own money.
+
+**Landmines:**
+- **Four recorded decisions were reversed this session, three of them Ayman's own.** The BOM
+  over-budget ceiling (retired 2026-08-09, reinstated); OQ-18's "Remaining" column; the invoice
+  requirement he had chosen on 2026-08-26; and OQ-07's substitution. Each rewrite records all
+  the positions the rule has held, because a test that silently changes sides is indistinguishable
+  from one somebody deleted.
+- **The code was misciting the requirements.** `// requirements §10: nobody approves their own
+  requisition` appeared twice plus a spec header quoting the design doc as if it were the source.
+  No such rule exists — the transcription says so explicitly. Corrected, but assume there are
+  others: any `REQUIRED §n` claim is worth checking against
+  `docs/reference/_source/requirements-verbatim.md` before you build on it.
+- **Almost nothing was seen in a browser.** The one session that did look found port 5173 serves
+  the *Docker build*, so the first screenshot showed the old UI and nearly got reported as
+  verification. The BOM PDF was measured through real Chromium; everything else is asserted
+  through tests and the accessibility tree only.
+- **`apps/api/dist` was stale and produced a confidently wrong measurement** — "1 item, 1 page"
+  when the truth was 2. Rebuild before measuring anything compiled.
+- The purchase form's carriage pre-fill assumes one van per requisition: it seeds the planned
+  figure only when nothing has been charged yet. A second delivery that genuinely had its own
+  carriage must be typed in. Deliberate, but it is a guess about how they work.
+
+**Next:** Answer OQ-34 — does the BOM print onto pre-printed letterhead or plain paper? It is one
+env value (`PDF_MARGIN_TOP_MM`, 45 vs 20) and it decides whether five items fit a page. Nothing
+else is queued; ask before starting.
 ## 2026-08-27 — Phase 08 tail, and a phase 06 that was already done
 **Did:**
 - Closed **OQ-32**. Reproduced first, as asked: on Ayman's 1,000 / 500-carriage / 250-purchased

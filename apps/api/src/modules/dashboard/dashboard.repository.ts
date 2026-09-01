@@ -181,29 +181,23 @@ export class DashboardRepository {
         .select((eb) => eb.fn.sum<string>('purchases.total_amount').as('purchased'))
         .executeTakeFirst(),
       /**
-       * Transportation, once per requisition that has actually bought something.
+       * The carriage actually paid, over every purchase this person's requisitions still
+       * carry.
        *
-       * It is spent money with no `purchases` row — it buys carriage, not stock — so a spend
-       * figure that reads only that table is short by exactly the carriage. Reported by Ayman on
-       * 2026-08-26: a 1,000 requisition of which 500 was a van showed 250 spent, not 750.
-       *
-       * `DISTINCT` on the requisition id, not a join: a requisition bought from three vendors has
-       * three purchase rows and one van, and joining would charge the van three times.
+       * Was the requisition's planned figure, `DISTINCT`-ed to one per requisition and gated
+       * on a live purchase existing — a shape that had to exist because the planned figure
+       * lives on the requisition and a requisition can hold three purchases. Migration 0029
+       * put the real figure on the purchase, so it is a plain sum over the rows that hold it,
+       * and a three-vendor requisition adds up three real carriages instead of one planned one.
        */
       this.db
-        .selectFrom('requisitions')
-        .where('requester_id', '=', userId)
-        .where('transportation_cost', 'is not', null)
-        .where((eb) =>
-          eb.exists(
-            eb
-              .selectFrom('purchases')
-              .select('purchases.id')
-              .whereRef('purchases.requisition_id', '=', 'requisitions.id')
-              .where('purchases.voided_at', 'is', null),
-          ),
+        .selectFrom('purchases')
+        .innerJoin('requisitions', 'requisitions.id', 'purchases.requisition_id')
+        .where('requisitions.requester_id', '=', userId)
+        .where('purchases.voided_at', 'is', null)
+        .select((eb) =>
+          eb.fn.sum<string>('purchases.transportation_cost').as('transportation'),
         )
-        .select((eb) => eb.fn.sum<string>('transportation_cost').as('transportation'))
         .executeTakeFirst(),
     ]);
 

@@ -188,7 +188,8 @@ describe('e2e: requisition → BOM pipeline (data flow)', () => {
         })),
       })
     ).body;
-    expect(generated.bomNo).toMatch(/^BOM-\d{6}$/);
+    // Either shape — see the note in boms.int-spec.ts.
+    expect(generated.bomNo).toMatch(/^BOM-\d{6}(-[A-Z0-9]+)?$/);
     expect(generated.subtotal).toBe(2_500);
     expect(generated.isVoid).toBe(false);
     expect(generated.hasPdf).toBe(false);
@@ -235,37 +236,58 @@ describe('e2e: requisition → BOM pipeline (data flow)', () => {
     expect(eventTypes).toContain(RequisitionEventType.BOM_GENERATED);
   });
 
-  /* ------------------------------------------------ B. over-budget (reformed) */
+  /* --------------------------------------- B. the approved-amount ceiling */
 
-  it('over-budget: subtotal > approved generates anyway (no bounce, retired 2026-08-09)', async () => {
-    // The over-budget bounce was retired on 2026-08-09: a unit cost going up between
-    // approval and BOM generation is a normal slowdown, not a policy violation. The
-    // same input that used to bounce now generates a BOM, the requisition moves to
-    // BOM_GENERATED, and no BOM_BOUNCED event is recorded.
+  /**
+   * Third position this assertion has held. A tolerance band bounced the BOM (OQ-05); the
+   * bounce was retired on 2026-08-09; Ayman reinstated an exact ceiling on 2026-08-29. What
+   * changed is not the arithmetic but who absorbs the difference: nothing downstream can, since
+   * Accounts funds against the approved figure, so the difference is settled at this screen by
+   * adjusting quantity and unit cost before the BOM exists.
+   *
+   * Refused, not bounced — the distinction the pipeline cares about. The retired bounce created
+   * a BOM in a flagged state and walked the requisition backwards; this creates nothing and
+   * leaves the requisition exactly where it was, ready for a second attempt that fits.
+   */
+  it('over-budget: subtotal > approved is refused, and the requisition does not move', async () => {
     const req = await approveRequisition(2_500);
 
-    // unitCost 3_000 > 2_500. Under the old gate this would have bounced off the
-    // 10% tolerance ceiling; under the new gate it generates cleanly.
+    const response = await im.client.post('/boms').send({
+      requisitionIds: [req.id],
+      lines: req.items.map((item) => ({
+        requisitionItemId: item.id,
+        unitCost: 3_000,
+        vendor: null,
+      })),
+    });
+
+    expect(response.status).toBe(409);
+    expect(response.body.code).toBe('BOM_EXCEEDS_APPROVED_AMOUNT');
+
+    const after = (await requester.client.get(`/requisitions/${req.id}`).send()).body;
+    expect(after.status).toBe(RequisitionStatus.APPROVED);
+    const eventTypes = after.events.map((e: { eventType: string }) => e.eventType);
+    expect(eventTypes).not.toContain(RequisitionEventType.BOM_GENERATED);
+    expect(eventTypes).not.toContain(RequisitionEventType.BOM_BOUNCED);
+  });
+
+  it('at the ceiling: subtotal equal to approved generates cleanly', async () => {
+    const req = await approveRequisition(2_500);
+
     const generated = (
       await im.client.post('/boms').send({
         requisitionIds: [req.id],
         lines: req.items.map((item) => ({
           requisitionItemId: item.id,
-          unitCost: 3_000,
+          unitCost: 2_500,
           vendor: null,
         })),
       })
     ).body;
 
-    expect(generated.overBudgetBounced).toBe(false);
-    expect(generated.subtotal).toBe(3_000);
-
-    const after = (await requester.client.get(`/requisitions/${req.id}`).send())
-      .body;
+    expect(generated.subtotal).toBe(2_500);
+    const after = (await requester.client.get(`/requisitions/${req.id}`).send()).body;
     expect(after.status).toBe(RequisitionStatus.BOM_GENERATED);
-    const eventTypes = after.events.map((e: { eventType: string }) => e.eventType);
-    expect(eventTypes).toContain(RequisitionEventType.BOM_GENERATED);
-    expect(eventTypes).not.toContain(RequisitionEventType.BOM_BOUNCED);
   });
 
   /* --------------------------------------------------- C. void after render */

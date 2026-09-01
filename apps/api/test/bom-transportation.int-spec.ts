@@ -41,6 +41,8 @@ describe('BOM transportation cost', () => {
 
   let ctx: TestApp;
   let requester: Actor;
+  /** A second requester, for the one-requester-per-BOM guard. */
+  let otherRequester: Actor;
   let im: Actor;
   let approver1: Actor;
   let departmentId: string;
@@ -88,6 +90,8 @@ describe('BOM transportation cost', () => {
     await resetData(ctx.db);
 
     requester = await actorFor([Role.GENERAL]);
+
+    otherRequester = await actorFor([Role.GENERAL]);
     im = await actorFor([Role.GENERAL, Role.INVENTORY_MANAGER]);
     approver1 = await actorFor([Role.GENERAL, Role.APPROVER]);
 
@@ -115,14 +119,24 @@ describe('BOM transportation cost', () => {
     itemsTotal: number;
     transportationCost?: number;
     transportationDescription?: string;
-  }) => {
+  }) => approveRequisitionAs(requester, options);
+
+  /** The same walk, raised by whichever requester the caller names. */
+  const approveRequisitionAs = async (
+    raisedBy: Actor,
+    options: {
+      itemsTotal: number;
+      transportationCost?: number;
+      transportationDescription?: string;
+    },
+  ) => {
     const { itemsTotal, transportationCost = 0, transportationDescription = null } = options;
     const transportationBody =
       transportationCost > 0
         ? { transportationCost, transportationDescription }
         : {};
 
-    const created = await requester.client.post('/requisitions').send({
+    const created = await raisedBy.client.post('/requisitions').send({
       approvalDeadline: futureDeadline(),
       departmentId,
       urgency: 'NORMAL',
@@ -140,7 +154,7 @@ describe('BOM transportation cost', () => {
     });
     expect(created.status).toBe(201);
 
-    const submitted = (await requester.client.post(`/requisitions/${created.body.id}/submit`).send())
+    const submitted = (await raisedBy.client.post(`/requisitions/${created.body.id}/submit`).send())
       .body;
     const imApprovalId = submitted.approvals.find(
       (a: { stage: string }) => a.stage === 'INVENTORY_MANAGER',
@@ -159,7 +173,7 @@ describe('BOM transportation cost', () => {
         .send({ approve: true });
     }
 
-    return (await requester.client.get(`/requisitions/${created.body.id}`)).body as {
+    return (await raisedBy.client.get(`/requisitions/${created.body.id}`)).body as {
       id: string;
       requisitionNo: string;
       items: Array<{ id: string; itemName: string; quantity: number; estimatedUnitPrice: number }>;
@@ -184,6 +198,316 @@ describe('BOM transportation cost', () => {
     ).body as BomDetail;
     return created;
   };
+
+  /* ------------------------------------------------------------- pagination */
+
+  /**
+   * A BOM with more items than fit a page.
+   *
+   * Ayman, 2026-09-01: "if item is too many then it will auto go to next page, no need to be
+   * congested in one page". Chromium will always break a long table somewhere; left alone it
+   * breaks rows through the middle and never repeats the column headings, so page three of a
+   * document somebody pays against is a wall of unlabelled numbers.
+   *
+   * Asserted on the rules rather than on a rendered page count: the page size and margins come
+   * from config (`PDF_PAGE_FORMAT`, `PDF_MARGIN_*_MM`), so how many rows reach page two is an
+   * operator setting, while whether a row may be split is a property of this document.
+   */
+  it('carries its column headings onto every page and never splits a row', async () => {
+    const req = await approveRequisition({ itemsTotal: 4_000 });
+    const bom = (
+      await im.client.post(`/boms`).send({
+        requisitionIds: [req.id],
+        lines: [{ requisitionItemId: req.items[0]!.id, unitCost: 250, vendor: 'Acme' }],
+      })
+    ).body;
+
+    const html = renderBomHtml(bom, CONTEXT);
+
+    // The heading row repeats on continuation pages.
+    expect(html).toMatch(/thead\s*\{\s*display:\s*table-header-group/);
+    // An item is never cut in half across the fold.
+    expect(html).toMatch(/tr\s*\{[^}]*page-break-inside:\s*avoid/);
+    // ...while the table itself is allowed to flow onto as many pages as it needs.
+    expect(html).toMatch(/table\.items\s*\{\s*page-break-inside:\s*auto/);
+  });
+
+  it('keeps the blocks that are meaningless in halves whole', async () => {
+    const req = await approveRequisition({ itemsTotal: 1_000 });
+    const bom = (
+      await im.client.post(`/boms`).send({
+        requisitionIds: [req.id],
+        lines: [{ requisitionItemId: req.items[0]!.id, unitCost: 250, vendor: 'Acme' }],
+      })
+    ).body;
+
+    const html = renderBomHtml(bom, CONTEXT);
+
+    // Half a signature block reads as a document that was tampered with; half an approved
+    // amount reads as a different number.
+    for (const block of [
+      'section.signatures',
+      '.signature-cell',
+      '.approved-summary',
+      '.desc-block',
+      'header.letterhead',
+    ]) {
+      expect(html, `${block} may be split across a page`).toContain(block);
+    }
+    expect(html).toMatch(/footer\s*\{\s*page-break-inside:\s*avoid/);
+  });
+
+  /** No `@page` rule here: margins are an operator setting, and two sources would fight. */
+  it('leaves the page margins to the renderer config', async () => {
+    const req = await approveRequisition({ itemsTotal: 1_000 });
+    const bom = (
+      await im.client.post(`/boms`).send({
+        requisitionIds: [req.id],
+        lines: [{ requisitionItemId: req.items[0]!.id, unitCost: 250, vendor: 'Acme' }],
+      })
+    ).body;
+
+    expect(renderBomHtml(bom, CONTEXT)).not.toContain('@page');
+  });
+
+  /* ------------------------------------------------------ the printed document */
+
+  describe('the BOM document', () => {
+    /**
+     * The total, restated in words.
+     *
+     * This is what Accounts pays against. Digits on a printout can be altered with a pen and a
+     * misplaced comma is invisible; the words are here to disagree loudly when either happens.
+     */
+    it('prints the grand total in words, carriage included', async () => {
+      const req = await approveRequisition({
+        itemsTotal: 1_000,
+        transportationCost: 500,
+        transportationDescription: 'Van hire',
+      });
+      const bom = (
+        await im.client.post(`/boms`).send({
+          requisitionIds: [req.id],
+          lines: [{ requisitionItemId: req.items[0]!.id, unitCost: 250, vendor: 'Acme' }],
+        })
+      ).body;
+
+      const html = renderBomHtml(bom, CONTEXT);
+
+      // 1,000 of items plus the 500 van. The words restate the grand total, not the subtotal —
+      // restating only the items would put a smaller number in words directly beneath a larger
+      // one in digits, which is worse than printing no words at all.
+      expect(html).toContain('Taka One Thousand Five Hundred Only');
+      expect(html).toMatch(/In words:/);
+    });
+
+    it('prints the words on a BOM with no carriage too', async () => {
+      const req = await approveRequisition({ itemsTotal: 4_000 });
+      const bom = (
+        await im.client.post(`/boms`).send({
+          requisitionIds: [req.id],
+          lines: [{ requisitionItemId: req.items[0]!.id, unitCost: 1_000, vendor: 'Acme' }],
+        })
+      ).body;
+
+      const html = renderBomHtml(bom, CONTEXT);
+
+      expect(html).toContain('Taka Four Thousand Only');
+    });
+
+    /**
+     * The letterhead. `COMPANY_LOGO_PATH` already resolves and inlines the file as a data URI —
+     * this asserts the template actually places it, so a configured logo cannot silently fail to
+     * reach the page.
+     */
+    it('places the company logo on the letterhead when one is configured', async () => {
+      const req = await approveRequisition({ itemsTotal: 1_000 });
+      const bom = (
+        await im.client.post(`/boms`).send({
+          requisitionIds: [req.id],
+          lines: [{ requisitionItemId: req.items[0]!.id, unitCost: 250, vendor: 'Acme' }],
+        })
+      ).body;
+
+      const withLogo = renderBomHtml(bom, {
+        ...CONTEXT,
+        company: { ...CONTEXT.company, logoUri: 'data:image/jpeg;base64,AAAA' },
+      });
+
+      expect(withLogo).toContain('<img class="logo" src="data:image/jpeg;base64,AAAA"');
+      // And no broken image element when there is none to place.
+      expect(renderBomHtml(bom, CONTEXT)).not.toContain('<img class="logo"');
+    });
+  });
+
+  /* --------------------------------------------------------- document numbers */
+
+  /**
+   * `REQ-000015-GINA` and `BOM-000004-GINA`. Ayman's ruling, 2026-08-29: the number says whose
+   * it is, so a stack of printouts sorts by hand without opening any of them.
+   *
+   * The serial is the identity and the name is decoration — two people called Gina still get
+   * different numbers. Rows created before the change keep their plain form, which is why
+   * nothing here asserts that *every* number has a suffix.
+   */
+  describe('document numbers carry the requester', () => {
+    it('names the requester on the requisition and on its BOM', async () => {
+      const req = await approveRequisition({ itemsTotal: 1_000 });
+
+      // The requester fixture is created by `createUser`, so assert the shape rather than a
+      // specific name: serial, then a dash, then an all-caps Latin token.
+      expect(req.requisitionNo).toMatch(/^REQ-\d{6}-[A-Z0-9]+$/);
+
+      const bom = await im.client.post(`/boms`).send({
+        requisitionIds: [req.id],
+        lines: [{ requisitionItemId: req.items[0]!.id, unitCost: 250, vendor: 'Acme' }],
+      });
+      expect(bom.status).toBe(201);
+      expect(bom.body.bomNo).toMatch(/^BOM-\d{6}-[A-Z0-9]+$/);
+
+      // Same person, so the same token on both documents — that is the point of putting it
+      // there at all.
+      const reqToken = req.requisitionNo.split('-')[2];
+      const bomToken = (bom.body.bomNo as string).split('-')[2];
+      expect(bomToken).toBe(reqToken);
+    });
+
+    /**
+     * The guard that makes the BOM number honest. Without it a batched BOM would be named after
+     * whichever requester the query returned first — a printed, filed claim about whose money
+     * this is, pointing at the wrong person.
+     */
+    it('refuses a BOM covering two requesters', async () => {
+      const mine = await approveRequisition({ itemsTotal: 1_000 });
+      const theirs = await approveRequisitionAs(otherRequester, { itemsTotal: 1_000 });
+
+      const response = await im.client.post(`/boms`).send({
+        requisitionIds: [mine.id, theirs.id],
+        lines: [
+          { requisitionItemId: mine.items[0]!.id, unitCost: 250, vendor: 'Acme' },
+          { requisitionItemId: theirs.items[0]!.id, unitCost: 250, vendor: 'Acme' },
+        ],
+      });
+
+      expect(response.status).toBe(409);
+      expect(response.body.code).toBe('BOM_SPANS_MULTIPLE_REQUESTERS');
+      // Grouped by requester, named by requisition: two fixture users can share a display
+      // name, and the requisition numbers are what the IM actually un-ticks.
+      expect(response.body.details.groups).toHaveLength(2);
+      const listed = response.body.details.groups.flatMap(
+        (group: { requisitionNos: string[] }) => group.requisitionNos,
+      );
+      expect(listed).toContain(mine.requisitionNo);
+      expect(listed).toContain(theirs.requisitionNo);
+    });
+
+    it('still batches several requisitions from the same requester', async () => {
+      const first = await approveRequisition({ itemsTotal: 1_000 });
+      const second = await approveRequisition({ itemsTotal: 1_000 });
+
+      const response = await im.client.post(`/boms`).send({
+        requisitionIds: [first.id, second.id],
+        lines: [
+          { requisitionItemId: first.items[0]!.id, unitCost: 250, vendor: 'Acme' },
+          { requisitionItemId: second.items[0]!.id, unitCost: 250, vendor: 'Acme' },
+        ],
+      });
+
+      expect(response.status).toBe(201);
+    });
+  });
+
+  /* ------------------------------------------------- the approved-amount ceiling */
+
+  /**
+   * Ayman's ruling, 2026-08-29. A BOM may not commit more than the requisition was approved
+   * for, and the transportation counts towards that ceiling because the approved figure already
+   * includes it (`requested = items + carriage` at submit).
+   *
+   * The IM reaches the ceiling by adjusting quantity and unit cost until the BOM fits — that is
+   * the whole purpose of the builder — and only then may it be generated. Nothing downstream can
+   * absorb an overspend: Accounts funds against the approved figure, so a BOM above it commits
+   * money nobody sanctioned and the shortfall surfaces at purchase time with the goods ordered.
+   */
+  describe('a BOM cannot commit more than was approved', () => {
+    it('refuses when the items alone exceed the approved amount', async () => {
+      // 4,000 of items, no carriage, approved at 4,000. Buying at 1,500 a unit is 6,000.
+      const req = await approveRequisition({ itemsTotal: 4_000 });
+
+      const response = await im.client.post(`/boms`).send({
+        requisitionIds: [req.id],
+        lines: [{ requisitionItemId: req.items[0]!.id, unitCost: 1_500, vendor: 'Acme' }],
+      });
+
+      expect(response.status).toBe(409);
+      expect(response.body.code).toBe('BOM_EXCEEDS_APPROVED_AMOUNT');
+      const overspent = response.body.details.overspent[0];
+      expect(overspent.requisitionNo).toBe(req.requisitionNo);
+      expect(overspent.approved).toBe(4_000);
+      expect(overspent.committed).toBe(6_000);
+    });
+
+    /**
+     * The trap this rule exists to close, and the one QA-019 found on the builder: a BOM whose
+     * *items* fit exactly, on a requisition that also has to pay for a van. The old comparison
+     * read the item total against an approved figure that already contained the carriage, so it
+     * reported room that was never there.
+     */
+    it('counts the transportation against the ceiling, not just the items', async () => {
+      // Items 1,000 + carriage 500 = approved 1,500. Items alone at 1,500 fit the approved
+      // figure exactly — and commit 2,000 once the van is paid for.
+      const req = await approveRequisition({
+        itemsTotal: 1_000,
+        transportationCost: 500,
+        transportationDescription: 'Van hire',
+      });
+      expect(req.approvedAmount).toBe(1_500);
+
+      const response = await im.client.post(`/boms`).send({
+        requisitionIds: [req.id],
+        lines: [{ requisitionItemId: req.items[0]!.id, unitCost: 375, vendor: 'Acme' }],
+      });
+
+      expect(response.status).toBe(409);
+      const overspent = response.body.details.overspent[0];
+      expect(overspent.items).toBe(1_500);
+      expect(overspent.transportation).toBe(500);
+      expect(overspent.committed).toBe(2_000);
+      expect(overspent.approved).toBe(1_500);
+    });
+
+    it('allows a BOM the IM has adjusted to fit exactly, carriage included', async () => {
+      const req = await approveRequisition({
+        itemsTotal: 1_000,
+        transportationCost: 500,
+        transportationDescription: 'Van hire',
+      });
+
+      // Four units at 250 is 1,000 of items; plus the 500 van that is exactly the 1,500
+      // approved. Equal to the ceiling is inside it.
+      const response = await im.client.post(`/boms`).send({
+        requisitionIds: [req.id],
+        lines: [{ requisitionItemId: req.items[0]!.id, unitCost: 250, vendor: 'Acme' }],
+      });
+
+      expect(response.status).toBe(201);
+    });
+
+    it('lets a smaller quantity bring an over-priced line back inside the ceiling', async () => {
+      const req = await approveRequisition({ itemsTotal: 4_000 });
+
+      // 1,500 a unit is over at four units (6,000) and inside at two (3,000). Adjusting the
+      // quantity is the other half of what the builder is for.
+      const response = await im.client.post(`/boms`).send({
+        requisitionIds: [req.id],
+        lines: [
+          { requisitionItemId: req.items[0]!.id, quantity: 2, unitCost: 1_500, vendor: 'Acme' },
+        ],
+      });
+
+      expect(response.status).toBe(201);
+    });
+  });
 
   /* ------------------------------------------------------- snapshot fields */
 
@@ -250,11 +574,12 @@ describe('BOM transportation cost', () => {
   });
 
   it('PDF subtotal reconciles against the header (items + transportation)', async () => {
-    // itemsTotal 1,000 + transportation 200 → the header "Total Money Requested" reads 1,200.00
-    // and the bottom Grand total must read the same. The breakdown prints three tfoot rows
-    // when transportation exists: Transportation / Items subtotal (1,000.00) / Grand total
-    // (1,200.00). Each label is anchored, so the assertion cannot pass by catching the header
-    // figure by accident.
+    // itemsTotal 1,000 + transportation 200. The header now prints only the approved amount
+    // (Ayman, 2026-08-29), which is also 1,200 here since nothing was revised down — so the
+    // reconciliation is between that single header figure and the Grand total. The breakdown
+    // prints three tfoot rows when transportation exists: Items subtotal (1,000.00) /
+    // Transportation / Grand total (1,200.00). Each label is anchored, so the assertion cannot
+    // pass by catching the header figure by accident.
     const req = await approveRequisition({
       itemsTotal: 1000,
       transportationCost: 200,
