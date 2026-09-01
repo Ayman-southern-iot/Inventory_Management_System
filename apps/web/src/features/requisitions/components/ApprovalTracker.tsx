@@ -1,13 +1,17 @@
 import { useState } from 'react';
-import { Check, CircleDashed, CircleSlash, Clock, X } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ArrowRight, Check, CircleDashed, CircleSlash, Clock, X } from 'lucide-react';
 import {
   ApprovalAction,
   ApprovalStage,
   RequisitionStatus,
+  Role,
   type Approval,
   type RequisitionDetail,
 } from '@ims/shared';
 import { Button } from '@/components/ui/Button';
+import { useAuth } from '@/features/auth/auth-context';
+import { ROUTES } from '@/routes/paths';
 import { t } from '@/i18n/en';
 import { formatDateTime } from '@/lib/format';
 import { cn } from '@/lib/cn';
@@ -158,6 +162,15 @@ export function ApprovalTracker({
   /** A note under the heading explaining the chain below it — the approver count and why. */
   hint?: string;
 }) {
+  const { hasRole } = useAuth();
+  /**
+   * `APPROVED` exactly — not "approved or later". Past that a BOM already exists, and offering
+   * to generate a second one for a requisition that is already on one is how you get the 409
+   * that the one-live-BOM rule exists to raise.
+   */
+  const canGenerateBom =
+    requisition.status === RequisitionStatus.APPROVED &&
+    hasRole(Role.INVENTORY_MANAGER, Role.ADMIN);
   // IM first, then approvers by slot — the order the chain is actually walked.
   const ordered = [...requisition.approvals].sort((a, b) => {
     if (a.stage !== b.stage) return a.stage === ApprovalStage.INVENTORY_MANAGER ? -1 : 1;
@@ -186,6 +199,27 @@ export function ApprovalTracker({
           ))}
         </ol>
       )}
+
+      {/*
+        The next step, at the end of the chain that finished.
+
+        Everyone has signed and the requisition is waiting to be put on a BOM — but the only way
+        there was to leave, open Bills of Materials, and find this requisition again among every
+        other approved one. The link carries the requisition with it, so the builder opens with
+        it already ticked.
+
+        Only for the people who can actually generate one: an approver seeing a call to action
+        they are refused at is worse than seeing none.
+      */}
+      {canGenerateBom ? (
+        <Link
+          to={ROUTES.boms.newForRequisition(requisition.id)}
+          className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-brand hover:underline"
+        >
+          {t.requisitions.generateBomNext}
+          <ArrowRight aria-hidden className="size-4" />
+        </Link>
+      ) : null}
     </div>
   );
 }

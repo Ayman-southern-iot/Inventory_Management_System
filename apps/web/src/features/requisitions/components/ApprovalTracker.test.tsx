@@ -1,6 +1,8 @@
-import { describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ReactElement } from 'react';
+import { render as rtlRender, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import {
   ApprovalAction,
   ApprovalStage,
@@ -10,7 +12,31 @@ import {
   type RequisitionDetail,
 } from '@ims/shared';
 import { t } from '@/i18n/en';
+import { Role } from '@ims/shared';
 import { ApprovalTracker } from './ApprovalTracker';
+
+/**
+ * Who is looking. The tracker asks, because the last node of a finished chain now offers the
+ * next step and not everyone is allowed to take it.
+ */
+let viewerRoles: Role[] = [];
+vi.mock('@/features/auth/auth-context', () => ({
+  useAuth: () => ({
+    hasRole: (...roles: Role[]) => roles.some((role) => viewerRoles.includes(role)),
+  }),
+}));
+
+/**
+ * The tracker links out, so it needs a router around it. Wrapping here rather than at each of
+ * the call sites keeps the tests reading as `render(<ApprovalTracker …/>)`.
+ */
+function render(ui: ReactElement) {
+  return rtlRender(<MemoryRouter>{ui}</MemoryRouter>);
+}
+
+beforeEach(() => {
+  viewerRoles = [];
+});
 
 function approval(overrides: Partial<Approval> = {}): Approval {
   return {
@@ -247,5 +273,77 @@ describe('ApprovalTracker', () => {
     );
 
     expect(container.querySelector('.bg-surface-muted')).toBeNull();
+  });
+});
+
+/**
+ * The next step, at the end of a chain that finished.
+ *
+ * Ayman, 2026-09-01: "after requisition fully approved in progress there will be link which
+ * leads him to generating bom". Before this the only route was to leave the requisition, open
+ * Bills of Materials, and find it again among every other approved one — so the link is only
+ * worth anything if it carries the requisition with it.
+ */
+describe('ApprovalTracker — the next step after approval', () => {
+  const approvedChain = () =>
+    requisition({
+      status: RequisitionStatus.APPROVED,
+      approvals: [
+        approval({
+          action: ApprovalAction.APPROVED,
+          actedByUserId: 'user-1',
+          actedByUserName: 'Ayesha Approver',
+        }),
+      ],
+    });
+
+  it('links an inventory manager to the BOM builder, carrying the requisition', () => {
+    viewerRoles = [Role.INVENTORY_MANAGER];
+
+    render(<ApprovalTracker requisition={approvedChain()} />);
+
+    const link = screen.getByRole('link', { name: t.requisitions.generateBomNext });
+    expect(link).toHaveAttribute('href', '/boms/new?requisition=req-1');
+  });
+
+  /**
+   * A call to action the viewer would be refused at is worse than no call to action. Only the
+   * IM and an admin can generate a BOM, so only they are offered the route.
+   */
+  it('offers nothing to an approver, who cannot generate one', () => {
+    viewerRoles = [Role.APPROVER];
+
+    render(<ApprovalTracker requisition={approvedChain()} />);
+
+    expect(screen.queryByRole('link', { name: t.requisitions.generateBomNext })).toBeNull();
+  });
+
+  /**
+   * `APPROVED` exactly. Past it a BOM already exists, and inviting a second one for the same
+   * requisition walks the IM into the conflict the one-live-BOM rule raises.
+   */
+  it('stops offering once a BOM has been generated', () => {
+    viewerRoles = [Role.INVENTORY_MANAGER];
+
+    render(
+      <ApprovalTracker
+        requisition={{ ...approvedChain(), status: RequisitionStatus.BOM_GENERATED }}
+      />,
+    );
+
+    expect(screen.queryByRole('link', { name: t.requisitions.generateBomNext })).toBeNull();
+  });
+
+  /** Still going through the chain: there is nothing to generate yet. */
+  it('offers nothing while the requisition is still awaiting approval', () => {
+    viewerRoles = [Role.INVENTORY_MANAGER];
+
+    render(
+      <ApprovalTracker
+        requisition={{ ...approvedChain(), status: RequisitionStatus.AWAITING_APPROVAL }}
+      />,
+    );
+
+    expect(screen.queryByRole('link', { name: t.requisitions.generateBomNext })).toBeNull();
   });
 });

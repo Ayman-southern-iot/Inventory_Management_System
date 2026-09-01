@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -104,11 +104,12 @@ const MULTI_ITEM: BomCandidate = {
   ],
 };
 
-function renderGenerate() {
+/** `entry` carries the query string, which is how a requisition arrives already chosen. */
+function renderGenerate(entry = '/boms/new') {
   return render(
     <QueryClientProvider client={new QueryClient()}>
       <ToastProvider>
-        <MemoryRouter initialEntries={['/boms/new']}>
+        <MemoryRouter initialEntries={[entry]}>
           <BomGeneratePage />
         </MemoryRouter>
       </ToastProvider>
@@ -227,5 +228,68 @@ describe('BomGeneratePage', () => {
     });
     // Quantity matches source, so the wire field is undefined (server reads source).
     expect(payload.lines[0].quantity).toBeUndefined();
+  });
+});
+
+/**
+ * Arriving from an approved requisition.
+ *
+ * Ayman, 2026-09-01: the tracker on a fully approved requisition now links here. That link is
+ * only worth following if it brings the requisition with it — otherwise it has dropped the IM
+ * into the same list they were trying to avoid searching.
+ */
+describe('BomGeneratePage — a requisition chosen by the link that got here', () => {
+  beforeEach(() => {
+    vi.mocked(bomApi.useBomCandidates).mockReturnValue({
+      data: [SINGLE_OVER_BUDGET, MULTI_ITEM],
+      isLoading: false,
+      isError: false,
+    } as unknown as ReturnType<typeof bomApi.useBomCandidates>);
+  });
+
+  /**
+   * A picked requisition prints its number twice — once in the picker, once as the group header
+   * over its lines — so the row has to be found by the one that is a picker row.
+   */
+  const pickerRow = (requisitionNo: string) =>
+    screen
+      .getAllByText(requisitionNo)
+      .map((node) => node.closest('label'))
+      .find((label): label is HTMLLabelElement => label !== null)!;
+
+  it('opens with the requisition named in the URL already ticked, and only that one', () => {
+    renderGenerate('/boms/new?requisition=r-multi');
+
+    expect(within(pickerRow('REQ-000101')).getByRole('checkbox')).toBeChecked();
+    expect(within(pickerRow('REQ-000100')).getByRole('checkbox')).not.toBeChecked();
+  });
+
+  /** The lines have to be loaded too, or the ticked row is a tick and nothing else. */
+  it('loads the picked requisition’s lines ready to adjust', () => {
+    renderGenerate('/boms/new?requisition=r-multi');
+
+    // Both of the multi-item candidate lines, each with its editable quantity.
+    expect(screen.getAllByLabelText(t.boms.lineQuantityLabel)).toHaveLength(2);
+  });
+
+  /**
+   * A link kept in a tab overnight, followed after somebody else put that requisition on a BOM.
+   * The id no longer matches a candidate, and the right outcome is an ordinary empty picker —
+   * not a crash, and not a phantom selection the IM cannot see to clear.
+   */
+  it('opens with nothing ticked when the id is no longer a candidate', () => {
+    renderGenerate('/boms/new?requisition=r-gone');
+
+    for (const box of screen.getAllByRole('checkbox')) {
+      expect(box).not.toBeChecked();
+    }
+  });
+
+  it('opens with nothing ticked when no requisition was named', () => {
+    renderGenerate();
+
+    for (const box of screen.getAllByRole('checkbox')) {
+      expect(box).not.toBeChecked();
+    }
   });
 });

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useFieldArray, useForm, useWatch } from 'react-hook-form';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Send, Undo2 } from 'lucide-react';
 import {
   type BomCandidate,
@@ -59,7 +59,22 @@ export function BomGeneratePage() {
   const generate = useGenerateBom();
   const sendBack = useSendBackForRevision();
 
-  const [pickedIds, setPickedIds] = useState<Set<string>>(new Set());
+  /**
+   * A requisition can arrive already chosen: `?requisition=<id>`.
+   *
+   * The link on an approved requisition is the whole point — an IM who has just approved
+   * something should not have to come here and find it again in a list of everything else that
+   * is approved. Seeded once from the URL rather than kept in sync with it, so un-ticking the
+   * row actually un-ticks it instead of the query string putting it straight back.
+   *
+   * An id that is not a candidate simply never matches a row, which is the right outcome for a
+   * stale link: the page opens, nothing is ticked, and the IM picks for themselves.
+   */
+  const [searchParams] = useSearchParams();
+  const [pickedIds, setPickedIds] = useState<Set<string>>(() => {
+    const preselected = searchParams.get('requisition');
+    return preselected ? new Set([preselected]) : new Set();
+  });
   const [sendBackFor, setSendBackFor] = useState<{ id: string; no: string } | null>(null);
   const [sendBackReason, setSendBackReason] = useState('');
 

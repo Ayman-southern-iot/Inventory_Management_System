@@ -21,6 +21,14 @@ export const ROUTES = {
   boms: {
     all: '/boms',
     new: '/boms/new',
+    /**
+     * The builder with one requisition already ticked.
+     *
+     * Used by the link on an approved requisition: the IM who just approved it should not have
+     * to find it again in a list of everything else that is approved.
+     */
+    newForRequisition: (requisitionId: string) =>
+      '/boms/new?requisition=' + encodeURIComponent(requisitionId),
     /** The router pattern; the helper below builds links. */
     detailPattern: '/boms/:bomId',
     detail: (id: string) => '/boms/' + id,

@@ -982,6 +982,14 @@ export const t = {
     // Shown on a draft, where there is no chain yet. Says why rather than just that.
     trackerEmpty:
       'Not submitted yet. The approval chain is worked out when you submit, and appears here.',
+    /*
+     * The end of the chain is not the end of the job.
+     *
+     * Everybody has signed and the requisition now waits to be put on a BOM, so the tracker says
+     * what happens next rather than stopping at a tick. "Generate" is the word on the button it
+     * leads to, so the two read as one action.
+     */
+    generateBomNext: 'Generate the BOM for this requisition',
     seeWhy: 'See why',
     rejectedBy: 'Rejected by',
     approvedBy: 'Approved by',
