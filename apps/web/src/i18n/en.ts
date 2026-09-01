@@ -132,38 +132,53 @@ export const t = {
      * each tile — the section headings carry it, so the numbers stay scannable.
      */
     yourRecord: 'Your record',
-    yourRecordHint: 'Everything you have raised, borrowed and spent. Only you see these figures.',
+    yourRecordHint: 'Only you can see this.',
 
+    /*
+     * Plain words over precise ones, on Ayman's instruction (2026-09-01). This is the first
+     * screen everybody sees and several of these labels were written for somebody who already
+     * knew the domain — "In flight", "Actually spent", "On transportation". Every label here now
+     * says what it is in words anyone in the office would use.
+     */
     requisitionsHeading: 'Requisitions',
+    requisitionsHint: '{n} raised in total.',
+    groupInMotion: 'Still going on',
+    groupSettled: 'Finished',
     raised: 'Raised',
+    inFlight: 'Waiting for approval',
+    draftsCount: 'Not sent yet',
     approvedCount: 'Approved',
     rejectedCount: 'Rejected',
-    inFlight: 'In progress',
-    draftsCount: 'Drafts',
     cancelledCount: 'Cancelled',
 
     borrowingHeading: 'Borrowing',
+    borrowingHint: '{n} items borrowed in total.',
+    groupWhereTheyAre: 'Where they are',
+    groupHowTheyCameBack: 'How they came back',
     borrowedCount: 'Borrowed',
-    returnedCount: 'Fully returned',
-    stillOut: 'Still out',
+    stillOut: 'Still with you',
+    returnedCount: 'Given back',
     // Units, not requests: three of five cables back damaged is three, and the copy has to be
     // unambiguous about that or the number reads as "three separate borrowings".
-    partiallyDamagedUnits: 'Returned partly damaged',
-    damagedUnits: 'Returned damaged',
-    notWorkingUnits: 'Returned not working',
+    partiallyDamagedUnits: 'Came back partly damaged',
+    damagedUnits: 'Came back damaged',
+    notWorkingUnits: 'Came back not working',
     unitsSuffix: 'units',
 
     spendHeading: 'Money',
-    spendRequested: 'Requested',
-    spendApproved: 'Approved',
-    spendSpent: 'Actually spent',
-    // The two halves of "actually spent", shown because transportation has no invoice behind it:
-    // an auditor adding up purchase totals would otherwise be short by exactly the carriage and
-    // have nowhere on the page to find it.
-    spendPurchased: 'On purchases',
-    spendTransportation: 'On transportation',
-    spendHint:
-      'Spent is what actually left the company on your requisitions: the purchases plus the transportation. Not what was requested or approved.',
+    /*
+     * Four figures, each named in full, on Ayman's instruction (2026-09-01).
+     *
+     * The card used to show a derived "Actually spent" with its two halves listed underneath —
+     * a total and its own components side by side, leaving the reader to work out which was
+     * which. Purchasing plus transportation is what left the company; anybody who wants that sum
+     * can add two numbers, and nobody has to decode a label to get there.
+     */
+    spendRequested: 'Total Money Requested',
+    spendApproved: 'Total Money Approved',
+    spendPurchased: 'Total Money in Purchasing',
+    spendTransportation: 'Total Transportation',
+    spendHint: 'What you asked for, what was approved, and what has actually been paid out.',
 
     /** Shown in place of a block when the person has nothing in it yet. */
     nothingYet: 'Nothing yet.',

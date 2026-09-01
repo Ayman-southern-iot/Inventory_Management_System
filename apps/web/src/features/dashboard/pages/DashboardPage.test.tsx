@@ -134,30 +134,41 @@ describe('the personal record', () => {
   });
 
   /**
-   * "Based on only spent money" — the figure most at risk of quietly being the wrong one of three
-   * plausible numbers.
+   * Four figures, and the risk is that two of them are quietly the same number.
+   *
+   * Requested, approved and purchased are three plausible answers to "how much was it", and a
+   * card that reads one of them into the wrong row is wrong in a way nobody notices — the
+   * figures all look reasonable. The fixture makes them deliberately distinct.
    */
-  it('shows spent as the purchase total, distinct from requested and approved', () => {
+  it('keeps requested, approved and purchasing distinct from one another', () => {
     renderPage(record());
 
-    expect(figureIn(MONEY, t.dashboard.spendSpent)).toContain('88,500');
-    expect(figureIn(MONEY, t.dashboard.spendApproved)).toContain('95,000');
     expect(figureIn(MONEY, t.dashboard.spendRequested)).toContain('120,000');
+    expect(figureIn(MONEY, t.dashboard.spendApproved)).toContain('95,000');
+    expect(figureIn(MONEY, t.dashboard.spendPurchased)).toContain('76,000');
   });
 
   /**
    * The bug Ayman reported on 2026-08-26: a 1,000 requisition of which 500 was a van showed 250
-   * spent, because transportation has no `purchases` row behind it. Spent now covers both, and
-   * the two halves are shown so the total can be reconciled against the invoices rather than
-   * merely believed.
+   * spent, because transportation has no `purchases` row behind it.
+   *
+   * The card no longer prints a combined total — Ayman, 2026-09-01: four figures, each named in
+   * full. So the guard is that the carriage has a row of its own and carries a real figure: the
+   * two together are what left the company, and neither can go missing without showing.
    */
-  it('breaks spent into purchases and transportation, and they add up', () => {
+  it('gives transportation a figure of its own, beside what was purchased', () => {
     renderPage(record());
 
     expect(figureIn(MONEY, t.dashboard.spendPurchased)).toContain('76,000');
     expect(figureIn(MONEY, t.dashboard.spendTransportation)).toContain('12,500');
-    // 76,000 + 12,500 = 88,500, which is what the Spent tile says.
-    expect(figureIn(MONEY, t.dashboard.spendSpent)).toContain('88,500');
+  });
+
+  /** The combined figure is gone on purpose; a stray one would be the third answer to "how much". */
+  it('prints no total beside the two halves that make it', () => {
+    renderPage(record());
+
+    const money = screen.getByRole('region', { name: MONEY });
+    expect(within(money).queryByText('88,500')).toBeNull();
   });
 
   /** A wall of zeroes says less than one sentence. */

@@ -77,7 +77,7 @@ function Fact({
         span ? 'sm:col-span-2' : '',
       ].join(' ')}
     >
-      <dt className="mb-1 text-[0.6875rem] font-semibold uppercase tracking-wider text-ink-subtle">
+      <dt className="mb-1 text-xs font-semibold uppercase tracking-wider text-ink-subtle">
         {label}
       </dt>
       {/* `break-words`: a long project name must wrap inside its column rather than widen the

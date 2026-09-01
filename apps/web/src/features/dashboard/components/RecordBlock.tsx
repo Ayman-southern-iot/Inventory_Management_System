@@ -24,11 +24,15 @@ export function Figure({
 }) {
   const isZero = value === 0 || value === '0';
   return (
-    <div>
-      <dt className="text-xs font-medium text-ink-muted">{label}</dt>
+    // Full height with the value pushed to the bottom, so three figures in a row line up even
+    // when one label wraps to two lines and its neighbours do not. Without this the numbers
+    // stagger down the row and stop being comparable at a glance, which is the only thing a row
+    // of figures is for.
+    <div className="flex h-full flex-col">
+      <dt className="text-xs font-medium leading-tight text-ink-muted">{label}</dt>
       <dd
         className={cn(
-          'mt-0.5 text-2xl font-semibold tabular-nums',
+          'mt-auto pt-1 text-2xl font-semibold tabular-nums',
           tone === 'neutral' || isZero
             ? 'text-ink'
             : tone === 'warning'
@@ -52,12 +56,22 @@ export function RecordBlock({
   title,
   hint,
   isEmpty,
+  grouped,
+  columns = 3,
   children,
 }: {
   title: string;
   hint?: string;
   /** When true the figures are replaced by one line, rather than a wall of zeroes. */
   isEmpty?: boolean;
+  /**
+   * The children are `Group`s, each bringing its own list. Six numbers in one undivided grid
+   * read as six unrelated facts; "in motion" and "settled" are two questions, and saying so
+   * costs one line of heading.
+   */
+  grouped?: boolean;
+  /** Figures per row. Four figures in a three-column grid leave a lonely orphan on row two. */
+  columns?: 2 | 3;
   children: ReactNode;
 }) {
   return (
@@ -71,10 +85,52 @@ export function RecordBlock({
 
         {isEmpty ? (
           <p className="mt-4 text-sm text-ink-subtle">{t.dashboard.nothingYet}</p>
+        ) : grouped ? (
+          <div className="mt-4 flex flex-col gap-5">{children}</div>
         ) : (
-          <dl className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3">{children}</dl>
+          <dl
+            className={cn(
+              'mt-4 grid gap-4',
+              columns === 2 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-2 sm:grid-cols-3',
+            )}
+          >
+            {children}
+          </dl>
         )}
       </section>
     </Panel>
+  );
+}
+
+/**
+ * A named run of figures inside a block — "In motion", "Settled".
+ *
+ * The heading is small and quiet on purpose: it is a label for the row beneath it, not a
+ * competitor to the block title above. The rule under it is what actually separates the groups;
+ * without it two headings in one card read as two cards that failed to draw their borders.
+ */
+export function Group({
+  title,
+  columns = 3,
+  children,
+}: {
+  title: string;
+  columns?: 2 | 3;
+  children: ReactNode;
+}) {
+  return (
+    <div>
+      <p className="border-b border-border pb-1 text-xs font-semibold uppercase tracking-wider text-ink-subtle">
+        {title}
+      </p>
+      <dl
+        className={cn(
+          'mt-3 grid gap-4',
+          columns === 2 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-2 sm:grid-cols-3',
+        )}
+      >
+        {children}
+      </dl>
+    </div>
   );
 }
