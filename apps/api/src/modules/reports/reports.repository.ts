@@ -24,6 +24,15 @@ export interface ExpenseRow {
   returned: string | null;
 }
 
+/** One ranked line of spend. Money and counts arrive as text, like every other figure here. */
+export interface TopSpendRow {
+  product_id: string | null;
+  /** Null when the requisition line was free text with no catalogue product behind it. */
+  name: string | null;
+  quantity: string;
+  spend: string;
+}
+
 @Injectable()
 export class ReportsRepository {
   constructor(@Inject(DB) private readonly db: Db) {}
@@ -225,6 +234,52 @@ export class ReportsRepository {
         AND (${categoryId}::uuid IS NULL OR p.category_id = ${categoryId}::uuid)
         AND (${zoneId}::uuid IS NULL OR z.id = ${zoneId}::uuid)
       ORDER BY p.name ASC, z.name ASC NULLS LAST, cm.code ASC NULLS LAST
+    `.execute(this.db);
+
+    return rows.rows;
+  }
+
+  /**
+   * What the money actually went on, ranked, for one date window.
+   *
+   * Reads purchase_lines rather than bom_lines. A BOM is a plan; a purchase is what was paid.
+   * Ranking the plan would give a list that does not add up to the Items figure sitting above it
+   * on the same page, and that reconciliation is the whole promise of this report.
+   *
+   * voided_at IS NULL on the purchase, so a reversed purchase leaves this list exactly as it
+   * leaves every other figure. Grouped on product_id, with the uncatalogued lines collapsed into
+   * one null-named row rather than aggregated by free text — two spellings of the same laptop
+   * would otherwise add up to a total that is wrong and looks right.
+   */
+  async topSpendItems(
+    query: ExpenseReportQuery,
+    timeZone: string,
+    limit: number,
+  ): Promise<TopSpendRow[]> {
+    const fromDate = query.from ?? null;
+    const toDate = query.to ?? null;
+    const fromInstant = sql`(${fromDate}::date AT TIME ZONE ${timeZone}::text)`;
+    const toInstant = sql`((${toDate}::date + 1) AT TIME ZONE ${timeZone}::text)`;
+
+    const rows = await sql<TopSpendRow>`
+      SELECT
+        ri.product_id,
+        max(pr.name) AS name,
+        sum(pl.quantity)::text AS quantity,
+        sum(pl.quantity * pl.unit_cost)::text AS spend
+      FROM purchase_lines pl
+      JOIN purchases pu ON pu.id = pl.purchase_id
+      JOIN requisition_items ri ON ri.id = pl.requisition_item_id
+      JOIN requisitions r ON r.id = ri.requisition_id
+      LEFT JOIN products pr ON pr.id = ri.product_id
+      WHERE pu.voided_at IS NULL
+        AND (${fromDate}::date IS NULL OR pu.purchased_at >= ${fromInstant})
+        AND (${toDate}::date IS NULL OR pu.purchased_at < ${toInstant})
+        AND (${query.departmentId ?? null}::uuid IS NULL OR r.department_id = ${query.departmentId ?? null}::uuid)
+        AND (${query.projectId ?? null}::uuid IS NULL OR r.project_id = ${query.projectId ?? null}::uuid)
+      GROUP BY ri.product_id
+      ORDER BY sum(pl.quantity * pl.unit_cost) DESC
+      LIMIT ${limit}
     `.execute(this.db);
 
     return rows.rows;

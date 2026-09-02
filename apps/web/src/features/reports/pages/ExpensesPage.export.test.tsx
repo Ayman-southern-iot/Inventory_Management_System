@@ -9,7 +9,15 @@ import { ExpensesPage } from './ExpensesPage';
 
 vi.mock('../api', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
-  return { ...actual, useExpenseReport: vi.fn() };
+  // The trend and the top-items list are separate hooks. Unmocked they would call useQuery for
+  // real, and this file renders the page without a QueryClientProvider on purpose — the export
+  // path is what is under test, not the data fetching.
+  return {
+    ...actual,
+    useExpenseReport: vi.fn(),
+    useSpendTrend: vi.fn(),
+    useTopSpendItems: vi.fn(),
+  };
 });
 
 vi.mock('@/api/client', async (importOriginal) => {
@@ -53,6 +61,13 @@ describe('ExpensesPage — export downloads', () => {
       isError: false,
       error: null,
     } as unknown as ReturnType<typeof reportsApi.useExpenseReport>);
+    // Undefined data: both panels render nothing, which is the state this test wants them in.
+    vi.mocked(reportsApi.useSpendTrend).mockReturnValue({
+      data: undefined,
+    } as unknown as ReturnType<typeof reportsApi.useSpendTrend>);
+    vi.mocked(reportsApi.useTopSpendItems).mockReturnValue({
+      data: undefined,
+    } as unknown as ReturnType<typeof reportsApi.useTopSpendItems>);
     // Reset, not just re-stub: vi.fn() accumulates calls across tests in the same file, and
     // the second test would otherwise read the first test's request out of calls[0].
     vi.mocked(api.blob).mockReset();

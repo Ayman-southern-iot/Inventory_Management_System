@@ -967,3 +967,21 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   current requisition — so the multi-receipt void branch is live, not dead. Those four tests are
   therefore `it.skip` and not retired (G-20), to be restored via a `CONFIG` override on
   `createTestApp()` once the integration suite can run again.
+- 2026-09-02 — The expenses page keeps the shipped nine-status D-020 predicate, not the spec's
+  two — the spec prose says Approved sums `APPROVED` or `FULLY_FUNDED`, but `FULLY_FUNDED` is not
+  a status and the two-status reading would drop every requisition past approval out of the
+  figure (144,700 → a fraction, the moment money moves). The spec's own instruction settles it:
+  "reuse it, do not re-derive it". The prose is shorthand predating the money stages.
+- 2026-09-02 — Top items ranks `purchase_lines`, not `bom_lines` — the spec says "aggregated
+  across BOMs", but a BOM is a plan and a purchase is what was paid. Ranking the plan would give
+  a list that does not add up to the Items figure directly above it, and reconciliation is the
+  page's whole promise. Verified live: the ranked rows sum to exactly the Items total.
+- 2026-09-02 — The spend trend is built on the existing `expenses()` query with the window and the
+  gap-filling done in the service, rather than new SQL with `generate_series` — the spec asks for
+  a left-join or generated series, and this meets the requirement it exists for (empty months are
+  real zeros, window computed in Asia/Dhaka) without a second copy of the D-020 predicate, which
+  is how D-020 happened the first time. The timezone guard is a unit test that fails if the zone
+  is dropped, proven with a red run.
+- 2026-09-02 — The trend chart is inline SVG, not a charting library — one line with twelve points
+  does not justify a dependency, a bundle and a theme adapter, and drawn by hand it inherits the
+  design tokens so it is legible in both themes without a second colour config.

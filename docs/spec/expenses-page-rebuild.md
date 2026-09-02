@@ -148,3 +148,60 @@ Own gate — this touches money and dates. In addition to the standard suite:
 - Do not compute any month boundary or "now" in UTC.
 - Do not group top-items by free-text name.
 - Do not let the export and the page show different figures for the same range.
+
+---
+
+## Build log — 2026-09-02
+
+**Built and shipped.** All four build-order steps landed; nothing was omitted.
+
+| Step | State |
+|---|---|
+| 1. Flow header + items/transport + two gaps | Done — `ExpenseFlow.tsx`, reusing the D-020 totals |
+| 2. Month ledger | Done — `ExpenseLedger.tsx`, footer reconciles with the flow |
+| 3. Trend | Done — `GET /reports/expenses/trend`, `SpendTrendChart.tsx` |
+| 4. Top items | Done — `GET /reports/expenses/top-items`, `TopSpendItems.tsx` |
+
+### The investigation this document required, answered
+
+**Spend is bounded by funded.** `FundsService.recordPurchase` refuses when
+`alreadySpent + alreadyCarried + thisTotal + thisCarriage` exceeds `sumReceipts`, under the row
+lock the transaction already holds. Its one escape (`alreadyFunded === 0`) is unreachable through
+the API: a purchase requires `FUNDS_RECEIVED`, `FUNDS_PARTIAL` or `PURCHASED`; the first two are
+only set by a receipt, voiding the last receipt returns the requisition to `SENT_TO_ACCOUNTS`, and
+`CANNOT_VOID_RECEIPT_WITH_PURCHASES` stops receipts being removed under a purchase.
+
+**No D-025-family gap.**
+
+### Preconditions, all already met
+
+D-020 fixed and status-filtered · D-014 timezone discipline already in the repository ·
+items/transport already split in the query · D-002 verified: lines carry a real `product_id`, so
+Top items was never actually blocked.
+
+### Three deviations, each deliberate
+
+1. **Approved keeps the shipped nine-status predicate**, not the two this document names. There is
+   no `FULLY_FUNDED` status, and the two-status reading would drop every requisition past approval
+   out of the figure — on live data, 144,700 collapsing to a fraction the moment money moves. This
+   document's own instruction, *"reuse it, do not re-derive it"*, settles it in favour of the
+   committed predicate. The prose appears to predate the money stages.
+2. **Top items ranks `purchase_lines`, not `bom_lines`.** A BOM is a plan; a purchase is what was
+   paid. Ranking the plan would give a list that does not add up to the Items figure directly above
+   it. Verified live: the ranked rows sum to exactly the Items total (52,000).
+3. **The trend reuses `expenses()`** with the window and the gap-filling done in the service,
+   rather than new SQL with `generate_series`. Same guarantees — twelve points always, real zeros
+   for empty months, window computed in Asia/Dhaka — without a second copy of the status predicate,
+   which is how D-020 happened the first time.
+
+### Gate
+
+- `items + transport == spent` — asserted live and in the trend unit tests
+- ledger footer == flow Spent == trend point for the month — verified against the running stack
+- a gap month emits 0, not a hole — unit test with two non-adjacent months of spend
+- the rolling window is computed in Asia/Dhaka — unit test that **fails when the zone is dropped**,
+  proven with a red run before the green one
+- Approved is status-filtered — verified by rejecting a requisition carrying 40,000 and watching
+  the Approved total not move
+
+Typecheck clean · lint 20 (baseline) · unit 13 / 83 / 302 · guard 8 (baseline).

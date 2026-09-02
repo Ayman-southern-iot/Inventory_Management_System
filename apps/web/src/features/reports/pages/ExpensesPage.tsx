@@ -1,14 +1,21 @@
 import { useMemo, useState } from 'react';
-import type { ExpenseGroupBy, ExpenseReportQuery } from '@ims/shared';
+import type { ExpenseGroupBy, ExpenseReport, ExpenseReportQuery } from '@ims/shared';
 import { Button } from '@/components/ui/Button';
-import { PageHeader, Panel, Table } from '@/components/ui/primitives';
+import { PageHeader, Panel } from '@/components/ui/primitives';
 import { EmptyState, QueryBoundary, SkeletonRows } from '@/components/ui/states';
 import { t } from '@/i18n/en';
-import { cn } from '@/lib/cn';
-import { formatBdt } from '@/lib/format';
 import { messageForError } from '@/lib/error-message';
 import { useToast } from '@/components/ui/Toast';
-import { useExpenseReport, expenseExportPath } from '../api';
+import { ExpenseFlow } from '../components/ExpenseFlow';
+import { ExpenseLedger } from '../components/ExpenseLedger';
+import { SpendTrendChart } from '../components/SpendTrendChart';
+import { TopSpendItems } from '../components/TopSpendItems';
+import {
+  useExpenseReport,
+  useSpendTrend,
+  useTopSpendItems,
+  expenseExportPath,
+} from '../api';
 import { useExportDownload } from '../use-export-download';
 
 /** Stem of the saved filename; the date and the extension are appended per download. */
@@ -39,29 +46,26 @@ function presets(): Array<{ label: string; from: string | null; to: string | nul
 }
 
 /**
- * A right-aligned, tabular-figure cell. Money columns only line up for comparison when the digits
- * are monospaced and the decimals agree, which is the whole reason this table exists.
+ * What the flow header calls this period.
+ *
+ * Read from the report's own `from`/`to` rather than the filter inputs: the server applies the
+ * reporting time zone when it resolves the window, so a label built from the raw inputs would
+ * drift from the figures underneath it. With a single month in view the month name is friendlier
+ * than a date range, and with no bounds at all the honest answer is that it covers everything.
  */
-function Amount({
-  value,
-  plain = false,
-  emphasis = false,
-}: {
-  value: number;
-  /** A count, not money — no forced decimals. */
-  plain?: boolean;
-  emphasis?: boolean;
-}) {
-  return (
-    <td
-      className={cn(
-        'px-4 py-2.5 text-right tabular-nums',
-        emphasis && 'font-semibold text-ink',
-      )}
-    >
-      {plain ? value : formatBdt(value)}
-    </td>
-  );
+function periodLabel(report: ExpenseReport): string {
+  const { from, to } = report;
+  if (!from && !to) return t.expenses.allTime;
+  if (from && to) {
+    const start = new Date(`${from}T00:00:00`);
+    const end = new Date(`${to}T00:00:00`);
+    const sameMonth =
+      start.getFullYear() === end.getFullYear() && start.getMonth() === end.getMonth();
+    if (sameMonth) {
+      return start.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+    }
+  }
+  return [from, to].filter(Boolean).join(' – ');
 }
 
 export function ExpensesPage() {
@@ -75,6 +79,11 @@ export function ExpensesPage() {
   );
 
   const report = useExpenseReport(query);
+  // Independent of the page filter on purpose: the trend answers a different question from the
+  // range picker, so it must not shrink to the selected month.
+  const trend = useSpendTrend();
+  // Same query as the report, so the ranking cannot disagree with the Items figure above it.
+  const topItems = useTopSpendItems(query);
 
   // One hook per button, so a slow PDF render cannot disable the CSV button and a double
   // click on either is a no-op rather than a second request.
@@ -186,51 +195,47 @@ export function ExpensesPage() {
               <EmptyState title={t.expenses.emptyTitle} body={t.expenses.emptyBody} />
             ) : (
               <>
-                <Table
-                  headers={[
-                    t.expenses.bucket,
-                    t.expenses.count,
-                    t.expenses.requested,
-                    t.expenses.approved,
-                    t.expenses.funded,
-                    t.expenses.spent,
-                    t.expenses.spentOnPurchases,
-                    t.expenses.spentOnTransportation,
-                    t.expenses.returned,
-                    t.expenses.netCash,
-                  ]}
-                >
-                  {data.buckets.map((bucket) => (
-                    <tr key={bucket.key}>
-                      <td className="px-4 py-2.5 font-medium text-ink">{bucket.label}</td>
-                      <Amount value={bucket.requisitionCount} plain />
-                      <Amount value={bucket.requested} />
-                      <Amount value={bucket.approved} />
-                      <Amount value={bucket.funded} />
-                      <Amount value={bucket.spent} />
-                      <Amount value={bucket.purchased} />
-                      <Amount value={bucket.transportation} />
-                      <Amount value={bucket.returned} />
-                      <Amount value={bucket.netCash} emphasis />
-                    </tr>
-                  ))}
-                  {/* The totals ride in the body because the shared Table owns thead/tbody. The
-                      heavier top border is what makes it read as a summary rather than a row. */}
-                  <tr className="border-t-2 border-border font-semibold">
-                    <td className="px-4 py-2.5">{t.expenses.total}</td>
-                    <Amount value={data.totals.requisitionCount} plain />
-                    <Amount value={data.totals.requested} />
-                    <Amount value={data.totals.approved} />
-                    <Amount value={data.totals.funded} />
-                    <Amount value={data.totals.spent} />
-                    <Amount value={data.totals.purchased} />
-                    <Amount value={data.totals.transportation} />
-                    <Amount value={data.totals.returned} />
-                    <Amount value={data.totals.netCash} emphasis />
-                  </tr>
-                </Table>
+                <ExpenseFlow totals={data.totals} periodLabel={periodLabel(data)} />
+                <div className="border-t border-border">
+                  <ExpenseLedger report={data} groupBy={groupBy} />
+                </div>
+                {/* Side by side above `lg`: the trend answers "when" and the list answers
+                    "on what", and they are read together. Stacked below it, because a
+                    twelve-point chart in half of a phone is unreadable. */}
+                <div className="grid grid-cols-1 border-t border-border lg:grid-cols-[3fr_2fr]">
+                  {trend.data ? (
+                    <section>
+                      <div className="px-4 pb-1 pt-4">
+                        <h2 className="text-base font-semibold text-ink">
+                          {t.expenses.trendHeading}
+                        </h2>
+                        <p className="mt-0.5 text-xs text-ink-subtle">
+                          {t.expenses.trendSubtitle.replace('{range}', trend.data.rangeLabel)}
+                        </p>
+                      </div>
+                      <div className="px-2 pb-3">
+                        <SpendTrendChart trend={trend.data} />
+                      </div>
+                    </section>
+                  ) : null}
+
+                  {topItems.data ? (
+                    <section className="border-t border-border lg:border-l lg:border-t-0">
+                      <div className="px-4 pb-3 pt-4">
+                        <h2 className="text-base font-semibold text-ink">
+                          {t.expenses.topItemsHeading}
+                        </h2>
+                        <p className="mt-0.5 text-xs text-ink-subtle">
+                          {t.expenses.topItemsSubtitle}
+                        </p>
+                      </div>
+                      <TopSpendItems data={topItems.data} />
+                    </section>
+                  ) : null}
+                </div>
+
                 {/* The two different date bases are the one thing that surprises people reading
-                    this table, so it is stated rather than left to be discovered. */}
+                    these figures, so it is stated rather than left to be discovered. */}
                 <p className="border-t border-border px-4 py-2 text-xs text-ink-subtle">
                   {t.expenses.attributionHint}
                 </p>

@@ -104,6 +104,67 @@ export const expenseReportSchema = z.object({
 });
 export type ExpenseReport = z.infer<typeof expenseReportSchema>;
 
+/* ------------------------------------------------------------------ trend */
+
+/**
+ * One month of the rolling spend trend.
+ *
+ * `total` is `items + transport`, the same figure the ledger prints in its Total column — the
+ * chart and the table must not be two answers to one question.
+ */
+export const spendTrendPointSchema = z.object({
+  /** `2026-09`. */
+  key: z.string(),
+  /** `Sep 2026`, already rendered in the reporting time zone. */
+  label: z.string(),
+  items: z.number(),
+  transport: z.number(),
+  total: z.number(),
+});
+export type SpendTrendPoint = z.infer<typeof spendTrendPointSchema>;
+
+/**
+ * The rolling twelve months ending with the current one.
+ *
+ * **Always twelve points, in order, zeros included.** A `group by month` naturally drops months
+ * with no spend, and a line that skips them slopes between the months either side — which reads
+ * as "we spent something in February" when the truth is that we spent nothing. The window is
+ * computed server-side from the reporting time zone: on the 1st of a month a UTC "now" is still
+ * the previous month for six hours in Asia/Dhaka, and the window must not shift.
+ */
+export const spendTrendSchema = z.object({
+  /** What the heading prints, e.g. `Sep 2025 – Aug 2026`. Named, never "all time". */
+  rangeLabel: z.string(),
+  points: z.array(spendTrendPointSchema).length(12),
+});
+export type SpendTrend = z.infer<typeof spendTrendSchema>;
+
+/* -------------------------------------------------------------- top items */
+
+/**
+ * One row of the top-items list.
+ *
+ * Aggregated by `product_id`, never by name. Free-text lines carry no product, so they cannot
+ * be grouped with anything — "Lenovo T14" and "lenovo thinkpad" are two different strings and
+ * adding them together would produce a total that is wrong and looks right. They are counted
+ * into a single uncatalogued row instead, which is honest about what it is.
+ *
+ * `name` is null for that row rather than carrying a label: user-visible copy lives in the
+ * i18n file, not in a SQL literal.
+ */
+export const topSpendItemSchema = z.object({
+  productId: z.string().uuid().nullable(),
+  name: z.string().nullable(),
+  quantity: z.number().int(),
+  spend: z.number(),
+});
+export type TopSpendItem = z.infer<typeof topSpendItemSchema>;
+
+export const topSpendItemsSchema = z.object({
+  items: z.array(topSpendItemSchema),
+});
+export type TopSpendItems = z.infer<typeof topSpendItemsSchema>;
+
 /* =========================================================== inventory report */
 
 /**

@@ -120,6 +120,9 @@ export const queryKeys = {
   reports: {
     all: () => ['reports'] as const,
     expenses: (query: ExpenseReportQuery) => ['reports', 'expenses', query] as const,
+    /** No query: the window is always the last twelve months, decided by the server. */
+    spendTrend: () => ['reports', 'expenses', 'trend'] as const,
+    topItems: (query: ExpenseReportQuery) => ['reports', 'expenses', 'top-items', query] as const,
   },
   notifications: {
     all: () => ['notifications'] as const,

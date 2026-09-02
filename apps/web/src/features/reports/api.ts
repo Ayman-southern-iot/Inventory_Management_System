@@ -1,5 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
-import type { ExpenseReport, ExpenseReportQuery, InventoryReportQuery } from '@ims/shared';
+import type {
+  ExpenseReport,
+  ExpenseReportQuery,
+  InventoryReportQuery,
+  SpendTrend,
+  TopSpendItems,
+} from '@ims/shared';
 import { api } from '@/api/client';
 import { queryKeys } from '@/api/keys';
 import { toSearchParams } from '@/api/search-params';
@@ -11,6 +17,30 @@ export function useExpenseReport(query: ExpenseReportQuery) {
       api.get<ExpenseReport>(`/reports/expenses${toSearchParams(query)}`, signal),
     // Keeps the previous table on screen while a new range loads, so changing the filter does not
     // blank the page and shift everything under the cursor.
+    placeholderData: (previous) => previous,
+  });
+}
+
+/**
+ * The rolling twelve-month spend trend.
+ *
+ * Deliberately not filtered by the page range: the trend answers "what has the shape of our
+ * spending been", which is a different question from "what happened in the range I picked", and
+ * a trend that shrank to the selected month would just be the flow header drawn as a dot.
+ */
+export function useSpendTrend() {
+  return useQuery({
+    queryKey: queryKeys.reports.spendTrend(),
+    queryFn: ({ signal }) => api.get<SpendTrend>(`/reports/expenses/trend`, signal),
+  });
+}
+
+/** What the money went on, over the page's own range so the two agree. */
+export function useTopSpendItems(query: ExpenseReportQuery) {
+  return useQuery({
+    queryKey: queryKeys.reports.topItems(query),
+    queryFn: ({ signal }) =>
+      api.get<TopSpendItems>(`/reports/expenses/top-items${toSearchParams(query)}`, signal),
     placeholderData: (previous) => previous,
   });
 }

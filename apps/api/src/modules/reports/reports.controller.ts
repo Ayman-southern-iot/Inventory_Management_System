@@ -7,6 +7,8 @@ import {
   type ExpenseReportQuery,
   type InventoryReport,
   type InventoryReportQuery,
+  type SpendTrend,
+  type TopSpendItems,
 } from '@ims/shared';
 import type { Response } from 'express';
 import { CONFIG, type AppConfig } from '../../config';
@@ -44,6 +46,26 @@ export class ReportsController {
     @Query(zodPipe(expenseReportQuerySchema)) query: ExpenseReportQuery,
   ): Promise<ExpenseReport> {
     return this.reports.expenses(query);
+  }
+
+  /**
+   * The rolling twelve months of spend.
+   *
+   * Takes no query at all: the window is the last twelve months ending with the current one,
+   * computed in the reporting time zone, and that is the whole point of it. A caller-supplied
+   * range would just be the expenses endpoint again.
+   */
+  /** What the money went on, ranked, over the same window the page is showing. */
+  @Get('expenses/top-items')
+  async topSpendItems(
+    @Query(zodPipe(expenseReportQuerySchema)) query: ExpenseReportQuery,
+  ): Promise<TopSpendItems> {
+    return this.reports.topSpendItems(query);
+  }
+
+  @Get('expenses/trend')
+  async spendTrend(): Promise<SpendTrend> {
+    return this.reports.spendTrend();
   }
 
   /** CSV export. `content-disposition: attachment` triggers the browser download prompt. */

@@ -550,6 +550,54 @@ export const t = {
     netHint: 'Funded minus what went back to Accounts — what the company is actually out of pocket.',
     attributionHint:
       'Requested and approved are counted by submission date; funded, spent and returned by the date the money moved.',
+    /*
+     * The four-stage flow (spec: docs/spec/expenses-page-rebuild.md).
+     *
+     * Each figure is the source of the next, so the labels are deliberately plain nouns rather
+     * than accounting terms — the page has to read left to right as a story about one pot of
+     * money, not as four unrelated totals.
+     */
+    flowRequested: 'Requested',
+    flowApproved: 'Approved',
+    flowFunded: 'Funded',
+    flowSpent: 'Spent',
+    flowRequestedHint: '{n} requisitions',
+    flowApprovedHint: '{pct}% of requested',
+    flowFundedHint: 'received from Accounts',
+    flowSpentHint: '{pct}% of funded',
+
+    // The split under the flow. Items and transport live at different levels — transport is one
+    // value per requisition, items are per line — so they are summed separately and shown apart.
+    splitItems: 'Items',
+    splitTransport: 'Transport',
+
+    // The two gaps. Not the same number and not to be conflated: one is money an approver has
+    // sanctioned that Accounts has not released, the other is money released and not yet spent.
+    gapAwaiting: 'Awaiting from Accounts',
+    gapInHand: 'In hand, unspent',
+
+    // Shown only when every derived figure agrees. Silence would be ambiguous — the reader
+    // cannot tell "checked and fine" from "never checked".
+    reconciles: 'Figures reconcile',
+    reconcilesOff: 'Figures do not reconcile',
+
+    ledgerHeading: 'Month by month',
+    ledgerHeadingDepartment: 'By department',
+    ledgerHeadingProject: 'By project',
+    ledgerSubtitle: 'Items and transport, most recent first',
+
+    trendHeading: 'Spend trend',
+    // The label names the computed range rather than saying "all time", so it is self-checking:
+    // a window that has drifted is visible in the heading instead of being silently wrong.
+    trendSubtitle: 'Rolling 12 months · {range}',
+    trendEmpty: 'No spend recorded in the last 12 months.',
+
+    topItemsHeading: 'Top items',
+    topItemsSubtitle: 'By spend, this period',
+    topItemsEmpty: 'Nothing purchased in this period yet.',
+    // Free-text lines carry no product to group by, so they are counted apart rather than
+    // aggregated by name — "Lenovo T14" and "lenovo thinkpad" are not the same row.
+    topItemsUncatalogued: 'Not in the catalogue',
   },
 
   account: {
