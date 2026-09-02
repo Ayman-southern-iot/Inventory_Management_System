@@ -31,7 +31,7 @@ items to a page on plain A4. Partial funding is switched **off** for this releas
 - `pnpm lint` → **20 pre-existing errors. Not green.** Compare against 20, not zero.
 - `guard-hardcoding.sh --scan-all` → **8**, against a documented baseline of 7.
 - Migrations 0001–**0030** applied.
-- **51/51 manual critical-flow checks pass** (`IMS-Critical-Flow-Run.md`), including TC-319 —
+- **62/62 manual critical-flow checks pass** (`IMS-Critical-Flow-Run.md`), including TC-319 —
   the carriage leaving with a voided purchase, which is OQ-32 exercised for the first time.
 - `pnpm --filter @ims/api test:int` → **677 pass / 0 fail / 8 skipped (49 files)**. The 8 are G-20.
 
