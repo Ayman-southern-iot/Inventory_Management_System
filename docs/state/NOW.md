@@ -9,8 +9,8 @@
 
 **Phases 00–08 complete, and it is deployed.** A demo stack runs on the VM (`rndserver`) for the
 testing round; everything is pushed to `origin/fix/lan-secure-context`. Since phase 08: three QA
-rounds, the expenses page rebuilt to Ayman's spec, and the money surface hardened — it refuses what
-it cannot pay for and now says what happened to every taka.
+rounds, the expenses page rebuilt to spec, and a money surface that refuses what it cannot pay for
+and now says what happened to every taka.
 
 Off for this release behind config flags: **partial funding** and **revising the approved amount**.
 
@@ -18,10 +18,9 @@ Off for this release behind config flags: **partial funding** and **revising the
 
 **Nothing is queued — ask before starting.** In the order I would take them:
 
-1. **Split the demo flag** so testing gets five accounts *without* four invented products. Offered
-   twice, not yet asked for. ~15 minutes.
-2. **File upload and signatures are still untested** — supporting documents, invoices,
-   approve-with-signature. The largest untouched surface, and the likeliest first surprise.
+1. **Split the demo flag** so testing gets five accounts *without* four invented products. ~15 min.
+2. **File upload and signatures are still untested** — documents, invoices, approve-with-signature.
+   The largest untouched surface, and the likeliest first surprise.
 3. **F-5**: every BOM signature prints "for &lt;their own name&gt;", on the document Accounts reads.
 4. `G-14`'s prevention half · `OQ-30` · `OQ-31`.
 
@@ -41,7 +40,7 @@ Off for this release behind config flags: **partial funding** and **revising the
    Before real data: redeploy via `infra/` (see the `deploy` skill) and do **not** migrate the
    testing database across.
 2. Offsite backups (**G-16**) and a restore drill against the real compose stack (**G-17**).
-3. A fresh production install processes no requisition until an admin sets the sub-threshold
+3. A fresh production install accepts no requisition until an admin sets the sub-threshold
    approver, both approver slots, an IM and a department. RUNBOOK §0.
 
 ## Landmines — full list in `ASSIST.md` §9
@@ -51,10 +50,10 @@ Off for this release behind config flags: **partial funding** and **revising the
   repairs in one session.
 - **Two compose files.** Root = demo, secrets hardcoded in the public repo. `infra/` = production.
   Read the `deploy` skill before writing any deployment instruction.
-- **Built output goes stale and lies confidently.** Rebuild before measuring the PDF; a config
-  default does not reach the container without `--build`.
-- **The API rate limits, correctly** — 300 req/60s per IP, 10 logins/60s. A harness trips both and
-  it looks like a broken app. See the `api-probe` skill.
+- **Built output goes stale and lies confidently.** A config default does not reach the container
+  without `--build`.
+- **The API rate limits, correctly** — 300/60s per IP, 10 logins/60s. A harness trips both and it
+  reads as a broken app. See the `api-probe` skill.
 - **`pnpm typecheck` reads `packages/shared/dist`.** Change a contract, rebuild shared.
 - **`D-nnn` is the QA defect numbering — never use it for a decision.** Cite by `OQ-*` / `G-*`.
 - **`resetData` keeps requisitions**, so money accumulates across a spec file.
