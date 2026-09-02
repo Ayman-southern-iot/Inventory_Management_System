@@ -48,3 +48,6 @@ playwright-shots/
 
 # Graphify knowledge graph (generated locally, large artifacts)
 graphify-out/
+
+# Regenerated on demand by docs/manual/verify/dump.js
+docs/manual/verify/screens.txt

@@ -1,0 +1,1095 @@
+<!--
+  User manual, rendered to PDF by docs/manual/build-pdf.js.
+
+  Every button name, field name and status word in here was read off the running application or
+  out of apps/web/src/i18n/en.ts. If the interface is reworded, this file is wrong until it is
+  reworded too — do not paraphrase from memory.
+-->
+<meta charset="utf-8" />
+<title>Inventory Management System — User Manual</title>
+<style>
+  /* Margins come from build-pdf.js, not from here. Setting them in both places makes Chromium
+     apply them twice, and the text column quietly shrinks. */
+  @page { size: A4; }
+
+  :root {
+    --ink: #16181d;
+    --ink-soft: #454a54;
+    --ink-faint: #6b7280;
+    --rule: #d9dce3;
+    --rule-soft: #e8eaf0;
+    --brand: #1d4ed8;
+    --brand-soft: #eff4ff;
+    --warn: #b45309;
+    --warn-soft: #fff8ec;
+    --stop: #b91c1c;
+    --stop-soft: #fef4f4;
+    --ok: #15803d;
+    --ok-soft: #f1fbf4;
+    --paper: #ffffff;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font: 10.5pt/1.62 "Segoe UI", -apple-system, "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  p { margin: 0 0 8pt; }
+  strong { font-weight: 600; color: var(--ink); }
+
+  /* ---------------------------------------------------------------- cover */
+
+  .cover {
+    height: 247mm;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    page-break-after: always;
+  }
+  .cover .rule-top {
+    border-top: 3pt solid var(--brand);
+    width: 60pt;
+    margin-bottom: 20pt;
+  }
+  .cover h1 {
+    font-size: 30pt;
+    line-height: 1.15;
+    margin: 0 0 10pt;
+    letter-spacing: -0.4pt;
+    font-weight: 650;
+  }
+  .cover .sub {
+    font-size: 13pt;
+    color: var(--ink-soft);
+    margin: 0 0 34pt;
+    font-weight: 400;
+  }
+  .cover .who {
+    border-top: 1pt solid var(--rule);
+    padding-top: 14pt;
+    font-size: 10pt;
+    color: var(--ink-soft);
+    max-width: 118mm;
+  }
+  .cover .who b { color: var(--ink); font-weight: 600; }
+  .cover .meta {
+    margin-top: 30pt;
+    font-size: 9pt;
+    color: var(--ink-faint);
+  }
+
+  /* ---------------------------------------------------------------- structure */
+
+  .part {
+    page-break-before: always;
+    margin: 0 0 16pt;
+    padding: 14pt 0 12pt;
+    border-top: 3pt solid var(--brand);
+    border-bottom: 1pt solid var(--rule);
+  }
+  .part .kicker {
+    font-size: 8.5pt;
+    letter-spacing: 1.6pt;
+    text-transform: uppercase;
+    color: var(--brand);
+    font-weight: 650;
+    margin-bottom: 5pt;
+  }
+  .part h2 {
+    font-size: 20pt;
+    margin: 0 0 6pt;
+    font-weight: 650;
+    letter-spacing: -0.2pt;
+  }
+  .part p {
+    margin: 0;
+    color: var(--ink-soft);
+    font-size: 10.5pt;
+    max-width: 135mm;
+  }
+
+  h3 {
+    font-size: 13pt;
+    font-weight: 650;
+    margin: 20pt 0 7pt;
+    padding-bottom: 4pt;
+    border-bottom: 1pt solid var(--rule-soft);
+    page-break-after: avoid;
+  }
+  h3 .num {
+    color: var(--brand);
+    font-variant-numeric: tabular-nums;
+    margin-right: 7pt;
+  }
+
+  h4 {
+    font-size: 10.5pt;
+    font-weight: 650;
+    margin: 14pt 0 5pt;
+    page-break-after: avoid;
+  }
+
+  /* ---------------------------------------------------------------- steps */
+
+  ol.steps {
+    counter-reset: step;
+    list-style: none;
+    margin: 9pt 0 12pt;
+    padding: 0;
+  }
+  ol.steps > li {
+    counter-increment: step;
+    position: relative;
+    padding: 0 0 0 25pt;
+    margin: 0 0 8pt;
+    page-break-inside: avoid;
+  }
+  ol.steps > li::before {
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    top: 0.6pt;
+    width: 16pt;
+    height: 16pt;
+    border-radius: 50%;
+    background: var(--brand);
+    color: #fff;
+    font-size: 8.5pt;
+    font-weight: 700;
+    line-height: 16pt;
+    text-align: center;
+  }
+  ol.steps ul {
+    margin: 4pt 0 0;
+    padding-left: 14pt;
+  }
+
+  ul.plain {
+    margin: 6pt 0 10pt;
+    padding-left: 15pt;
+  }
+  ul.plain li { margin-bottom: 4pt; }
+
+  /* ---------------------------------------------------------------- ui words */
+
+  .btn {
+    display: inline-block;
+    border: 0.8pt solid #c3cbdb;
+    background: #f4f6fb;
+    border-radius: 3pt;
+    padding: 0.5pt 4pt;
+    font-size: 9.3pt;
+    font-weight: 600;
+    color: #1e293b;
+    white-space: nowrap;
+  }
+  .fld {
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .fld::before { content: "\201C"; }
+  .fld::after { content: "\201D"; }
+
+  /* ---------------------------------------------------------------- callouts */
+
+  .note, .warn, .stop, .tip {
+    border-left: 2.5pt solid var(--brand);
+    background: var(--brand-soft);
+    padding: 8pt 11pt;
+    margin: 10pt 0 12pt;
+    font-size: 10pt;
+    page-break-inside: avoid;
+    border-radius: 0 3pt 3pt 0;
+  }
+  .note b, .warn b, .stop b, .tip b {
+    display: block;
+    font-size: 8.5pt;
+    letter-spacing: 1pt;
+    text-transform: uppercase;
+    margin-bottom: 3pt;
+    font-weight: 700;
+  }
+  .note b { color: var(--brand); }
+  .warn { border-left-color: var(--warn); background: var(--warn-soft); }
+  .warn b { color: var(--warn); }
+  .stop { border-left-color: var(--stop); background: var(--stop-soft); }
+  .stop b { color: var(--stop); }
+  .tip { border-left-color: var(--ok); background: var(--ok-soft); }
+  .tip b { color: var(--ok); }
+  .note p:last-child, .warn p:last-child, .stop p:last-child, .tip p:last-child { margin-bottom: 0; }
+
+  /* ---------------------------------------------------------------- tables */
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 9pt 0 13pt;
+    font-size: 9.6pt;
+    page-break-inside: avoid;
+  }
+  caption {
+    caption-side: top;
+    text-align: left;
+    font-weight: 650;
+    font-size: 10pt;
+    padding-bottom: 5pt;
+  }
+  th {
+    text-align: left;
+    font-weight: 650;
+    font-size: 8.5pt;
+    letter-spacing: 0.6pt;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    border-bottom: 1pt solid var(--rule);
+    padding: 0 7pt 5pt 0;
+    vertical-align: bottom;
+  }
+  td {
+    padding: 6pt 7pt 6pt 0;
+    border-bottom: 0.6pt solid var(--rule-soft);
+    vertical-align: top;
+  }
+  td:last-child, th:last-child { padding-right: 0; }
+  .yes { color: var(--ok); font-weight: 650; }
+  .no { color: #b3b8c2; }
+
+  /* ---------------------------------------------------------------- journey */
+
+  .journey {
+    margin: 10pt 0 14pt;
+    page-break-inside: avoid;
+  }
+  .journey .row {
+    display: flex;
+    align-items: flex-start;
+    gap: 9pt;
+    padding: 6pt 0;
+    border-bottom: 0.6pt solid var(--rule-soft);
+  }
+  .journey .row:last-child { border-bottom: 0; }
+  .journey .dot {
+    flex: 0 0 auto;
+    width: 15pt;
+    height: 15pt;
+    border-radius: 50%;
+    background: var(--brand-soft);
+    border: 1.2pt solid var(--brand);
+    color: var(--brand);
+    font-size: 8pt;
+    font-weight: 700;
+    line-height: 12.6pt;
+    text-align: center;
+  }
+  .journey .what { flex: 1; }
+  .journey .what .t { font-weight: 650; }
+  .journey .what .d { color: var(--ink-soft); font-size: 9.8pt; }
+  .journey .who {
+    flex: 0 0 34mm;
+    text-align: right;
+    font-size: 9pt;
+    color: var(--ink-faint);
+  }
+
+  /* ---------------------------------------------------------------- misc */
+
+  .lead {
+    font-size: 11pt;
+    color: var(--ink-soft);
+    margin-bottom: 12pt;
+  }
+  .keep { page-break-inside: avoid; }
+  .toc { margin: 4pt 0 0; }
+  .toc .grp {
+    font-size: 8.5pt;
+    letter-spacing: 1.4pt;
+    text-transform: uppercase;
+    color: var(--brand);
+    font-weight: 650;
+    margin: 14pt 0 5pt;
+  }
+  .toc .item {
+    display: flex;
+    gap: 8pt;
+    padding: 3pt 0;
+    border-bottom: 0.6pt solid var(--rule-soft);
+    font-size: 10pt;
+  }
+  .toc .item .n { flex: 0 0 16pt; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+</style>
+
+<!-- ==================================================================== cover -->
+
+<section class="cover">
+  <div class="rule-top"></div>
+  <h1>Inventory&nbsp;Management&nbsp;System<br />User Manual</h1>
+  <p class="sub">How to ask for things, approve them, and keep the store straight.</p>
+
+  <div class="who">
+    <p><b>Who this is for.</b> Everyone who uses the system. It is written in plain language and
+      assumes you have never seen the system before.</p>
+    <p><b>How to read it.</b> Part&nbsp;1 is for everybody — read that first. Then read only the
+      part for your own job. You do not need to read the whole book.</p>
+  </div>
+
+  <div class="meta">
+    Southern IoT &middot; Internal system &middot; Amounts in BDT &middot; Times shown in Asia/Dhaka<br />
+    Manual version 1.0
+  </div>
+</section>
+
+<!-- ==================================================================== contents -->
+
+<section>
+  <div class="part" style="page-break-before: avoid">
+    <div class="kicker">Contents</div>
+    <h2>What is in this manual</h2>
+    <p>Four parts, then three short reference lists at the back.</p>
+  </div>
+
+  <div class="toc">
+    <div class="grp">Part 1 &middot; Everybody</div>
+    <div class="item"><span class="n">1</span><span>Signing in</span></div>
+    <div class="item"><span class="n">2</span><span>Finding your way around the screen</span></div>
+    <div class="item"><span class="n">3</span><span>Notifications — the bell</span></div>
+    <div class="item"><span class="n">4</span><span>Your dashboard</span></div>
+    <div class="item"><span class="n">5</span><span>Looking up an item in the store</span></div>
+    <div class="item"><span class="n">6</span><span>Borrowing something</span></div>
+    <div class="item"><span class="n">7</span><span>Giving it back</span></div>
+    <div class="item"><span class="n">8</span><span>Asking to buy something</span></div>
+    <div class="item"><span class="n">9</span><span>Following your request</span></div>
+    <div class="item"><span class="n">10</span><span>Your account and your password</span></div>
+
+    <div class="grp">Part 2 &middot; Approvers</div>
+    <div class="item"><span class="n">11</span><span>What lands in your queue</span></div>
+    <div class="item"><span class="n">12</span><span>Reading a request properly</span></div>
+    <div class="item"><span class="n">13</span><span>Approving or rejecting</span></div>
+    <div class="item"><span class="n">14</span><span>The expenses page</span></div>
+
+    <div class="grp">Part 3 &middot; Inventory Manager</div>
+    <div class="item"><span class="n">15</span><span>Your job, in one page</span></div>
+    <div class="item"><span class="n">16</span><span>Borrow requests</span></div>
+    <div class="item"><span class="n">17</span><span>Taking items back in</span></div>
+    <div class="item"><span class="n">18</span><span>Reviewing requisitions</span></div>
+    <div class="item"><span class="n">19</span><span>Making a Bill of Materials</span></div>
+    <div class="item"><span class="n">20</span><span>The money trail, step by step</span></div>
+    <div class="item"><span class="n">21</span><span>Undoing a step</span></div>
+    <div class="item"><span class="n">22</span><span>Categories and storage places</span></div>
+
+    <div class="grp">Part 4 &middot; Administrator</div>
+    <div class="item"><span class="n">23</span><span>People and their roles</span></div>
+    <div class="item"><span class="n">24</span><span>Departments</span></div>
+    <div class="item"><span class="n">25</span><span>Settings</span></div>
+    <div class="item"><span class="n">26</span><span>The audit log</span></div>
+    <div class="item"><span class="n">27</span><span>Setting up a brand new system</span></div>
+
+    <div class="grp">Reference</div>
+    <div class="item"><span class="n">A</span><span>What each status word means</span></div>
+    <div class="item"><span class="n">B</span><span>Who is allowed to do what</span></div>
+    <div class="item"><span class="n">C</span><span>Common problems</span></div>
+  </div>
+
+  <h3>The whole journey on one page</h3>
+  <p>Almost everything in this system is one of two journeys. This is the longer one — buying
+    something new. Borrowing is much shorter and is covered in section&nbsp;6.</p>
+
+  <div class="journey">
+    <div class="row">
+      <span class="dot">1</span>
+      <span class="what"><span class="t">Someone asks</span><br />
+        <span class="d">Fills in a requisition: what, how many, roughly how much, and why.</span></span>
+      <span class="who">Anybody</span>
+    </div>
+    <div class="row">
+      <span class="dot">2</span>
+      <span class="what"><span class="t">The Inventory Manager reviews it</span><br />
+        <span class="d">First pair of eyes. Checks it is sensible and not already in the store.</span></span>
+      <span class="who">Inventory Manager</span>
+    </div>
+    <div class="row">
+      <span class="dot">3</span>
+      <span class="what"><span class="t">One or two approvers sign off</span><br />
+        <span class="d">How many depends on the amount. See section&nbsp;13.</span></span>
+      <span class="who">Approvers</span>
+    </div>
+    <div class="row">
+      <span class="dot">4</span>
+      <span class="what"><span class="t">A Bill of Materials is made</span><br />
+        <span class="d">Approved requests are grouped into one document Accounts can pay against.</span></span>
+      <span class="who">Inventory Manager</span>
+    </div>
+    <div class="row">
+      <span class="dot">5</span>
+      <span class="what"><span class="t">It goes to Accounts, and money comes back</span><br />
+        <span class="d">The money received is recorded against the request.</span></span>
+      <span class="who">Inventory Manager</span>
+    </div>
+    <div class="row">
+      <span class="dot">6</span>
+      <span class="what"><span class="t">The buying happens, and is checked</span><br />
+        <span class="d">Vendor, invoice and real prices are recorded, then verified.</span></span>
+      <span class="who">Inventory Manager</span>
+    </div>
+    <div class="row">
+      <span class="dot">7</span>
+      <span class="what"><span class="t">The goods go on the shelf</span><br />
+        <span class="d">Stock goes up. From here the item can be borrowed by anybody.</span></span>
+      <span class="who">Inventory Manager</span>
+    </div>
+  </div>
+
+  <div class="note">
+    <b>One rule worth knowing early</b>
+    <p>Nothing in this system is deleted. A mistake is corrected by recording the correction, so
+      the history always shows what really happened and who did it.</p>
+  </div>
+</section>
+
+<!-- ==================================================================== part 1 -->
+
+<section>
+  <div class="part">
+    <div class="kicker">Part 1</div>
+    <h2>For everybody</h2>
+    <p>Read this part whoever you are. It covers signing in, the bell, looking things up,
+      borrowing, and asking to buy something.</p>
+  </div>
+
+  <h3><span class="num">1</span>Signing in</h3>
+  <p>Open the address your administrator gave you. You will see a sign-in box.</p>
+  <ol class="steps">
+    <li>Type your <span class="fld">Email</span> — the work address your administrator used when
+      they made your account.</li>
+    <li>Type your <span class="fld">Password</span>.</li>
+    <li>Press <span class="btn">Sign in</span>.</li>
+  </ol>
+  <p>You land on your dashboard. The system remembers you on that computer, so you will not have
+    to sign in every time.</p>
+
+  <div class="warn">
+    <b>If you were given a temporary password</b>
+    <p>The system will ask you to choose your own before it lets you do anything else. Pick
+      something only you know. Nobody in the office — including the administrator — needs to know
+      your password.</p>
+  </div>
+
+  <div class="stop">
+    <b>If it says too many attempts</b>
+    <p>Signing in wrongly several times in a row locks the door for about a minute. That is
+      deliberate. Wait a minute and try again — nothing is broken and your account is not blocked.</p>
+  </div>
+
+  <h3><span class="num">2</span>Finding your way around the screen</h3>
+  <p>Every page has the same three things.</p>
+  <ul class="plain">
+    <li><strong>The menu, down the left.</strong> Everything you are allowed to do is in there. If
+      you cannot see a menu item, your role does not include it — that is normal, not a fault.</li>
+    <li><strong>The bell, top right.</strong> Your news. A red number means you have unread
+      items.</li>
+    <li><strong>Your name, top right corner.</strong> Your account, and the way out. Signing out
+      is in there.</li>
+  </ul>
+  <p>Everyone sees <span class="fld">Dashboard</span>, <span class="fld">Inventory</span>,
+    <span class="fld">My borrowings</span>, <span class="fld">My requisitions</span> and
+    <span class="fld">Projects</span>. Anything below that depends on your role.</p>
+
+  <h3><span class="num">3</span>Notifications — the bell</h3>
+  <p>The system tells you when something you care about moves: your request was approved or
+    rejected, a borrow you asked for was allowed, a BOM was made. Press the bell to read them.</p>
+  <ul class="plain">
+    <li>The number on the bell is how many you have not read. It shows <span class="btn">9+</span>
+      once there are more than nine.</li>
+    <li><span class="btn">Mark all as read</span> clears the number.</li>
+    <li><span class="btn">Unread only</span> hides the ones you have already seen.</li>
+  </ul>
+  <div class="note">
+    <b>The bell is the only place</b>
+    <p>The system does not send emails or SMS. If you are waiting on something, the bell is where
+      it will appear.</p>
+  </div>
+
+  <h3><span class="num">4</span>Your dashboard</h3>
+  <p>The first page after signing in. It shows who you are signed in as, then
+    <strong>Your record</strong> — and only you can see that.</p>
+  <ul class="plain">
+    <li><strong>Requisitions</strong> — how many you have raised, how many are still going on, and
+      how many finished.</li>
+    <li><strong>Borrowing</strong> — how many items you have taken, how many are still with you,
+      and what condition things came back in.</li>
+    <li><strong>Money</strong> — what you asked for, what was approved, and what has actually been
+      paid out on your requests.</li>
+  </ul>
+
+  <h3><span class="num">5</span>Looking up an item in the store</h3>
+  <p>Open <span class="fld">Inventory</span> from the menu. This is the stock register: every
+    movement in and out is recorded and cannot be edited afterwards.</p>
+  <ol class="steps">
+    <li>Type part of the name in <span class="fld">Search</span>, or pick a
+      <span class="fld">Category</span>.</li>
+    <li>Tick <span class="fld">In stock only</span> to hide things that are finished.</li>
+    <li>Click any row to open that item.</li>
+  </ol>
+  <p>On the item's own page you can see which shelves it sits on, what is currently out with
+    people, and its recent movements.</p>
+
+  <table>
+    <caption>The numbers on the list, in plain words</caption>
+    <tr><th style="width:32%">Column</th><th>What it means</th></tr>
+    <tr><td><strong>Total owned</strong></td><td>Everything the company has, including what is out with people.</td></tr>
+    <tr><td><strong>In project use</strong></td><td>Out with somebody right now for a project.</td></tr>
+    <tr><td><strong>Available</strong></td><td>What you could actually take today. This is the number that matters.</td></tr>
+  </table>
+
+  <h3><span class="num">6</span>Borrowing something</h3>
+  <p>Borrowing is for something the company already owns. If the store does not have it, you want
+    section&nbsp;8 instead.</p>
+  <ol class="steps">
+    <li>Find the item in <span class="fld">Inventory</span> and open it.</li>
+    <li>Press <span class="btn">Borrow</span>.</li>
+    <li>Fill in the form:
+      <ul>
+        <li><span class="fld">From</span> — which shelf it should come off.</li>
+        <li><span class="fld">Quantity</span> — how many you need.</li>
+        <li><span class="fld">Project</span> — if it is for a project, choose it.</li>
+        <li><span class="fld">I will return this</span> — leave it ticked for a tool or a laptop.
+          Untick it for something that gets used up and never comes back, like cable or tape.</li>
+        <li><span class="fld">Expected back</span> — the day you will return it.</li>
+        <li><span class="fld">Purpose</span> — what it is for. This helps the Inventory Manager
+          say yes quickly.</li>
+      </ul>
+    </li>
+    <li>Press <span class="btn">Borrow</span> to send the request.</li>
+  </ol>
+  <p>The Inventory Manager reviews it. Watch the bell. You can follow it under
+    <span class="fld">My borrowings</span>, where the filters mean:</p>
+  <ul class="plain">
+    <li><span class="btn">Pending</span> — waiting for the Inventory Manager.</li>
+    <li><span class="btn">Out</span> — approved, and with you now.</li>
+    <li><span class="btn">Returned</span> — given back.</li>
+    <li><span class="btn">Overdue</span> — past the day you said you would return it.</li>
+  </ul>
+
+  <h3><span class="num">7</span>Giving it back</h3>
+  <p>Take the item to the Inventory Manager. They record the return in the system, and note what
+    condition it came back in. You do not do this yourself — that way there is always a second
+    person who saw the item.</p>
+  <div class="tip">
+    <b>You can return part of it</b>
+    <p>Borrowed five and only finished with three? The Inventory Manager can record three back;
+      the other two stay out in your name.</p>
+  </div>
+
+  <h3><span class="num">8</span>Asking to buy something</h3>
+  <p>This is a <strong>requisition</strong>. Use it when the company does not have the thing, or
+    has run out. Open <span class="fld">My requisitions</span> and press
+    <span class="btn">New requisition</span>.</p>
+
+  <h4>Part one — the request itself</h4>
+  <ol class="steps">
+    <li><span class="fld">Department</span> — whose budget this comes out of.</li>
+    <li><span class="fld">Project</span> — if it belongs to one.</li>
+    <li><span class="fld">Urgency</span> — Low, Normal, High or Critical. Be honest; marking
+      everything Critical stops it meaning anything.</li>
+    <li><span class="fld">Approval deadline</span> — the date you need it decided by. Press
+      <span class="btn">Select date &amp; time</span>, choose the day, then
+      <span class="btn">Set deadline</span>. <strong>You must fill this in.</strong></li>
+    <li><span class="fld">Reason</span> — why you need it. Your approver reads this and very
+      little else. A good reason is the difference between approved today and questions
+      tomorrow.</li>
+    <li><span class="fld">Supporting document</span> — optional. A quotation or a specification
+      sheet, if you have one.</li>
+  </ol>
+
+  <h4>Part two — the things you want</h4>
+  <ol class="steps">
+    <li>Type what you need, how many, and the price for one. The system works out the line
+      total.</li>
+    <li>Press <span class="btn">Add item</span> for each further thing.</li>
+    <li><span class="fld">Transportation cost</span> — optional. Fuel, vehicle hire, a porter.
+      It is added to the total you are asking for.</li>
+  </ol>
+
+  <h4>Part three — send it</h4>
+  <ul class="plain">
+    <li><span class="btn">Submit for approval</span> — sends it. The Inventory Manager sees it
+      straight away.</li>
+    <li><span class="btn">Save draft</span> — keeps it private. Nobody is told, and nothing
+      happens until you come back and submit it.</li>
+  </ul>
+
+  <div class="warn">
+    <b>Once you submit, the figures are fixed</b>
+    <p>The amounts and the list of approvers are locked at the moment you press
+      <span class="btn">Submit for approval</span>. If you got something wrong, cancel the request
+      and raise a new one — do not ask someone to change it later.</p>
+  </div>
+
+  <h3><span class="num">9</span>Following your request</h3>
+  <p>Open <span class="fld">My requisitions</span> and click the row. Two things on that page tell
+    you everything.</p>
+  <ul class="plain">
+    <li><strong>Progress</strong> — the people who have to sign, in order, and which one it is
+      sitting with right now.</li>
+    <li><strong>Lifecycle</strong> — the longer journey: Submitted, IM review, Approved, BOM,
+      Accounts, Funded, Purchased, Verified, In stock.</li>
+  </ul>
+  <p>While it is still early you can press <span class="btn">Cancel request</span> to stop it.
+    Appendix&nbsp;A explains every status word you might see.</p>
+
+  <div class="note">
+    <b>If it is rejected</b>
+    <p>The person who rejected it must write a reason, and you will see that reason on the
+      request. Read it, fix the problem, and raise a new one.</p>
+  </div>
+
+  <h3><span class="num">10</span>Your account and your password</h3>
+  <p>Press your name in the top right corner, then your account. You will find your details, and
+    a link to change your password. Approvers and the Inventory Manager also have a signature
+    panel there — see section&nbsp;13.</p>
+</section>
+
+<!-- ==================================================================== part 2 -->
+
+<section>
+  <div class="part">
+    <div class="kicker">Part 2</div>
+    <h2>For approvers</h2>
+    <p>You decide whether the company spends the money. Everything in Part&nbsp;1 applies to you
+      as well — you can borrow and raise requests like anybody else.</p>
+  </div>
+
+  <h3><span class="num">11</span>What lands in your queue</h3>
+  <p>Open <span class="fld">Approvals</span> from the menu. It opens on
+    <span class="btn">Waiting on me</span> — the requests where it is your turn. The other tabs
+    are <span class="btn">All</span>, <span class="btn">Approved</span> and
+    <span class="btn">Rejected</span>, so you can look back at what you decided.</p>
+  <p>Each row shows the reference, who raised it, how much, the urgency, and the date they need a
+    decision by. Click a row to open it.</p>
+  <div class="tip">
+    <b>Sort your day by the deadline column</b>
+    <p>Every request carries the date the requester needs an answer by. That column, not the
+      urgency word, is the one to work through.</p>
+  </div>
+
+  <h3><span class="num">12</span>Reading a request properly</h3>
+  <p>Four things are worth your attention before you decide.</p>
+  <ul class="plain">
+    <li><strong>Reason.</strong> Why they say they need it.</li>
+    <li><strong>Line items.</strong> What, how many, and the price they expect to pay for one.</li>
+    <li><strong>Requested / Approved amount.</strong> The totals, including transportation.</li>
+    <li><strong>Progress.</strong> Who has already signed, and who comes after you.</li>
+  </ul>
+  <p>If a supporting document was attached, it is on the same page.</p>
+
+  <h3><span class="num">13</span>Approving or rejecting</h3>
+  <p>Scroll to <strong>Your decision</strong>. You have three buttons.</p>
+
+  <table>
+    <tr><th style="width:38%">Button</th><th>What it does</th></tr>
+    <tr>
+      <td><span class="btn">Approve without signature</span></td>
+      <td>Approves it and passes it to the next person in the chain.</td>
+    </tr>
+    <tr>
+      <td><span class="btn">Approve with signature</span></td>
+      <td>The same, but stamps your saved signature onto the paperwork. Use this where a signed
+        document is expected.</td>
+    </tr>
+    <tr>
+      <td><span class="btn">Reject</span></td>
+      <td>Stops the request dead. <strong>You must write a note saying why.</strong></td>
+    </tr>
+  </table>
+
+  <div class="note">
+    <b>Your signature</b>
+    <p>To use <span class="btn">Approve with signature</span> you must upload your signature once,
+      on your account page. Until you do, only the plain approve button will work.</p>
+  </div>
+
+  <div class="stop">
+    <b>Rejecting ends it for everyone</b>
+    <p>One rejection stops the whole request — the later approvers never see it. Your note is the
+      only thing the requester has to work from, so write a sentence they can act on, not just
+      &ldquo;no&rdquo;.</p>
+  </div>
+
+  <h4>How many approvers are needed</h4>
+  <p>It depends on the amount, against a threshold your administrator sets (15,000 to begin
+    with).</p>
+  <ul class="plain">
+    <li><strong>Below the threshold</strong> — the Inventory Manager, then one approver.</li>
+    <li><strong>At or above it</strong> — the Inventory Manager, then two approvers.</li>
+  </ul>
+  <p>The request itself tells you which applies: it says how many approvers are required and what
+    the threshold was on the day it was submitted. Changing the threshold later never disturbs a
+    request already in flight.</p>
+
+  <div class="note">
+    <b>You never approve your own request</b>
+    <p>If you raise a requisition yourself, the system leaves your own step out of the chain
+      rather than asking you to sign your own paperwork.</p>
+  </div>
+
+  <h3><span class="num">14</span>The expenses page</h3>
+  <p><span class="fld">Expenses</span> in the menu is the money view across the whole company,
+    not just your own requests. It shows:</p>
+  <ul class="plain">
+    <li><strong>The four stages of money</strong> — what was approved, what Accounts actually
+      funded, what has been spent, and what is still outstanding.</li>
+    <li><strong>Money Return and Money in Hand</strong> — money given back to Accounts, and money
+      still sitting with whoever went to buy.</li>
+    <li><strong>A month-by-month ledger</strong>, a twelve-month trend, and the items the company
+      spends most on.</li>
+  </ul>
+</section>
+
+<!-- ==================================================================== part 3 -->
+
+<section>
+  <div class="part">
+    <div class="kicker">Part 3</div>
+    <h2>For the Inventory Manager</h2>
+    <p>You are the busiest person in this system. You control the shelves, you are the first
+      reviewer on every purchase, and you record everything that happens to the money.</p>
+  </div>
+
+  <h3><span class="num">15</span>Your job, in one page</h3>
+  <table>
+    <tr><th style="width:34%">Where</th><th>What you do there</th></tr>
+    <tr><td><span class="fld">Borrowing</span></td><td>Approve or refuse requests to take stock out, and record it when it comes back.</td></tr>
+    <tr><td><span class="fld">Approvals</span></td><td>Your review — the first sign-off on every requisition.</td></tr>
+    <tr><td><span class="fld">All requisitions</span></td><td>Every request in the company, at whatever stage.</td></tr>
+    <tr><td><span class="fld">Bills of Materials</span></td><td>Group approved requests into one document Accounts can pay against.</td></tr>
+    <tr><td><span class="fld">Categories</span> and <span class="fld">Locations</span></td><td>How the store is organised.</td></tr>
+    <tr><td><span class="fld">Inventory</span></td><td>Add products, and correct stock counts.</td></tr>
+  </table>
+
+  <h3><span class="num">16</span>Borrow requests</h3>
+  <p>Open <span class="fld">Borrowing</span>. The filters are
+    <span class="btn">Pending</span>, <span class="btn">Out</span>,
+    <span class="btn">Returned</span> and <span class="btn">Overdue</span>.</p>
+  <ol class="steps">
+    <li>Work through <span class="btn">Pending</span> first — somebody is waiting.</li>
+    <li>Open a request and read the <span class="fld">Purpose</span> and the quantity.</li>
+    <li>Press <span class="btn">Approve</span> to allow it, or <span class="btn">Reject</span> if
+      it should not go out.</li>
+  </ol>
+  <p>Approving both allows it and issues it — the stock leaves the shelf at that moment.
+    Rejecting releases the quantity that was being held for them.</p>
+  <div class="warn">
+    <b>Overdue is your list, not theirs</b>
+    <p>Nobody is chased automatically. <span class="btn">Overdue</span> is the list of items past
+      their return date, and following them up is part of the job.</p>
+  </div>
+
+  <h3><span class="num">17</span>Taking items back in</h3>
+  <ol class="steps">
+    <li>Find the borrow — <span class="btn">Out</span> or <span class="btn">Overdue</span>.</li>
+    <li>Press <span class="btn">Record return</span>.</li>
+    <li>Enter how many are coming back. It can be fewer than were taken; the rest stay out.</li>
+    <li>Choose the <span class="fld">Return condition</span>:
+      <ul>
+        <li><strong>Good</strong> — back on the shelf, ready for the next person.</li>
+        <li><strong>Partially damaged but usable</strong> — still usable, but marked.</li>
+        <li><strong>Damaged</strong> / <strong>Not working</strong> — recorded so nobody is handed
+          a broken tool later.</li>
+      </ul>
+    </li>
+  </ol>
+  <p>Be truthful about condition. It is the only record of how the equipment is holding up.</p>
+
+  <h3><span class="num">18</span>Reviewing requisitions</h3>
+  <p>Every requisition reaches you before it reaches any approver. You are there to catch the
+    things an approver cannot see from a desk.</p>
+  <ul class="plain">
+    <li>Is it <strong>already in the store</strong>? Then it should be a borrow, not a purchase.</li>
+    <li>Are the <strong>quantities and prices sensible</strong> for what is being asked?</li>
+    <li>Is the <strong>reason</strong> clear enough for an approver to act on?</li>
+  </ul>
+  <p>Then approve or reject it exactly as described in section&nbsp;13.</p>
+
+  <h3><span class="num">19</span>Making a Bill of Materials</h3>
+  <p>Once every approver has signed, the request is <strong>Approved</strong> and waiting for you
+    to turn it into something Accounts can pay against.</p>
+  <ol class="steps">
+    <li>Open <span class="fld">Bills of Materials</span> and press <span class="btn">New BOM</span>.</li>
+    <li>Tick the approved requisitions you want on one document. You can batch several
+      together.</li>
+    <li>Their lines appear below. Fill in the <span class="fld">unit cost</span> and the
+      <span class="fld">vendor</span> for each.</li>
+    <li>Press <span class="btn">Generate BOM</span>.</li>
+  </ol>
+  <p>The system produces a numbered PDF for Accounts. It prints on plain A4 paper.</p>
+  <div class="stop">
+    <b>A BOM cannot exceed what was approved</b>
+    <p>If your costs add up to more than the approved amount for a requisition — carriage included
+      — the system refuses to generate it. Lower a cost, or send the request back for a fresh
+      decision. It will not quietly let the company commit more than it agreed to.</p>
+  </div>
+
+  <h3><span class="num">20</span>The money trail, step by step</h3>
+  <p>Open the requisition and scroll to <strong>Money and purchasing</strong>. Each step unlocks
+    the next.</p>
+
+  <div class="journey">
+    <div class="row">
+      <span class="dot">1</span>
+      <span class="what"><span class="t">Send to Accounts</span><br />
+        <span class="d">Records that the BOM has left your desk. Nothing is emailed — you still
+          hand it over the normal way.</span></span>
+    </div>
+    <div class="row">
+      <span class="dot">2</span>
+      <span class="what"><span class="t">Record money received</span><br />
+        <span class="d">When Accounts releases the money, enter the amount, the date, and a
+          reference — a cheque number or a transfer id.</span></span>
+    </div>
+    <div class="row">
+      <span class="dot">3</span>
+      <span class="what"><span class="t">Record a purchase</span><br />
+        <span class="d">After buying: vendor, invoice number, date, and what each line actually
+          cost. Attach the invoice here.</span></span>
+    </div>
+    <div class="row">
+      <span class="dot">4</span>
+      <span class="what"><span class="t">Verify purchase</span><br />
+        <span class="d">Confirms the paperwork matches what arrived.</span></span>
+    </div>
+    <div class="row">
+      <span class="dot">5</span>
+      <span class="what"><span class="t">Add to inventory</span><br />
+        <span class="d">Puts the goods on a shelf. Stock goes up and anyone can borrow it from
+          this point.</span></span>
+    </div>
+  </div>
+
+  <table>
+    <caption>The figures in that panel</caption>
+    <tr><th style="width:34%">Figure</th><th>What it means</th></tr>
+    <tr><td><strong>Approved</strong></td><td>What the approvers agreed to.</td></tr>
+    <tr><td><strong>Funded</strong></td><td>What Accounts has actually handed over.</td></tr>
+    <tr><td><strong>Spent</strong></td><td>What has been paid to vendors so far.</td></tr>
+    <tr><td><strong>Transportation</strong></td><td>What the carriage really cost, on the purchase that paid it.</td></tr>
+    <tr><td><strong>Returned to Accounts</strong></td><td>Money handed back.</td></tr>
+    <tr><td><strong>Unspent</strong></td><td>Money still in hand. This should end at zero — either spent or returned.</td></tr>
+  </table>
+
+  <p>Underneath, <strong>What happened</strong> lists every money event in order, with the date,
+    who did it, and any note that was written at the time.</p>
+
+  <div class="warn">
+    <b>Accounts pays the whole amount in one go</b>
+    <p>In this release the system does not accept part-payments against a requisition. Record the
+      full outstanding amount when it arrives. Paying in instalments is planned for a later
+      version.</p>
+  </div>
+
+  <div class="stop">
+    <b>You cannot spend more than has been funded</b>
+    <p>If a purchase would commit more than the money actually received, the system refuses and
+      tells you the two figures. Lower a unit cost, or record the rest of the funding first.</p>
+  </div>
+
+  <h3><span class="num">21</span>Undoing a step</h3>
+  <p>People make mistakes, so most steps have a way back. Each one asks you to say why, and the
+    reason is kept on the record.</p>
+  <table>
+    <tr><th style="width:38%">Button</th><th>Takes you back to</th></tr>
+    <tr><td><span class="btn">Back to BOM</span></td><td>Before it was sent to Accounts. Only while no money has been received.</td></tr>
+    <tr><td><span class="btn">Undo money received</span></td><td>Cancels a receipt. Only while nothing has been bought against it.</td></tr>
+    <tr><td><span class="btn">Undo purchase</span></td><td>Cancels a purchase, and the carriage recorded with it.</td></tr>
+    <tr><td><span class="btn">Back to purchased</span></td><td>Un-verifies a purchase you verified too soon.</td></tr>
+  </table>
+  <div class="stop">
+    <b>Adding to inventory is the point of no return</b>
+    <p>Once goods are on the shelf, that cannot be undone from this panel — the stock record is
+      permanent. If something is wrong after that, correct it with a stock adjustment, which
+      leaves its own trail.</p>
+  </div>
+
+  <h3><span class="num">22</span>Categories and storage places</h3>
+  <p><span class="fld">Categories</span> group products so people can find them.
+    <span class="fld">Locations</span> describe where things physically are — a zone, and the
+    compartments inside it.</p>
+  <p>When you put something on a shelf you choose the zone first, then the compartment inside that
+    zone. Keep the names the way the store is actually labelled; a compartment name nobody
+    recognises is worse than no name at all.</p>
+</section>
+
+<!-- ==================================================================== part 4 -->
+
+<section>
+  <div class="part">
+    <div class="kicker">Part 4</div>
+    <h2>For the administrator</h2>
+    <p>You set the rules everyone else works inside, and you are the only person who can see the
+      audit log.</p>
+  </div>
+
+  <h3><span class="num">23</span>People and their roles</h3>
+  <p><span class="fld">Users</span> under Admin. Create a person, give them a role, reset a
+    password, or deactivate someone who has left.</p>
+  <table>
+    <tr><th style="width:32%">Role</th><th>What it allows</th></tr>
+    <tr><td><strong>General</strong></td><td>Borrow, raise requisitions, follow their own. Everybody has this.</td></tr>
+    <tr><td><strong>Approver</strong></td><td>Everything above, plus the approvals queue and the expenses page.</td></tr>
+    <tr><td><strong>Inventory Manager</strong></td><td>Everything above, plus the store, borrowing, BOMs and the money trail.</td></tr>
+    <tr><td><strong>Administrator</strong></td><td>Everything, plus users, departments, settings and the audit log.</td></tr>
+  </table>
+  <p>Roles add up rather than replace each other — an approver is a general user with approval
+    rights on top. One person can hold several.</p>
+  <div class="warn">
+    <b>Deactivate, do not delete</b>
+    <p>When somebody leaves, deactivate the account. Their name still has to appear correctly on
+      every approval and every stock movement they were part of.</p>
+  </div>
+
+  <h3><span class="num">24</span>Departments</h3>
+  <p>Departments are whose budget a requisition comes out of, and they appear in the expenses
+    reporting. Every person should belong to one.</p>
+
+  <h3><span class="num">25</span>Settings</h3>
+  <p>Business rules that take effect immediately, with no redeploy and no developer.</p>
+  <table>
+    <tr><th style="width:38%">Setting</th><th>What it controls</th></tr>
+    <tr><td><strong>Expense threshold</strong></td><td>The amount at or above which a requisition needs the larger number of approvers.</td></tr>
+    <tr><td><strong>Approvers below the threshold</strong><br /><strong>Approvers at or above the threshold</strong></td><td>How many approvers each size of request needs.</td></tr>
+    <tr><td><strong>Approver slots</strong></td><td>Which people fill Approver&nbsp;1 and Approver&nbsp;2. Only someone with the Approver role can be put in a slot.</td></tr>
+    <tr><td><strong>Sub-threshold approver</strong></td><td>Who approves everything below the threshold. <strong>Must be set</strong>, or small requisitions cannot be submitted at all.</td></tr>
+    <tr><td><strong>Audit actions</strong></td><td>Which actions the audit log records. Some can never be switched off.</td></tr>
+    <tr><td><strong>Audit history retention</strong></td><td>How long audit history is kept, from five days to forever.</td></tr>
+  </table>
+  <div class="note">
+    <b>A department can have its own approvers</b>
+    <p>The approver slots you set here are the company default. A department can be given its own
+      Approver&nbsp;1 and Approver&nbsp;2, and those win for requisitions raised against it.</p>
+  </div>
+
+  <div class="note">
+    <b>Changing a rule never rewrites the past</b>
+    <p>Each requisition remembers the threshold and the approver list from the day it was
+      submitted. Raise the threshold this afternoon and everything already in flight carries on
+      under the old rule.</p>
+  </div>
+
+  <h3><span class="num">26</span>The audit log</h3>
+  <p><span class="fld">Audit log</span> records who did what and when. Sign-ins, user changes and
+    settings changes are always recorded and cannot be switched off — an administrator who could
+    hide their own actions would defeat the point of having a log.</p>
+
+  <h3><span class="num">27</span>Setting up a brand new system</h3>
+  <p>A fresh installation will not accept a single requisition until these are done. Each is
+    quick; forgetting one produces a confusing error for somebody else.</p>
+  <ol class="steps">
+    <li>Create at least one <strong>department</strong>.</li>
+    <li>Create the <strong>people</strong>, and give them their roles.</li>
+    <li>Appoint an <strong>Inventory Manager</strong> — nothing moves without one.</li>
+    <li>Set <strong>Approver 1</strong> and <strong>Approver 2</strong>.</li>
+    <li>Set the <strong>sub-threshold approver</strong>. This is the one most often missed.</li>
+    <li>Check the <strong>expense threshold</strong> is the figure your office actually uses.</li>
+  </ol>
+  <div class="stop">
+    <b>Before the system holds anything real</b>
+    <p>If the sign-in page lists demo accounts and a shared password, the system is in
+      demonstration mode and anyone who can reach the page can sign in as anyone. That is fine
+      while you are testing and unacceptable once there is real data. Ask whoever installed it to
+      turn demonstration mode off before you go live.</p>
+  </div>
+</section>
+
+<!-- ==================================================================== reference -->
+
+<section>
+  <div class="part">
+    <div class="kicker">Reference</div>
+    <h2>Three short lists</h2>
+    <p>Status words, who can do what, and the problems people hit in the first week.</p>
+  </div>
+
+  <h3><span class="num">A</span>What each status word means</h3>
+  <table>
+    <caption>Requisitions</caption>
+    <tr><th style="width:34%">Status</th><th>What it means</th></tr>
+    <tr><td><strong>Draft</strong></td><td>Saved but not sent. Only you can see it.</td></tr>
+    <tr><td><strong>With the Inventory Manager</strong></td><td>Waiting for the first review.</td></tr>
+    <tr><td><strong>Awaiting approval</strong></td><td>With one of the approvers now.</td></tr>
+    <tr><td><strong>Approved</strong></td><td>Everyone has signed. Waiting to be put on a BOM.</td></tr>
+    <tr><td><strong>Rejected</strong></td><td>Refused. The reason is on the request.</td></tr>
+    <tr><td><strong>BOM generated</strong></td><td>On a document for Accounts.</td></tr>
+    <tr><td><strong>Sent to Accounts</strong></td><td>With Accounts, waiting for money.</td></tr>
+    <tr><td><strong>Funded</strong></td><td>The money has been received.</td></tr>
+    <tr><td><strong>Purchased</strong></td><td>Bought, invoice recorded.</td></tr>
+    <tr><td><strong>Purchase verified</strong></td><td>Checked against the paperwork.</td></tr>
+    <tr><td><strong>Stocked</strong></td><td>On the shelf. Finished.</td></tr>
+    <tr><td><strong>Cancelled</strong></td><td>Stopped by the person who raised it.</td></tr>
+  </table>
+
+  <table>
+    <caption>Borrowing</caption>
+    <tr><th style="width:34%">Status</th><th>What it means</th></tr>
+    <tr><td><strong>Pending</strong></td><td>Waiting for the Inventory Manager.</td></tr>
+    <tr><td><strong>Out</strong></td><td>Approved and with the borrower.</td></tr>
+    <tr><td><strong>Returned</strong></td><td>Back on the shelf.</td></tr>
+    <tr><td><strong>Overdue</strong></td><td>Past the promised return date.</td></tr>
+  </table>
+
+  <h3><span class="num">B</span>Who is allowed to do what</h3>
+  <table>
+    <tr>
+      <th style="width:40%">Task</th>
+      <th style="text-align:center">General</th>
+      <th style="text-align:center">Approver</th>
+      <th style="text-align:center">Inv. Mgr</th>
+      <th style="text-align:center">Admin</th>
+    </tr>
+    <tr><td>Look up stock</td><td align="center" class="yes">Yes</td><td align="center" class="yes">Yes</td><td align="center" class="yes">Yes</td><td align="center" class="yes">Yes</td></tr>
+    <tr><td>Ask to borrow</td><td align="center" class="yes">Yes</td><td align="center" class="yes">Yes</td><td align="center" class="yes">Yes</td><td align="center" class="yes">Yes</td></tr>
+    <tr><td>Raise a requisition</td><td align="center" class="yes">Yes</td><td align="center" class="yes">Yes</td><td align="center" class="yes">Yes</td><td align="center" class="yes">Yes</td></tr>
+    <tr><td>Approve a requisition</td><td align="center" class="no">&ndash;</td><td align="center" class="yes">Yes</td><td align="center" class="yes">Yes</td><td align="center" class="yes">Yes</td></tr>
+    <tr><td>See company expenses</td><td align="center" class="no">&ndash;</td><td align="center" class="yes">Yes</td><td align="center" class="yes">Yes</td><td align="center" class="yes">Yes</td></tr>
+    <tr><td>Approve a borrow, record a return</td><td align="center" class="no">&ndash;</td><td align="center" class="no">&ndash;</td><td align="center" class="yes">Yes</td><td align="center" class="yes">Yes</td></tr>
+    <tr><td>Make a BOM, record money</td><td align="center" class="no">&ndash;</td><td align="center" class="no">&ndash;</td><td align="center" class="yes">Yes</td><td align="center" class="yes">Yes</td></tr>
+    <tr><td>Add products, adjust stock</td><td align="center" class="no">&ndash;</td><td align="center" class="no">&ndash;</td><td align="center" class="yes">Yes</td><td align="center" class="yes">Yes</td></tr>
+    <tr><td>Manage users and settings</td><td align="center" class="no">&ndash;</td><td align="center" class="no">&ndash;</td><td align="center" class="no">&ndash;</td><td align="center" class="yes">Yes</td></tr>
+    <tr><td>Read the audit log</td><td align="center" class="no">&ndash;</td><td align="center" class="no">&ndash;</td><td align="center" class="no">&ndash;</td><td align="center" class="yes">Yes</td></tr>
+  </table>
+
+  <h3><span class="num">C</span>Common problems</h3>
+
+  <h4>&ldquo;I cannot see a menu item somebody else has.&rdquo;</h4>
+  <p>Your role does not include it. Ask the administrator if you should have it.</p>
+
+  <h4>&ldquo;It will not let me submit my requisition.&rdquo;</h4>
+  <p>Something required is empty. The most commonly missed one is the approval deadline — the
+    date field with the <span class="btn">Select date &amp; time</span> button. Every field marked
+    with a star must be filled.</p>
+
+  <h4>&ldquo;My request has not moved for days.&rdquo;</h4>
+  <p>Open it and look at <strong>Progress</strong>. It names the exact person it is sitting with.
+    Go and ask them — the system does not chase anybody.</p>
+
+  <h4>&ldquo;I was signed out.&rdquo;</h4>
+  <p>Sign in again. If it refuses right after several wrong attempts, wait a minute — that is the
+    lock-out, and it clears by itself.</p>
+
+  <h4>&ldquo;The available number looks wrong.&rdquo;</h4>
+  <p><strong>Available</strong> excludes what is already out with people and anything set aside.
+    Open the item and look at <strong>Currently in use</strong> — that usually explains the
+    difference.</p>
+
+  <h4>&ldquo;I recorded something on the wrong request.&rdquo;</h4>
+  <p>Tell the Inventory Manager. Most money steps can be undone with a written reason
+    (section&nbsp;21). Nothing is deleted; the correction is recorded alongside the mistake.</p>
+
+  <div class="note">
+    <b>Still stuck?</b>
+    <p>Note the reference number on the screen — something like REQ-000004-GINA or BR-000001 —
+      and give that to whoever helps you. It identifies the exact record straight away.</p>
+  </div>
+</section>
