@@ -139,6 +139,9 @@ describe('funding snapshots', () => {
 
     expect(response.status).toBe(200);
     expect(Object.keys(response.body).sort()).toEqual([
+      // Added 2026-09-02: the client is told whether instalments are allowed, so the dialog
+      // does not offer an amount field the API would refuse.
+      'allowsPartialFunding',
       'approvedAmount',
       'funded',
       'isFullyFunded',

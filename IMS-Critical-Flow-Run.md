@@ -14,7 +14,7 @@ a 409 spends minutes on what one request answers.
 
 ## 1. Headline
 
-**38 of 38 checks pass.** No failures, no workarounds.
+**62 of 62 checks pass.** No failures, no workarounds.
 
 | Group | Result |
 |---|---|
@@ -23,6 +23,8 @@ a 409 spends minutes on what one request answers.
 | D-020 regression, tested with a real rejection | 3 / 3 |
 | UI sweep — 20 routes | all render, **0 console errors** |
 | Responsive at 390px — 6 heaviest pages | no sideways scroll anywhere |
+| Stock operations (§12) | 13 / 13 |
+| Borrowing conditions and quarantine (§12) | 11 / 11 |
 
 **The one that mattered most: TC-319 passes.** Voiding a purchase takes its carriage out of
 `spent` with it — OQ-32, decided and built on 2026-09-01 and never once exercised until now.
@@ -232,3 +234,56 @@ Honest scope. This was the critical set, not the catalogue.
   all three it looks like the app is broken when it is the defence working.
 - **Port 5173 binds again.** The Windows reservation that blocked it has cleared, so the
   integration suite should be runnable — that is the cheapest coverage still on the table.
+
+---
+
+## 12. Second batch — the surfaces nothing had touched
+
+Run after the first twenty, while the integration suite was going. These are from the
+"never exercised at all" list.
+
+### Stock operations — 13 / 13
+
+The one-writer boundary the system is built around: only `StockService` touches placements and
+the ledger, every change is one transaction, and every change appends exactly one row that is
+never updated or deleted.
+
+| ID | Flow | Result |
+|---|---|---|
+| TC-366 | Adjusting up raises on-hand by exactly the delta | ✅ 11 → 13 |
+| TC-367 | Adjusting down lowers it by exactly the delta | ✅ 13 → 11 |
+| TC-368 | An adjustment of zero | ✅ refused — it would write a ledger row saying nothing happened |
+| TC-369 | An adjustment below zero on hand | ✅ `INSUFFICIENT_STOCK` |
+| TC-369b | The refused adjustment changed nothing | ✅ |
+| TC-370 | An adjustment with no reason | ✅ refused |
+| TC-362 | Moving between compartments | ✅ total unchanged, 11 → 11 |
+| TC-363 | Moving more than the source holds | ✅ `INSUFFICIENT_STOCK` |
+| TC-365 | Moving to the same compartment | ✅ 409 `CONFLICT`, not a 500 |
+| TC-377 | Every change appended a ledger row | ✅ |
+| TC-378 | All five movement types present | ✅ `MOVE, ADJUST, RETURN, ISSUE, RECEIPT` |
+| TC-379 | Deleting a ledger row | ✅ no such route — 404 |
+| TC-380 | On-hand back where the run found it | ✅ 11 |
+
+### Borrowing conditions — 11 / 11
+
+The important one is a damaged return. It must not go back on the shelf as available.
+
+| ID | Flow | Result |
+|---|---|---|
+| TC-128 | Requesting reserves rather than issues | ✅ reserved 0 → 1, owned unchanged |
+| TC-335 | Rejecting releases the reservation | ✅ back to 0 |
+| TC-336 | Deciding an already-decided borrow | ✅ `BORROW_INVALID_TRANSITION` |
+| TC-339 | Partial return leaves the rest out | ✅ `PARTIALLY_RETURNED` |
+| TC-340 | Returning the last unit closes it | ✅ `RETURNED` |
+| TC-341 | Returning more than is out | ✅ refused |
+| **TC-344** | **A `DAMAGED` return is quarantined** | ✅ quarantined 0 → 1 |
+| **TC-344b** | **…and is not counted as available** | ✅ available 9 → 9 |
+| TC-345 | A `NOT_WORKING` return is quarantined too | ✅ 1 → 2 |
+| TC-372 | Releasing from quarantine returns it to available | ✅ quarantined 2 → 1, available 9 → 10 |
+| TC-373 | Disposing from quarantine removes it from owned | ✅ owned 11 → 10 |
+
+**Running total: 62 checks, 62 pass.**
+
+One note on data: TC-373 disposes a unit permanently, so `LAP-0001` on the demo stack is now 10
+rather than 11. That is the flow working, not a mistake, but it is a real irreversible change to
+the demo database and worth knowing before anyone reconciles against an earlier number.

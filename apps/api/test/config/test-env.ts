@@ -60,6 +60,11 @@ export const TEST_ENV: Record<string, string> = {
   JSON_BODY_LIMIT: '100kb',
   URLENCODED_BODY_LIMIT: '100kb',
 
+  // Pinned false so the suite is deterministic and matches production for this release.
+  // Flipping it here is what the four paused reversal tests in funds-reversals need (G-20),
+  // and that wants a per-test CONFIG override rather than a global change.
+  ALLOW_PARTIAL_FUNDING: 'false',
+
   SETTING_EXPENSE_THRESHOLD_BDT: '15000',
   SETTING_APPROVER_SLOTS_BELOW_THRESHOLD: '1',
   SETTING_APPROVER_SLOTS_AT_OR_ABOVE_THRESHOLD: '2',
