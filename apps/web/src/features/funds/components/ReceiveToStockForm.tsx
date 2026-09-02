@@ -5,8 +5,8 @@ import { Dialog } from '@/components/ui/Dialog';
 import { TextField } from '@/components/ui/Field';
 import { useToast } from '@/components/ui/Toast';
 import { useAllProducts, useCategoryTree, useZones } from '@/features/inventory/api';
+import { CompartmentPicker } from '@/components/ui/CompartmentPicker';
 import { t } from '@/i18n/en';
-import { cn } from '@/lib/cn';
 import { focusFirstInvalid } from '@/lib/focus-invalid';
 import { messageForError } from '@/lib/error-message';
 import { CATALOGUE_QUERY } from '@/features/requisitions/pages/RequisitionFormPage';
@@ -111,12 +111,6 @@ export function ReceiveToStockForm({
     // without it every line would be stuck on "new product" from before they loaded.
   }, [outstanding.map((line) => line.id).join(','), products.length]);
 
-  const compartments = (zones.data ?? []).flatMap((zone) =>
-    zone.compartments.map((compartment) => ({
-      id: compartment.id,
-      label: `${zone.name} · ${compartment.code}`,
-    })),
-  );
 
   function update(id: string, patch: Partial<LineState>) {
     setLines((previous) => ({ ...previous, [id]: { ...previous[id]!, ...patch } }));
@@ -221,18 +215,16 @@ export function ReceiveToStockForm({
                   />
 
                   <label className="flex flex-col gap-1">
-                    <span className="text-sm font-medium text-ink">
-                      {t.funds.compartment}
-                      <span aria-hidden className="ml-0.5 text-danger">
-                        *
-                      </span>
-                    </span>
-                    <select
+                    {/*
+                      Zone first, then the compartments inside it. A flat list of every shelf in
+                      the building stops being pickable once there are more than a handful.
+                    */}
+                    <CompartmentPicker
+                      zones={zones.data ?? []}
                       value={state.compartmentId}
-                      aria-required
-                      aria-invalid={lineErrors[line.id] ? true : undefined}
-                      onChange={(event) => {
-                        update(line.id, { compartmentId: event.target.value });
+                      error={lineErrors[line.id]}
+                      onChange={(compartmentId) => {
+                        update(line.id, { compartmentId });
                         // Clear the mark as soon as it is answered, or a corrected row keeps
                         // wearing a refusal it has already satisfied.
                         setLineErrors((current) => {
@@ -242,18 +234,7 @@ export function ReceiveToStockForm({
                           return next;
                         });
                       }}
-                      className={cn(
-                        'rounded-[--radius-control] border bg-surface px-2.5 py-1.5 text-sm',
-                        lineErrors[line.id] ? 'border-danger' : 'border-border',
-                      )}
-                    >
-                      <option value="">{t.common.none}</option>
-                      {compartments.map((compartment) => (
-                        <option key={compartment.id} value={compartment.id}>
-                          {compartment.label}
-                        </option>
-                      ))}
-                    </select>
+                    />
                     {lineErrors[line.id] ? (
                       <p role="alert" className="text-xs text-danger">
                         {lineErrors[line.id]}

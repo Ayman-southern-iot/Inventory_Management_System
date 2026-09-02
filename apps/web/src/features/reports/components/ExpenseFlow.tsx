@@ -76,7 +76,7 @@ function Gap({ label, value }: { label: string; value: number }) {
 type Totals = ExpenseReport['totals'];
 
 export function ExpenseFlow({ totals, periodLabel }: { totals: Totals; periodLabel: string }) {
-  const { requested, approved, funded, spent, purchased, transportation } = totals;
+  const { requested, approved, funded, spent, purchased, transportation, returned } = totals;
 
   /*
    * The two gaps, floored at zero and never conflated.
@@ -89,7 +89,19 @@ export function ExpenseFlow({ totals, periodLabel }: { totals: Totals; periodLab
    * the funding endpoint already applies to `outstanding` and `unspent`.
    */
   const awaiting = Math.max(0, Math.round((approved - funded) * 100) / 100);
-  const inHand = Math.max(0, Math.round((funded - spent) * 100) / 100);
+
+  /*
+   * Returned money has left; money in hand has not. They are two figures, not one.
+   *
+   * This read `funded − spent` until 2026-09-02, which counted money already handed back to
+   * Accounts as still being held — the page said 1,500 in hand where the requisition itself said
+   * 500 and 1,000 returned. The requisition panel had it right all along
+   * (`funded − spent − transportation − returned`); the page-level version dropped the last term.
+   *
+   * `spent` already includes transportation here, because the report folds the carriage into it.
+   */
+  const returnedToAccounts = Math.max(0, Math.round(returned * 100) / 100);
+  const inHand = Math.max(0, Math.round((funded - spent - returned) * 100) / 100);
 
   /*
    * The page's whole promise is that the figures reconcile, so it says whether they do rather than
@@ -151,6 +163,7 @@ export function ExpenseFlow({ totals, periodLabel }: { totals: Totals; periodLab
         <Gap label={t.expenses.splitTransport} value={transportation} />
         <div className="ml-auto flex flex-wrap items-baseline gap-x-8 gap-y-2">
           <Gap label={t.expenses.gapAwaiting} value={awaiting} />
+          <Gap label={t.expenses.gapReturned} value={returnedToAccounts} />
           <Gap label={t.expenses.gapInHand} value={inHand} />
         </div>
       </div>

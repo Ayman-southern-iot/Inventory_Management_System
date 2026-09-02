@@ -10,11 +10,11 @@ import { Button } from '@/components/ui/Button';
 import { QueryBoundary } from '@/components/ui/states';
 import { useAuth } from '@/features/auth/auth-context';
 import { t } from '@/i18n/en';
-import { formatBdt, formatDateTime } from '@/lib/format';
+import { formatBdt } from '@/lib/format';
 import { useFunding } from '../api';
 import { useBomForRequisition } from '@/features/boms/api';
 import { FundsActionDialog, type FundsAction } from './FundsActionDialog';
-import { InvoiceRow } from './InvoiceRow';
+import { MoneyTrail } from './MoneyTrail';
 
 /**
  * The Inventory Manager's view of a requisition's money, and the one action that is available
@@ -130,50 +130,11 @@ export function FundsPanel({ requisition }: { requisition: RequisitionDetail }) 
               />
             </dl>
 
-            {data.receipts.length > 0 && (
-              <Section title={t.funds.receipts}>
-                {data.receipts.map((receipt) => (
-                  <li key={receipt.id} className="flex flex-wrap justify-between gap-2 py-1.5">
-                    <span className="text-ink">
-                      {formatBdt(receipt.amount)}
-                      {receipt.reference ? ` · ${receipt.reference}` : ''}
-                    </span>
-                    <span className="text-xs text-ink-subtle">
-                      {formatDateTime(receipt.receivedAt)}
-                    </span>
-                  </li>
-                ))}
-              </Section>
-            )}
-
-            <Section title={t.funds.purchases}>
-              {data.purchases.length === 0 ? (
-                <li className="py-1.5 text-ink-subtle">{t.funds.noPurchases}</li>
-              ) : (
-                data.purchases.map((purchase) => (
-                  <InvoiceRow
-                    key={purchase.id}
-                    requisitionId={requisition.id}
-                    purchase={purchase}
-                  />
-                ))
-              )}
-            </Section>
-
-            {data.returns.length > 0 && (
-              <Section title={t.funds.returns}>
-                {data.returns.map((entry) => (
-                  <li key={entry.id} className="flex flex-wrap justify-between gap-2 py-1.5">
-                    <span className="text-ink">
-                      {formatBdt(entry.amount)} · {entry.note}
-                    </span>
-                    <span className="text-xs text-ink-subtle">
-                      {formatDateTime(entry.returnedAt)}
-                    </span>
-                  </li>
-                ))}
-              </Section>
-            )}
+            {/*
+              One trail, in order, instead of three lists with no ordering between them. The
+              notes typed at each step were stored and shown nowhere; they appear here.
+            */}
+            <MoneyTrail requisition={requisition} funding={data} />
           </div>
         )}
       </QueryBoundary>
@@ -311,13 +272,3 @@ function Figure({
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-subtle">
-        {title}
-      </h3>
-      <ul className="divide-y divide-border text-sm">{children}</ul>
-    </div>
-  );
-}

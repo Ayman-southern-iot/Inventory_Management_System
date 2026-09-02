@@ -1018,3 +1018,22 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   revision tests keep running — the integration suite now has **zero skipped tests**. It was
   deferred on 2026-09-02 only because the suite could not run to verify it; once the port cleared,
   that reason was gone.
+- 2026-09-02 — The expenses page counts returned money as returned, not as in hand — **a defect I
+  introduced** when the page was rebuilt: `inHand` was `funded − spent` with no `returned` term, so
+  a requisition with 1,000 already handed back read 1,500 in hand where its own funding panel said
+  500. Split into two figures, Money returned and Money in hand, and a test now pins the two
+  surfaces to the same arithmetic — the disagreement between them is exactly how it was spotted.
+- 2026-09-02 — The money panel shows one chronological trail instead of three lists — Ayman: "a
+  normal person is not understanding anything from this information". Receipts, Purchases and
+  Returned had no ordering between them, and the note typed at each step was stored and rendered
+  nowhere. **Ordered by when each row was recorded, not by the date printed on it**: a receipt
+  carries a business date the IM types and an event carries a system instant, and sorting those
+  together put "BOM sent to Accounts" below a receipt back-dated to the day before.
+- 2026-09-02 — Compartments are chosen zone-first — Ayman. One flat list of every shelf stops being
+  pickable past a handful. Applied to the three places that ask "any shelf in the building" (add to
+  inventory, record a return, receive stock) and **deliberately not** to Borrow, Adjust or
+  Quarantine, which choose among the shelves already holding that product: a zone step there can
+  show an empty compartment list for a zone that holds none of it. The plan said seven call sites;
+  only four are the right shape. The zone is component state, not derived from the compartment —
+  deriving it means clearing the compartment clears the zone, and the second select can never be
+  reached.

@@ -1,10 +1,11 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { receiveStockSchema, type ReceiveStockInput, type Zone } from '@ims/shared';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
-import { SelectField, TextField } from '@/components/ui/Field';
+import { CompartmentPicker } from '@/components/ui/CompartmentPicker';
+import { TextField } from '@/components/ui/Field';
 import { useToast } from '@/components/ui/Toast';
 import { t } from '@/i18n/en';
 import { messageForError } from '@/lib/error-message';
@@ -28,20 +29,6 @@ export function ReceiveStockDialog({ open, onClose, productId, zones }: Props) {
   });
 
   // A deactivated compartment cannot take stock — the API refuses it, so do not offer it.
-  const compartments = useMemo(
-    () =>
-      zones
-        .filter((zone) => zone.isActive)
-        .flatMap((zone) =>
-          zone.compartments
-            .filter((compartment) => compartment.isActive)
-            .map((compartment) => ({
-              id: compartment.id,
-              label: `${zone.name} / ${compartment.code}`,
-            })),
-        ),
-    [zones],
-  );
 
   useEffect(() => {
     if (open) form.reset({ productId, compartmentId: '', quantity: undefined });
@@ -82,18 +69,20 @@ export function ReceiveStockDialog({ open, onClose, productId, zones }: Props) {
         onSubmit={form.handleSubmit(onSubmit)}
         className="flex flex-col gap-4"
       >
-        <SelectField
-          label={t.inventory.compartment}
+        {/*
+          Zone first, then the shelves inside it. This one asks "any shelf in the building",
+          which is the question the two-step picker is for — unlike Borrow, Adjust and
+          Quarantine, which choose among the shelves already holding this product and would be
+          made worse by a zone step that can show an empty list.
+        */}
+        <CompartmentPicker
+          zones={zones}
+          value={form.watch('compartmentId') ?? ''}
           error={errors.compartmentId?.message}
-          {...form.register('compartmentId')}
-        >
-          <option value="">{t.inventory.chooseCompartment}</option>
-          {compartments.map((compartment) => (
-            <option key={compartment.id} value={compartment.id}>
-              {compartment.label}
-            </option>
-          ))}
-        </SelectField>
+          onChange={(compartmentId) =>
+            form.setValue('compartmentId', compartmentId, { shouldValidate: true })
+          }
+        />
 
         <QuantityField
           control={form.control}

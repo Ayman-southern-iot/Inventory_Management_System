@@ -487,6 +487,17 @@ export const t = {
     unit: 'Unit',
     // states
     noPurchases: 'No purchases recorded yet.',
+
+    // The money trail. One row per thing that happened, in the order it happened — this replaced
+    // three lists with no ordering between them, and gave the notes somewhere to be shown.
+    trailHeading: 'What happened',
+    trailSentToAccounts: 'BOM sent to Accounts',
+    trailReceived: 'Money received from Accounts',
+    trailPurchased: 'Purchase recorded',
+    trailReturned: 'Money returned to Accounts',
+    trailStocked: 'Added to inventory',
+    trailReference: 'ref',
+    trailEmpty: 'Nothing has happened to the money yet.',
     receipts: 'Receipts',
     purchases: 'Purchases',
     returns: 'Returned',
@@ -576,7 +587,11 @@ export const t = {
     // The two gaps. Not the same number and not to be conflated: one is money an approver has
     // sanctioned that Accounts has not released, the other is money released and not yet spent.
     gapAwaiting: 'Awaiting from Accounts',
-    gapInHand: 'In hand, unspent',
+    // Two figures, not one. Money that went back to Accounts has left the building; money in
+    // hand has not. Reporting their sum as "in hand" overstates what the IM is still holding by
+    // exactly whatever has been returned — which is what it did until 2026-09-02.
+    gapReturned: 'Money returned',
+    gapInHand: 'Money in hand',
 
     // Shown only when every derived figure agrees. Silence would be ambiguous — the reader
     // cannot tell "checked and fine" from "never checked".
@@ -716,6 +731,21 @@ export const t = {
     updated: 'Category updated.',
     emptyTitle: 'No categories yet',
     emptyBody: 'Create one before adding products.',
+  },
+
+  /*
+   * The shared zone-then-compartment picker.
+   *
+   * Its own block because the component is shared: "zone" lives under locations and
+   * "compartment" under both inventory and funds, and a shared control reaching into a
+   * feature's copy is how one feature renaming a label breaks another screen.
+   */
+  compartmentPicker: {
+    zone: 'Zone',
+    zonePlaceholder: 'Choose a zone',
+    compartment: 'Compartment',
+    compartmentPlaceholder: 'Choose a compartment',
+    compartmentPickZoneFirst: 'Pick a zone first',
   },
 
   locations: {
