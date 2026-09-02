@@ -10,7 +10,20 @@ export default defineConfig(({ mode }) => {
   const devPort = Number(env.WEB_PORT ?? 5173);
   const apiTarget = env.VITE_DEV_API_PROXY_TARGET ?? 'http://127.0.0.1:3000';
 
+  /*
+   * When this bundle was built, shown on the login page.
+   *
+   * A literal date in the source would be wrong the day after somebody wrote it, and would
+   * still read as today's while the browser served a week-old bundle from cache. Stamped here
+   * it cannot disagree with the code around it: the value is created by the build that
+   * produced the file, so a stale page shows a stale date, which is the useful answer.
+   */
+  const builtAt = new Date().toISOString();
+
   return {
+    define: {
+      __BUILD_TIME__: JSON.stringify(builtAt),
+    },
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },

@@ -89,6 +89,9 @@ export const t = {
     demoAccountsPasswordLabel: 'Password for every account below:',
     demoAccountsCaveat:
       'Anyone who can open this page can sign in as any of these people. Turn demo mode off before this system holds anything real. If an administrator changes one account’s password, that account no longer uses the password above.',
+    // Stamped at build time, so a browser serving a cached bundle shows the date of the
+    // bundle it is actually running rather than of the deploy it missed.
+    lastUpdated: 'Last update',
   },
 
   nav: {

@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/Field';
 import { t } from '@/i18n/en';
 import { messageForError } from '@/lib/error-message';
+import { formatDateTime } from '@/lib/format';
 import { useAuth } from '../auth-context';
 import { ROUTES } from '@/routes/paths';
 
@@ -168,6 +169,17 @@ export function LoginPage() {
             <p className="mt-3 text-[0.7rem] text-ink-subtle">{t.auth.demoAccountsCaveat}</p>
           </section>
         ) : null}
+
+        {/*
+          Which build this is.
+
+          Stamped by Vite at build time rather than written into the source, so it cannot claim
+          to be today while the browser is serving last week's cached bundle — a stale page shows
+          a stale date, which is the answer a tester actually needs.
+        */}
+        <p className="mt-6 text-center text-xs text-ink-subtle">
+          {t.auth.lastUpdated}: {formatDateTime(__BUILD_TIME__)}
+        </p>
       </div>
     </main>
   );
