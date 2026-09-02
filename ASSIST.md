@@ -704,6 +704,25 @@ Condensed, so you can scan it before starting work. Detail for most of these is 
   demo mode off) · `infra/docker-compose.dev.yml` (host dev DBs on 5433/5434). Know which one
   you are talking about before you "fix" a port.
 - **`0020` and `0021` migrations do not exist.** Skipped numbers, not missing files.
+- **A stack running with no `.env` is the demo stack**, whatever anyone intended — demo accounts
+  on, and the JWT and PDF-signing secrets are literals in a file that is on GitHub. Fine on a
+  closed LAN for a testing round; not a launch. Check before assuming a deployment is protected:
+  `curl -s http://<host>:5173/api/v1/auth/demo-accounts` answers **unauthenticated**, and if it
+  lists emails and a password there is no authentication on that system.
+- **Windows reserves TCP port blocks at boot**, and 5173 / 5433 / 5434 can all land inside one.
+  The proxy fails to bind with *"forbidden by its access permissions"* while nothing is listening,
+  and the integration suite dies on `ECONNREFUSED :5434`. An OS reservation, not a broken app.
+- **A probe is not the product.** A synthetic `dispatchEvent` does not register a combobox
+  selection, so lines fall through to free text and it reads as a broken catalogue picker; the
+  database settles it (`product_id` null on those rows). Ask what the harness did differently from
+  a person before filing anything.
+- **`GET /reports/expenses` returns `{ buckets, totals }`** — not `rows`, not `items`. A check
+  written against an invented field name compared `0` to `0` and passed green. Read the zod
+  contract in `packages/shared/src/contracts/` before asserting.
+- **Partial funding and revising the approved amount are switched off for this release**
+  (`ALLOW_PARTIAL_FUNDING`, `ALLOW_APPROVED_AMOUNT_REVISION`, both default false). A refusal from
+  either is correct behaviour, not a defect — `WORKING-AS-DESIGNED`, cited to `DECISIONS.md`
+  2026-09-02.
 
 ---
 
@@ -892,52 +911,68 @@ GATE  (re-run after the last edit of the batch)
 
 ## 13. The current true state of the build
 
-**Read this section carefully — the project's own status docs are behind the code right now,
-and they are exactly the files you would otherwise trust.**
+**Rewritten 2026-09-02.** Earlier versions of this section warned that the status docs were behind
+the code. That is no longer the case for `NOW.md`, `PROGRESS.md` and `SESSION-LOG.md` — they were
+brought current on 2026-09-02 and are maintained per session. `AI_PLAYBOOK.md` is still a
+derivative summary with residual drift; where it and the code disagree, **the code wins**.
 
 ### What is actually true
 
-- All planned phases (00–06) are complete. There is no open phase file. The build is
-  feature-complete against the original plan; what remains is go-live operations plus the
-  features added on top since.
-- The working branch is **`fix/lan-secure-context`**, which is **73 commits ahead of `main`**
-  and has not been merged. Whether that is intentional is an open question for the lead.
-- Recent work not in the original plan: transportation cost on requisitions (migration 0025),
-  `funding_snapshots` (0026), quarantine correctness in `available`, IM-side BOM line
-  customisation, single-item over-budget **send-back for revision**, `unverify-purchase`,
-  reverse-a-borrow-return with a compensating ledger row, demo personas on the login page, and
-  the one-command root demo stack on 5173.
-- **Test baseline: 458 pass / 8 pre-existing failures** (`reports`, `throttling`) per
-  `DECISIONS.md`. **Unverified this session.** See §6 for how to handle that.
+- **Phases 00–08 are complete**, plus four QA rounds on top of them. There is no open phase file
+  and nothing is queued. What remains is go-live operations, the untested upload surface, and the
+  ranked candidates in `NOW.md`.
+- **It is deployed.** A demo stack runs on the VM (`rndserver`) for the testing round, and the
+  branch is pushed. **Demo mode is on, which means there is effectively no authentication** —
+  deliberate for this round, and the reason `GET /auth/demo-accounts` answers unauthenticated.
+- The working branch is **`fix/lan-secure-context`**, still unmerged to `main`. Whether that is
+  intentional remains an open question for the lead.
+- **Test baseline: 685 integration pass / 0 fail / 0 skipped, 50 files** — green, and with nothing
+  skipped for the first time in the project's history. `pnpm lint` carries **20 pre-existing
+  errors**; compare against 20, not zero. `guard-hardcoding.sh --scan-all` reports 8.
+  `DECISIONS.md` holds the authoritative figures — read them there rather than trusting a number
+  memorised from a rule file.
+- Recent work not in the original plan: transportation cost on the purchase that paid it (0029),
+  `funding_snapshots` (0026), a requester's own approval stage no longer created (0030), BOM and
+  purchase money ceilings, reversible money stages, the personal dashboard, the rebuilt expenses
+  page with a twelve-month trend and top items, the chronological money trail, and demo mode.
 
-### Known documentation drift — do not trust these without checking the code
+### Two features are switched off for this release
+
+`ALLOW_PARTIAL_FUNDING` and `ALLOW_APPROVED_AMOUNT_REVISION`, both default false, both refusing
+server-side with their own `ErrorCode`, both hiding their control in the UI. **A refusal from
+either is `WORKING-AS-DESIGNED`**, cited to `DECISIONS.md` 2026-09-02 — not a defect. The code and
+its tests are intact; reversing it is one env var.
+
+### Residual playbook drift — check the code before trusting these
 
 | Document | Problem |
 |---|---|
-| `docs/state/NOW.md` | Dated 2026-07-31 and **auto-injected into every session**. Claims "368 integration tests, all passing" and that nothing remains but go-live. Both are now wrong. It is the first thing a fresh session reads, which makes it the most misleading file in the repo. |
-| `AI_PLAYBOOK.md` §5.3, §20 | Still describes the **over-budget BOM bounce-back gate as live**. It was retired in `5435fac`. The remnant is `const overBudget = false;` at `apps/api/src/modules/boms/boms.service.ts:170`, still threaded into four call sites as dead code. |
 | `AI_PLAYBOOK.md` §5.1 | Gives `available = quantity − reserved_qty`. The real rule subtracts `quarantined_qty` as well. |
-| `AI_PLAYBOOK.md` §5.3 | Lifecycle list omits `PURCHASE_VERIFIED` and `CANCELLED`, both of which are in the enum. |
-| `AI_PLAYBOOK.md` §10.1 | Table and migration counts are stale; `funding_snapshots` is missing. |
-| `AI_PLAYBOOK.md` generally | No mention of transportation cost, BOM customise, send-back, `unverify-purchase`, reverse-return, demo mode, or the root compose file. |
+| `AI_PLAYBOOK.md` §5.3 | Lifecycle list omits `PURCHASE_VERIFIED` and `CANCELLED`, both in the enum. |
+| `AI_PLAYBOOK.md` §5.3, §20 | Described the over-budget BOM bounce-back gate as live. It was retired in `5435fac` — **and then reinstated in a stricter, per-requisition form** on 2026-09-01 (`BOM_EXCEEDS_APPROVED_AMOUNT`). Read `boms.service.ts`, not the playbook. |
+| `AI_PLAYBOOK.md` §10.1 | Table and migration counts are stale; migrations now run to **0030**. |
 
-**So: when the playbook and the code disagree, the code wins — and tell the lead, because the
-playbook is supposed to be fixed in the same change that outdated it.**
+**When the playbook and the code disagree, the code wins — and tell the lead, because the playbook
+is supposed to be fixed in the same change that outdated it.**
 
 ### Open items you may run into
 
+- **Untested surface: file upload and signatures** — supporting documents, invoices,
+  approve-with-signature. The largest part of the build nobody has exercised.
+- **`G-14`** — the prevention half is still open.
 - **`G-16`** — offsite backups are not configured; backups sit on the same VM as the database.
   The `rclone`/`aws s3` lines in `infra/backup.sh` are commented out.
 - **`G-17`** — the restore drill has only been run against a scratch DB, not the production stack.
 - **`G-18`** — integration tests write uploads into the dev storage directory, leaving orphans.
 - **`G-19`** — five endpoints return a bare array rather than `Paginated<T>`. Deliberate;
   revisit past ~1,000 rows.
+- **`F-5`** — every BOM signature prints "for &lt;their own name&gt;", on the document Accounts reads.
 - **Unconfirmed assumptions** (marked 🟡 in `OPEN-QUESTIONS.md`): OQ-14 audit always-on
-  membership · OQ-16 notification audience · OQ-20 part-payments kept · OQ-22 borrow-to-user may
-  target any active user.
-- **Three settings have no safe default** and the system refuses work until an operator sets
-  them: approver slots 1 and 2, the **sub-threshold approver** (separate setting, most commonly
-  missed), and the expense threshold.
+  membership · OQ-16 notification audience · OQ-30 · OQ-31 · OQ-33.
+- **A fresh production install accepts no requisition** until an admin sets approver slots 1 and 2,
+  the **sub-threshold approver** (a separate setting, most commonly missed), an Inventory Manager,
+  one department, and the expense threshold. The error at submit names the missing one.
+  `docs/RUNBOOK.md` §0.
 
 ---
 

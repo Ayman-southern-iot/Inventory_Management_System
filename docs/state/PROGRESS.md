@@ -5,6 +5,39 @@
 
 ## Current position
 
+- **2026-09-02 — QA rounds 3–4, the expenses page rebuilt, and the first deployment.** Working
+  tree clean apart from the long-standing untracked set (`IMS-QA-Report.md`,
+  `IMS_QA_Test_Plan.xlsx`, `approving_view_template.html`, `bom_template.html`, `docs/policy/`,
+  `promt.md` — OQ-33), now joined by this session's QA documents. Branch
+  `fix/lan-secure-context`, **pushed — `origin` is level with local.** A demo stack is running on
+  the VM (`rndserver`) and serving the testing round.
+  - **Next task:** none queued. Ranked candidates in `NOW.md`; the first is splitting the demo
+    flag so testing gets five accounts without four invented products.
+  - **Verified green:** typecheck clean · unit shared 20 / api 83 / web 318 · integration
+    **685 pass / 0 fail / 0 skipped (50 files)** — the first run in this project's history with
+    nothing skipped · `pnpm lint` **20 pre-existing errors**, unchanged ·
+    `guard-hardcoding.sh --scan-all` **8**, unchanged · **29/29 MVP end-to-end and 62/62
+    critical-flow checks** (`IMS-MVP-Readiness.md`, `IMS-Critical-Flow-Run.md`).
+  - **OQ-34 closed** — plain A4, `PDF_MARGIN_TOP_MM` 45→20, five items to a page, measured
+    through the real Chromium rather than estimated.
+  - **G-20 closed** — `createTestApp()` takes a partial `CONFIG` override, so a spec can build
+    its app under a different policy. It brought all eight paused tests back.
+  - **Two features deferred behind config flags, not deleted:** `ALLOW_PARTIAL_FUNDING` and
+    `ALLOW_APPROVED_AMOUNT_REVISION`. Both default false, both refuse with their own `ErrorCode`,
+    both hide their control by way of a field on a payload the client already fetches — so the UI
+    cannot offer what the API would refuse. The `defer-feature` skill records the shape.
+  - **The expenses page was built to `docs/spec/expenses-page-rebuild.md`:** four-stage flow, the
+    two gaps, month ledger, a rolling twelve-month trend and top items — two new endpoints, the
+    window computed in Asia/Dhaka, empty months as real zeros, the trend drawn as inline SVG.
+  - **The money panel tells one chronological story** instead of three unordered lists, and it
+    finally shows the notes people had been typing into every dialog and never seeing again.
+  - **Shipped alongside:** zone-then-compartment selection, an in-app reason dialog replacing
+    `window.prompt`, a note required only on rejection, the completion badge no longer claiming a
+    live requisition is finished, and a build stamp on the login page.
+  - **Four skills written** so the next session does not re-derive any of it: `codemod`,
+    `api-probe`, `defer-feature`, `deploy`.
+  - **Still untested: file upload and signatures** — supporting documents, invoices,
+    approve-with-signature. The largest untouched surface in the build.
 - **2026-08-31 → 2026-09-01 — Ayman's QA rounds: the money surface closed, both documents
   rebuilt, and who approves their own requisition.** Working tree **not yet committed at the time
   this was written** — see the commit that carries it. `IMS-QA-Report.md`,
@@ -311,6 +344,7 @@
 | 06 | Hardening — invariant job, backups, monitoring, runbook | ✅ done and verified | 6.1–6.7; re-verified 2026-08-27 |
 | 07 | QA round 2 defect burndown | ✅ done and verified | 22 of 22, plus EX-02 |
 | 08 | Reversible money stages, lifecycle truth, personal dashboard | ✅ done and verified | migration 0028, 656 int tests |
+| — | QA rounds 3–4, expenses page, deferral flags, first deploy | ✅ done and verified | no plan file — driven by QA, see SESSION-LOG 2026-09-02 |
 
 Legend: ⬜ not started · 🟡 in progress · ✅ done and verified
 

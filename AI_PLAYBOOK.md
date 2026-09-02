@@ -8,8 +8,8 @@
 >
 > **Maintenance rule:** see `.claude/rules/05-ai-playbook.md`. A `PostToolUse` hook
 > (`.claude/hooks/playbook-reminder.sh`) reminds Claude to update this file after every
-> meaningful edit. Last updated: 2026-08-26 (phase 08: reversible money stages, migration 0028,
-> the transportation-in-spent fix; landmines added to §16, new surface in §17).
+> meaningful edit. Last updated: 2026-09-02 (QA rounds 3–4: four new skills in §15, the two
+> deferral flags in §11, deployment and harness landmines in §16, new surface in §17).
 >
 > **⚠ This file has known drift as of 2026-08-17** — §5.1 (`available` omits `quarantined_qty`),
 > §5.3 and §20 (the over-budget BOM gate was retired in `5435fac`), §5.3 (lifecycle list omits
@@ -869,6 +869,19 @@ and `PUT /admin/settings` rejects it. It is what distinguishes "this release int
 from "an admin switched it off": the latter stays off across every restart (`DECISIONS.md`,
 2026-08-07).
 
+**Two features ship off, behind config rather than `app_settings`** (2026-09-02):
+`ALLOW_PARTIAL_FUNDING` and `ALLOW_APPROVED_AMOUNT_REVISION`, both defaulting false in the `money`
+group. Env and not the settings table on purpose — this is a release decision about an unfinished
+feature, not a policy the office tunes, and an admin toggle for a half-built path is worse than no
+toggle. Each refuses server-side with its own `ErrorCode`, and each tells the client through a
+field on a payload the SPA already fetches (`allowsPartialFunding` on the funding response,
+`allowsApprovedAmountRevision` on the approval policy) so the UI cannot offer what the API would
+refuse. The `defer-feature` skill documents the seven pieces; turning either back on is one env
+var plus a suite run.
+
+**Every boolean config key is `z.enum(['true','false']).default(...).transform(v => v === 'true')`.**
+Never `z.coerce.boolean()` — it reads `"false"` as `true`.
+
 **Settings changed by hand in dev persist** — reset `EXPENSE_THRESHOLD_BDT` to 15,000 or read
 it live rather than assuming.
 
@@ -967,6 +980,10 @@ reason the locking exists).
 | `/add-migration` | New migration: additive first, rollback tested |
 | `/add-screen` | New web feature folder: query hooks, RHF form, i18n, states |
 | `/adr` | Record an architectural decision expensive to reverse |
+| `codemod` | Editing a file by script. Read it **before** the first splice — heredocs mangle scripts and a bad splice costs a restore |
+| `api-probe` | Verifying what the server *decides* — refusals, permissions, money arithmetic. Cheaper than clicking and it produces pasteable evidence |
+| `defer-feature` | "We'll do it next version." Switches a half-built feature off behind a config flag without deleting it or its tests |
+| `deploy` | **Before writing any deployment instruction.** There are two compose files and the wrong one ships secrets that are in the public repo |
 | `domain-context` | (auto-loaded) stock/borrowing/requisitions/BOM vocabulary |
 
 ### 15.2 Agents (specialists)
@@ -1063,10 +1080,54 @@ reason the locking exists).
 - **`@typescript-eslint/consistent-type-imports` is off for `apps/api/src`** — Nest resolves
   DI from `design:paramtypes`, which the compiler only emits for value imports, so the
   rule's autofix silently breaks the container at boot.
+- **Two compose files, and picking the wrong one is a security incident.** Root
+  `docker-compose.yml` is the **demo** stack: demo accounts hardcoded on, JWT and PDF-signing
+  secrets as literals in a file that is on GitHub. `infra/docker-compose.yml` is production and
+  reads a gitignored `infra/.env`. A stack running with no `.env` is the demo stack, whatever
+  anyone intended. **Read the `deploy` skill before writing any deployment instruction** — one
+  session produced a full set of confident, wrong ones by not reading the compose header.
+- **Windows reserves TCP port blocks at boot**, and 5173 / 5433 / 5434 can all land inside one.
+  The proxy then fails to bind with *"forbidden by its access permissions"* while nothing is
+  listening, and the integration suite dies on `ECONNREFUSED :5434`. It looks like a broken app
+  and is an OS reservation. `RUNBOOK.md` §7 has the fix.
+- **Your harness is not the product.** Twice in one session a "defect" was the probe: a synthetic
+  `dispatchEvent` that did not register a combobox selection (proven by `product_id` null in the
+  database), and a receive call keyed on `requisitionItemId` when the contract wants
+  `purchaseLineId`. Before reporting a defect, ask what the harness did differently from a person,
+  then check the database, which has no opinion. The `api-probe` skill lists the payload shapes
+  that have already cost a wrong result.
+- **A test that asserts a field name you invented has asserted nothing.** `GET /reports/expenses`
+  returns `{ buckets, totals }`; a check reading `rows` compared `0` to `0` and passed green.
+  Read the zod contract before writing the assertion.
+- **`z.coerce.boolean()` reads the string `"false"` as `true`.** Every boolean config key uses
+  `z.enum(['true','false']).default('false').transform((v) => v === 'true')`. Anything else hands
+  an operator the opposite of what they typed.
+- **A new config key must be pinned in `apps/api/test/config/test-env.ts`** or a guard test fails
+  — correctly, because an unpinned key means the suite inherits the developer's shell.
 
 ---
 
 ## 17. Open work & known gaps
+
+**2026-09-02 — QA rounds 3–4, the expenses page, and the first deployment.** 685 integration
+tests green across 50 files, **and zero skipped for the first time** — `createTestApp()` now takes
+a partial `CONFIG` override (G-20 closed), which brought all eight paused tests back. No plan
+file; the work was QA-driven. Detail in `SESSION-LOG.md` under 2026-09-02.
+
+New surface, for anyone grepping: `GET /reports/expenses/trend`, `GET /reports/expenses/top-items`;
+`ErrorCode` `PARTIAL_FUNDING_DISABLED`, `APPROVED_AMOUNT_REVISION_DISABLED`; config keys
+`ALLOW_PARTIAL_FUNDING`, `ALLOW_APPROVED_AMOUNT_REVISION` (§11); components `ExpenseFlow`,
+`MoneyTrail`, `CompartmentPicker`, `ReasonDialog`; the build-time constant `__BUILD_TIME__`
+injected by `apps/web/vite.config.ts` and printed on the login page.
+
+**Still untested: file upload and signatures** — supporting documents, invoices,
+approve-with-signature. The largest untouched surface in the build and the likeliest first
+surprise in the testing round.
+
+**A demo stack is deployed on the VM, and demo mode means there is effectively no
+authentication:** `GET /auth/demo-accounts` answers unauthenticated with every email and the
+shared password. Deliberate for this round. Before real data, redeploy through `infra/` and do
+not migrate the testing database across.
 
 **Phase 08 (2026-08-26): the way back, and an arithmetic audit.** 656 integration tests green,
 49 files. Ledger: `plan/PHASE-08-reversible-stages-and-dashboard.md`.

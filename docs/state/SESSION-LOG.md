@@ -12,6 +12,57 @@ Format:
 **Next:** the single next action, specific enough to start without thinking
 ```
 
+## 2026-09-02 — QA rounds 3–4, the expenses page, and first deployment
+
+**Did:**
+- **Closed OQ-34** (BOM prints on plain A4 → `PDF_MARGIN_TOP_MM` 45→20, five items to a page,
+  measured through the real Chromium at the real margins, not estimated).
+- **Deferred two features behind config flags** rather than deleting them: partial funding
+  (`ALLOW_PARTIAL_FUNDING`) and revising the approved amount (`ALLOW_APPROVED_AMOUNT_REVISION`).
+  Both default false, both refuse with their own `ErrorCode`, both hide their control from a field
+  on a payload the client already fetches — so the UI cannot offer what the API would refuse.
+- **Rebuilt the expenses page** to `docs/spec/expenses-page-rebuild.md`: four-stage flow, the two
+  gaps, month ledger, a rolling twelve-month trend (new endpoint, window computed in Asia/Dhaka,
+  empty months as real zeros) and top items (new endpoint, grouped on `product_id`). Trend drawn as
+  inline SVG — one line with twelve points does not justify a charting dependency.
+- **Replaced three unordered money lists with one chronological trail**, which finally shows the
+  notes people had been typing into every dialog and never seeing again.
+- **Zone-then-compartment picker** on the three screens that ask "any shelf"; deliberately not on
+  the three that pick among shelves already holding the product.
+- **Closed G-20**: `createTestApp()` now takes a partial `CONFIG` override, so a spec can build its
+  app under a different policy. All eight paused tests came back — the integration suite has **zero
+  skipped tests** for the first time.
+- **Deployed to the VM** and pushed 92 commits to `origin/fix/lan-secure-context`. The login page
+  now stamps its own build time.
+- Wrote four skills — `codemod`, `api-probe`, `defer-feature`, `deploy` — and three QA documents:
+  `IMS-Flow-Catalogue.md` (620 numbered flows), `IMS-Happy-Path-Test.md`, `IMS-MVP-Readiness.md`.
+
+**Decisions:** all in DECISIONS.md under 2026-09-02. The ones a future reader would otherwise
+re-litigate: config over `app_settings` for release-level flags; nine-status D-020 predicate kept
+over the spec's two (the spec's own "reuse it, do not re-derive it" settles it, and `FULLY_FUNDED`
+is not a status); top items ranks `purchase_lines` not `bom_lines` so the list adds up to the Items
+figure above it; the money trail orders by **when a row was recorded**, not the business date
+printed on it.
+
+**Landmines:**
+- **Two bugs I introduced and then found.** The expenses page counted returned money as still in
+  hand (`funded − spent`, no `returned` term) — caught only because it disagreed with the
+  requisition panel. And a config key added without pinning it in `test-env.ts`, caught by the
+  guard test doing exactly its job.
+- **Nearly filed two false defects** where the harness was at fault, not the product: synthetic DOM
+  events not registering a combobox selection, and a receive call keyed on `requisitionItemId`
+  instead of `purchaseLineId`. The database settled both. Check what the probe did differently
+  before believing a defect.
+- **Mangled two files with careless splicing** (`reports.repository.ts`, `funds.int-spec.ts`) —
+  restored from git and redone with content anchors and a brace-balance check rather than patched
+  over. The `codemod` skill exists because of this.
+- **Gave a full set of wrong deployment instructions** by not reading the compose header first. The
+  root stack is a demo with secrets published in the repo. The `deploy` skill exists because of this.
+- Still untested: **file upload and signatures**, the largest untouched surface.
+
+**Next:** ask. Nothing is queued. If asked to continue: split the demo flag so testing gets five
+accounts without four invented products (~15 min, offered twice), then the upload surface.
+
 ## 2026-08-31 → 2026-09-01 — Ayman's QA rounds: the money surface, the two documents, and who approves
 **Did:**
 - **Closed the money holes the QA found.** A BOM can no longer commit more than the requisition
