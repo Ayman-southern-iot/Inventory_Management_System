@@ -64,6 +64,7 @@ export const TEST_ENV: Record<string, string> = {
   // Flipping it here is what the four paused reversal tests in funds-reversals need (G-20),
   // and that wants a per-test CONFIG override rather than a global change.
   ALLOW_PARTIAL_FUNDING: 'false',
+  ALLOW_APPROVED_AMOUNT_REVISION: 'false',
 
   SETTING_EXPENSE_THRESHOLD_BDT: '15000',
   SETTING_APPROVER_SLOTS_BELOW_THRESHOLD: '1',

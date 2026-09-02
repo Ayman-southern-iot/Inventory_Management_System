@@ -15,6 +15,7 @@ import {
   missingForSubmit,
   type RequisitionSubmitField,
 } from '@ims/shared';
+import { CONFIG, type AppConfig } from '../../config';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
 import {
@@ -41,6 +42,7 @@ import {
   InvalidRequisitionTransitionError,
   RequisitionIncompleteError,
   NotYourApprovalError,
+  ApprovedAmountRevisionDisabledError,
   ApprovedExceedsRequestedError,
   SelfApprovalForbiddenError,
   SignatureNotUploadedError,
@@ -64,6 +66,7 @@ export class RequisitionsService {
 
   constructor(
     @Inject(DB) private readonly db: Db,
+    @Inject(CONFIG) private readonly config: AppConfig,
     private readonly repo: RequisitionsRepository,
     // Forward-ref: pairs with the same import on `RequisitionsRepository` — the modules are
     // mutually dependent now that `findDetail` reads `funding_snapshots` via the funds repo.
@@ -93,7 +96,12 @@ export class RequisitionsService {
         this.settings.get(SettingKey.APPROVER_SLOTS_AT_OR_ABOVE_THRESHOLD),
       ]);
 
-    return { expenseThresholdBdt, approversBelowThreshold, approversAtOrAboveThreshold };
+    return {
+      expenseThresholdBdt,
+      approversBelowThreshold,
+      approversAtOrAboveThreshold,
+      allowsApprovedAmountRevision: this.config.money.allowApprovedAmountRevision,
+    };
   }
 
   async createDraft(input: SaveRequisitionInput, requesterId: string) {
@@ -632,6 +640,21 @@ export class RequisitionsService {
       }
 
       if (input.approvedAmount !== null) {
+        /*
+         * Revising the sanctioned figure is closed for this release (Ayman, 2026-09-02) — the
+         * flow is still being worked on, so an approval carries the requested amount.
+         *
+         * Checked before the ceiling: with the feature off, "you may not revise" is the honest
+         * answer to any figure, and reporting "that exceeds the requested amount" for a revision
+         * that would be refused either way sends the approver to fix the wrong thing.
+         *
+         * Only the *setting* of a new figure is closed. Requisitions already carrying a reduced
+         * amount keep it, and the BOM ceiling still enforces whatever approved_amount says.
+         */
+        if (!this.config.money.allowApprovedAmountRevision) {
+          throw new ApprovedAmountRevisionDisabledError();
+        }
+
         // Ayman's ruling, 2026-08-20: approved may not exceed requested. Revising down is the
         // point of the field; revising up would make the BOM's "Remaining" (requested minus
         // approved) negative and the printed document nonsense. requested_amount is frozen at

@@ -22,6 +22,7 @@ import { ApprovalTracker } from '../components/ApprovalTracker';
 import { LifecycleTracker } from '../components/LifecycleTracker';
 import { RequisitionFacts } from '../components/RequisitionFacts';
 import { FundsPanel } from '@/features/funds/components/FundsPanel';
+import { ReasonDialog } from '@/components/ui/ReasonDialog';
 import { DecisionDialog } from '../components/DecisionDialog';
 import {
   useCancelRequisition,
@@ -155,6 +156,8 @@ export function RequisitionDetailPage() {
   const withdraw = useWithdrawApproval();
 
   const [deciding, setDeciding] = useState<{ approval: Approval; approve: boolean } | null>(null);
+  /** The approval whose decision is being taken back, or null. */
+  const [withdrawing, setWithdrawing] = useState<string | null>(null);
 
   /** The approval this viewer can act on right now, if any. */
   const actionable = useMemo(() => {
@@ -279,18 +282,7 @@ export function RequisitionDetailPage() {
                     <Button
                       variant="secondary"
                       icon={<Undo2 aria-hidden className="size-4" />}
-                      onClick={() => {
-                        const reason = window.prompt(t.requisitions.withdrawReason);
-                        if (!reason) return;
-                        void act(
-                          () =>
-                            withdraw.mutateAsync({
-                              approvalId: withdrawable.id,
-                              input: { reason },
-                            }),
-                          t.requisitions.withdrawnToast,
-                        );
-                      }}
+                      onClick={() => setWithdrawing(withdrawable.id)}
                     >
                       {t.requisitions.withdraw}
                     </Button>
@@ -453,6 +445,25 @@ export function RequisitionDetailPage() {
 
             {/* Renders itself only once a BOM exists — before that there is no money story. */}
             <FundsPanel requisition={detail} />
+
+            <ReasonDialog
+              open={withdrawing !== null}
+              title={t.requisitions.withdrawTitle}
+              description={t.requisitions.withdrawExplain}
+              label={t.requisitions.withdrawReason}
+              confirmLabel={t.requisitions.withdraw}
+              isPending={withdraw.isPending}
+              onClose={() => setWithdrawing(null)}
+              onConfirm={(reason) => {
+                const approvalId = withdrawing;
+                if (!approvalId) return;
+                setWithdrawing(null);
+                void act(
+                  () => withdraw.mutateAsync({ approvalId, input: { reason } }),
+                  t.requisitions.withdrawnToast,
+                );
+              }}
+            />
 
             <DecisionDialog
               deciding={deciding}

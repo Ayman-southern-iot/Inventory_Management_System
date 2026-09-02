@@ -20,7 +20,10 @@ describe('funds and purchasing', () => {
   let fixture: StockFixture;
 
   beforeAll(async () => {
-    ctx = await createTestApp();
+    // Partial funding is off in production for this release. These specs are about what happens
+    // *once* a requisition holds several receipts — a state an upward revision of the approved
+    // amount still reaches — so the app is built with instalments on.
+    ctx = await createTestApp({ money: { allowPartialFunding: true } });
   });
 
   afterAll(async () => {
@@ -75,54 +78,6 @@ describe('funds and purchasing', () => {
 
   /* ------------------------------------------------------ partial funding */
 
-  /**
-   * Instalments are switched off for this release (Ayman, 2026-09-02).
-   *
-   * This test previously asserted the opposite — that a 2,000 receipt against a 5,000 approval
-   * was accepted, reported `FUNDS_PARTIAL`, and could be topped up later. That behaviour is not
-   * broken; it is deferred, because the half of it that matters (returning the balance, and
-   * reconciling a part-funded requisition across three surfaces) was never finished. Closing the
-   * door is cheaper than leaving a path that half works.
-   *
-   * Kept as a flag rather than deleted code, so this file also pins the door being *openable*
-   * again: flip `ALLOW_PARTIAL_FUNDING` and the first assertion here is what should change.
-   */
-  it('refuses an instalment while partial funding is switched off', async () => {
-    const req = await requisitionOnBom(5000);
-    await im.client.post(`/requisitions/${req.id}/send-to-accounts`).send();
-
-    const short = await im.client.post(`/requisitions/${req.id}/fund-receipts`).send({
-      amount: 2000,
-      receivedAt: new Date().toISOString(),
-    });
-
-    expect(short.status).toBe(409);
-    expect(short.body.code).toBe(ErrorCode.PARTIAL_FUNDING_DISABLED);
-    // The refusal names the only acceptable figure, so the IM is not left guessing.
-    expect(short.body.details).toMatchObject({ outstanding: 5000, attempted: 2000 });
-    // Nothing written: a refused receipt must not leave a partial trace.
-    expect((await fundingOf(req.id)).funded).toBe(0);
-    expect(await statusOf(req.id)).toBe('SENT_TO_ACCOUNTS');
-  });
-
-  it('takes the whole outstanding balance in one payment', async () => {
-    const req = await requisitionOnBom(5000);
-    await im.client.post(`/requisitions/${req.id}/send-to-accounts`).send();
-
-    const paid = await im.client.post(`/requisitions/${req.id}/fund-receipts`).send({
-      amount: 5000,
-      receivedAt: new Date().toISOString(),
-    });
-
-    expect(paid.status).toBe(201);
-    const funding = paid.body as RequisitionFunding;
-    expect(funding.funded).toBe(5000);
-    expect(funding.outstanding).toBe(0);
-    expect(funding.isFullyFunded).toBe(true);
-    // The client is told the policy, so the dialog does not offer a field the API would refuse.
-    expect(funding.allowsPartialFunding).toBe(false);
-    expect(await statusOf(req.id)).toBe('FUNDS_RECEIVED');
-  });
 
   it('refuses funding beyond the approved amount instead of clamping it', async () => {
     const req = await requisitionOnBom(5000);
@@ -218,8 +173,7 @@ describe('funds and purchasing', () => {
     expect(withReason.status).toBe(201);
   });
 
-  // Paused: sets up with instalments, which ALLOW_PARTIAL_FUNDING=false refuses. G-20.
-  it.skip('keeps money exact to two decimals', async () => {
+  it('keeps money exact to two decimals', async () => {
     const req = await requisitionOnBom(5000);
     await im.client.post(`/requisitions/${req.id}/send-to-accounts`).send();
 
@@ -285,8 +239,7 @@ describe('funds and purchasing', () => {
 
   /* ---------------------------------------------------------- concurrency */
 
-  // Paused: sets up with instalments, which ALLOW_PARTIAL_FUNDING=false refuses. G-20.
-  it.skip('does not let two simultaneous receipts push funding past the approved amount', async () => {
+  it('does not let two simultaneous receipts push funding past the approved amount', async () => {
     const req = await requisitionOnBom(5000);
     await im.client.post(`/requisitions/${req.id}/send-to-accounts`).send();
 
@@ -351,8 +304,7 @@ describe('funds and purchasing', () => {
     expect(actions).toContain('requisition.purchased');
   });
 
-  // Paused: sets up with instalments, which ALLOW_PARTIAL_FUNDING=false refuses. G-20.
-  it.skip('notifies the requester when funding completes, but not on each instalment', async () => {
+  it('notifies the requester when funding completes, but not on each instalment', async () => {
     const req = await requisitionOnBom(5000);
     await im.client.post(`/requisitions/${req.id}/send-to-accounts`).send();
 

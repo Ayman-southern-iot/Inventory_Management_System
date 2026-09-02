@@ -1,8 +1,7 @@
-import { Info, Send, TriangleAlert } from 'lucide-react';
-import { approversRequiredFor, type ApprovalPolicy } from '@ims/shared';
+import type { ApprovalPolicy } from '@ims/shared';
+import { Send } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { t } from '@/i18n/en';
-import { cn } from '@/lib/cn';
 import { formatBdt } from '@/lib/format';
 
 /**
@@ -27,29 +26,16 @@ interface RequisitionSummaryProps {
   onSubmit: () => void;
 }
 
-/** "1 approver" / "2 approvers" — the count is part of the sentence, so it is part of the copy. */
-function approverCount(count: number): string {
-  return count === 1
-    ? t.requisitions.approverCountOne
-    : t.requisitions.approverCountOther.replace('{n}', String(count));
-}
 
 export function RequisitionSummary({
   itemsTotal,
   transportationTotal,
   requestedTotal,
-  policy,
+  policy: _policy,
   isSubmitting,
   onSaveDraft,
   onSubmit,
 }: RequisitionSummaryProps) {
-  /**
-   * `approversRequiredFor` is the shared helper the boundary is defined in, so the note and the
-   * server cannot drift. The boundary is **inclusive** (OQ-01): a requisition for exactly the
-   * threshold needs the higher count, which is why this says "at or above" and never "over".
-   */
-  const required = policy ? approversRequiredFor(requestedTotal, policy) : null;
-  const isAtOrAboveThreshold = policy ? requestedTotal >= policy.expenseThresholdBdt : false;
 
   return (
     <aside className="lg:sticky lg:top-6">
@@ -75,35 +61,15 @@ export function RequisitionSummary({
           </div>
         </dl>
 
-        {/* Rendered only once the policy has loaded. A note that guesses a threshold and then
-            corrects itself is worse than one that arrives a moment late. */}
-        {policy && required !== null ? (
-          <div
-            className={cn(
-              'mt-4 flex gap-2.5 rounded-[--radius-control] p-3 text-xs leading-relaxed',
-              isAtOrAboveThreshold
-                ? 'bg-pending-subtle text-ink'
-                : 'bg-brand-subtle text-ink',
-            )}
-          >
-            {isAtOrAboveThreshold ? (
-              <TriangleAlert aria-hidden className="mt-px size-4 shrink-0 text-pending" />
-            ) : (
-              <Info aria-hidden className="mt-px size-4 shrink-0 text-brand" />
-            )}
-            <p>
-              <span className="font-semibold">{approverCount(required)}</span>{' '}
-              {isAtOrAboveThreshold
-                ? t.requisitions.approverNoteAtOrAbove.replace(
-                    '{threshold}',
-                    formatBdt(policy.expenseThresholdBdt),
-                  )
-                : t.requisitions.approverNoteBelow
-                    .replace('{threshold}', formatBdt(policy.expenseThresholdBdt))
-                    .replace('{higher}', approverCount(policy.approversAtOrAboveThreshold))}
-            </p>
-          </div>
-        ) : null}
+        {/*
+          The approver-count note is gone (Ayman, 2026-09-02).
+
+          It explained the threshold rule to someone filling in a form who cannot act on it:
+          the count is decided by the amount, and the amount is decided by what they need. It
+          told them their request would "take longer to clear" without offering anything to do
+          about it. The chain is shown on the requisition itself once it is submitted, which is
+          where it is actually useful.
+        */}
 
         <div className="mt-5 flex flex-col gap-2">
           <Button

@@ -42,7 +42,10 @@ describe('requisitions and approvals', () => {
   };
 
   beforeAll(async () => {
-    ctx = await createTestApp();
+      // Revising the sanctioned amount is off in production for this release. These tests are
+      // about what happens *once* a figure has been revised, so the app is built with it on —
+      // that is what the CONFIG override on createTestApp exists for.
+    ctx = await createTestApp({ money: { allowApprovedAmountRevision: true } });
     settings = ctx.app.get(SettingsService);
   });
 
@@ -466,7 +469,7 @@ describe('requisitions and approvals', () => {
       await im.client.post(`/requisitions/approvals/${imApproval}/decision`).send({ approve: true });
       const again = await im.client
         .post(`/requisitions/approvals/${imApproval}/decision`)
-        .send({ approve: false });
+        .send({ approve: false, note: 'Rejected for this test.' });
 
       expect(again.status).toBe(409);
     });
@@ -688,7 +691,9 @@ describe('requisitions and approvals', () => {
       ).body;
 
       const approval = approvalOf(detail, ApprovalStage.APPROVER, 1).id;
-      await approver1.client.post(`/requisitions/approvals/${approval}/decision`).send({ approve: false });
+      await approver1.client
+        .post(`/requisitions/approvals/${approval}/decision`)
+        .send({ approve: false, note: 'Rejected for this test.' });
       const after = await approver1.client
         .post(`/requisitions/approvals/${approval}/withdraw`)
         .send({ reason: 'changed my mind' });
@@ -711,7 +716,9 @@ describe('requisitions and approvals', () => {
         .body;
       const imApproval = approvalOf(detail, ApprovalStage.INVENTORY_MANAGER).id;
 
-      await im.client.post(`/requisitions/approvals/${imApproval}/decision`).send({ approve: false });
+      await im.client
+        .post(`/requisitions/approvals/${imApproval}/decision`)
+        .send({ approve: false, note: 'Rejected for this test.' });
       const after = await im.client
         .post(`/requisitions/approvals/${imApproval}/withdraw`)
         .send({ reason: 'wrong call' });

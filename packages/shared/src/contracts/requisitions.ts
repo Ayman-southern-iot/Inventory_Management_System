@@ -268,7 +268,14 @@ export const saveRequisitionSchema = z
   );
 export type SaveRequisitionInput = z.infer<typeof saveRequisitionSchema>;
 
-export const decideRequisitionSchema = z.object({
+/**
+ * The decision fields, before the reject-needs-a-reason rule.
+ *
+ * Exported because the dialog extends it with a UI-only field, and `superRefine` returns a
+ * `ZodEffects` that cannot be extended. Extend this, then apply `requireNoteOnReject` — do not
+ * write a second copy of the rule.
+ */
+export const decideRequisitionShape = z.object({
   approve: z.boolean(),
   note: z.string().trim().max(2000).nullable().default(null),
   /**
@@ -285,6 +292,32 @@ export const decideRequisitionSchema = z.object({
    */
   withSignature: z.boolean().default(false),
 });
+
+/**
+ * A rejection has to say why; an approval does not.
+ *
+ * One rejection ends the whole request — the other approvers are never asked — so the requester
+ * is owed a reason, and "rejected" with an empty note leaves them with nothing to act on. An
+ * approval carries no such debt, and demanding a note for one would just train people to type
+ * a full stop.
+ *
+ * On the shared schema so the form and the API cannot disagree about it.
+ */
+export function requireNoteOnReject(
+  value: { approve: boolean; note?: string | null },
+  ctx: z.RefinementCtx,
+): void {
+  if (value.approve) return;
+  if (!value.note || value.note.trim().length === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['note'],
+      message: 'Say why this is being rejected — the requester only sees this.',
+    });
+  }
+}
+
+export const decideRequisitionSchema = decideRequisitionShape.superRefine(requireNoteOnReject);
 export type DecideRequisitionInput = z.infer<typeof decideRequisitionSchema>;
 
 export const withdrawApprovalSchema = z.object({
@@ -484,6 +517,13 @@ export const approvalPolicySchema = z.object({
   approversBelowThreshold: z.number().int(),
   /** Requisitions **at or above** it — the boundary is inclusive (OQ-01). */
   approversAtOrAboveThreshold: z.number().int(),
+  /**
+   * Whether an approver may sanction a different amount from the one requested.
+   *
+   * False for this release. On the payload rather than a client build flag: the rule is the
+   * API's, and a dialog that offered the field anyway would be offering a refusal.
+   */
+  allowsApprovedAmountRevision: z.boolean(),
 });
 export type ApprovalPolicy = z.infer<typeof approvalPolicySchema>;
 

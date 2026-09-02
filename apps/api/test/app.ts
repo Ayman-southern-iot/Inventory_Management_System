@@ -4,7 +4,7 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test, type TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
-import { config } from '../src/config';
+import { CONFIG, config, type AppConfig } from '../src/config';
 import { AllExceptionsFilter } from '../src/common/all-exceptions.filter';
 import { DB } from '../src/database/database.module';
 import type { Db } from '../src/database/create-db';
@@ -17,12 +17,46 @@ export interface TestApp {
 }
 
 /**
+ * A partial config override, for a spec that needs the application built under a different
+ * policy from the one production ships with.
+ *
+ * Deep-merged one level, because the interesting settings are grouped (`money`, `pdf`, `auth`)
+ * and a caller wanting one of them should not have to restate the rest of its group.
+ */
+export type ConfigOverrides = {
+  [K in keyof AppConfig]?: AppConfig[K] extends object ? Partial<AppConfig[K]> : AppConfig[K];
+};
+
+function withOverrides(overrides: ConfigOverrides): AppConfig {
+  const merged: Record<string, unknown> = { ...config };
+  for (const [group, value] of Object.entries(overrides)) {
+    const current = (config as unknown as Record<string, unknown>)[group];
+    merged[group] =
+      current && typeof current === "object" && value && typeof value === "object"
+        ? Object.freeze({ ...(current as object), ...(value as object) })
+        : value;
+  }
+  return Object.freeze(merged) as unknown as AppConfig;
+}
+
+/**
  * The real application: real AppModule, real guards, real filter, real Postgres. The only
  * differences from `main.ts` are the silenced logger and the absence of `helmet`/CORS, neither
  * of which any assertion here depends on.
+ *
+ * `overrides` builds the app under a different config — the way to test a flag-gated feature
+ * from both sides. Without it the behaviour is byte-identical to before: the provider is only
+ * replaced when a caller actually asks, so the other specs are untouched.
+ *
+ * The alternative was setting an env var for the whole run, which would flip the flag for every
+ * spec in the process and make "what was this suite testing" depend on the runner.
  */
-export async function createTestApp(): Promise<TestApp> {
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+export async function createTestApp(overrides?: ConfigOverrides): Promise<TestApp> {
+  const builder = Test.createTestingModule({ imports: [AppModule] });
+  if (overrides) {
+    builder.overrideProvider(CONFIG).useValue(withOverrides(overrides));
+  }
+  const moduleRef = await builder.compile();
 
   // Silenced: a passing suite must not flood the runner with Nest's stdout.
   const app = moduleRef.createNestApplication<NestExpressApplication>({ logger: false });

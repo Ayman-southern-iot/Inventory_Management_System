@@ -19,7 +19,15 @@ describe('expense report', () => {
   let departmentId: string;
 
   beforeAll(async () => {
-    ctx = await createTestApp();
+    // Two production flags are off for this release and this suite needs both: it builds
+    // requisitions whose Approved differs from Requested (a revision), and reconciles figures
+    // across several receipts. Neither is what the report is being tested for.
+    // Partial funding is off in production for this release. These specs are about what happens
+    // *once* a requisition holds several receipts — a state an upward revision of the approved
+    // amount still reaches — so the app is built with instalments on.
+    ctx = await createTestApp({
+      money: { allowPartialFunding: true, allowApprovedAmountRevision: true },
+    });
   });
 
   afterAll(async () => {
@@ -61,8 +69,7 @@ describe('expense report', () => {
    * The fan-out guard. Two receipts, two purchases and a return on ONE requisition: a naive join
    * would multiply them together and report four times the money.
    */
-  // Paused: sets up with instalments, which ALLOW_PARTIAL_FUNDING=false refuses. G-20.
-  it.skip('does not inflate figures when a requisition has several receipts and purchases', async () => {
+  it('does not inflate figures when a requisition has several receipts and purchases', async () => {
     const req = await verifiable({ requested: 10_000, approved: 10_000 });
 
     // Two instalments totalling 10,000.

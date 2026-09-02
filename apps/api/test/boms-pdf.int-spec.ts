@@ -20,7 +20,7 @@ import {
   type BomDetail,
 } from '@ims/shared';
 import { AppModule } from '../src/app.module';
-import { config } from '../src/config';
+import { CONFIG, config } from '../src/config';
 import { AllExceptionsFilter } from '../src/common/all-exceptions.filter';
 import { DB } from '../src/database/database.module';
 import type { Db } from '../src/database/create-db';
@@ -116,6 +116,13 @@ describe('BOMs PDF', () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(PdfRendererService)
       .useValue(stub)
+      // The document has to show an approved figure that differs from the requested one, so
+      // this suite needs revision switched on even though production ships it off.
+      .overrideProvider(CONFIG)
+      .useValue({
+        ...config,
+        money: { ...config.money, allowApprovedAmountRevision: true },
+      })
       .compile();
 
     const app = moduleRef.createNestApplication<NestExpressApplication>({ logger: false });

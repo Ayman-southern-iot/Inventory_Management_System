@@ -292,7 +292,9 @@ describe('a person’s own record', () => {
     );
     const response = await im.client
       .post(`/requisitions/approvals/${approval.id}/decision`)
-      .send({ approve });
+      // A rejection has to say why; an approval need not. Sent unconditionally because the
+      // note is harmless on an approval and this helper serves both.
+      .send({ approve, note: approve ? null : 'Not needed — the dashboard fixture rejects.' });
     expect(response.status).toBe(200);
   }
 

@@ -176,6 +176,8 @@ export const ErrorCode = {
    * for makes Remaining negative and the printed document meaningless. An approver who thinks
    * the request is too low sends it back for the requester to restate.
    */
+  /** Revising the sanctioned figure is switched off for this release. */
+  APPROVED_AMOUNT_REVISION_DISABLED: 'APPROVED_AMOUNT_REVISION_DISABLED',
   APPROVED_EXCEEDS_REQUESTED: 'APPROVED_EXCEEDS_REQUESTED',
 
   /**

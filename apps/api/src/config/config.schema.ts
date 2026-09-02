@@ -140,6 +140,25 @@ const rawSchema = z.object({
    * `z.enum` rather than `z.coerce.boolean()` — coercion treats the string "false" as true,
    * which is the opposite of what an operator who typed it would expect.
    */
+  /**
+   * May an approver sanction a different amount from the one requested?
+   *
+   * Off. Ayman, 2026-09-02: the revision flow is still being worked on, so the control is
+   * closed rather than left half-finished in front of approvers. An approval now carries the
+   * requested amount, full stop.
+   *
+   * Reading a revision already on a requisition is unaffected — this governs setting a new one.
+   * Requisitions approved at a reduced figure before today keep it, and the BOM ceiling still
+   * enforces whatever `approved_amount` says.
+   *
+   * Same shape as ALLOW_PARTIAL_FUNDING, and for the same reason: a release decision about an
+   * unfinished feature, not a policy the office tunes.
+   */
+  ALLOW_APPROVED_AMOUNT_REVISION: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+
   ALLOW_PARTIAL_FUNDING: z
     .enum(['true', 'false'])
     .default('false')
@@ -369,6 +388,7 @@ export interface AppConfig {
   /** Money policy that is a release decision rather than an admin setting. */
   readonly money: {
     readonly allowPartialFunding: boolean;
+    readonly allowApprovedAmountRevision: boolean;
   };
   readonly reportingTimeZone: string;
   readonly company: {
@@ -520,6 +540,7 @@ export function buildConfig(source: Record<string, string | undefined>): AppConf
     }),
     money: Object.freeze({
       allowPartialFunding: env.ALLOW_PARTIAL_FUNDING,
+      allowApprovedAmountRevision: env.ALLOW_APPROVED_AMOUNT_REVISION,
     }),
     demo: Object.freeze({
       accountsEnabled: env.DEMO_ACCOUNTS_ENABLED,

@@ -28,28 +28,15 @@ import {
  *    "previous status" instead of recomputing gets a three-instalment requisition wrong.
  */
 /**
- * PAUSED, NOT RETIRED — four tests in this file are `it.skip` as of 2026-09-02.
+ * These tests build their app with instalments switched on.
  *
- * Each sets its state up with a receipt short of the outstanding balance — three of them go on to
- * hold several receipts at once. Partial funding is switched off for this release
- * (`ALLOW_PARTIAL_FUNDING`, default false; see DECISIONS.md 2026-09-02), so that first receipt is
- * refused with `PARTIAL_FUNDING_DISABLED` and these setups cannot run.
+ * Partial funding is off in production for this release (ALLOW_PARTIAL_FUNDING). The branch
+ * they cover is not dead: an approver revising the approved amount *upward* reopens a balance,
+ * so the receipt that clears it is a second receipt on a current requisition, and rows written
+ * before the flag landed hold multi-receipt states already.
  *
- * **The code they cover is still reachable.** One payment clears the balance, so a new
- * requisition cannot reach `FUNDS_PARTIAL` — but an approver revising the approved amount
- * *upward* reopens an outstanding balance, and the receipt that clears it is a second receipt on
- * a current requisition. Rows written before this release hold multi-receipt states too. The
- * void-one-of-several branch is live; only this way of setting it up is closed.
- *
- * **To bring them back** (blocked on the port fix in RUNBOOK.md §7, which the integration suite
- * needs before any of this can be verified):
- *   1. give `createTestApp()` an optional `CONFIG` override — useful to every flag-gated feature
- *      after this one, which is why it is worth building rather than hacking around here;
- *   2. build this spec's app with `ALLOW_PARTIAL_FUNDING` on;
- *   3. remove the four `.skip`s and run them.
- *
- * They are skipped rather than deleted deliberately. The flag is temporary, and a test deleted
- * for a reversible decision is a bet that someone remembers to write it again.
+ * They were briefly it.skip while the harness had no way to vary config per spec. It has one
+ * now — createTestApp takes a CONFIG override — so they run again (G-20, closed 2026-09-02).
  */
 describe('stepping back through the money stages', () => {
   let ctx: TestApp;
@@ -59,7 +46,10 @@ describe('stepping back through the money stages', () => {
   let departmentId: string;
 
   beforeAll(async () => {
-    ctx = await createTestApp();
+    // Partial funding is off in production for this release. These specs are about what happens
+    // *once* a requisition holds several receipts — a state an upward revision of the approved
+    // amount still reaches — so the app is built with instalments on.
+    ctx = await createTestApp({ money: { allowPartialFunding: true } });
   });
 
   afterAll(async () => {
@@ -108,8 +98,7 @@ describe('stepping back through the money stages', () => {
      * "waiting to be sent" any more, and a receipt hanging off one that claims it was never sent
      * describes a state that never existed rather than an earlier one.
      */
-    // Paused: sets up with a receipt short of the balance. See the note at the top of this file.
-    it.skip('refuses once Accounts has released money against it', async () => {
+    it('refuses once Accounts has released money against it', async () => {
       const req = await requisitionOnBom(5000);
       await sendToAccounts(req.id);
       await recordReceipt(req.id, 2000);
@@ -174,8 +163,7 @@ describe('stepping back through the money stages', () => {
      * still partially funded — a reversal that flipped to "the previous status" would send this
      * requisition back to SENT_TO_ACCOUNTS while 2,000 of real money sat on it.
      */
-    // Paused: sets up with a receipt short of the balance. See the note at the top of this file.
-    it.skip('stays FUNDS_PARTIAL when another instalment is still standing', async () => {
+    it('stays FUNDS_PARTIAL when another instalment is still standing', async () => {
       const req = await requisitionOnBom(5000);
       await sendToAccounts(req.id);
       await recordReceipt(req.id, 2000);
@@ -197,8 +185,7 @@ describe('stepping back through the money stages', () => {
      * One entry per press, repeatable (ruling 2026-08-26). Pressing Back twice must undo two
      * instalments, not wipe the stage on the first press.
      */
-    // Paused: sets up with a receipt short of the balance. See the note at the top of this file.
-    it.skip('undoes exactly one entry per call', async () => {
+    it('undoes exactly one entry per call', async () => {
       const req = await requisitionOnBom(6000);
       await sendToAccounts(req.id);
       await recordReceipt(req.id, 2000);
@@ -238,8 +225,7 @@ describe('stepping back through the money stages', () => {
      * Idempotent by the `voided_at IS NULL` predicate on the write, not by a separate check. A
      * second void must not overwrite the first one's actor and reason.
      */
-    // Paused: sets up with a receipt short of the balance. See the note at the top of this file.
-    it.skip('refuses to void the same receipt twice', async () => {
+    it('refuses to void the same receipt twice', async () => {
       const req = await requisitionOnBom(5000);
       await sendToAccounts(req.id);
       await recordReceipt(req.id, 2000);

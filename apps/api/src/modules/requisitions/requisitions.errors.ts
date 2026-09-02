@@ -178,6 +178,22 @@ export class SignatureNotUploadedError extends DomainError {
  * `requested_amount` already includes transportation cost (it is items + transport, frozen at
  * submit), so the bound is the requested figure itself and needs no adjustment.
  */
+/**
+ * An approver sent a revised figure while the revision flow is closed.
+ *
+ * CONFLICT rather than a validation failure: the amount is a perfectly valid number, it is the
+ * feature being switched off that makes it unacceptable.
+ */
+export class ApprovedAmountRevisionDisabledError extends DomainError {
+  constructor() {
+    super(
+      ErrorCode.APPROVED_AMOUNT_REVISION_DISABLED,
+      'Revising the approved amount is not available in this version. Approve the requested amount, or reject it with a reason.',
+      HttpStatus.CONFLICT,
+    );
+  }
+}
+
 export class ApprovedExceedsRequestedError extends DomainError {
   constructor(requested: number, attempted: number) {
     super(

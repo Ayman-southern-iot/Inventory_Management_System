@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/Field';
 import { PageHeader, Pagination, Panel, Table } from '@/components/ui/primitives';
 import { EmptyState, QueryBoundary, SkeletonRows } from '@/components/ui/states';
+import { ReasonDialog } from '@/components/ui/ReasonDialog';
 import { useToast } from '@/components/ui/Toast';
 import { t } from '@/i18n/en';
 import { cn } from '@/lib/cn';
@@ -44,6 +45,8 @@ export function BorrowingPage({ mine = false }: { mine?: boolean }) {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [returning, setReturning] = useState<BorrowRequest | undefined>(undefined);
+  /** The borrow whose decision is being reverted, or null. */
+  const [reverting, setReverting] = useState<string | null>(null);
 
   const debouncedSearch = useDebouncedValue(search, SEARCH_DEBOUNCE_MS);
 
@@ -241,14 +244,7 @@ export function BorrowingPage({ mine = false }: { mine?: boolean }) {
                             size="sm"
                             aria-label={`${t.borrowing.revert} ${borrow.borrowNo}`}
                             icon={<Undo2 aria-hidden className="size-4" />}
-                            onClick={() => {
-                              const reason = window.prompt(t.borrowing.revertReason);
-                              if (!reason) return;
-                              void act(
-                                () => revert.mutateAsync({ id: borrow.id, input: { reason } }),
-                                t.borrowing.reverted,
-                              );
-                            }}
+                            onClick={() => setReverting(borrow.id)}
                           />
                         ) : null}
 
@@ -283,6 +279,21 @@ export function BorrowingPage({ mine = false }: { mine?: boolean }) {
       </Panel>
 
       <ReturnDialog borrow={returning} onClose={() => setReturning(undefined)} />
+
+      <ReasonDialog
+        open={reverting !== null}
+        title={t.borrowing.revertTitle}
+        label={t.borrowing.revertReason}
+        confirmLabel={t.borrowing.revert}
+        isPending={revert.isPending}
+        onClose={() => setReverting(null)}
+        onConfirm={(reason) => {
+          const id = reverting;
+          if (!id) return;
+          setReverting(null);
+          void act(() => revert.mutateAsync({ id, input: { reason } }), t.borrowing.reverted);
+        }}
+      />
     </>
   );
 }

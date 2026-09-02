@@ -21,6 +21,8 @@ export const t = {
     search: 'Search',
     retry: 'Try again',
     clear: 'Clear',
+    // Used by ReasonDialog, which every reversal now goes through instead of window.prompt.
+    reasonRequired: 'A reason is required.',
     loading: 'Loading…',
     none: '—',
     yes: 'Yes',
@@ -768,6 +770,7 @@ export const t = {
     reject: 'Reject',
     recordReturn: 'Record return',
     revert: 'Revert to pending',
+    revertTitle: 'Revert this borrow',
     revertReason: 'Why is this being reverted?',
     cancel: 'Cancel request',
     decisionNote: 'Note',
@@ -1004,8 +1007,15 @@ export const t = {
     signatureUploading: 'Uploading…',
     signatureUploadedInline: 'Signature saved. You can now approve with signature.',
     reject: 'Reject',
-    withdraw: 'Withdraw approval',
-    withdrawReason: 'Why are you withdrawing? (You can still approve or reject again afterwards.)',
+    // Not "Withdraw approval": the same button is offered after a *rejection*, and telling an
+    // approver they are withdrawing an approval they never gave is how F-10 was reported.
+    // Neutral wording covers both decisions.
+    withdraw: 'Take it back',
+    // Was one sentence inside a window.prompt. Split into a title, an explanation and a field
+    // label now that it is a real dialog.
+    withdrawTitle: 'Take back your decision',
+    withdrawExplain: 'The requisition returns to waiting on you. You can approve or reject it again afterwards.',
+    withdrawReason: 'Why are you taking it back?',
     decisionNote: 'Note',
     reviseAmount: 'Revise the approved amount',
     reviseAmountHint: 'Leave blank to approve the full requested amount.',
@@ -1373,6 +1383,8 @@ export const t = {
       'That entry is not on this requisition, or somebody has already voided it. Reload the page to see where things stand.',
     SIGNATURE_NOT_UPLOADED:
       'You have not uploaded a signature yet. Add one from your profile, or approve without a signature.',
+    APPROVED_AMOUNT_REVISION_DISABLED:
+      'Revising the approved amount is not available in this version. Approve the requested amount, or reject it with a reason.',
     APPROVED_EXCEEDS_REQUESTED:
       'You cannot approve more than the {requested} requested. Approve up to that, or send the requisition back so the requester can restate it.',
     DELEGATION_ALREADY_LIVE:

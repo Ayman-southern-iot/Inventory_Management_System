@@ -4,7 +4,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
   ApprovalStage,
-  decideRequisitionSchema,
+  decideRequisitionShape,
+  requireNoteOnReject,
   type Approval,
   type DecideRequisitionInput,
 } from '@ims/shared';
@@ -19,16 +20,19 @@ import { Checkbox, TextAreaField, TextField } from '@/components/ui/Field';
 import { useToast } from '@/components/ui/Toast';
 import { t } from '@/i18n/en';
 import { messageForError } from '@/lib/error-message';
-import { useDecideRequisition } from '../api';
+import { useApprovalPolicy, useDecideRequisition } from '../api';
 
 /**
  * Local form shape: the shared `decideRequisitionSchema` plus a UI-only `reviseAmount` gate.
  * The gate is stripped before submission and forces `approvedAmount: null` when off, so a
  * rendered-but-untouched number input can never submit 0 by accident.
  */
-const formSchema = decideRequisitionSchema.extend({
-  reviseAmount: z.boolean().default(false),
-});
+const formSchema = decideRequisitionShape
+  .extend({
+    reviseAmount: z.boolean().default(false),
+  })
+  // The same rule the API applies, imported rather than restated: a rejection says why.
+  .superRefine(requireNoteOnReject);
 type FormShape = z.infer<typeof formSchema>;
 
 interface Props {
@@ -47,6 +51,8 @@ interface Props {
 export function DecisionDialog({ deciding, requestedAmount, isAdjustable, onClose }: Props) {
   const toast = useToast();
   const decide = useDecideRequisition();
+  // Already cached by the requisition form; this is a read from the same query.
+  const { data: policy } = useApprovalPolicy();
 
   const form = useForm<FormShape>({
     resolver: zodResolver(formSchema),
@@ -107,7 +113,15 @@ export function DecisionDialog({ deciding, requestedAmount, isAdjustable, onClos
   // ...and only where a lower figure could actually buy something (QA-034). An indivisible
   // requisition still shows the row, carrying the reason — silently dropping the control
   // reads as a missing feature to an approver who has revised one before.
-  const canReviseAmount = isApproverDeciding && isAdjustable;
+  /*
+   * Revising the sanctioned amount is closed for this release (Ayman, 2026-09-02) while the
+   * flow is finished off.
+   *
+   * Driven by the policy the API publishes rather than a build flag, so the dialog cannot offer
+   * a field the server would refuse — and so it comes back on its own when the flag flips.
+   */
+  const canReviseAmount =
+    (policy?.allowsApprovedAmountRevision ?? false) && isApproverDeciding && isAdjustable;
   const reviseAmount = form.watch('reviseAmount');
 
   return (
@@ -182,7 +196,7 @@ export function DecisionDialog({ deciding, requestedAmount, isAdjustable, onClos
           />
         ) : null}
 
-        {isApproverDeciding && !isAdjustable ? (
+        {policy?.allowsApprovedAmountRevision && isApproverDeciding && !isAdjustable ? (
           <p className="text-xs text-ink-subtle">{t.requisitions.reviseAmountIndivisible}</p>
         ) : null}
 

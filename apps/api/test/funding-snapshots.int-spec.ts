@@ -16,7 +16,10 @@ describe('funding snapshots', () => {
   let departmentId: string;
 
   beforeAll(async () => {
-    ctx = await createTestApp();
+      // Revising the sanctioned amount is off in production for this release. These tests are
+      // about what happens *once* a figure has been revised, so the app is built with it on —
+      // that is what the CONFIG override on createTestApp exists for.
+    ctx = await createTestApp({ money: { allowApprovedAmountRevision: true } });
   });
 
   afterAll(async () => {

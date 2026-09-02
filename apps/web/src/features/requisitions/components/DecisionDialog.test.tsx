@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -20,6 +20,17 @@ const uploadSpy = vi.fn();
 const removeSpy = vi.fn();
 const toastSpy = vi.fn();
 
+/** Revision is off for this release, so the default matches production. */
+const policy = (allowsApprovedAmountRevision: boolean) => ({
+  data: {
+    expenseThresholdBdt: 15_000,
+    approversBelowThreshold: 1,
+    approversAtOrAboveThreshold: 2,
+    allowsApprovedAmountRevision,
+  },
+});
+const policyStub = vi.fn(() => policy(false));
+
 vi.mock('../api', () => ({
   useDecideRequisition: () => ({
     mutateAsync: (input: { approvalId: string; input: DecideRequisitionInput }) => {
@@ -28,6 +39,9 @@ vi.mock('../api', () => ({
     },
     isPending: false,
   }),
+  // The dialog reads the policy to decide whether the revise-amount control exists at all.
+  // A spy, not a fixed value, so the one test that needs revision switched back on can say so.
+  useApprovalPolicy: () => policyStub(),
 }));
 
 vi.mock('@/features/profile/api', () => ({
@@ -95,34 +109,38 @@ function renderDialog(
 }
 
 describe('DecisionDialog', () => {
-  afterEach(() => {
+  beforeEach(() => {
+    policyStub.mockReturnValue(policy(false));
+    // Reset, not just re-stub: vi.fn() accumulates calls across tests in one file, and a later
+    // test would otherwise read an earlier one submission out of calls[0].
     decideSpy.mockClear();
-    uploadSpy.mockClear();
-    removeSpy.mockClear();
-    toastSpy.mockClear();
-  });
-  it('does not render the approved-amount input when the gate is off', () => {
-    renderDialog({ approval: approval(), approve: true });
-
-    // The opt-in checkbox is labelled "Revise the approved amount".
-    expect(screen.getByLabelText(/revise the approved amount/i)).toBeInTheDocument();
-    // The amount field is hidden by default — proves the gate is unmounting the input.
-    expect(
-      screen.queryByRole('spinbutton', { name: /revise the approved amount/i }),
-    ).not.toBeInTheDocument();
   });
 
   /**
-   * QA-034. One line of one unit has no smaller quantity to buy, so a revised-down figure
-   * approves an amount that cannot purchase the thing asked for. The control goes; the reason
-   * stays on screen, because an approver who has revised one before would read a bare absence
-   * as the feature being broken.
+   * Revising the sanctioned amount is closed for this release (Ayman, 2026-09-02).
+   *
+   * These two replace the pair that described the opt-in gate and the indivisible-requisition
+   * case. Kept rather than deleted because the feature is coming back: the second is what fails
+   * if the flag is flipped on and the control does not return with it.
    */
-  it('offers no revise control for a requisition that cannot be part-bought', () => {
-    renderDialog({ approval: approval(), approve: true }, false);
+  it('offers no way to revise the amount while the flow is closed', () => {
+    renderDialog({ approval: approval(), approve: true });
 
     expect(screen.queryByLabelText(/revise the approved amount/i)).not.toBeInTheDocument();
-    expect(screen.getByText(t.requisitions.reviseAmountIndivisible)).toBeInTheDocument();
+    expect(
+      screen.queryByRole('spinbutton', { name: /revise the approved amount/i }),
+    ).not.toBeInTheDocument();
+    // Nor the explanation for why it is missing on an indivisible requisition — with the whole
+    // feature off, that note answers a question nobody can ask.
+    expect(screen.queryByText(t.requisitions.reviseAmountIndivisible)).not.toBeInTheDocument();
+  });
+
+  it('brings the control back when the policy allows revision again', () => {
+    policyStub.mockReturnValue(policy(true));
+
+    renderDialog({ approval: approval(), approve: true });
+
+    expect(screen.getByLabelText(/revise the approved amount/i)).toBeInTheDocument();
   });
 
   it('submits approvedAmount: null when the gate stays off', async () => {
@@ -141,6 +159,8 @@ describe('DecisionDialog', () => {
   });
 
   it('submits the revised amount when the gate is ticked and a figure is entered', async () => {
+    // Only reachable with revision switched on; kept so the submit path is covered for its return.
+    policyStub.mockReturnValue(policy(true));
     const user = userEvent.setup();
     renderDialog({ approval: approval(), approve: true });
 

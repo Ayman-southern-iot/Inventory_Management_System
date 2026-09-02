@@ -20,8 +20,8 @@ items to a page on plain A4. Partial funding is switched **off** for this releas
 1. **The two hard blockers below.** `IMS-MVP-Readiness.md` has the verdict: the software passes
    28/28 end to end, but demo mode is on in production and nothing is pushed. RUNBOOK §0 is the
    checklist.
-2. `G-20` — un-skip the four paused reversal tests via a `CONFIG` override on `createTestApp()`.
-   The port is unblocked, so this is now doable.
+2. **The expenses page rebuild is done** (`docs/spec/expenses-page-rebuild.md`) — but two conflicts
+   in that spec need Ayman's ruling, recorded in `IMS-Critical-Flow-Run.md` §8.
 3. The **expenses page rebuild** (`docs/spec/expenses-page-rebuild.md`). Its investigation is
    answered and all four preconditions are met, but **two conflicts in the spec need Ayman's
    ruling first** — see `IMS-Critical-Flow-Run.md` §8. Do not build to the literal spec.
@@ -29,13 +29,13 @@ items to a page on plain A4. Partial funding is switched **off** for this releas
 
 ## Green as of 2026-09-02 — measured, not remembered
 
-- `pnpm typecheck` clean · `pnpm test` → shared 13 · api 76 · web 302
+- `pnpm typecheck` clean · `pnpm test` → shared 20 · api 83 · web 299
 - `pnpm lint` → **20 pre-existing errors. Not green.** Compare against 20, not zero.
 - `guard-hardcoding.sh --scan-all` → **8**, against a documented baseline of 7.
 - Migrations 0001–**0030** applied.
-- **62/62 manual critical-flow checks pass** (`IMS-Critical-Flow-Run.md`), including TC-319 —
+- **29/29 MVP end-to-end + 62/62 critical-flow checks pass** (`IMS-Critical-Flow-Run.md`), including TC-319 —
   the carriage leaving with a voided purchase, which is OQ-32 exercised for the first time.
-- `pnpm --filter @ims/api test:int` → **677 pass / 0 fail / 8 skipped (49 files)**. The 8 are G-20.
+- `pnpm --filter @ims/api test:int` → **685 pass / 0 fail / 0 skipped (50 files)**. No skipped tests.
 
 ## Needs the operator
 
@@ -66,5 +66,5 @@ items to a page on plain A4. Partial funding is switched **off** for this releas
 
 ## Open debt
 
-`G-14` · `G-16` · `G-17` · `G-18` · `G-19` · **`G-20`** · PM 6/12/14/15 · `OQ-30` · `OQ-31` ·
-`OQ-33`. **OQ-07, OQ-32 and OQ-34 closed.**
+`G-14` · `G-16` · `G-17` · `G-18` · `G-19` · PM 6/12/14/15 · `OQ-30` · `OQ-31` ·
+`OQ-33`. **OQ-07, OQ-32, OQ-34 and G-20 closed.**

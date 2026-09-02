@@ -985,3 +985,36 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
 - 2026-09-02 — The trend chart is inline SVG, not a charting library — one line with twelve points
   does not justify a dependency, a bundle and a theme adapter, and drawn by hand it inherits the
   design tokens so it is legible in both themes without a second colour config.
+- 2026-09-02 — Revising the approved amount is off for this release, behind
+  `ALLOW_APPROVED_AMOUNT_REVISION` (config, default false) — Ayman: the flow is still being worked
+  on, so the control is closed rather than left half-finished in front of approvers. An approval
+  now carries the requested amount. Setting a new figure is refused with
+  `APPROVED_AMOUNT_REVISION_DISABLED` (409), checked *before* the exceeds-requested ceiling so the
+  approver is told the real reason rather than sent to fix the wrong thing. Reading a revision
+  already on a requisition is untouched, and the BOM ceiling still enforces whatever
+  `approved_amount` says. The dialog hides the control based on `allowsApprovedAmountRevision` on
+  the approval policy, not a build flag, so it returns on its own when the flag flips.
+- 2026-09-02 — A rejection must give a reason; an approval need not — Ayman. One rejection ends the
+  whole request and the other approvers are never asked, so the requester is owed something to act
+  on; "rejected" with an empty note leaves them unable to tell whether to revise and resubmit or
+  drop it. Demanding a note on an approval would only train people to type a full stop. The rule is
+  a `superRefine` on the shared `decideRequisitionSchema`, and the dialog imports the same
+  refinement rather than restating it, so the form and the API cannot drift.
+- 2026-09-02 — The approver-count note is gone from the requisition form — Ayman. It explained the
+  threshold rule to someone who cannot act on it: the count follows from the amount, and the amount
+  follows from what they need. Telling them the request would "take longer to clear" gave them
+  nothing to do about it. The chain is shown on the requisition once submitted, which is where it
+  is worth reading. `RequisitionSummary.test.tsx` keeps guards asserting its absence, so it cannot
+  drift back in by accident.
+- 2026-09-02 — `window.prompt` is gone; reversals ask through `ReasonDialog` — a native prompt
+  cannot be styled or show a field error, is suppressible, and announces itself with the hostname
+  ("localhost says") over an otherwise finished application. It also cannot enforce a non-empty
+  reason without a round trip. Both call sites — withdrawing a decision, reverting a borrow — now
+  use the shared dialog, which requires the reason before it will submit.
+- 2026-09-02 — `createTestApp()` takes a `CONFIG` override, and **G-20 is closed**. A spec that
+  needs a flag-gated feature builds its app under a different policy instead of the flag being
+  flipped for the whole run. Additive: without the argument the behaviour is byte-identical, so the
+  other 45 spec files are untouched. This is what let the eight paused tests come back and the
+  revision tests keep running — the integration suite now has **zero skipped tests**. It was
+  deferred on 2026-09-02 only because the suite could not run to verify it; once the port cleared,
+  that reason was gone.
