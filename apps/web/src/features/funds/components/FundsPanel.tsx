@@ -60,6 +60,20 @@ export function FundsPanel({ requisition }: { requisition: RequisitionDetail }) 
   const previous = canAct ? previousAction(requisition.status as RequisitionStatus) : null;
 
   /**
+   * Whether the money chain has actually finished — a fact about the requisition, not about the
+   * viewer.
+   *
+   * The "complete" badge used to be the else-branch of `next`, and `next` is null whenever the
+   * viewer cannot act. So every general user and every approver was told the requisition was
+   * complete at every stage, including one sitting at "sent to Accounts, waiting for money".
+   * Reported by Ayman on 2026-09-02 from exactly that screen.
+   *
+   * Read from the status through the same map the buttons use, so "no step left" cannot come to
+   * mean two different things in one component.
+   */
+  const isComplete = nextAction(requisition.status as RequisitionStatus) === null;
+
+  /**
    * The figure set rendered below. When the requisition's current status has a snapshot row,
    * the figures come from the snapshot (captured at the moment of transition). Otherwise we
    * fall back to the live `funding` data — identical to the pre-pills behaviour. The snapshot
@@ -80,9 +94,14 @@ export function FundsPanel({ requisition }: { requisition: RequisitionDetail }) 
         <div className="flex flex-col items-end gap-2">
           {next ? (
             <Button onClick={() => setAction(next)}>{ACTION_LABEL[next]}</Button>
-          ) : (
+          ) : isComplete ? (
             <Badge tone="success">{t.funds.done}</Badge>
-          )}
+          ) : null}
+          {/*
+            Nothing for a viewer who cannot act on a requisition still in motion. The Lifecycle
+            strip directly above already says which stage it is at, so a second label here would
+            only be another thing to keep in agreement with it.
+          */}
           {previous ? (
             <Button variant="ghost" onClick={() => setAction(previous)}>
               {t.funds.back}

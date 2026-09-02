@@ -1037,3 +1037,12 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   only four are the right shape. The zone is component state, not derived from the compartment —
   deriving it means clearing the compartment clears the zone, and the second select can never be
   reached.
+- 2026-09-02 — "This requisition is complete" is read from the status, not from whether the viewer
+  has a button — reported by Ayman from a general user's screen showing a requisition sitting at
+  `SENT_TO_ACCOUNTS`, waiting for money that had not arrived, labelled complete. The badge was the
+  else-branch of the next-action button, and that button is only offered to someone who can act, so
+  every general user and every approver saw it at every stage. Now driven by
+  `nextAction(status) === null`, the same map the buttons use, so "no step left" cannot mean two
+  different things in one component; a viewer who cannot act on a requisition still in motion sees
+  nothing, because the Lifecycle strip above already names the stage. The test that matters asserts
+  the property rather than the cases: every role sees the same badge at the same status.
