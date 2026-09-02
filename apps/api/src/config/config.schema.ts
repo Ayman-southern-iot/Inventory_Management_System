@@ -125,6 +125,26 @@ const rawSchema = z.object({
     .enum(['true', 'false'])
     .default('false')
     .transform((v) => v === 'true'),
+  /**
+   * May Accounts release the money in instalments?
+   *
+   * Off. Ayman, 2026-09-02: partial funding is deferred to the next version, so the half-built
+   * path is closed rather than left reachable. With this false a receipt must clear the whole
+   * outstanding balance in one go, and `FUNDS_PARTIAL` becomes a state only a *reversal* can
+   * produce — voiding one of several receipts still leaves the requisition part-funded, and
+   * that has to keep working or Back would be a trap.
+   *
+   * A flag rather than deleted code: the feature is wanted, just not now. Flipping this to
+   * true restores it, and the tests for both settings are written against the flag.
+   *
+   * `z.enum` rather than `z.coerce.boolean()` — coercion treats the string "false" as true,
+   * which is the opposite of what an operator who typed it would expect.
+   */
+  ALLOW_PARTIAL_FUNDING: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+
   /** Shared password for the demo accounts. Four characters is the policy minimum. */
   DEMO_ACCOUNT_PASSWORD: z.string().min(4).default('demo'),
   /**
@@ -346,6 +366,10 @@ export interface AppConfig {
     readonly backupMaxAgeHours: number;
     readonly backupDir: string;
   };
+  /** Money policy that is a release decision rather than an admin setting. */
+  readonly money: {
+    readonly allowPartialFunding: boolean;
+  };
   readonly reportingTimeZone: string;
   readonly company: {
     readonly name: string;
@@ -493,6 +517,9 @@ export function buildConfig(source: Record<string, string | undefined>): AppConf
           .filter(Boolean),
       ),
       logoPath: env.COMPANY_LOGO_PATH,
+    }),
+    money: Object.freeze({
+      allowPartialFunding: env.ALLOW_PARTIAL_FUNDING,
     }),
     demo: Object.freeze({
       accountsEnabled: env.DEMO_ACCOUNTS_ENABLED,
