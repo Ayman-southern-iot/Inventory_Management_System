@@ -75,30 +75,53 @@ describe('funds and purchasing', () => {
 
   /* ------------------------------------------------------ partial funding */
 
-  it('reports partial funding honestly rather than as complete', async () => {
+  /**
+   * Instalments are switched off for this release (Ayman, 2026-09-02).
+   *
+   * This test previously asserted the opposite — that a 2,000 receipt against a 5,000 approval
+   * was accepted, reported `FUNDS_PARTIAL`, and could be topped up later. That behaviour is not
+   * broken; it is deferred, because the half of it that matters (returning the balance, and
+   * reconciling a part-funded requisition across three surfaces) was never finished. Closing the
+   * door is cheaper than leaving a path that half works.
+   *
+   * Kept as a flag rather than deleted code, so this file also pins the door being *openable*
+   * again: flip `ALLOW_PARTIAL_FUNDING` and the first assertion here is what should change.
+   */
+  it('refuses an instalment while partial funding is switched off', async () => {
     const req = await requisitionOnBom(5000);
     await im.client.post(`/requisitions/${req.id}/send-to-accounts`).send();
 
-    const first = await im.client.post(`/requisitions/${req.id}/fund-receipts`).send({
+    const short = await im.client.post(`/requisitions/${req.id}/fund-receipts`).send({
       amount: 2000,
       receivedAt: new Date().toISOString(),
     });
-    expect(first.status).toBe(201);
 
-    const partial = first.body as RequisitionFunding;
-    expect(partial.funded).toBe(2000);
-    expect(partial.outstanding).toBe(3000);
-    expect(partial.isFullyFunded).toBe(false);
-    expect(await statusOf(req.id)).toBe('FUNDS_PARTIAL');
+    expect(short.status).toBe(409);
+    expect(short.body.code).toBe(ErrorCode.PARTIAL_FUNDING_DISABLED);
+    // The refusal names the only acceptable figure, so the IM is not left guessing.
+    expect(short.body.details).toMatchObject({ outstanding: 5000, attempted: 2000 });
+    // Nothing written: a refused receipt must not leave a partial trace.
+    expect((await fundingOf(req.id)).funded).toBe(0);
+    expect(await statusOf(req.id)).toBe('SENT_TO_ACCOUNTS');
+  });
 
-    const second = await im.client.post(`/requisitions/${req.id}/fund-receipts`).send({
-      amount: 3000,
+  it('takes the whole outstanding balance in one payment', async () => {
+    const req = await requisitionOnBom(5000);
+    await im.client.post(`/requisitions/${req.id}/send-to-accounts`).send();
+
+    const paid = await im.client.post(`/requisitions/${req.id}/fund-receipts`).send({
+      amount: 5000,
       receivedAt: new Date().toISOString(),
     });
-    expect((second.body as RequisitionFunding).outstanding).toBe(0);
+
+    expect(paid.status).toBe(201);
+    const funding = paid.body as RequisitionFunding;
+    expect(funding.funded).toBe(5000);
+    expect(funding.outstanding).toBe(0);
+    expect(funding.isFullyFunded).toBe(true);
+    // The client is told the policy, so the dialog does not offer a field the API would refuse.
+    expect(funding.allowsPartialFunding).toBe(false);
     expect(await statusOf(req.id)).toBe('FUNDS_RECEIVED');
-    // Both instalments are kept — the total is derived, so the history stays legible.
-    expect((second.body as RequisitionFunding).receipts).toHaveLength(2);
   });
 
   it('refuses funding beyond the approved amount instead of clamping it', async () => {

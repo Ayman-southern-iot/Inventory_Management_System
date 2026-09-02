@@ -9,8 +9,8 @@
 
 **Phases 00–08 complete.** Since then, two rounds of Ayman's own QA against the running app —
 `IMS-QA-Report.md` (43 findings) plus six more items on 2026-08-31 and six on 2026-09-01. All
-delivered bar one operator decision (OQ-34). Highlights: the money surface now refuses what it
-cannot pay for (BOM ≤ approved, purchase ≤ funded), the carriage is recorded on the purchase that
+delivered, OQ-34 included (plain white A4, so the BOM top margin is 20mm and five items fit a
+page). Highlights: the money surface now refuses what it cannot pay for (BOM ≤ approved, purchase ≤ funded), the carriage is recorded on the purchase that
 paid it, requesters no longer need a stand-in to approve their own requisition, and the requisition
 detail and BOM document were rebuilt from Ayman's templates.
 
@@ -18,16 +18,13 @@ detail and BOM document were rebuilt from Ayman's templates.
 
 **Nothing is queued — ask before starting.** In the order I would take them:
 
-1. **OQ-34, one env value.** Does the BOM print onto pre-printed letterhead or plain paper?
-   `PDF_MARGIN_TOP_MM=45` means five items will not fit a page; at 20 they do. Measured, not
-   guessed — the numbers are in DECISIONS.md, 2026-09-01.
-2. **The operator blockers below**, still worth more than any code.
-3. `G-14`'s prevention half (`BorrowingService.create` reserves and inserts in two transactions —
+1. **The operator blockers below**, now the only thing standing between this and go-live.
+2. `G-14`'s prevention half (`BorrowingService.create` reserves and inserts in two transactions —
    wants a ruling on widening the one-writer boundary) · `OQ-30` · `OQ-31`.
 
 ## Green as of 2026-09-01 — measured, not remembered
 
-- `pnpm typecheck` clean · `pnpm test` → shared 13 · api 76 · web 287
+- `pnpm typecheck` clean · `pnpm test` → shared 13 · api 76 · web 296
 - `pnpm --filter @ims/api test:int` → **684 pass / 0 fail (49 files)**
 - `pnpm lint` → **20 pre-existing errors. Not green.** Compare against 20, not zero.
 - `guard-hardcoding.sh --scan-all` → **8**, against a documented baseline of 7.
@@ -47,19 +44,25 @@ detail and BOM document were rebuilt from Ayman's templates.
 
 - **A backtick inside any `` `…` `` template literal ends it.** Bit three times in one session, in
   SQL *and* in the PDF's CSS. Write those comments without backticks.
-- **Port 5173 is the Docker production build, not a dev server.** Your working-tree changes are
-  not there. To see them: `WEB_PORT=5199 VITE_DEV_API_PROXY_TARGET=http://localhost:5173
-  pnpm --filter @ims/web dev`.
-- **`apps/api/dist` goes stale.** Anything measuring the PDF must rebuild first, or it measures
-  last week's template and reports the opposite of the truth.
+- **Port 5173 is the Docker build, not a dev server** — your working tree is not there. To see
+  it: `WEB_PORT=5199 VITE_DEV_API_PROXY_TARGET=http://localhost:5173 pnpm --filter @ims/web dev`.
+- **Built output goes stale, and lies confidently.** `apps/api/dist` must be rebuilt before
+  anything measures the PDF; a config default (`PDF_MARGIN_TOP_MM` is now 20) does not reach
+  the stack until `docker compose up -d --build` at the repo root.
 - **`pnpm typecheck` reads `packages/shared/dist`.** Change a contract, rebuild shared.
 - **`D-nnn` is the QA defect numbering — never use it for a decision.** Cite by `OQ-*` / `G-*`.
 - **`resetData` keeps requisitions**, so money accumulates across a spec file.
 - **Never return `this.funding()` from inside its own transaction.**
-- **`pnpm db:up`, not `docker compose up`.** Never `npx`/`npm` at the root. **`test:int -- <spec>`
-  does not filter**; use `vitest run --config vitest.integration.config.ts <pattern>`.
+- **Two compose files.** `pnpm db:up` is `infra/docker-compose.dev.yml` — the dev database only.
+  The app stack is `docker compose up -d --build` at the root. Neither substitutes for the other.
+- **Windows reserves port blocks at boot; 5173, 5433 and 5434 can all land in one.** The proxy
+  refuses to bind and the integration suite dies on `ECONNREFUSED :5434`, while `docker ps` says
+  everything is running and nothing is listening. Fix: `RUNBOOK.md` §7.
+- Never `npx`/`npm` at the root. **`test:int -- <spec>` does not filter**; use
+  `vitest run --config vitest.integration.config.ts <pattern>`.
 
 ## Open debt
 
-`OQ-34` (above) · `G-14` (prevention half) · `G-16` · `G-17` · `G-18` · `G-19` · PM 6/12/14/15 ·
-`OQ-30` · `OQ-31` · `OQ-33` (untracked xlsx / docs/policy). **OQ-07 and OQ-32 closed.**
+`G-14` (prevention half) · `G-16` · `G-17` · `G-18` · `G-19` · **`G-20` (4 paused reversal
+tests — un-skip once the port is fixed)** · PM 6/12/14/15 ·
+`OQ-30` · `OQ-31` · `OQ-33` (untracked xlsx / docs/policy). **OQ-07, OQ-32 and OQ-34 closed.**

@@ -457,6 +457,10 @@ export const t = {
     transportationActual: 'Transportation for this delivery',
     transportationActualHint: 'What the carriage actually cost. Adjust it up or down; it counts towards what has been funded.',
     purchaseTotal: 'This purchase',
+    // Partial funding is off for this release. The dialog states the amount rather than
+    // offering a field, so the rule is visible before the click, not reported after it.
+    fullAmountOnly: 'Recorded in one payment.',
+    fullAmountOnlyHint: 'Instalments are not available in this version.',
     fundedLabel: 'Funded',
     leftToSpend: 'Left to spend',
     overspendInline: 'This is more than has been funded. Lower a quantity, a unit cost or the transportation until it is not negative.',
@@ -1303,6 +1307,8 @@ export const t = {
       '{purchasesWithoutInvoice} purchase(s) on this requisition still have no invoice attached. Upload them before verifying.',
     FUNDING_EXCEEDS_APPROVED:
       'Recording {attempted} would take the funding to {wouldBecome}, past the approved {approved}. Ask an approver to revise the amount first.',
+    PARTIAL_FUNDING_DISABLED:
+      'Money has to come in one payment for now. Record the full outstanding {outstanding}, not {attempted}.',
     RECEIVE_EXCEEDS_PURCHASED:
       'Only {outstanding} of "{itemName}" is still outstanding, so {attempted} cannot be received.',
     CANNOT_UNVERIFY_WITH_RETURNS:

@@ -169,6 +169,15 @@ export function FundsActionDialog({
    */
   const outstandingBalance = funding ? funding.outstanding : null;
 
+  /**
+   * One legal amount, so no field.
+   *
+   * Only when there is genuinely something outstanding to state: with no funding record, or
+   * nothing left owing, the field stays so the IM is never shown a bare "0" they cannot act on.
+   */
+  const fullAmountOnly =
+    funding !== null && !funding.allowsPartialFunding && funding.outstanding > 0;
+
   /** The entry a void would take out, named in the hint so the IM can see what they are undoing. */
   const voidingReceipt = mostRecentReceipt(funding);
   const voidingPurchase = mostRecentPurchase(funding);
@@ -457,26 +466,46 @@ export function FundsActionDialog({
 
         {action === 'receipt' && (
           <>
-            <TextField
-              label={t.funds.amount}
-              required
-              type="number"
-              min={0}
-              // D-025: the server refuses a receipt above the outstanding balance, so the input
-              // says so up front rather than letting the user find out on submit. Omitted when
-              // there is nothing sensible to cap against, so the browser never enforces a bound
-              // the server does not.
-              max={outstandingBalance ?? undefined}
-              hint={
-                outstandingBalance === null
-                  ? undefined
-                  : `${t.funds.outstandingHint} ${outstandingBalance.toLocaleString()}`
-              }
-              step="0.01"
-              value={amount}
-              error={fieldErrors.amount}
-              onChange={(event) => setAmount(event.target.value)}
-            />
+            {/*
+              With instalments switched off there is only one legal amount, so the dialog states
+              it instead of offering a field. An input the server would refuse for every value
+              but one is a trap, and "type the number we already know" is not a decision.
+
+              Driven by the funding payload rather than a client build flag: the rule belongs to
+              the API, and when it is turned back on this reverts on its own.
+            */}
+            {fullAmountOnly ? (
+              <div>
+                <p className="text-sm text-ink-muted">{t.funds.amount}</p>
+                <p className="text-2xl font-semibold tabular-nums text-ink">
+                  {(outstandingBalance ?? 0).toLocaleString()}
+                </p>
+                <p className="mt-1 text-xs text-ink-subtle">
+                  {t.funds.fullAmountOnly} {t.funds.fullAmountOnlyHint}
+                </p>
+              </div>
+            ) : (
+              <TextField
+                label={t.funds.amount}
+                required
+                type="number"
+                min={0}
+                // D-025: the server refuses a receipt above the outstanding balance, so the
+                // input says so up front rather than letting the user find out on submit.
+                // Omitted when there is nothing sensible to cap against, so the browser never
+                // enforces a bound the server does not.
+                max={outstandingBalance ?? undefined}
+                hint={
+                  outstandingBalance === null
+                    ? undefined
+                    : `${t.funds.outstandingHint} ${outstandingBalance.toLocaleString()}`
+                }
+                step="0.01"
+                value={amount}
+                error={fieldErrors.amount}
+                onChange={(event) => setAmount(event.target.value)}
+              />
+            )}
             <TextField
               label={t.funds.receivedAt}
               required

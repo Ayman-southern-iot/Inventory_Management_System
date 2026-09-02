@@ -51,6 +51,23 @@ export class InvoiceMissingError extends DomainError {
   }
 }
 
+/**
+ * A receipt for less than the outstanding balance, while instalments are switched off.
+ *
+ * CONFLICT rather than a validation failure: the amount is a perfectly valid number, it is the
+ * state of the requisition that makes it unacceptable.
+ */
+export class PartialFundingDisabledError extends DomainError {
+  constructor(outstanding: number, attempted: number) {
+    super(
+      ErrorCode.PARTIAL_FUNDING_DISABLED,
+      `This release does not take money in instalments. Record the full outstanding ${outstanding}, not ${attempted}.`,
+      HttpStatus.CONFLICT,
+      { outstanding, attempted },
+    );
+  }
+}
+
 export class FundingExceedsApprovedError extends DomainError {
   constructor(approved: number, alreadyFunded: number, attempted: number) {
     // Computed here rather than interpolated inline, so `details` carries the figure the copy

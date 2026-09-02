@@ -102,6 +102,7 @@ function funding(): RequisitionFunding {
     netFunded: 40_500,
     outstanding: 0,
     unspent: 40_500,
+    allowsPartialFunding: false,
     isFullyFunded: true,
     receipts: [],
     purchases: [],

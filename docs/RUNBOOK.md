@@ -212,6 +212,65 @@ healthcheck uses. Disk headroom and backup timing are deliberately admin-only.
 
 ## 7. When something is wrong
 
+### The stack comes up but `proxy` will not start
+
+Symptom, from `docker compose up -d --build`:
+
+```
+Error response from daemon: ports are not available: exposing port TCP 0.0.0.0:5173
+-> 127.0.0.1:0: listen tcp 0.0.0.0:5173: bind: An attempt was made to access a socket in a
+way forbidden by its access permissions.
+```
+
+Every other container is fine — `api` reports healthy — and nothing is listening on 5173.
+That wording is specific: **Windows has reserved the port**, it is not in use. Hyper-V and
+WinNAT claim blocks of the dynamic port range at boot, the blocks move between reboots, and
+5173 sits low enough to be caught by one.
+
+Confirm it:
+
+```bash
+netstat -ano | grep ":5173"                                  # expect nothing
+netsh interface ipv4 show excludedportrange protocol=tcp     # look for a range covering 5173
+```
+
+A range with no `*` beside it is one Windows took automatically.
+
+**Check the other two ports as well.** The blocks come in contiguous hundreds, so a grab that
+catches 5173 usually catches the development databases with it — `5433` (dev) and `5434`
+(integration tests) both sit in the next block up. The symptom there is different and easy to
+misread: the containers say they are running, but `docker port ims-dev-db-test-1` prints
+nothing and the integration suite dies on `ECONNREFUSED 127.0.0.1:5434` before a single test
+file loads. The binding is in the container config; it was never established.
+
+The fix is to claim all three ports so they cannot be taken again, in an **Administrator**
+shell:
+
+```powershell
+net stop winnat
+netsh int ipv4 add excludedportrange protocol=tcp startport=5173 numberofports=1 store=persistent
+netsh int ipv4 add excludedportrange protocol=tcp startport=5433 numberofports=2 store=persistent
+net start winnat
+```
+
+Then bring both stacks back, recreating the containers whose bindings never took:
+
+```bash
+docker compose up -d                                                   # the app stack
+docker compose -f infra/docker-compose.dev.yml up -d --force-recreate  # the dev databases
+```
+
+`--force-recreate` is needed on the second one: the containers already exist with the right
+binding in their config, so a plain `up -d` reports them up to date and changes nothing. The
+data lives in a volume and survives the recreation.
+
+Stopping `winnat` releases the automatic reservations; the `store=persistent` exclusion then
+survives reboots, and an explicitly excluded port is still bindable by a process that asks for
+it by name — the exclusion only stops Windows handing it out to something else.
+
+If you would rather not touch the machine's networking, publish the proxy on a port above the
+dynamic range instead — change `5173:80` in `docker-compose.yml` — but everyone's bookmark and
+the `WEB_PUBLIC_URL` in `.env` change with it, so prefer reclaiming the port.
 ### Nobody can sign in
 
 Check the API is actually up. Caddy only proxies `/api/*` to the backend, so `/health` is not

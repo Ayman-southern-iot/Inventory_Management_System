@@ -76,6 +76,7 @@ function liveFunding(overrides: Partial<RequisitionFunding> = {}): RequisitionFu
     netFunded: 2900,
     outstanding: 0,
     unspent: 200,
+    allowsPartialFunding: false,
     isFullyFunded: true,
     receipts: [],
     purchases: [],

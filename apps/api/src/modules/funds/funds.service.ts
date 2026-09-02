@@ -15,6 +15,7 @@ import {
   type BorrowToUserInput,
   type RequisitionFunding,
 } from '@ims/shared';
+import { CONFIG, type AppConfig } from '../../config';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
 import { ForbiddenError, NotFoundError, ValidationFailedError } from '../../common/errors';
@@ -34,6 +35,7 @@ import {
   CannotVoidReceiptWithPurchasesError,
   CannotVoidReceivedPurchaseError,
   FundingExceedsApprovedError,
+  PartialFundingDisabledError,
   InvalidFundingTransitionError,
   PurchaseExceedsFundedError,
   MoneyRowNotFoundError,
@@ -75,6 +77,7 @@ export class FundsService {
 
   constructor(
     @Inject(DB) private readonly db: Db,
+    @Inject(CONFIG) private readonly config: AppConfig,
     private readonly repo: FundsRepository,
     // Forward-ref: RequisitionsModule also imports FundsModule so RequisitionsService can
     // call our snapshot hooks. A plain `@Inject` would resolve before the other side is ready.
@@ -168,6 +171,26 @@ export class FundsService {
 
       if (approved > 0 && round2(alreadyFunded + amount) > approved) {
         throw new FundingExceedsApprovedError(approved, alreadyFunded, amount);
+      }
+
+      /*
+       * Instalments are switched off for this release (Ayman, 2026-09-02).
+       *
+       * Checked after the ceiling, so money that is both short *and* over-approved still reports
+       * the over-approval — that is the more surprising of the two and the one an IM needs to see.
+       *
+       * Guarded on `approved > 0` for the same reason the ceiling is: with nothing approved there
+       * is no outstanding balance to clear, and refusing every receipt would strand the
+       * requisition. Note what this does to FUNDS_PARTIAL: with one payment clearing the whole
+       * balance, a *new* requisition can no longer reach it. The status stays in the enum and the
+       * void path still derives it, because rows written before this release are still readable
+       * and an upward revision of the approved amount can still open a balance.
+       */
+      if (!this.config.money.allowPartialFunding && approved > 0) {
+        const outstanding = round2(approved - alreadyFunded);
+        if (amount < outstanding) {
+          throw new PartialFundingDisabledError(outstanding, amount);
+        }
       }
 
       await this.repo.insertReceipt(tx, {
@@ -1276,6 +1299,7 @@ export class FundsService {
       // Also floored: spending past what was released is a real condition worth seeing on the
       // screen, but it is not "negative money available to hand back".
       unspent: Math.max(0, round2(funded - spent - transportation - returned)),
+      allowsPartialFunding: this.config.money.allowPartialFunding,
       isFullyFunded: approved !== null && approved > 0 && round2(funded) >= round2(approved),
       receipts,
       purchases,

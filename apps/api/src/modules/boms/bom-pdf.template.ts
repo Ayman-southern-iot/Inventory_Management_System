@@ -347,9 +347,10 @@ function escape(value: string): string {
 function bomStyles(): string {
   /**
    * Page format, margins and orientation all come from the renderer config — never from here.
-   * There is deliberately no `@page` rule: `PDF_MARGIN_*_MM` exists because this office prints
-   * onto pre-printed letterhead, and a margin hardcoded here would fight the one Puppeteer is
-   * given and win silently.
+   * There is deliberately no `@page` rule. A margin hardcoded here would fight the one
+   * Puppeteer is given and win silently, and the paper is not fixed: this prints on plain
+   * white A4 today (OQ-34), but `PDF_MARGIN_*_MM` is what lets it move onto a pre-printed pad
+   * without touching this file.
    *
    * Modelled on `bom_template.html`.
    */

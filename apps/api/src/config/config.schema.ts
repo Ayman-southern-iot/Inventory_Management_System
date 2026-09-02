@@ -211,7 +211,20 @@ const rawSchema = z.object({
   /** Where the letterhead image lives, if one has been supplied. Blank renders a placeholder. */
   PDF_LETTERHEAD_PATH: z.string().default(''),
   PDF_PAGE_FORMAT: z.enum(['A4', 'Letter']).default('A4'),
-  PDF_MARGIN_TOP_MM: z.coerce.number().min(0).max(100).default(45),
+  /**
+   * OQ-34, answered by Ayman 2026-09-01: the BOM prints on plain white A4, not on a
+   * pre-printed pad.
+   *
+   * So the top margin is an ordinary document margin, not a reserve for somebody else's ink.
+   * The template draws its own letterhead — logo, company name, address — inside it. At the
+   * 45mm this used to hold, an ordinary five-line BOM ran onto a second page for no reason
+   * anyone could see: 25mm of every sheet was being kept clear for a header that is printed
+   * rather than pre-printed.
+   *
+   * Still configuration, and still overridable: if a pad is ever supplied, raise this to the
+   * height of its printed area and nothing else has to change.
+   */
+  PDF_MARGIN_TOP_MM: z.coerce.number().min(0).max(100).default(20),
   PDF_MARGIN_RIGHT_MM: z.coerce.number().min(0).max(100).default(15),
   PDF_MARGIN_BOTTOM_MM: z.coerce.number().min(0).max(100).default(30),
   PDF_MARGIN_LEFT_MM: z.coerce.number().min(0).max(100).default(15),

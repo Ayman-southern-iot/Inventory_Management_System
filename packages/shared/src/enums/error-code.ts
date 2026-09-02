@@ -142,6 +142,8 @@ export const ErrorCode = {
   /** Verifying a purchase while some of its purchases still have no invoice attached. */
   INVOICE_MISSING: 'INVOICE_MISSING',
   /** Logging a receipt that would take total funding past the approved amount. */
+  /** Partial funding is switched off for this release; a receipt must clear the balance. */
+  PARTIAL_FUNDING_DISABLED: 'PARTIAL_FUNDING_DISABLED',
   FUNDING_EXCEEDS_APPROVED: 'FUNDING_EXCEEDS_APPROVED',
   /** Receiving more units of an item into stock than were actually purchased. */
   RECEIVE_EXCEEDS_PURCHASED: 'RECEIVE_EXCEEDS_PURCHASED',

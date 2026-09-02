@@ -47,6 +47,7 @@ function funding(overrides: Partial<RequisitionFunding> = {}): RequisitionFundin
     netFunded: 3000,
     outstanding: 0,
     unspent: 300,
+    allowsPartialFunding: false,
     isFullyFunded: true,
     receipts: [],
     purchases: [],

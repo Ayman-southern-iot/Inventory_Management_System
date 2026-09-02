@@ -401,6 +401,14 @@ export const requisitionFundingSchema = z.object({
    * ceiling the return guard enforces.
    */
   unspent: z.number(),
+  /**
+   * Whether Accounts may release this in instalments. False for this release, so the dialog
+   * fixes the amount at `outstanding` instead of offering a field the server would refuse.
+   *
+   * On the payload rather than read from the client build: the rule is the API’s, and a UI
+   * that disagreed with it would offer an action that always fails.
+   */
+  allowsPartialFunding: z.boolean(),
   isFullyFunded: z.boolean(),
   receipts: z.array(fundReceiptSchema),
   purchases: z.array(purchaseSchema),
