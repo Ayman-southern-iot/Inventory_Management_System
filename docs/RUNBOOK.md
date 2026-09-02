@@ -7,6 +7,72 @@ If you are reading this during an incident, jump to [When something is wrong](#w
 
 ---
 
+## 0. Before go-live — the checklist that must be done first
+
+Work down this list before the first real requisition. Items 1 and 2 are **hard blockers**: the
+system is not safe to hold real data until both are done.
+
+### 1. Turn demo mode off — HARD BLOCKER
+
+While `DEMO_ACCOUNTS_ENABLED=true`, `GET /api/v1/auth/demo-accounts` answers **without any
+authentication** and hands out every account's email plus the shared password. Anyone who can
+reach the login page can sign in as **System Administrator**. There is effectively no
+authentication until this is off.
+
+```bash
+# In .env
+DEMO_ACCOUNTS_ENABLED=false
+
+docker compose up -d --force-recreate api
+```
+
+Confirm it is actually off — the check is one command and it is worth doing:
+
+```bash
+curl -s http://<host>:5173/api/v1/auth/demo-accounts    # must NOT list accounts
+```
+
+Then **change the password on every seeded account**, because the demo password was known:
+Admin → Users → Reset password, for all five.
+
+### 2. Push the repository — HARD BLOCKER
+
+At the time of writing the work exists on one laptop and nowhere else. A disk failure loses the
+entire build. Push before launch, not after.
+
+```bash
+git push origin <branch>
+```
+
+### 3. Configure the approval chain
+
+A fresh install accepts no requisition until an admin has set all four. The seed creates none of
+them, and the failure at submit names the missing one:
+
+- Admin → Settings → **Sub-threshold approver**
+- Admin → Settings → **Approver 1** and **Approver 2**
+- At least one user holding **Inventory Manager**
+- At least one **department**
+
+### 4. Check the expense threshold
+
+Admin → Settings → Expense threshold. It seeds at 15,000 BDT. At or above it a requisition needs
+two approvers; below it, one. Set it to whatever the office actually uses before people start
+raising requests against the wrong rule — the count is frozen onto each requisition at submit, so
+changing it later does not correct requisitions already in flight.
+
+### 5. Set up backups
+
+`pg_dump` on a schedule, with the output going **somewhere other than this machine**. See §5.
+Until that is running, the database has the same single point of failure as the git repository.
+
+### 6. Decide the BOM paper
+
+`PDF_MARGIN_TOP_MM` is 20, which suits plain white A4 and fits five items to a page. If BOMs are
+printed on a pre-printed letterhead pad instead, raise it to the height of the printed area.
+
+---
+
 ## 1. What is running
 
 Five containers, defined in `infra/docker-compose.yml`:

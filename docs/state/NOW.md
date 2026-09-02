@@ -17,7 +17,9 @@ items to a page on plain A4. Partial funding is switched **off** for this releas
 
 **Nothing is queued — ask before starting.** In the order I would take them:
 
-1. **The operator blockers below**, now the only thing between this and go-live.
+1. **The two hard blockers below.** `IMS-MVP-Readiness.md` has the verdict: the software passes
+   28/28 end to end, but demo mode is on in production and nothing is pushed. RUNBOOK §0 is the
+   checklist.
 2. `G-20` — un-skip the four paused reversal tests via a `CONFIG` override on `createTestApp()`.
    The port is unblocked, so this is now doable.
 3. The **expenses page rebuild** (`docs/spec/expenses-page-rebuild.md`). Its investigation is
@@ -39,7 +41,9 @@ items to a page on plain A4. Partial funding is switched **off** for this releas
 
 1. **`git push` is still not authorised — ~152 commits ahead of `main`.** Everything since QA
    round 2 exists on this machine only. The single largest risk.
-2. **Demo mode is ON in production** — login lists five accounts with a shared password.
+2. **Demo mode is ON in production — there is effectively no authentication.**
+   `GET /auth/demo-accounts` answers unauthenticated with every email and the shared password,
+   admin included. Set `DEMO_ACCOUNTS_ENABLED=false`, recreate the api, reset all five passwords.
 3. Offsite backups (**G-16**) and a drill against the real compose stack (**G-17**).
 4. A fresh install processes no requisition until an admin sets the sub-threshold approver,
    approver slots, an IM and a department. The seed creates none of them.
