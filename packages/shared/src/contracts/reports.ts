@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { queryBoolean } from './common.js';
 
 /**
  * Phase 05 task 5.8 — what the organisation has actually spent.
@@ -182,10 +183,16 @@ export type TopSpendItems = z.infer<typeof topSpendItemsSchema>;
 export const inventoryReportQuerySchema = z.object({
   categoryId: z.string().uuid().optional(),
   zoneId: z.string().uuid().optional(),
+  /**
+   * `queryBoolean`, never `z.coerce.boolean()`: these arrive as query-string text, and coercion
+   * reads every non-empty string — `"false"` included — as `true`. The web sends the checkbox
+   * state faithfully, so `inStockOnly=false` was silently inverted and the export dropped every
+   * product holding nothing while the list on screen showed them.
+   */
   /** Deactivated products are excluded by default; history still needs them on request. */
-  includeInactive: z.coerce.boolean().default(false),
+  includeInactive: queryBoolean(false),
   /** Drops products holding nothing, which is most of a mature catalogue. */
-  inStockOnly: z.coerce.boolean().default(false),
+  inStockOnly: queryBoolean(false),
 });
 export type InventoryReportQuery = z.infer<typeof inventoryReportQuerySchema>;
 

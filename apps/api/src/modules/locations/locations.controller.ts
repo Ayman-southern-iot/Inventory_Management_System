@@ -4,6 +4,7 @@ import {
   Role,
   createCompartmentSchema,
   createZoneSchema,
+  queryBoolean,
   updateCompartmentSchema,
   updateZoneSchema,
   type Compartment,
@@ -21,7 +22,10 @@ import type { AuditContext } from '../audit/audit-context';
 import { LocationsService } from './locations.service';
 
 const listQuerySchema = z.object({
-  includeInactive: z.coerce.boolean().default(false),
+  // `queryBoolean`, never `z.coerce.boolean()`: this arrives as query-string text, and coercion
+  // reads every non-empty string — `"false"` included — as `true`, so `?includeInactive=false`
+  // would list the retired zones it was asked to hide.
+  includeInactive: queryBoolean(false),
 });
 
 @AuthenticatedThrottle
