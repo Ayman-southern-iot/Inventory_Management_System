@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
   ArrowRightLeft,
   Box,
@@ -49,6 +49,25 @@ interface NavGroup {
   label: string | null;
   roles?: Role[];
   items: NavItem[];
+}
+
+/**
+ * Which nav item counts as "the page you are on" — the longest one that matches.
+ *
+ * `NavLink` marks itself active by prefix, so `/inventory` claimed `/inventory/categories` and
+ * both lit up at once. Ranking the matches and taking the most specific fixes that without
+ * putting `end` on the Inventory link, which would have gone too far the other way: a product
+ * page is reachable from Inventory and nowhere else, so Inventory is the right answer there.
+ *
+ * A path that no item owns — a requisition detail, say — matches nothing and lights nothing.
+ * That is deliberate; see the note on the detail-page test in AppShell.test.tsx.
+ */
+function activePathFor(pathname: string, candidates: string[]): string | null {
+  const matched = candidates.filter((to) =>
+    // The dashboard is `/`, a prefix of literally everything, so it only ever matches exactly.
+    to === ROUTES.dashboard ? pathname === to : pathname === to || pathname.startsWith(to + '/'),
+  );
+  return matched.sort((a, b) => b.length - a.length)[0] ?? null;
 }
 
 const IM = [Role.INVENTORY_MANAGER, Role.ADMIN];
@@ -145,6 +164,12 @@ export function AppShell() {
     [hasRole],
   );
 
+  const { pathname } = useLocation();
+  const activePath = useMemo(
+    () => activePathFor(pathname, groups.flatMap((group) => group.items.map((item) => item.to))),
+    [pathname, groups],
+  );
+
   if (!user) return null;
 
   return (
@@ -237,27 +262,30 @@ export function AppShell() {
                   {group.label}
                 </p>
               ) : null}
-              {group.items.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.to === ROUTES.dashboard}
-                  onClick={() => setMobileNavOpen(false)}
-                  className={({ isActive }) =>
-                    cn(
+              {group.items.map((item) => {
+                // Plain `Link`, because `NavLink` would compute its own prefix match alongside
+                // this one and the two would disagree on exactly the pages this fixes.
+                const isActive = item.to === activePath;
+                return (
+                  <Link
+                    key={item.to}
+                    to={item.to}
+                    aria-current={isActive ? 'page' : undefined}
+                    onClick={() => setMobileNavOpen(false)}
+                    className={cn(
                       'flex items-center gap-2.5 rounded-[--radius-control] px-3 py-2 text-sm transition-colors',
                       isActive
                         ? 'bg-brand-subtle font-medium text-brand'
                         : 'text-ink-muted hover:bg-surface-muted hover:text-ink',
-                    )
-                  }
-                >
-                  <item.icon aria-hidden className="size-4" />
-                  {item.label}
-                  {item.badge ? <AwaitingApprovalBadge /> : null}
-                  {item.borrowBadge ? <PendingBorrowBadge /> : null}
-                </NavLink>
-              ))}
+                    )}
+                  >
+                    <item.icon aria-hidden className="size-4" />
+                    {item.label}
+                    {item.badge ? <AwaitingApprovalBadge /> : null}
+                    {item.borrowBadge ? <PendingBorrowBadge /> : null}
+                  </Link>
+                );
+              })}
             </div>
           ))}
         </nav>
