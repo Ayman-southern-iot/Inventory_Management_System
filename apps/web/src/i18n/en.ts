@@ -724,8 +724,6 @@ export const t = {
     newCategory: 'New category',
     editCategory: 'Edit category',
     name: 'Name',
-    parent: 'Parent category',
-    noParent: 'Top level',
     trackable: 'Track stock for this category',
     trackableHint:
       'Untracked categories stay in the catalogue for reference but hold no stock — furniture, for example.',

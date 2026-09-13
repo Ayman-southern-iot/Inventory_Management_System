@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { createCategorySchema, type Category, type CreateCategoryInput } from '@ims/shared';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
-import { Checkbox, SelectField, TextField } from '@/components/ui/Field';
+import { Checkbox, TextField } from '@/components/ui/Field';
 import { Badge, PageHeader, Panel, Table } from '@/components/ui/primitives';
 import { EmptyState, QueryBoundary, SkeletonRows } from '@/components/ui/states';
 import { useToast } from '@/components/ui/Toast';
@@ -25,6 +25,9 @@ export function CategoriesPage() {
 
   const flat = useMemo(() => flattenCategoryTree(categories.data ?? []), [categories.data]);
 
+  // `parentId` stays in the form because the contract carries it, but nothing sets it any more:
+  // the parent picker was removed and every category is created at the top level. The API still
+  // accepts a parent, so re-adding the picker is the only change needed to bring nesting back.
   const form = useForm<CreateCategoryInput>({
     resolver: zodResolver(createCategorySchema),
     defaultValues: { name: '', parentId: null, isTrackable: true },
@@ -172,17 +175,8 @@ export function CategoriesPage() {
             error={form.formState.errors.name?.message}
             {...form.register('name')}
           />
-          {editing ? null : (
-            <SelectField label={t.categories.parent} {...form.register('parentId')}>
-              <option value="">{t.categories.noParent}</option>
-              {flat.map((row) => (
-                <option key={row.id} value={row.id}>
-                  {indentFor(row.depth)}
-                  {row.name}
-                </option>
-              ))}
-            </SelectField>
-          )}
+          {/* No parent picker: every new category is top level. The column and the tree
+              rendering stay, so a category that already has a parent still reads correctly. */}
           <Checkbox
             label={t.categories.trackable}
             {...form.register('isTrackable')}

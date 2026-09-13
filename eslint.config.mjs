@@ -30,6 +30,11 @@ export default tseslint.config(
       '**/*.config.js',
       '**/*.config.ts',
       '**/vite.config.ts',
+      // Standalone CommonJS Node tooling, not application source: it uses `require`, it prints
+      // to the console on purpose, and half its callbacks run inside a browser page where
+      // `document` is defined. Linting it with the app's config produced 35 errors that said
+      // nothing about the app and buried the ones that did.
+      'docs/**/*.js',
     ],
   },
 
