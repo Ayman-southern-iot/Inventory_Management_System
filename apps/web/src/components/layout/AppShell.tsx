@@ -1,25 +1,26 @@
 import { useMemo, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import {
+  ArrowRightLeft,
+  Box,
   Boxes,
-  HandCoins,
-  ClipboardList,
-  FileSpreadsheet,
-  FileText,
-  History,
-  Stamp,
   ChevronDown,
-  FolderKanban,
-  FolderTree,
+  ClipboardList,
+  Files,
+  Folder,
+  History,
   LayoutDashboard,
+  LayoutGrid,
+  ListTree,
   LogOut,
   MapPin,
   Menu,
-  Package,
+  Receipt,
+  Repeat,
   Settings2,
-  Users,
+  Stamp,
   UserRound,
-  Wallet,
+  Users,
   X,
 } from 'lucide-react';
 import { Role } from '@ims/shared';
@@ -50,36 +51,66 @@ interface NavGroup {
   items: NavItem[];
 }
 
+const IM = [Role.INVENTORY_MANAGER, Role.ADMIN];
+const SIGNS_OFF = [Role.APPROVER, Role.INVENTORY_MANAGER, Role.ADMIN];
+
+/**
+ * Grouped by whose work it is, not by which module built it: what is mine, what is the store's,
+ * what is the money's.
+ *
+ * Roles sit on the **items**, not the groups. `Inventory` is the reason — browsing stock is
+ * everyone's (it is step one of borrowing), so it cannot live behind an IM-only group even
+ * though it reads as part of the store. A group with no visible items is dropped at render.
+ *
+ * The paired icons are deliberate: `My borrowings` / `Borrowing` and `My requisitions` /
+ * `All requisitions` each use a related-but-different glyph, so the personal view and the
+ * everyone view are told apart before the label is read.
+ */
 const NAV: NavGroup[] = [
   {
     label: null,
     items: [
       { label: t.nav.dashboard, to: ROUTES.dashboard, icon: LayoutDashboard },
-      // Browsing stock and seeing your own borrows are everyone's, so no roles here.
-      { label: t.nav.inventoryProducts, to: ROUTES.inventory.products, icon: Package },
-      { label: t.nav.myBorrowings, to: ROUTES.borrowing.mine, icon: HandCoins },
-      { label: t.nav.myRequisitions, to: ROUTES.requisitions.mine, icon: FileText },
-      { label: t.nav.projects, to: ROUTES.projects.all, icon: FolderKanban },
+      { label: t.nav.projects, to: ROUTES.projects.all, icon: Folder },
     ],
   },
   {
-    label: t.nav.approvals,
-    roles: [Role.APPROVER, Role.INVENTORY_MANAGER, Role.ADMIN],
+    label: t.nav.groupMyWork,
     items: [
-      { label: t.nav.approvals, to: ROUTES.requisitions.approvals, icon: Stamp, badge: true },
-      // Approvers see it too: the shape of the spend they are sanctioning is their business.
-      { label: t.nav.expenses, to: ROUTES.reports.expenses, icon: Wallet },
+      { label: t.nav.myRequisitions, to: ROUTES.requisitions.mine, icon: ClipboardList },
+      { label: t.nav.myBorrowings, to: ROUTES.borrowing.mine, icon: ArrowRightLeft },
+      {
+        label: t.nav.approvals,
+        to: ROUTES.requisitions.approvals,
+        icon: Stamp,
+        badge: true,
+        roles: SIGNS_OFF,
+      },
     ],
   },
   {
     label: t.nav.inventory,
-    roles: [Role.INVENTORY_MANAGER, Role.ADMIN],
     items: [
-      { label: t.nav.borrowing, to: ROUTES.borrowing.all, icon: ClipboardList, borrowBadge: true },
-      { label: t.nav.allRequisitions, to: ROUTES.requisitions.all, icon: FileText },
-      { label: t.nav.inventoryCategories, to: ROUTES.inventory.categories, icon: FolderTree },
-      { label: t.nav.inventoryLocations, to: ROUTES.inventory.locations, icon: MapPin },
-      { label: t.nav.boms, to: ROUTES.boms.all, icon: FileSpreadsheet },
+      // No roles: browsing stock is everyone's, and it is where a borrow starts.
+      { label: t.nav.inventoryProducts, to: ROUTES.inventory.products, icon: Box },
+      { label: t.nav.inventoryCategories, to: ROUTES.inventory.categories, icon: LayoutGrid, roles: IM },
+      { label: t.nav.inventoryLocations, to: ROUTES.inventory.locations, icon: MapPin, roles: IM },
+      { label: t.nav.boms, to: ROUTES.boms.all, icon: ListTree, roles: IM },
+      {
+        label: t.nav.borrowing,
+        to: ROUTES.borrowing.all,
+        icon: Repeat,
+        borrowBadge: true,
+        roles: IM,
+      },
+      { label: t.nav.allRequisitions, to: ROUTES.requisitions.all, icon: Files, roles: IM },
+    ],
+  },
+  {
+    label: t.nav.groupFinance,
+    items: [
+      // Approvers see it too: the shape of the spend they are sanctioning is their business.
+      { label: t.nav.expenses, to: ROUTES.reports.expenses, icon: Receipt, roles: SIGNS_OFF },
     ],
   },
   {
@@ -103,10 +134,14 @@ export function AppShell() {
   // (plan 0.8: logging in as each role shows only that role's navigation).
   const groups = useMemo(
     () =>
-      NAV.filter((group) => !group.roles || hasRole(...group.roles)).map((group) => ({
-        ...group,
-        items: group.items.filter((item) => !item.roles || hasRole(...item.roles)),
-      })),
+      NAV.filter((group) => !group.roles || hasRole(...group.roles))
+        .map((group) => ({
+          ...group,
+          items: group.items.filter((item) => !item.roles || hasRole(...item.roles)),
+        }))
+        // Roles live on the items now, so a group can empty out — a general user reaches none
+        // of Finance. Without this it would render a heading with nothing under it.
+        .filter((group) => group.items.length > 0),
     [hasRole],
   );
 

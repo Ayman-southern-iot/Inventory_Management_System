@@ -104,6 +104,10 @@ export const t = {
     allRequisitions: 'All requisitions',
     approvals: 'Approvals',
     expenses: 'Expenses',
+    // Sidebar group headings. Rendered uppercase by the stylesheet, so they are stored in
+    // sentence case like every other string here.
+    groupMyWork: 'My work',
+    groupFinance: 'Finance',
     admin: 'Administration',
     adminUsers: 'Users',
     adminDepartments: 'Departments',
