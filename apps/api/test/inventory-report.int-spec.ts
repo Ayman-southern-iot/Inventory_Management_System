@@ -124,8 +124,14 @@ describe('the inventory report (EX-02, requirements §10)', () => {
     const product = report.rows.find((row) => row.productId === fixture.productId)!;
     const productLines = lines.filter((line) => line.split(',')[0] === product.productCode);
 
+    // Column read by name, not by a hardcoded index. Adding the "Holding" column shifted every
+    // later field one place and this assertion started comparing zone names to compartment
+    // codes — passing the wrong data to a test that looked like it still checked the right thing.
+    const compartment = lines[0].split(',').indexOf('Compartment');
+    expect(compartment).toBeGreaterThan(-1);
+
     expect(productLines).toHaveLength(2);
-    expect(productLines.map((line) => line.split(',')[5]).sort()).toEqual(['A1', 'B2']);
+    expect(productLines.map((line) => line.split(',')[compartment]).sort()).toEqual(['A1', 'B2']);
     expect(lines.at(-1)).toContain('TOTAL');
   });
 

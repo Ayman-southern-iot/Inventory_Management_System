@@ -224,7 +224,20 @@ export class ReportsRepository {
         cm.code            AS compartment_name,
         sp.quantity        AS quantity,
         sp.reserved_qty    AS reserved_qty,
-        sp.quarantined_qty AS quarantined_qty
+        sp.quarantined_qty AS quarantined_qty,
+        -- Outstanding borrows, per PRODUCT, so this value repeats on every placement row of the
+        -- same product. The service must assign it, never accumulate it, or a product sitting in
+        -- two compartments would report twice the loans it has.
+        --
+        -- ISSUED and PARTIALLY_RETURNED are OUTSTANDING_STATUSES in @ims/shared, spelled out here
+        -- so the query reads on its own — and matched to the products list on purpose, so the
+        -- export and the screen cannot give two answers to "how many do we have".
+        COALESCE((
+          SELECT SUM(br.quantity - br.returned_qty)
+          FROM borrow_requests br
+          WHERE br.product_id = p.id
+            AND br.status IN ('ISSUED', 'PARTIALLY_RETURNED')
+        ), 0)::int      AS on_loan
       FROM products p
       LEFT JOIN categories c ON c.id = p.category_id
       LEFT JOIN stock_placements sp ON sp.product_id = p.id
@@ -314,4 +327,6 @@ export interface InventoryRow {
   quantity: number | null;
   reserved_qty: number | null;
   quarantined_qty: number | null;
+  /** Per product, so it repeats across that product's placement rows. Assign, do not sum. */
+  on_loan: number;
 }

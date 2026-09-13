@@ -219,6 +219,20 @@ export const inventoryReportRowSchema = z.object({
   totalQuarantined: z.number().int(),
   /** `quantity − reserved − quarantined`: what someone could actually be handed today. */
   totalAvailable: z.number().int(),
+  /**
+   * Issued and not yet back — `OUTSTANDING_STATUSES`, the same definition the products list
+   * reports as "In project use".
+   *
+   * Borrowed stock has left its compartment, so it appears in no placement. Without this the
+   * report counts only what is on a shelf and quietly understates what the company owns: a
+   * product with one on the shelf and four out read as a total of one.
+   */
+  totalOnLoan: z.number().int(),
+  /**
+   * `quantity + onLoan` — everything the company is currently responsible for, wherever it is.
+   * Reconciles with "Total owned" on the products list.
+   */
+  totalOwned: z.number().int(),
   placements: z.array(inventoryReportPlacementSchema),
 });
 export type InventoryReportRow = z.infer<typeof inventoryReportRowSchema>;
@@ -233,6 +247,8 @@ export const inventoryReportSchema = z.object({
     totalReserved: z.number().int(),
     totalQuarantined: z.number().int(),
     totalAvailable: z.number().int(),
+    totalOnLoan: z.number().int(),
+    totalOwned: z.number().int(),
   }),
 });
 export type InventoryReport = z.infer<typeof inventoryReportSchema>;

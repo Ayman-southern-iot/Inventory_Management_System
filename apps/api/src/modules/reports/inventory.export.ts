@@ -23,11 +23,20 @@ function escapeHtml(value: string): string {
     .replace(/"/g, '&quot;');
 }
 
+/**
+ * `Holding` says what kind of line each row is — `Shelf` or `On loan`.
+ *
+ * The product-level "owned" total is deliberately *not* a column here. This file is one line per
+ * holding so it can be pivoted, and a product total repeated across a product's rows would be
+ * summed once per compartment by any pivot that touched it. Owned is `Quantity` summed over both
+ * kinds of line, which a pivot derives correctly on its own.
+ */
 const HEADERS = [
   'Storage ID',
   'Product',
   'Category',
   'Unit',
+  'Holding',
   'Zone',
   'Compartment',
   'Quantity',
@@ -36,6 +45,9 @@ const HEADERS = [
   'Available',
   'Status',
 ] as const;
+
+const SHELF = 'Shelf';
+const ON_LOAN = 'On loan';
 
 /** A product holding nothing still has to appear — see the note in `ReportsRepository.inventory`. */
 function csvRowsFor(row: InventoryReportRow): string[] {
@@ -47,13 +59,10 @@ function csvRowsFor(row: InventoryReportRow): string[] {
   ];
   const status = row.isActive ? 'Active' : 'Deactivated';
 
-  if (row.placements.length === 0) {
-    return [[...common, '', '', 0, 0, 0, 0, status].join(',')];
-  }
-
-  return row.placements.map((placement) =>
+  const shelf = row.placements.map((placement) =>
     [
       ...common,
+      SHELF,
       csvField(placement.zoneName),
       csvField(placement.compartmentName),
       placement.quantity,
@@ -63,6 +72,22 @@ function csvRowsFor(row: InventoryReportRow): string[] {
       status,
     ].join(','),
   );
+
+  /*
+   * Borrowed stock has left its compartment, so it has no zone and no shelf — but it is still
+   * owned, and a stock file that omits it understates the company's holdings. It cannot be
+   * issued to anyone else while it is out, so Available is 0.
+   */
+  const loan =
+    row.totalOnLoan > 0
+      ? [[...common, ON_LOAN, '', '', row.totalOnLoan, 0, 0, 0, status].join(',')]
+      : [];
+
+  if (shelf.length === 0 && loan.length === 0) {
+    return [[...common, SHELF, '', '', 0, 0, 0, 0, status].join(',')];
+  }
+
+  return [...shelf, ...loan];
 }
 
 /**
@@ -83,7 +108,10 @@ export function inventoryReportToCsv(report: InventoryReport): string {
       '',
       '',
       '',
-      report.totals.totalQuantity,
+      '',
+      // Quantity across both kinds of line: on a shelf plus out with borrowers. This is the
+      // owned figure, and it reconciles with "Total owned" on the products list.
+      report.totals.totalOwned,
       report.totals.totalReserved,
       report.totals.totalQuarantined,
       report.totals.totalAvailable,
@@ -101,21 +129,43 @@ export function inventoryReportToCsv(report: InventoryReport): string {
 export function inventoryReportToHtml(report: InventoryReport, timeZone: string): string {
   const body = report.rows
     .map((row) => {
-      const placements =
+      const shelfRows =
         row.placements.length === 0
-          ? `<tr class="placement empty"><td colspan="5">Held in no compartment</td></tr>`
+          ? row.totalOnLoan > 0
+            ? '' // Entirely out with borrowers; the loan line below says so.
+            : `<tr class="placement empty"><td colspan="7">Held in no compartment</td></tr>`
           : row.placements
               .map(
                 (placement) => `
                 <tr class="placement">
                   <td>${escapeHtml(placement.zoneName)} / ${escapeHtml(placement.compartmentName)}</td>
+                  <td class="num dim">&mdash;</td>
                   <td class="num">${placement.quantity}</td>
+                  <td class="num dim">&mdash;</td>
                   <td class="num">${placement.reserved}</td>
                   <td class="num">${placement.quarantined}</td>
                   <td class="num">${placement.quantity - placement.reserved - placement.quarantined}</td>
                 </tr>`,
               )
               .join('');
+
+      /*
+       * Borrowed stock has no compartment, so without a line of its own the breakdown under a
+       * product would not add up to the product's own total — the reader is left asking where
+       * the rest went. This is that line.
+       */
+      const loanRow =
+        row.totalOnLoan > 0
+          ? `<tr class="placement loan">
+               <td>With borrowers</td>
+               <td class="num dim">&mdash;</td>
+               <td class="num dim">&mdash;</td>
+               <td class="num">${row.totalOnLoan}</td>
+               <td class="num dim">&mdash;</td>
+               <td class="num dim">&mdash;</td>
+               <td class="num dim">&mdash;</td>
+             </tr>`
+          : '';
 
       return `
         <tr class="product">
@@ -125,12 +175,15 @@ export function inventoryReportToHtml(report: InventoryReport, timeZone: string)
             ${row.categoryName ? `<span class="cat">${escapeHtml(row.categoryName)}</span>` : ''}
             ${row.isActive ? '' : '<span class="inactive">deactivated</span>'}
           </td>
-          <td class="num"><strong>${row.totalQuantity}</strong></td>
+          <td class="num"><strong>${row.totalOwned}</strong></td>
+          <td class="num">${row.totalQuantity}</td>
+          <td class="num">${row.totalOnLoan}</td>
           <td class="num">${row.totalReserved}</td>
           <td class="num">${row.totalQuarantined}</td>
           <td class="num"><strong>${row.totalAvailable}</strong></td>
         </tr>
-        ${placements}`;
+        ${shelfRows}
+        ${loanRow}`;
     })
     .join('');
 
@@ -154,6 +207,8 @@ export function inventoryReportToHtml(report: InventoryReport, timeZone: string)
           tr.product td { border-top: 1px solid #bbb; }
           tr.placement td { color: #555; font-size: 10px; padding-left: 18px; }
           tr.placement.empty td { font-style: italic; color: #888; }
+          tr.placement.loan td { font-style: italic; }
+          .dim { color: #bbb; }
           .num { text-align: right; font-variant-numeric: tabular-nums; }
           .code { color: #666; font-family: monospace; margin-left: 6px; }
           .cat { color: #666; margin-left: 6px; }
@@ -169,7 +224,9 @@ export function inventoryReportToHtml(report: InventoryReport, timeZone: string)
           <thead>
             <tr>
               <th>Product / location</th>
-              <th class="num">Quantity</th>
+              <th class="num">Owned</th>
+              <th class="num">On shelf</th>
+              <th class="num">On loan</th>
               <th class="num">Reserved</th>
               <th class="num">Quarantined</th>
               <th class="num">Available</th>
@@ -179,7 +236,9 @@ export function inventoryReportToHtml(report: InventoryReport, timeZone: string)
           <tfoot>
             <tr>
               <td>Total</td>
+              <td class="num">${report.totals.totalOwned}</td>
               <td class="num">${report.totals.totalQuantity}</td>
+              <td class="num">${report.totals.totalOnLoan}</td>
               <td class="num">${report.totals.totalReserved}</td>
               <td class="num">${report.totals.totalQuarantined}</td>
               <td class="num">${report.totals.totalAvailable}</td>
@@ -187,9 +246,13 @@ export function inventoryReportToHtml(report: InventoryReport, timeZone: string)
           </tfoot>
         </table>
         <p class="footnote">
-          Available is quantity less reserved and quarantined: reserved stock is committed to a
-          borrow request and quarantined stock is physically present but unserviceable, so neither
-          can be issued. Stock moves, so this report is only true as at the time above.
+          <strong>Owned</strong> is everything the company is responsible for: what is on a shelf
+          plus what is out with borrowers. <strong>On loan</strong> is issued and not yet
+          returned, so it sits in no compartment and is listed against the product rather than a
+          location. <strong>Available</strong> is on-shelf stock less reserved and quarantined:
+          reserved stock is committed to a borrow request and quarantined stock is physically
+          present but unserviceable, so neither can be issued.
+          Stock moves, so this report is only true as at the time above.
         </p>
       </body>
     </html>`;

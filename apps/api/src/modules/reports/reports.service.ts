@@ -148,6 +148,11 @@ export class ReportsService {
           totalReserved: 0,
           totalQuarantined: 0,
           totalAvailable: 0,
+          // Set once, from the product's first row. The query computes it per product, so it
+          // arrives repeated on every placement of that product — adding it up would report a
+          // product held in two compartments as having twice the loans it has.
+          totalOnLoan: row.on_loan,
+          totalOwned: 0,
           placements: [],
         };
         byProduct.set(row.product_id, product);
@@ -179,6 +184,10 @@ export class ReportsService {
       // − reserved, and quarantine sits outside availability).
       product.totalAvailable =
         product.totalQuantity - product.totalReserved - product.totalQuarantined;
+      // Everything the company is responsible for, wherever it physically is. Borrowed stock
+      // holds no placement, so without this term the report understates what is owned — and
+      // disagrees with the products list it was exported from.
+      product.totalOwned = product.totalQuantity + product.totalOnLoan;
     }
 
     const reportRows = query.inStockOnly ? all.filter((row) => row.totalQuantity > 0) : all;
@@ -192,6 +201,8 @@ export class ReportsService {
         totalReserved: sum.totalReserved + row.totalReserved,
         totalQuarantined: sum.totalQuarantined + row.totalQuarantined,
         totalAvailable: sum.totalAvailable + row.totalAvailable,
+        totalOnLoan: sum.totalOnLoan + row.totalOnLoan,
+        totalOwned: sum.totalOwned + row.totalOwned,
       }),
       {
         productCount: 0,
@@ -199,6 +210,8 @@ export class ReportsService {
         totalReserved: 0,
         totalQuarantined: 0,
         totalAvailable: 0,
+        totalOnLoan: 0,
+        totalOwned: 0,
       },
     );
 
