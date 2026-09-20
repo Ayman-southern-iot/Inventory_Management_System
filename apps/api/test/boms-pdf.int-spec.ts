@@ -499,6 +499,23 @@ describe('BOMs PDF', () => {
       expect(behalfLines).toHaveLength(footprints.filter((f) => f.onBehalfOf !== null).length);
     });
 
+    it('footnotes that the document was approved digitally', async () => {
+      const req = await approveRequisition(5000);
+      const bom = (
+        await im.client.post('/boms').send(generatePayload(req.id, req.items))
+      ).body as BomDetail;
+
+      const html = renderBomHtml(bom, CONTEXT);
+
+      // Accounts reads this sheet and has asked what the absent wet-ink signature means.
+      expect(html).toContain('approved digitally');
+      // The footer keeps what it already carried.
+      expect(html).toContain(CONTEXT.company.name);
+      // Inside the footer, not floating loose in the body.
+      const footer = html.slice(html.indexOf('<footer'));
+      expect(footer).toContain('approved digitally');
+    });
+
     it('names the delegate as the signer, not as the beneficiary', async () => {
       const req = await approveRequisition(5000);
       const bom = (

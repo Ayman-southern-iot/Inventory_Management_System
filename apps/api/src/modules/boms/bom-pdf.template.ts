@@ -291,8 +291,19 @@ function renderVoidBanner(detail: BomDetail): string {
   return `<div class="void-banner">VOID — ${escape(when)}${reason ? ` · ${escape(reason)}` : ''}</div>`;
 }
 
+/**
+ * The footnote is here because Accounts reads this sheet and asked what the missing wet-ink
+ * signature means. It is worded to stay true for an approval with no signature image: the
+ * signature block prints the approver's name and "Approved" whether or not they uploaded one,
+ * so a sentence about "the signatures above" would be false on half the documents.
+ */
 function renderFooter(company: CompanyIdentity): string {
-  return `<footer class="muted">${escape(company.name)}</footer>`;
+  return [
+    '<footer class="muted">',
+    `  <div class="footer-note">This document was approved digitally. Each approval shown above was recorded in the Inventory Management System against the named approver, with the date the decision was made, and is retained in the system's audit log.</div>`,
+    `  <div>${escape(company.name)}</div>`,
+    '</footer>',
+  ].join('\n');
 }
 
 /* ------------------------------------------------------------ formatting */
@@ -473,6 +484,7 @@ function bomStyles(): string {
       margin-top: 20pt; padding-top: 6pt; border-top: 0.5pt solid #E4DFD3;
       font-size: 8.5pt; color: #A39D91;
     }
+    .footer-note { margin-bottom: 3pt; line-height: 1.4; }
 
     /**
      * Pagination.
