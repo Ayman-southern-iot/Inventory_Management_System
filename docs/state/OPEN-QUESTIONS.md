@@ -150,3 +150,33 @@ rediscovered as a surprise.
 - **Should a repeat purchase merge into the existing product?** → **Yes, across locations.** It
   already did when the requester picked from the catalogue; it now also does when they free-typed
   the name, because the IM can resolve the line to an existing product at receive time.
+
+## Phase 09 (opened 2026-09-20)
+
+- **OQ-A — the storage IDs of compartments that already exist.** Generate them in the migration,
+  or leave them null until someone edits the compartment? Generating is tidier; leaving null
+  admits that no physical label exists yet. Decide before writing migration `0032`'s successor
+  for Part B.
+- **OQ-B — what "Search by name or storage ID" means once slots have IDs.** `en.ts` already says
+  it; today it means `product_code`. Product code, slot ID, or both?
+- **OQ-C — a requisition or borrow attached to a project that is later REJECTED.** Current
+  behaviour: attribution stays, the project simply stops being offered. The alternative is
+  refusing the rejection until outstanding items are moved, which makes the IM reassign somebody
+  else's borrow before they can decline a proposal. Nobody has asked for that.
+- **OQ-D — a `specs` text field on products.** `category-taxonomy-spec.md` §7 recommends it for
+  in-category search (sizes, values, tolerances) and explicitly defers the decision; `jsonb` would
+  not ride the existing `pg_trgm` index. Out of scope for phase 09 as written.
+- **OQ-E — should anyone be told when a borrow is overdue?** `borrowing.due_soon` and
+  `borrowing.overdue` have copy in `notifications.copy.ts` and **nothing sends either**;
+  `overdue.job.ts` writes a server log and stops. Found 2026-09-20. Either the notifications were
+  intended and never wired, or the log is deliberate — no decision is recorded anywhere.
+
+### Answered this session
+
+- **What should the auto-generated Storage ID identify?** → **A shelf slot.** See DECISIONS.md.
+- **Multi-category: many categories per product, or a deeper tree?** → **A tree, one category per
+  product**, per Ayman's `category-taxonomy-spec.md` §0/§1. No `product_categories` join table —
+  cross-cutting grouping is what Projects already do.
+- **What does #4 (custody) actually need?** → **Both**: issuing from existing shelf stock (done,
+  E-a) and reassigning an already-issued borrow (E-b, not started).
+- **Restrict project creation?** → **Propose-then-approve**, not IM-only. See DECISIONS.md.

@@ -1046,3 +1046,39 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   different things in one component; a viewer who cannot act on a requisition still in motion sees
   nothing, because the Lifecycle strip above already names the stage. The test that matters asserts
   the property rather than the cases: every role sees the same badge at the same status.
+- 2026-09-20 — **The auto-generated Storage ID names a shelf slot, not a product and not a unit.**
+  Ayman's choice between three readings of "Storage ID auto-generated from product name, Room,
+  Zone, Compartment and a serial". A product legitimately occupies many compartments at once —
+  `UNIQUE (product_id, compartment_id)` on `stock_placements`, and `move` splits a placement — so
+  a location baked into a product-level identifier is wrong for part of the stock the moment
+  anything moves, and `product_code` is stamped into `audit_log.entity_ref` where it cannot be
+  corrected. The ID therefore belongs to the compartment; product name drops out of it, because a
+  slot outlives the product sitting in it. Per-unit asset tags were the third option and were
+  declined: `products.is_serialised` is dormant under OQ-03's "no serial tracking".
+- 2026-09-20 — **Storage IDs are immutable once assigned.** Renaming a room must not rewrite them,
+  or every printed shelf label and every audit row quoting the old ID disagrees with the database.
+- 2026-09-20 — **Projects are proposed by anyone and accepted by the IM, rather than IM-only.**
+  The user review asked for IM-only creation because "the lists keep piling up"; inventory items
+  already were IM-only (`POST /products` and every `createWithin` caller). Projects were open
+  deliberately — a project is raised on the fly while filling in the borrow or requisition charged
+  to it, and closing that pushes the cost onto the person mid-form. A `PROPOSED` row that the
+  pickers do not offer stops the pile-up without removing the capability. Existing rows became
+  ACTIVE with `decided_at` NULL: they are in use, and writing `created_at` there would fabricate
+  an approval that never happened. `is_active` was not reused — it means "archived", which is a
+  different fact from "never accepted".
+- 2026-09-20 — **A rejected project keeps the borrows already charged to it.** Attribution is
+  history; clearing it would falsify where an item went for the sake of tidying a list. Filed as
+  OQ-C rather than decided permanently.
+- 2026-09-20 — **`StockService.reserve` gained the optional `existingTx` its siblings already had.**
+  Issuing off the shelf is reserve-then-issue as one handover; with reserve committing on its own
+  connection, a later failure leaves a reservation held by nothing — the G-14 state
+  `reconcileReservations` exists to detect. Additive: every existing caller passes nothing.
+- 2026-09-20 — **Every throttler tier is now exclusive.** `ThrottlerModule.forRoot` registers four
+  named tiers and each applies to every route unless skipped *by name*, so `@Throttle({authenticated})`
+  left the 10/60s `auth` ceiling counting ordinary reads — measured as a 429 on the 11th
+  authenticated GET, in production defaults as well as test. Each tier now names the ones it is
+  not. The credential ceiling is unchanged where it was always meant to apply.
+- 2026-09-20 — **The BOM's digital-approval footnote does not mention signatures.** The signature
+  block prints a name and "Approved" whether or not an image was uploaded, so a footnote about
+  "the signatures above" would be false on every BOM where nobody uploaded one. It claims nothing
+  about legal sufficiency — that is policy, not something the code can evidence.

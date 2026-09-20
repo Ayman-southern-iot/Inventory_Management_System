@@ -12,6 +12,57 @@ Format:
 **Next:** the single next action, specific enough to start without thinking
 ```
 
+## 2026-09-20 — Phase 09 opened: Parts G, F, E-a, and a rate limit that refused every 11th request
+
+**Did:**
+- **Cleared the upload/signature surface.** It turned out to be *well* covered, not untested as
+  `NOW.md` claimed — four integration specs, ~60 tests. A security review found four real things:
+  a per-user quota on orphan uploads (any logged-in user could fill the disk; only reclamation was
+  a daily sweep with a 24h TTL), `files:1, fields:0` on all **four** `FileInterceptor` sites (the
+  audit named three — the invoice attach was missed), the PDF token's payload now parsed only
+  after its MAC verifies, and **F-5**: every BOM signature printed "for &lt;the signer's own
+  name&gt;", because `onBehalfOf` took the actor unconditionally and `acted_by_user_id` is always
+  set. Forward-only — footprints are frozen into `approval_snapshot` at generation.
+- **Found and fixed a production rate-limit defect.** Every named throttler tier applies to every
+  route unless skipped *by name*; `@Throttle({authenticated})` overrode only that entry, so the
+  `auth` tier (10/60s, meant for login) was counting ordinary reads. Measured:
+  `[200 ×10, 429, 429, …]` on the 11th authenticated GET. `THROTTLE_AUTH_LIMIT` defaults to 10 and
+  no compose file overrides it, so production behaved the same. Verified fixed against the running
+  container: 13 consecutive 200s.
+- **Part G:** "1 approver" no longer reads "1 approvers" (the `approverCountOne`/`Other` keys
+  already existed, unused); the BOM footer now states the document was approved digitally.
+- **Part F:** projects are proposed by anyone and accepted by the IM (`0031`).
+- **Part E-a:** `POST /borrowing/issue-from-stock` — the IM records a handover off the shelf.
+
+**Decisions:**
+- Storage ID (phase 09 #1) names a **shelf slot**, not a product or a unit — a product occupies
+  many compartments at once (`UNIQUE (product_id, compartment_id)`), so a location baked into a
+  product-level identifier starts lying the first time stock moves. Product name is therefore
+  dropped from it. Ayman's call between three options.
+- Projects: **propose-then-approve** rather than IM-only, because a project is raised mid-form and
+  closing creation pushes the cost onto the person filling it in. Existing rows → ACTIVE with
+  `decided_at` NULL; backfilling `created_at` there would fabricate an approval.
+- A rejected project keeps the borrows already charged to it. Attribution is history.
+- `StockService.reserve` gained the optional `existingTx` its three siblings already had, so
+  reserve-then-issue is one transaction (G-14). Purely additive.
+
+**Landmines:**
+- **I collided two integration runs three times in one session**, each producing a convincing fake
+  regression in a different innocent spec (11 files, then `funds.int-spec`, then `projects`/`audit`).
+  The suite is `singleFork` against one shared `db-test`. The cause each time was starting a new
+  gate while an earlier background gate was still running — its completion notification arrives
+  long after I have moved on. `scratchpad/gate.sh` now waits for any live `vitest` first. **Use it.**
+- **`borrowing.due_soon` and `borrowing.overdue` are dead code** — copy exists, nothing sends
+  them, `overdue.job.ts` only writes a server log. Nobody is told their item is overdue.
+- Ten commits are local only; Ayman declined to push. The VM therefore still has the rate-limit
+  defect.
+- Part E is half-done: E-a landed, E-b (holder reassignment) not started.
+
+**Next:** Part E-b. Write migration `0032` — `borrow_requests.current_holder_id` (backfilled from
+`requester_id`) plus append-only `borrow_holder_changes` — then `POST /borrowing/:id/holder`
+(IM/Admin, ISSUED or PARTIALLY_RETURNED only), notify **both** old and new holder, and move the
+"who has it" reads off `requester_id` per the table in the phase plan.
+
 ## 2026-09-02 — QA rounds 3–4, the expenses page, and first deployment
 
 **Did:**

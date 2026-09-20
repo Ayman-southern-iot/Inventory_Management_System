@@ -3,65 +3,62 @@
 > Auto-injected every session by the `SessionStart` hook. **Keep under ~60 lines.** Deeper, on
 > demand: `ASSIST.md` · `SESSION-LOG.md` · `DECISIONS.md` · `OPEN-QUESTIONS.md` · `docs/RUNBOOK.md`.
 
-**Updated:** 2026-09-02
+**Updated:** 2026-09-20
 
 ## Where the build is
 
-**Phases 00–08 complete, and it is deployed.** A demo stack runs on the VM (`rndserver`) for the
-testing round; everything is pushed to `origin/fix/lan-secure-context`. Since phase 08: three QA
-rounds, the expenses page rebuilt to spec, and a money surface that refuses what it cannot pay for
-and now says what happened to every taka.
-
-Off for this release behind config flags: **partial funding** and **revising the approved amount**.
+**Phases 00–08 complete and deployed. Phase 09 is open and part-done** —
+`plan/PHASE-09-taxonomy-location-and-custody.md`, nine asks from Ayman in dependency order.
+Landed: Part G (approver plural, BOM digital-approval footnote), Part F (projects are proposed
+by anyone, accepted by the IM), Part E-a (IM issues straight from shelf stock to a person), plus
+a rate-limit defect found on the way. **Ten commits, local only — `origin` is ten behind.**
 
 ## Next action
 
-**Nothing is queued — ask before starting.** In the order I would take them:
+**Part E-b — holder reassignment.** Migration `0032`: `borrow_requests.current_holder_id` plus an
+append-only `borrow_holder_changes` trail. It touches no stock and writes no ledger row — issued
+units already left the shelf, so who holds them is not a placement fact.
 
-1. **Split the demo flag** so testing gets five accounts *without* four invented products. ~15 min.
-2. **File upload and signatures are still untested** — documents, invoices, approve-with-signature.
-   The largest untouched surface, and the likeliest first surprise.
-3. **F-5**: every BOM signature prints "for &lt;their own name&gt;", on the document Accounts reads.
-4. `G-14`'s prevention half · `OQ-30` · `OQ-31`.
+The care is in the read sites, enumerated in the plan: `requester_id` stays as "who asked" (cancel
+check, display joins); "who has it" moves to `current_holder_id` (my-borrows, dashboard,
+return/revert notifications). Then Part C (categories), then A→B (rooms, shelf IDs).
 
-## Green as of 2026-09-02 — measured, not remembered
+## Green as of 2026-09-20 — measured serially, not remembered
 
-- `pnpm typecheck` clean · `pnpm test` → shared 20 · api 83 · web 318
+- `pnpm typecheck` clean · `pnpm test` → shared 25 · api 83 · web 336
 - `pnpm lint` → **20 pre-existing errors. Not green.** Compare against 20, not zero.
-- `pnpm --filter @ims/api test:int` → **685 pass / 0 fail / 0 skipped (50 files)**
+- `pnpm --filter @ims/api test:int` → **711 pass / 0 fail / 0 skipped (51 files)**
 - `guard-hardcoding.sh --scan-all` → **8**, against a documented baseline of 7.
-- Migrations 0001–**0030** applied.
-- **29/29 MVP end-to-end + 62/62 critical-flow checks** — `IMS-MVP-Readiness.md`.
+- Migrations 0001–**0031** applied.
 
 ## Needs the operator
 
-1. **Demo mode is ON on the VM — there is effectively no authentication.** Deliberate for testing.
-   `GET /auth/demo-accounts` answers unauthenticated with every email and the shared password.
-   Before real data: redeploy via `infra/` (see the `deploy` skill) and do **not** migrate the
+1. **Ten commits are local only.** Ayman declined to push; the remote is public GitHub.
+2. **The rate-limit fix has not reached the VM.** Until it does, every user there is refused on
+   their 11th request in a minute. It is one commit (`03426df`) and independent of the rest.
+3. **Demo mode is ON on the VM** — `GET /auth/demo-accounts` answers unauthenticated with every
+   email and the shared password. Before real data: redeploy via `infra/`, do not migrate the
    testing database across.
-2. Offsite backups (**G-16**) and a restore drill against the real compose stack (**G-17**).
-3. A fresh production install accepts no requisition until an admin sets the sub-threshold
-   approver, both approver slots, an IM and a department. RUNBOOK §0.
+4. Offsite backups (**G-16**) and a restore drill (**G-17**).
 
 ## Landmines — full list in `ASSIST.md` §9
 
-- **Shell heredocs mangle scripts.** Backslashes collapse, backticks end template literals. Write
-  scripts with the Write tool, never `<<'EOF'`. The `codemod` skill has the rest; it cost four
-  repairs in one session.
+- **Never run two test suites at once.** The integration suite is `singleFork` against one shared
+  `db-test`; two runs truncate each other mid-assertion and produce a *convincing fake regression*
+  in a random innocent spec. It cost three wasted investigations in one session. Use
+  `scratchpad/gate.sh`, which waits for any live `vitest` before starting — and check for a
+  background gate you already started before launching another.
+- **Shell heredocs mangle scripts.** Write scripts with the Write tool, never `<<'EOF'`.
 - **Two compose files.** Root = demo, secrets hardcoded in the public repo. `infra/` = production.
-  Read the `deploy` skill before writing any deployment instruction.
-- **Built output goes stale and lies confidently.** A config default does not reach the container
-  without `--build`.
-- **The API rate limits, correctly** — 300/60s per IP, 10 logins/60s. A harness trips both and it
-  reads as a broken app. See the `api-probe` skill.
+- **Built output goes stale and lies confidently.** A config default needs `--build`.
 - **`pnpm typecheck` reads `packages/shared/dist`.** Change a contract, rebuild shared.
-- **`D-nnn` is the QA defect numbering — never use it for a decision.** Cite by `OQ-*` / `G-*`.
+- **`D-nnn` is the QA defect numbering** — cite decisions by `OQ-*` / `G-*`.
 - **`resetData` keeps requisitions**, so money accumulates across a spec file.
-- **Never return `this.funding()` from inside its own transaction.**
 - Never `npx`/`npm` at the root. **`test:int -- <spec>` does not filter**; use
   `vitest run --config vitest.integration.config.ts <pattern>`.
 
 ## Open debt
 
-`G-14` · `G-16` · `G-17` · `G-18` · `G-19` · PM 6/12/14/15 · `OQ-30` · `OQ-31` · `OQ-33`.
-**OQ-07, OQ-32, OQ-34 and G-20 closed.**
+`G-14` · `G-16` · `G-17` · `G-18` · `G-19` · PM 6/12/14/15 · `OQ-30` · `OQ-31` · `OQ-33` ·
+`OQ-A`–`OQ-D` (phase 09) · **overdue notifications are dead code** — `borrowing.due_soon` and
+`borrowing.overdue` have copy but nothing sends them; the job only logs.

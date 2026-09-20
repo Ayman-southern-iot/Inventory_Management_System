@@ -5,6 +5,24 @@
 
 ## Current position
 
+- **2026-09-20 — phase 09 opened; Parts G, F and E-a landed, plus a rate-limit defect.** Working
+  tree clean apart from the long-standing untracked set (OQ-33). Branch `fix/lan-secure-context`,
+  **ten commits local only — `origin` is ten behind, Ayman declined to push.** The local demo
+  stack was rebuilt and is serving migration 0031; the VM has NOT been updated.
+  - **Next task:** Part E-b — holder reassignment. Migration `0032`
+    (`borrow_requests.current_holder_id` + append-only `borrow_holder_changes`), then move the
+    "who has it" read sites off `requester_id`. Enumerated in
+    `plan/PHASE-09-taxonomy-location-and-custody.md`.
+  - **Verified green (serial run):** typecheck clean · unit shared 25 / api 83 / web 336 ·
+    integration **711 pass / 0 fail / 0 skipped (51 files)** · `pnpm lint` **20 pre-existing
+    errors**, unchanged · `guard-hardcoding.sh --scan-all` **8**, unchanged.
+  - **Landed this session:** F-5 signature label · orphan-upload quota · multipart envelope caps ·
+    PDF token parse ordering · approver singular/plural · BOM digitally-approved footnote ·
+    **the `auth` rate-limit tier no longer counts ordinary requests** · projects
+    propose-then-approve · issue-from-shelf-stock.
+  - **Found, not fixed:** `borrowing.due_soon` / `borrowing.overdue` have copy but nothing sends
+    them — an overdue borrow produces only a server log.
+
 - **2026-09-02 — QA rounds 3–4, the expenses page rebuilt, and the first deployment.** Working
   tree clean apart from the long-standing untracked set (`IMS-QA-Report.md`,
   `IMS_QA_Test_Plan.xlsx`, `approving_view_template.html`, `bom_template.html`, `docs/policy/`,
