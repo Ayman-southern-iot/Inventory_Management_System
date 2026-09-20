@@ -88,6 +88,31 @@ describe('throttler tiers', () => {
     expect(response.body).toEqual(expect.objectContaining({ items: expect.any(Array) }));
   });
 
+  /**
+   * The `auth` tier is 10/60s and exists for credential-bearing endpoints. Every named tier
+   * registered on `ThrottlerModule.forRoot` applies to every route unless that route skips it
+   * BY NAME, and `AuthenticatedThrottle` only ever overrode the `authenticated` entry — so the
+   * credential ceiling was silently counting ordinary reads too, and the eleventh click in a
+   * minute was refused.
+   *
+   * The test above this one fires a single request and proves only that the throttler does not
+   * reject request #1. Request #11 is where the bug lived, so that is what this asserts.
+   */
+  it('does not spend the credential ceiling on ordinary authenticated reads', async () => {
+    const http = httpClient(ctx.app);
+    const user = await createUser(ctx.db);
+    const session = await login(http, user.email);
+    const authed = http.as(session.accessToken);
+
+    const statuses: number[] = [];
+    for (let i = 0; i < 12; i += 1) {
+      statuses.push((await authed.get('/products')).status);
+    }
+
+    // Reported as the whole list: "the 11th failed" is the fact worth seeing on a red run.
+    expect(statuses).toEqual(Array.from({ length: 12 }, () => 200));
+  });
+
   it('rejects an oversized JSON body with 413 before the controller runs', async () => {
     // main.ts installs a body parser with a 100kb cap. Nest surfaces 413 as PAYLOAD_TOO_LARGE
     // through the AllExceptionsFilter. We send a 200kb payload and expect 413 — proving the cap
