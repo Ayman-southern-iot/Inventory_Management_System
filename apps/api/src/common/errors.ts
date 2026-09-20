@@ -91,6 +91,22 @@ export class ConflictError extends DomainError {
 }
 
 /**
+ * The uploader already holds `MAX_PENDING_UPLOADS_PER_USER` unclaimed supporting documents.
+ * CONFLICT rather than TOO_MANY_REQUESTS: this is not a rate the caller should back off and
+ * retry, it is a state they have to clear by saving or abandoning a draft.
+ */
+export class PendingUploadLimitReachedError extends DomainError {
+  constructor(limit: number) {
+    super(
+      ErrorCode.PENDING_UPLOAD_LIMIT_REACHED,
+      `You already have ${limit} uploaded documents waiting to be attached. Save or discard a draft before uploading another.`,
+      HttpStatus.CONFLICT,
+      { limit },
+    );
+  }
+}
+
+/**
  * One live delegation per approver (OQ-26). Windows are compared for *overlap*, not for
  * "effective right now": two future delegations that overlap each other are the same defect
  * one day later.

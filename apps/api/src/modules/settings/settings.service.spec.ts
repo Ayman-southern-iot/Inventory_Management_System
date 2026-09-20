@@ -28,6 +28,7 @@ const SEED_VALUES: Record<SettingKeyType, number | string | string[] | null> = {
   // Phase 06. Seeded as "everything recorded" and "keep forever", matching a fresh install.
   [SettingKey.AUDIT_ENABLED_ACTIONS]: [...AUDIT_ACTIONS],
   [SettingKey.AUDIT_RETENTION_DAYS]: 0,
+  [SettingKey.MAX_PENDING_UPLOADS_PER_USER]: 20,
 };
 
 const ACTOR_ID = 'actor-id';

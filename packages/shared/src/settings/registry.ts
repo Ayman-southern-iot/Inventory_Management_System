@@ -36,6 +36,13 @@ export const SettingKey = {
    * default — deleting history is opt-in, never something an upgrade does on its own.
    */
   AUDIT_RETENTION_DAYS: 'AUDIT_RETENTION_DAYS',
+  /**
+   * How many orphan supporting documents one user may hold at once — uploaded from the
+   * requisition form but not yet claimed by a saved draft. Without a ceiling the only thing
+   * reclaiming those bytes is the daily sweep's 24h TTL, which leaves any authenticated user
+   * able to fill the disk faster than it drains and take Postgres down with it.
+   */
+  MAX_PENDING_UPLOADS_PER_USER: 'MAX_PENDING_UPLOADS_PER_USER',
 } as const;
 
 export type SettingKey = (typeof SettingKey)[keyof typeof SettingKey];
@@ -208,6 +215,19 @@ const definitions = {
     seedEnvVar: 'SETTING_AUDIT_RETENTION_DAYS',
     kind: 'days',
     labelKey: 'auditRetentionDays',
+  },
+  /**
+   * The ceiling on unclaimed uploads per user. A requester attaching a document to the draft
+   * they are filling in needs one or two; the ceiling exists for the case where nobody is
+   * filling in a form at all. `min(1)` because zero would break the pre-draft attach flow
+   * entirely, which is a setting an admin should not be able to shoot themselves with.
+   */
+  [SettingKey.MAX_PENDING_UPLOADS_PER_USER]: {
+    key: SettingKey.MAX_PENDING_UPLOADS_PER_USER,
+    schema: z.number().int().min(1).max(1000),
+    seedEnvVar: 'SETTING_MAX_PENDING_UPLOADS_PER_USER',
+    kind: 'integer',
+    labelKey: 'maxPendingUploadsPerUser',
   },
 } as const satisfies Record<SettingKey, SettingDefinition<unknown>>;
 

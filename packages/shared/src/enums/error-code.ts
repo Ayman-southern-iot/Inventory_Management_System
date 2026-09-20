@@ -23,6 +23,12 @@ export const ErrorCode = {
    * the server broke, when in fact their file is simply too big.
    */
   PAYLOAD_TOO_LARGE: 'PAYLOAD_TOO_LARGE',
+  /**
+   * The uploader is already holding the maximum number of unclaimed supporting documents
+   * (`MAX_PENDING_UPLOADS_PER_USER`). Distinct from PAYLOAD_TOO_LARGE because no individual
+   * file is at fault — the fix is to finish or abandon a draft, not to send a smaller file.
+   */
+  PENDING_UPLOAD_LIMIT_REACHED: 'PENDING_UPLOAD_LIMIT_REACHED',
   UNKNOWN_SETTING: 'UNKNOWN_SETTING',
 
   // Stock. These are the ones later phases branch on rather than just display.

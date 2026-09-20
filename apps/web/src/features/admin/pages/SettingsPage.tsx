@@ -39,6 +39,17 @@ function labelFor(key: SettingKey): string {
 }
 
 /**
+ * Same convention as the label: `<labelKey>Hint` if the copy file has one, otherwise no hint.
+ * Was a hardcoded check against a single key, which meant every setting added afterwards
+ * silently rendered without its explanation even when one had been written.
+ */
+function hintFor(key: SettingKey): string | undefined {
+  const hintKey = `${getSettingDefinition(key).labelKey}Hint` as keyof typeof t.settings;
+  const hint = t.settings[hintKey];
+  return typeof hint === 'string' ? hint : undefined;
+}
+
+/**
  * Friendly form of a dotted audit action id (`auth.login.failure` → "Auth login failure").
  * The dotted path groups naturally on the prefix boundary.
  */
@@ -124,9 +135,7 @@ function NumericSettingRow({ setting }: { setting: Setting }) {
         label={labelFor(setting.key)}
         type="number"
         inputMode="numeric"
-        hint={
-          setting.key === 'EXPENSE_THRESHOLD_BDT' ? t.settings.expenseThresholdHint : undefined
-        }
+        hint={hintFor(setting.key)}
         value={draft}
         onChange={(event) => setDraft(event.target.value)}
       />

@@ -69,6 +69,8 @@ export const TEST_ENV: Record<string, string> = {
   SETTING_EXPENSE_THRESHOLD_BDT: '15000',
   SETTING_APPROVER_SLOTS_BELOW_THRESHOLD: '1',
   SETTING_APPROVER_SLOTS_AT_OR_ABOVE_THRESHOLD: '2',
+  /** Matches the config schema default, so `restoreSeededSettings` puts back what boot seeded. */
+  SETTING_MAX_PENDING_UPLOADS_PER_USER: '20',
 
   SEED_ADMIN_EMAIL: 'seed-admin@ims.test',
   SEED_ADMIN_PASSWORD: 'SeedAdminPass1',

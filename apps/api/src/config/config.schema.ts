@@ -110,6 +110,12 @@ const rawSchema = z.object({
    */
   SETTING_AUDIT_ENABLED_ACTIONS: z.string().default(''),
   SETTING_AUDIT_RETENTION_DAYS: z.coerce.number().int().min(0).default(0),
+  /**
+   * First-boot seed for the per-user orphan-upload ceiling. 20 is generous for the real flow
+   * (a requester attaches one document to the draft in front of them) and low enough that the
+   * abuse case cannot outrun the daily sweep.
+   */
+  SETTING_MAX_PENDING_UPLOADS_PER_USER: z.coerce.number().int().min(1).max(1000).default(20),
 
   // --- Demo accounts -----------------------------------------------------------
   /**
@@ -522,6 +528,7 @@ export function buildConfig(source: Record<string, string | undefined>): AppConf
             .filter(Boolean)
         : '',
       SETTING_AUDIT_RETENTION_DAYS: env.SETTING_AUDIT_RETENTION_DAYS,
+      SETTING_MAX_PENDING_UPLOADS_PER_USER: env.SETTING_MAX_PENDING_UPLOADS_PER_USER,
     }),
     monitoring: Object.freeze({
       diskWarnPercent: env.MONITOR_DISK_WARN_PERCENT,

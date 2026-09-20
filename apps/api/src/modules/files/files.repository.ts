@@ -61,6 +61,21 @@ export class FilesRepository {
     return this.db.selectFrom('stored_files').selectAll().where('id', '=', id).executeTakeFirst();
   }
 
+  /**
+   * How many uploads this user is holding unclaimed. Counts only the orphan state — a file the
+   * draft has already claimed belongs to a requisition and is no longer the uploader's to
+   * account for.
+   */
+  async countPendingFor(userId: string, kind: StoredFileKind): Promise<number> {
+    const row = await this.db
+      .selectFrom('stored_files')
+      .select(({ fn }) => fn.countAll<string>().as('count'))
+      .where('pending_claim_by', '=', userId)
+      .where('kind', '=', kind)
+      .executeTakeFirstOrThrow();
+    return Number(row.count);
+  }
+
   /** Joined form for display, where the uploader's name is wanted alongside the metadata. */
   async findWithUploader(id: string): Promise<(StoredFileRow & { uploader_name: string | null }) | undefined> {
     return this.db

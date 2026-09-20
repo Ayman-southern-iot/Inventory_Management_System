@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import type { StoredFile, StoredFileKind } from '@ims/shared';
-import { NotFoundError } from '../../common/errors';
+import { SettingKey, type StoredFile, type StoredFileKind } from '@ims/shared';
+import { NotFoundError, PendingUploadLimitReachedError } from '../../common/errors';
+import { SettingsService } from '../settings/settings.service';
 import { FileStorageService } from './file-storage.service';
 import { FilesRepository, toStoredFile, type StoredFileRow, type Tx } from './files.repository';
 
@@ -30,6 +31,7 @@ export class FilesService {
   constructor(
     private readonly storage: FileStorageService,
     private readonly repo: FilesRepository,
+    private readonly settings: SettingsService,
   ) {}
 
   /**
@@ -43,6 +45,16 @@ export class FilesService {
    * signature, the purchase that carries the invoice).
    */
   async upload(input: UploadInput, tx?: Tx): Promise<StoredFileRow> {
+    // Checked before the bytes are written, not after: the point of the ceiling is to stop the
+    // disk filling, and a check that runs once the file is already on disk does not do that.
+    // Only the orphan path is bounded — a signature or an invoice is attached to a row that
+    // already exists, so it cannot accumulate unclaimed.
+    if (input.pendingClaimBy) {
+      const limit = await this.settings.get(SettingKey.MAX_PENDING_UPLOADS_PER_USER);
+      const held = await this.repo.countPendingFor(input.pendingClaimBy, input.kind);
+      if (held >= limit) throw new PendingUploadLimitReachedError(limit);
+    }
+
     const stored = await this.storage.store({
       kind: input.kind,
       contents: input.contents,

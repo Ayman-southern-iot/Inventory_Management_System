@@ -292,6 +292,9 @@ export const t = {
     auditRetentionDaysHint:
       'How long the audit log is kept before the nightly job purges it. Forever keeps everything.',
     auditRetentionForever: 'Forever',
+    maxPendingUploadsPerUser: 'Unattached uploads per person',
+    maxPendingUploadsPerUserHint:
+      'How many supporting documents one person may have uploaded but not yet attached to a saved requisition. Unattached files are deleted automatically after a day.',
   },
 
   inventory: {
@@ -1345,6 +1348,8 @@ export const t = {
       'No approver is set for requests below the expense threshold. An administrator must choose one in Settings → Sub-threshold approver. (Approver 1 and 2 do not apply below the threshold.)',
     // Nobody approves their own requisition, so an approver raising one needs someone to stand in.
     PAYLOAD_TOO_LARGE: 'That file is too large. Choose a smaller one and try again.',
+    PENDING_UPLOAD_LIMIT_REACHED:
+      'You have too many uploaded documents waiting to be attached. Save or discard a draft, then try again.',
     SELF_APPROVAL_FORBIDDEN:
       'You cannot approve your own requisition. Another approver has to act on this one.',
     SELF_APPROVAL_NO_SUBSTITUTE:

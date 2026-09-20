@@ -1,8 +1,10 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { sql } from 'kysely';
 import { ErrorCode, Role } from '@ims/shared';
+import { SettingKey } from '@ims/shared';
 import { createTestApp, httpClient, type HttpClient, type TestApp } from './app';
-import { createUser, login, resetData } from './factories';
+import { createUser, login, resetData, restoreSeededSettings } from './factories';
+import { SettingsService } from '../src/modules/settings/settings.service';
 
 interface Actor {
   id: string;
@@ -40,6 +42,9 @@ describe('orphan supporting document upload', () => {
   });
 
   afterAll(async () => {
+    // This spec lowers MAX_PENDING_UPLOADS_PER_USER. `app_settings` is the one table that
+    // survives between spec files, so leaving it lowered would fail a later file instead.
+    await restoreSeededSettings(ctx);
     await ctx.close();
   });
 
@@ -56,6 +61,35 @@ describe('orphan supporting document upload', () => {
 
   const createDraft = async (actor: Actor, body: Record<string, unknown>) =>
     actor.client.post('/requisitions').send(body);
+
+  /**
+   * Nothing bounded how many unclaimed files one user could accumulate: the only reclamation
+   * is the 4am sweep's 24h TTL, so an authenticated user could write bytes far faster than
+   * they drain and fill the VM's disk, which takes Postgres down with it.
+   */
+  it('refuses an upload once the user holds the configured ceiling of unclaimed files', async () => {
+    const settings = ctx.app.get(SettingsService);
+    await settings.set(SettingKey.MAX_PENDING_UPLOADS_PER_USER, 2, {
+      actorId: null,
+      actorName: null,
+      actorEmail: null,
+      actorRoles: [],
+      requestMethod: 'TEST',
+      requestPath: 'test://orphan-supporting-upload',
+      requestIp: null,
+      userAgent: 'orphan-supporting-upload.int-spec.ts',
+    });
+
+    expect((await uploadOrphan(requester, 'one.pdf')).status).toBe(200);
+    expect((await uploadOrphan(requester, 'two.pdf')).status).toBe(200);
+
+    const refused = await uploadOrphan(requester, 'three.pdf');
+    expect(refused.status).toBe(409);
+    expect(refused.body.code).toBe(ErrorCode.PENDING_UPLOAD_LIMIT_REACHED);
+
+    // The ceiling is per person: one user filling their quota cannot lock anyone else out.
+    expect((await uploadOrphan(otherRequester, 'theirs.pdf')).status).toBe(200);
+  });
 
   it('creates an orphan stored_files row with the actor as pending owner', async () => {
     const response = await uploadOrphan(requester);

@@ -5,6 +5,7 @@ import { FilesService } from './files.service';
 import { PendingUploadSweepJob } from './pending-upload-sweep.job';
 import { SupportingDocumentUploadController } from './uploads.controller';
 import { AuditModule } from '../audit/audit.module';
+import { SettingsModule } from '../settings/settings.module';
 
 /**
  * Phase 05 task 5.1 — the one way bytes enter this system.
@@ -21,7 +22,7 @@ import { AuditModule } from '../audit/audit.module';
  * who abandons the form does not accumulate bytes indefinitely.
  */
 @Module({
-  imports: [AuditModule],
+  imports: [AuditModule, SettingsModule],
   providers: [FileStorageService, FilesRepository, FilesService, PendingUploadSweepJob],
   controllers: [SupportingDocumentUploadController],
   exports: [FilesService],

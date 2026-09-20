@@ -368,6 +368,11 @@ export async function restoreSeededSettings(ctx: TestApp): Promise<void> {
     context,
   );
   await settings.set(SettingKey.AUDIT_ENABLED_ACTIONS, [...AUDIT_ACTIONS], context);
+  await settings.set(
+    SettingKey.MAX_PENDING_UPLOADS_PER_USER,
+    Number(TEST_ENV.SETTING_MAX_PENDING_UPLOADS_PER_USER),
+    context,
+  );
 }
 
 export async function seedSubthresholdApprover(ctx: TestApp, approverId: string): Promise<void> {
