@@ -72,7 +72,12 @@ export class ProfileController {
   @HttpCode(HttpStatus.OK)
   // Capped at the interceptor because multer buffers the entire body into memory before the
   // handler runs — FileStorageService's check happens too late to prevent the heap exhaustion.
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: config.uploads.maxImageBytes } }))
+  // `files`/`fields` bound the envelope for the same reason; see uploads.controller.ts.
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: config.uploads.maxImageBytes, files: 1, fields: 0 },
+    }),
+  )
   async upload(
     @CurrentUser() actor: RequestUser,
     @CurrentAuditContext() ctx: AuditContext,

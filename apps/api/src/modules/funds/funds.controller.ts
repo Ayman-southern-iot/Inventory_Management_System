@@ -142,7 +142,11 @@ export class FundsController {
   // whole upload into memory before the handler runs, so a check that happens after it has
   // finished cannot stop a 2GB body from exhausting the heap on a single-VM deployment.
   @UseInterceptors(
-    FileInterceptor('file', { limits: { fileSize: config.uploads.maxDocumentBytes } }),
+    // See uploads.controller.ts: `fileSize` bounds the file, `files`/`fields` bound the
+    // envelope multer would otherwise buffer without limit.
+    FileInterceptor('file', {
+      limits: { fileSize: config.uploads.maxDocumentBytes, files: 1, fields: 0 },
+    }),
   )
   async attachInvoice(
     @Param('id', ParseUUIDPipe) id: string,

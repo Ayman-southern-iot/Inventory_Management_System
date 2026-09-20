@@ -52,7 +52,13 @@ export class SupportingDocumentUploadController {
   @Roles(Role.GENERAL, Role.INVENTORY_MANAGER, Role.APPROVER, Role.ADMIN)
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(
-    FileInterceptor('file', { limits: { fileSize: config.uploads.maxDocumentBytes } }),
+    // `fileSize` alone bounds the file but not the envelope: multer's defaults allow an
+    // unbounded number of non-file text parts, each buffered into memory, and the express
+    // json/urlencoded caps in main.ts do not apply to multipart bodies. Every client sends
+    // exactly one part named `file`, so anything else is refused rather than absorbed.
+    FileInterceptor('file', {
+      limits: { fileSize: config.uploads.maxDocumentBytes, files: 1, fields: 0 },
+    }),
   )
   async upload(
     @UploadedFile() file: Express.Multer.File | undefined,

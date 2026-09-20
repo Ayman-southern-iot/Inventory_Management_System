@@ -51,7 +51,11 @@ export class RequisitionDocumentsController {
   @Roles(Role.GENERAL, Role.INVENTORY_MANAGER, Role.APPROVER, Role.ADMIN)
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(
-    FileInterceptor('file', { limits: { fileSize: config.uploads.maxDocumentBytes } }),
+    // See uploads.controller.ts: `fileSize` bounds the file, `files`/`fields` bound the
+    // envelope multer would otherwise buffer without limit.
+    FileInterceptor('file', {
+      limits: { fileSize: config.uploads.maxDocumentBytes, files: 1, fields: 0 },
+    }),
   )
   async upload(
     @Param('id', ParseUUIDPipe) id: string,

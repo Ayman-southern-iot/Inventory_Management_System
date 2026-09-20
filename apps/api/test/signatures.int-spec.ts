@@ -86,6 +86,23 @@ describe('signatures', () => {
     expect(result.body.code).toBe(ErrorCode.PAYLOAD_TOO_LARGE);
   });
 
+  /**
+   * `fileSize` bounds the file; it does not bound the envelope. Multer's defaults allow an
+   * unbounded number of non-file text parts at 1MB each, all buffered into memory before the
+   * handler runs, and the express json/urlencoded caps do not apply to multipart bodies.
+   * Every client sends exactly one part named `file`.
+   */
+  it('refuses a multipart body padded with text fields', async () => {
+    let pending = approver.client.post('/me/signature').attach('file', PNG, 'sig.png');
+    for (let i = 0; i < 200; i += 1) {
+      pending = pending.field(`padding-${i}`, 'x'.repeat(1024));
+    }
+
+    const result = await pending;
+    expect(result.status).toBeGreaterThanOrEqual(400);
+    expect(result.status).toBeLessThan(500);
+  });
+
   it('refuses a user with no signing role', async () => {
     const general = await signIn([Role.GENERAL]);
     const result = await general.client.post('/me/signature').attach('file', PNG, 'x.png');
