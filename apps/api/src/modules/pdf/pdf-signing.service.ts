@@ -87,13 +87,18 @@ export class PdfSigningService {
     const payloadB64 = token.slice(0, dot);
     const macB64 = token.slice(dot + 1);
 
-    const payload = this.decode(payloadB64);
     const expectedMac = Buffer.from(this.computeMac(payloadB64), 'base64url');
     const providedMac = Buffer.from(macB64, 'base64url');
     // timingSafeEqual rejects length mismatches with an exception — handle both shapes.
     if (expectedMac.length !== providedMac.length || !timingSafeEqual(expectedMac, providedMac)) {
       throw new PdfDownloadTokenInvalidError('malformed');
     }
+
+    // Decoded only after the MAC proves we wrote this payload. The route is public, so
+    // parsing first would run JSON.parse over unauthenticated attacker-supplied bytes on
+    // every request. No known exploit — both failure modes are caught — but there is no
+    // reason to offer the parser to anyone who has not already proved possession of the key.
+    const payload = this.decode(payloadB64);
 
     if (payload.bomId !== expectedBomId) {
       throw new PdfDownloadTokenInvalidError('mismatch');
