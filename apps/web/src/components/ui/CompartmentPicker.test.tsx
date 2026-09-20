@@ -28,6 +28,7 @@ function compartment(id: string, code: string, zoneId: string, zoneName: string,
     zoneName,
     roomId: zoneId === 'zone-meta' ? 'room-lab' : 'room-store',
     roomName: zoneId === 'zone-meta' ? 'Lab' : 'Store',
+    storageId: `${zoneId === 'zone-meta' ? 'LAB' : 'STO'}-ZON-${code}-0001`,
     isActive,
     placementCount: 0,
   };

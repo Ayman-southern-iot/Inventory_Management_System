@@ -272,6 +272,121 @@ describe('migrations', () => {
     });
   });
 
+  /**
+   * 0034 stamps a Storage ID on every shelf slot, including the ones that already existed
+   * (Ayman, 2026-09-21). The ID is printed on a physical label, so the three things that matter
+   * are: every slot gets one, no two are the same, and none of them can ever change.
+   */
+  describe('0034 — storage ids on existing shelves', () => {
+    const BEFORE = '0033_storage_rooms';
+
+    /** Two rooms, two zones, three shelves — enough to prove ordering and uniqueness. */
+    async function seedShelves(): Promise<void> {
+      await sql`INSERT INTO storage_rooms (name) VALUES ('Laboratory'), ('Store Room')`.execute(db);
+      await sql`
+        INSERT INTO storage_zones (name, room_id)
+        SELECT 'Meta', id FROM storage_rooms WHERE name = 'Laboratory'
+      `.execute(db);
+      await sql`
+        INSERT INTO storage_zones (name, room_id)
+        SELECT 'Meta', id FROM storage_rooms WHERE name = 'Store Room'
+      `.execute(db);
+      await sql`
+        INSERT INTO storage_compartments (zone_id, code)
+        SELECT z.id, c.code
+        FROM storage_zones z
+        JOIN storage_rooms r ON r.id = z.room_id
+        CROSS JOIN (VALUES ('1A'), ('2B')) AS c(code)
+        WHERE r.name = 'Laboratory'
+      `.execute(db);
+      await sql`
+        INSERT INTO storage_compartments (zone_id, code)
+        SELECT z.id, '1A' FROM storage_zones z
+        JOIN storage_rooms r ON r.id = z.room_id
+        WHERE r.name = 'Store Room'
+      `.execute(db);
+    }
+
+    it('gives every pre-existing shelf an id, in building order', async () => {
+      await migrateToNamed(db, BEFORE);
+      await seedShelves();
+      await migrateUp(db);
+
+      const rows = await sql<{ room: string; zone: string; code: string; storage_id: string }>`
+        SELECT r.name AS room, z.name AS zone, c.code, c.storage_id
+        FROM storage_compartments c
+        JOIN storage_zones z ON z.id = c.zone_id
+        JOIN storage_rooms r ON r.id = z.room_id
+        ORDER BY c.storage_id
+      `.execute(db);
+
+      expect(rows.rows.map((r) => r.storage_id)).toEqual([
+        'LAB-MET-1A-0001',
+        'LAB-MET-2B-0002',
+        'STO-MET-1A-0003',
+      ]);
+      // The same zone name in two rooms is exactly what rooms were added for, and the two
+      // "Meta / 1A" shelves must still get different labels.
+      expect(new Set(rows.rows.map((r) => r.storage_id)).size).toBe(3);
+    });
+
+    it('refuses a duplicate id, case and whitespace insensitively', async () => {
+      await migrateToNamed(db, BEFORE);
+      await seedShelves();
+      await migrateUp(db);
+
+      const zone = await sql<{ id: string }>`SELECT id FROM storage_zones LIMIT 1`.execute(db);
+      await expect(
+        sql`
+          INSERT INTO storage_compartments (zone_id, code, storage_id)
+          VALUES (${zone.rows[0]!.id}, 'NEW', '  lab-met-1a-0001  ')
+        `.execute(db),
+      ).rejects.toThrow();
+    });
+
+    /**
+     * The one that protects the physical world: renaming the room must not rewrite the label
+     * already stuck on the shelf underneath it.
+     */
+    it('refuses to change an id once assigned, including via a room rename', async () => {
+      await migrateToNamed(db, BEFORE);
+      await seedShelves();
+      await migrateUp(db);
+
+      await expect(
+        sql`UPDATE storage_compartments SET storage_id = 'LAB-MET-1A-9999'`.execute(db),
+      ).rejects.toThrow();
+
+      // Renaming the room is allowed and simply leaves the ids alone — the room token is a
+      // snapshot of the name at creation, not a view of it.
+      await sql`UPDATE storage_rooms SET name = 'Big Lab' WHERE name = 'Laboratory'`.execute(db);
+      const after = await sql<{ storage_id: string }>`
+        SELECT storage_id FROM storage_compartments ORDER BY storage_id LIMIT 1
+      `.execute(db);
+      expect(after.rows[0]!.storage_id).toBe('LAB-MET-1A-0001');
+    });
+
+    it('carries on numbering past the backfilled rows', async () => {
+      await migrateToNamed(db, BEFORE);
+      await seedShelves();
+      await migrateUp(db);
+
+      // The sequence was moved past the backfill, so the next slot cannot collide with one.
+      const next = await sql<{ n: string }>`SELECT nextval('storage_id_seq') AS n`.execute(db);
+      expect(Number(next.rows[0]!.n)).toBeGreaterThan(3);
+    });
+
+    it('refuses a shelf with no id at all', async () => {
+      await migrateToNamed(db, BEFORE);
+      await seedShelves();
+      await migrateUp(db);
+
+      await expect(
+        sql`UPDATE storage_compartments SET storage_id = NULL`.execute(db),
+      ).rejects.toThrow();
+    });
+  });
+
   it('allows only one company-wide row per approver slot', async () => {
     await migrateUp(db);
     await sql`INSERT INTO approver_slots (department_id, slot_no) VALUES (NULL, 1)`.execute(db);

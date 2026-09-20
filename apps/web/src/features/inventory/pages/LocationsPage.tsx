@@ -290,11 +290,19 @@ export function LocationsPage() {
                               >
                                 <span
                                   className={cn(
-                                    'font-mono text-sm',
+                                    'flex flex-col leading-tight',
                                     !compartment.isActive && 'text-ink-subtle line-through',
                                   )}
                                 >
-                                  {compartment.code}
+                                  <span className="font-mono text-sm">{compartment.code}</span>
+                                  {/*
+                                    The printed label. Shown under the code rather than instead
+                                    of it: the code is what the IM says out loud, the Storage ID
+                                    is what is stuck on the shelf edge.
+                                  */}
+                                  <span className="font-mono text-2xs text-ink-subtle">
+                                    {compartment.storageId}
+                                  </span>
                                 </span>
                                 {compartment.placementCount > 0 ? (
                                   <span className="text-xs text-ink-subtle">

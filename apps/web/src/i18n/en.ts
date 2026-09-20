@@ -307,7 +307,7 @@ export const t = {
     downloadPdf: 'Export PDF',
     subtitle: 'The stock register. Every movement is recorded and cannot be edited afterwards.',
     // list
-    searchPlaceholder: 'Search by name or storage ID',
+    searchPlaceholder: 'Search by name or product code',
     newProduct: 'New product',
     editProduct: 'Edit product',
     productCode: 'Storage ID',
@@ -768,6 +768,8 @@ export const t = {
     room: 'Room',
     roomName: 'Room name',
     zones: 'Zones',
+    storageId: 'Storage ID',
+    storageIdHint: 'Generated when the shelf is created. It never changes, so the printed label stays true.',
     roomCreated: 'Room created.',
     roomUpdated: 'Room updated.',
     noZones: 'No zones in this room yet.',

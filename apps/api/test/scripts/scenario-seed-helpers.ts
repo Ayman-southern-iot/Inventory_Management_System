@@ -15,6 +15,7 @@ import {
 } from '../factories';
 import type { HttpClient } from '../app';
 import type { Db } from '../../src/database/create-db';
+import { generateStorageId } from '../../src/modules/locations/storage-id';
 
 export {
   createDepartment,
@@ -141,7 +142,11 @@ export async function findOrCreateCompartment(
 
   const created = await db
     .insertInto('storage_compartments')
-    .values({ zone_id: zoneId, code: options.code })
+    .values({
+      zone_id: zoneId,
+      code: options.code,
+      storage_id: await generateStorageId(db, zoneId, options.code),
+    })
     .returning('id')
     .executeTakeFirstOrThrow();
   return created.id;

@@ -241,6 +241,23 @@ const rawSchema = z.object({
     .min(1)
     .refine(isValidTimeZone, { message: 'must be a valid IANA time zone, e.g. Asia/Dhaka' })
     .default('Asia/Dhaka'),
+  /**
+   * Shape of the auto-generated Storage ID on a shelf slot (migration 0034):
+   * ROOM-ZONE-CODE-0001, broad to narrow, hyphen separated, zero-padded tail so the codes
+   * sort correctly in plain alphanumeric order.
+   *
+   * Config rather than constants because the shape is exactly the kind of thing another
+   * deployment would want different, and it runs on every compartment created from now on.
+   * Changing it is safe for existing slots — an assigned Storage ID is immutable, enforced by
+   * trigger — but it does mean new labels stop matching the shape of old ones, so it is a
+   * deploy-time decision and not an admin toggle.
+   *
+   * The one-time backfill in 0034 hard-codes these same defaults: a migration must not import
+   * this schema, and it runs once on the databases that exist today.
+   */
+  STORAGE_ID_TOKEN_LENGTH: z.coerce.number().int().min(1).max(8).default(3),
+  STORAGE_ID_SERIAL_PAD: z.coerce.number().int().min(1).max(8).default(4),
+  STORAGE_ID_SEPARATOR: z.string().min(1).max(2).default('-'),
   COMPANY_NAME: z.string().min(1).default('Southern IoT'),
   /** Pipe-separated so one env var carries a multi-line address block. */
   COMPANY_ADDRESS: z
@@ -397,6 +414,11 @@ export interface AppConfig {
     readonly allowApprovedAmountRevision: boolean;
   };
   readonly reportingTimeZone: string;
+  readonly storageId: {
+    readonly tokenLength: number;
+    readonly serialPad: number;
+    readonly separator: string;
+  };
   readonly company: {
     readonly name: string;
     readonly addressLines: readonly string[];
@@ -536,6 +558,11 @@ export function buildConfig(source: Record<string, string | undefined>): AppConf
       backupDir: env.MONITOR_BACKUP_DIR,
     }),
     reportingTimeZone: env.REPORTING_TIME_ZONE,
+    storageId: Object.freeze({
+      tokenLength: env.STORAGE_ID_TOKEN_LENGTH,
+      serialPad: env.STORAGE_ID_SERIAL_PAD,
+      separator: env.STORAGE_ID_SEPARATOR,
+    }),
     company: Object.freeze({
       name: env.COMPANY_NAME,
       addressLines: Object.freeze(

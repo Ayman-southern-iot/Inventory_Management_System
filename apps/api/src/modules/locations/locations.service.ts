@@ -11,6 +11,7 @@ import type {
   Zone,
 } from '@ims/shared';
 import { ConflictError, NotFoundError } from '../../common/errors';
+import { CONFIG, type AppConfig } from '../../config';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
 import { isUniqueViolation } from '../../common/pg-errors';
@@ -24,6 +25,7 @@ export class LocationsService {
   constructor(
     private readonly repo: LocationsRepository,
     @Inject(DB) private readonly db: Db,
+    @Inject(CONFIG) private readonly config: AppConfig,
     private readonly audit: AuditService,
   ) {}
 
@@ -208,10 +210,19 @@ export class LocationsService {
   ): Promise<Compartment> {
     const zone = await this.repo.findZone(input.zoneId);
     if (!zone) throw new NotFoundError('Zone');
+    // The room name is a component of the Storage ID, snapshotted at creation.
+    const room = await this.repo.findRoom(zone.room_id);
+    if (!room) throw new NotFoundError('Room');
 
     try {
       const id = await this.db.transaction().execute(async (tx) => {
-        const newId = await this.repo.insertCompartment(input.zoneId, input.code, tx);
+        const created = await this.repo.insertCompartment(
+          input.zoneId,
+          input.code,
+          this.config.storageId,
+          tx,
+        );
+        const newId = created.id;
         // Audit inside the transaction: a successful compartment create cannot lack its audit
         // row. The zone's name provides a human reference in the summary.
         await this.audit.record(
@@ -221,7 +232,7 @@ export class LocationsService {
             entityId: newId,
             entityRef: `${zone.name}/${input.code}`,
             summary: `Created compartment ${zone.name}/${input.code}`,
-            metadata: { zoneId: input.zoneId, code: input.code },
+            metadata: { zoneId: input.zoneId, code: input.code, storageId: created.storageId },
           },
           context,
           tx,

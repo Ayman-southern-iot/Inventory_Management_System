@@ -234,6 +234,11 @@ export const compartmentSchema = z.object({
   roomId: z.string().uuid(),
   roomName: z.string(),
   code: z.string(),
+  /**
+   * The printed shelf label, ROOM-ZONE-CODE-0001 (migration 0034). Server-generated and
+   * immutable — a room rename does not rewrite it, because the label is already on the shelf.
+   */
+  storageId: z.string(),
   isActive: z.boolean(),
   /** Distinct products held here — a compartment with stock cannot be deactivated. */
   placementCount: z.number().int().nonnegative(),

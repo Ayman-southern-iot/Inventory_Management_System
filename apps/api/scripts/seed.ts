@@ -12,6 +12,7 @@ import { hash, Algorithm } from '@node-rs/argon2';
 import { Role, SETTING_KEYS, getSettingDefinition } from '@ims/shared';
 import { config } from '../src/config';
 import { createDatabase } from '../src/database/create-db';
+import { generateStorageId } from '../src/modules/locations/storage-id';
 
 const ARGON2 = {
   algorithm: Algorithm.Argon2id,
@@ -25,9 +26,6 @@ const ARGON2 = {
  * environment. Their password is deliberately obvious and comes from config — with demo mode
  * on it is also printed on the login page, which is the whole point and the whole risk.
  */
-/** The room the seeded zones hang under. Reference data, so a literal belongs here. */
-const SEED_ROOM_NAME = 'Main Store';
-
 const demoEnabled = config.demo.accountsEnabled || !config.isProduction;
 const DEMO_PASSWORD = config.demo.password;
 
@@ -71,6 +69,9 @@ const DEV_USERS: SeedUser[] = [
 ];
 
 const DEV_DEPARTMENTS = ['Engineering', 'Operations', 'Accounts'];
+
+/** The room the seeded zones hang under. Reference data, so a literal belongs here. */
+const SEED_ROOM_NAME = 'Main Store';
 
 async function main(): Promise<void> {
   const { db, pool } = createDatabase(config);
@@ -281,11 +282,22 @@ async function main(): Promise<void> {
         if (!zoneRow) continue;
 
         for (const code of zone.compartments) {
-          await db
-            .insertInto('storage_compartments')
-            .values({ zone_id: zoneRow.id, code })
-            .onConflict((oc) => oc.doNothing())
-            .execute();
+          const existingCompartment = await db
+            .selectFrom('storage_compartments')
+            .select('id')
+            .where('zone_id', '=', zoneRow.id)
+            .where('code', '=', code)
+            .executeTakeFirst();
+          if (!existingCompartment) {
+            await db
+              .insertInto('storage_compartments')
+              .values({
+                zone_id: zoneRow.id,
+                code,
+                storage_id: await generateStorageId(db, zoneRow.id, code, config.storageId),
+              })
+              .execute();
+          }
           const compartment = await db
             .selectFrom('storage_compartments')
             .select('id')

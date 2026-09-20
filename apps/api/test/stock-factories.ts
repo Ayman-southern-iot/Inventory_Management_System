@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Db } from '../src/database/create-db';
+import { generateStorageId } from '../src/modules/locations/storage-id';
 
 /**
  * Inventory fixtures. Every name is unique per call so specs can run in any order without
@@ -80,9 +81,14 @@ export async function createCompartment(
   zoneId: string,
   code?: string,
 ): Promise<string> {
+  const finalCode = code ?? randomUUID().slice(0, 6);
   const row = await db
     .insertInto('storage_compartments')
-    .values({ zone_id: zoneId, code: code ?? randomUUID().slice(0, 6) })
+    .values({
+      zone_id: zoneId,
+      code: finalCode,
+      storage_id: await generateStorageId(db, zoneId, finalCode),
+    })
     .returning('id')
     .executeTakeFirstOrThrow();
   return row.id;

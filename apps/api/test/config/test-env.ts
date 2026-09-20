@@ -92,6 +92,11 @@ export const TEST_ENV: Record<string, string> = {
   DEMO_ACCOUNTS_ENABLED: 'false',
   PDF_BROWSER_EXECUTABLE_PATH: '',
   REPORTING_TIME_ZONE: 'Asia/Dhaka',
+  // The Storage ID shape. Pinned rather than allowlisted: migrations.int-spec asserts the exact
+  // labels the 0034 backfill produces, so a developer's .env must not be able to change them.
+  STORAGE_ID_TOKEN_LENGTH: '3',
+  STORAGE_ID_SERIAL_PAD: '4',
+  STORAGE_ID_SEPARATOR: '-',
 };
 
 /**

@@ -178,6 +178,12 @@ export interface StorageCompartmentsTable {
   id: Generated<string>;
   zone_id: string;
   code: string;
+  /**
+   * The printed shelf label, ROOM-ZONE-CODE-0001 (migration 0034). Generated server-side at
+   * creation and immutable afterwards, enforced by trigger — renaming the room above it does
+   * not rewrite it.
+   */
+  storage_id: string;
   is_active: Generated<boolean>;
   created_at: CreatedAt;
   updated_at: UpdatedAt;

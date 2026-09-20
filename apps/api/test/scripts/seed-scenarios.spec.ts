@@ -34,6 +34,7 @@ import {
 } from '@ims/shared';
 import { config } from '../../src/config';
 import { createDatabase, type Db } from '../../src/database/create-db';
+import { generateStorageId } from '../../src/modules/locations/storage-id';
 import { createTestApp, httpClient, type HttpClient, type TestApp } from '../app';
 import {
   createUserAndLogin,
@@ -875,7 +876,7 @@ async function ensureCompartment(db: Db, zoneName: string, code: string): Promis
 
   const created = await db
     .insertInto('storage_compartments')
-    .values({ zone_id: zoneId, code })
+    .values({ zone_id: zoneId, code, storage_id: await generateStorageId(db, zoneId, code) })
     .returning('id')
     .executeTakeFirstOrThrow();
   return created.id;

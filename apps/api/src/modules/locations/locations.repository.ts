@@ -4,6 +4,7 @@ import type { Transaction } from 'kysely';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
 import type { Database } from '../../database/schema';
+import { generateStorageId, type StorageIdFormat } from './storage-id';
 
 /** Kysely transaction handle. Pass to repository writes so audit rows commit together. */
 export type Tx = Transaction<Database>;
@@ -86,6 +87,7 @@ export class LocationsRepository {
         'storage_compartments.id',
         'storage_compartments.zone_id',
         'storage_compartments.code',
+        'storage_compartments.storage_id',
         'storage_compartments.is_active',
         'storage_zones.name as zone_name',
         'storage_zones.room_id as room_id',
@@ -117,6 +119,7 @@ export class LocationsRepository {
         roomId: row.room_id,
         roomName: row.room_name,
         code: row.code,
+        storageId: row.storage_id,
         isActive: row.is_active,
         placementCount: Number(row.placement_count ?? 0),
       });
@@ -228,14 +231,29 @@ export class LocationsRepository {
       .executeTakeFirst();
   }
 
-  async insertCompartment(zoneId: string, code: string, tx?: Tx): Promise<string> {
+  /**
+   * Draws the next serial and stamps the Storage ID in the same statement path as the insert.
+   *
+   * `nextval` is what makes this safe under concurrent creates — two IMs adding a shelf at the
+   * same moment get different serials from the database rather than from a read-then-write that
+   * would hand them both the same number. Gaps are fine and expected: a rolled-back create
+   * burns a serial, which is the correct trade against ever reusing one.
+   */
+  async insertCompartment(
+    zoneId: string,
+    code: string,
+    format: StorageIdFormat,
+    tx?: Tx,
+  ): Promise<{ id: string; storageId: string }> {
     const conn = tx ?? this.db;
+    const storageId = await generateStorageId(conn, zoneId, code, format);
+
     const row = await conn
       .insertInto('storage_compartments')
-      .values({ zone_id: zoneId, code })
+      .values({ zone_id: zoneId, code, storage_id: storageId })
       .returning('id')
       .executeTakeFirstOrThrow();
-    return row.id;
+    return { id: row.id, storageId };
   }
 
   async updateCompartment(
@@ -260,10 +278,13 @@ export class LocationsRepository {
 
   async findCompartment(
     id: string,
-  ): Promise<{ id: string; zone_id: string; code: string; is_active: boolean } | undefined> {
+  ): Promise<
+    | { id: string; zone_id: string; code: string; storage_id: string; is_active: boolean }
+    | undefined
+  > {
     return this.db
       .selectFrom('storage_compartments')
-      .select(['id', 'zone_id', 'code', 'is_active'])
+      .select(['id', 'zone_id', 'code', 'storage_id', 'is_active'])
       .where('id', '=', id)
       .executeTakeFirst();
   }
