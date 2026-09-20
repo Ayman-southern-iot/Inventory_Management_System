@@ -115,7 +115,7 @@ export const OUTSTANDING_STATUSES: readonly BorrowStatus[] = [
   BorrowStatus.PARTIALLY_RETURNED,
 ];
 
-export const createBorrowRequestSchema = z
+const borrowLineShape = z
   .object({
     productId: z.string().uuid(),
     compartmentId: z.string().uuid(),
@@ -129,25 +129,48 @@ export const createBorrowRequestSchema = z
       .nullable()
       .default(null),
     purpose: z.string().trim().max(1000).nullable().default(null),
-  })
-  .superRefine((input, ctx) => {
-    // A consumable is issued and never comes back, so a return date is a contradiction.
-    if (!input.isReturnable && input.expectedReturnDate !== null) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['expectedReturnDate'],
-        message: 'A consumable is not returned, so it has no return date',
-      });
-    }
-    if (input.isReturnable && input.expectedReturnDate === null) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['expectedReturnDate'],
-        message: 'An expected return date is required',
-      });
-    }
   });
+
+/**
+ * Shared by the request and the IM's straight-to-issued handover, so the two can never
+ * disagree about whether a consumable may carry a return date.
+ */
+const refineReturnDate = (
+  input: { isReturnable: boolean; expectedReturnDate: string | null },
+  ctx: z.RefinementCtx,
+): void => {
+  // A consumable is issued and never comes back, so a return date is a contradiction.
+  if (!input.isReturnable && input.expectedReturnDate !== null) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['expectedReturnDate'],
+      message: 'A consumable is not returned, so it has no return date',
+    });
+  }
+  if (input.isReturnable && input.expectedReturnDate === null) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['expectedReturnDate'],
+      message: 'An expected return date is required',
+    });
+  }
+};
+
+export const createBorrowRequestSchema = borrowLineShape.superRefine(refineReturnDate);
 export type CreateBorrowRequestInput = z.infer<typeof createBorrowRequestSchema>;
+
+/**
+ * The IM recording a handover that already happened: ten arrive, somebody takes one off the
+ * shelf and says "put it against me". Same fields as a request, plus who is holding it —
+ * there is no requester, because nobody requested anything.
+ *
+ * `POST /requisitions/:id/borrow-to-user` already does this for goods arriving on a purchase.
+ * This is the same act for stock that is already on a shelf.
+ */
+export const issueFromStockSchema = borrowLineShape
+  .extend({ borrowerId: z.string().uuid() })
+  .superRefine(refineReturnDate);
+export type IssueFromStockInput = z.infer<typeof issueFromStockSchema>;
 
 export const decideBorrowSchema = z.object({
   approve: z.boolean(),

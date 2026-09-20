@@ -15,6 +15,7 @@ import {
   Role,
   createBorrowRequestSchema,
   decideBorrowSchema,
+  issueFromStockSchema,
   listBorrowsQuerySchema,
   returnBorrowSchema,
   revertBorrowSchema,
@@ -23,6 +24,7 @@ import {
   type BorrowReturnView,
   type CreateBorrowRequestInput,
   type DecideBorrowInput,
+  type IssueFromStockInput,
   type ListBorrowsQuery,
   type Paginated,
   type ReturnBorrowInput,
@@ -102,6 +104,28 @@ export class BorrowingController {
   ): Promise<BorrowRequest> {
     return this.runOnce(idempotencyKey, actor.id, `borrow:decide:${id}`, () =>
       this.borrowing.decide(id, body, actor.id, ctx),
+    );
+  }
+
+  /**
+   * The IM recording a handover that already happened, off the shelf, with no request behind
+   * it. Idempotent for the same reason `decision` is: this issues stock, and a double-clicked
+   * button must not hand over twice.
+   */
+  @Roles(...STOCK_ROLES)
+  @Post('issue-from-stock')
+  @HttpCode(HttpStatus.CREATED)
+  async issueFromStock(
+    @Body(zodPipe(issueFromStockSchema)) body: IssueFromStockInput,
+    @CurrentUser() actor: RequestUser,
+    @CurrentAuditContext() ctx: AuditContext,
+    @Headers(IDEMPOTENCY_HEADER) idempotencyKey?: string,
+  ): Promise<BorrowRequest> {
+    return this.runOnce(
+      idempotencyKey,
+      actor.id,
+      `borrow:issue-from-stock:${body.borrowerId}:${body.productId}`,
+      () => this.borrowing.issueFromStock(body, actor.id, ctx),
     );
   }
 

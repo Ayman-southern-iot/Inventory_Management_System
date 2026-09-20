@@ -7,13 +7,19 @@ import {
   type BorrowRequest,
   type CreateBorrowRequestInput,
   type DecideBorrowInput,
+  type IssueFromStockInput,
   type ReturnBorrowInput,
   type RevertBorrowInput,
   type ReverseReturnInput,
 } from '@ims/shared';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
-import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationFailedError,
+} from '../../common/errors';
 import { StockService } from '../stock/stock.service';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -769,6 +775,129 @@ export class BorrowingService {
     );
 
     return { id, borrowNo };
+  }
+
+  /**
+   * The IM recording a handover off the shelf: ten arrive, the CTO takes one and says "put it
+   * against me". `issueOnBehalf` above does this for goods arriving on a purchase, which is
+   * why it starts with `receiveAndHold`; here the units are already on the shelf, so the
+   * movement is reserve-then-issue on the placement that exists.
+   *
+   * One transaction, for the reason G-14 exists: the reservation and the issue that consumes
+   * it are a single handover, and a split leaves either a reservation held by nothing or units
+   * issued against no borrow.
+   */
+  async issueFromStock(
+    input: IssueFromStockInput,
+    actorId: string,
+    context: AuditContext,
+  ) {
+    const id = await this.db.transaction().execute(async (tx) => {
+      const borrower = await tx
+        .selectFrom('users')
+        .where('id', '=', input.borrowerId)
+        .select(['id', 'full_name', 'is_active'])
+        .executeTakeFirst();
+      if (!borrower) throw new NotFoundError('User');
+      // Issuing to a deactivated account would create a borrow nobody can return. Same rule
+      // and wording as the purchase path in funds.service.ts.
+      if (!borrower.is_active) {
+        throw new ValidationFailedError({
+          path: 'borrowerId',
+          message: 'That user is deactivated, so nothing can be issued to them',
+        });
+      }
+
+      const borrowNo = await this.nextBorrowNo(tx);
+      const movement = {
+        productId: input.productId,
+        compartmentId: input.compartmentId,
+        quantity: input.quantity,
+      };
+
+      // Reserve first, inside this transaction: `issue` below refuses to take more than is
+      // reserved, so this is what proves the units are actually available to hand over.
+      const placement = await this.stock.reserve(
+        movement,
+        { performedBy: actorId, refType: BORROW_REF_TYPE },
+        tx,
+      );
+
+      const borrowId = await this.repo.insert(
+        {
+          borrowNo,
+          requesterId: input.borrowerId,
+          productId: input.productId,
+          placementId: placement.id,
+          compartmentId: input.compartmentId,
+          quantity: input.quantity,
+          projectId: input.projectId,
+          isReturnable: input.isReturnable,
+          expectedReturnDate: input.expectedReturnDate,
+          purpose: input.purpose,
+        },
+        tx,
+      );
+
+      // Straight to ISSUED: the IM is the approver and the item is already in someone's hands.
+      const didClaim = await this.repo.claimPendingDecision(
+        borrowId,
+        {
+          status: BorrowStatus.ISSUED,
+          decidedBy: actorId,
+          decisionNote: input.purpose,
+          markIssued: true,
+        },
+        tx,
+      );
+      if (!didClaim) throw new ConflictError('The borrow could not be issued');
+
+      await this.stock.issue(
+        movement,
+        { performedBy: actorId, refType: BORROW_REF_TYPE, refId: borrowId },
+        tx,
+      );
+
+      await this.audit.record(
+        {
+          action: 'borrowing.issue_on_behalf',
+          entityType: 'borrowing',
+          entityId: borrowId,
+          entityRef: borrowNo,
+          summary: `Issued ${input.quantity} unit(s) on ${borrowNo} to ${borrower.full_name} from stock`,
+          metadata: {
+            borrowNo,
+            requesterId: input.borrowerId,
+            productId: input.productId,
+            compartmentId: input.compartmentId,
+            quantity: input.quantity,
+            source: 'STOCK',
+          },
+        },
+        context,
+        tx,
+      );
+
+      // The borrower never asked for this, so the notification is their record that it happened.
+      await this.notifications.notify(
+        {
+          type: 'borrowing.issued_to_you',
+          userIds: [input.borrowerId],
+          ref: borrowNo,
+          link: NOTIFICATION_LINKS.myBorrowings,
+          entityType: 'borrowing',
+          entityId: borrowId,
+          actorId,
+          actorName: context.actorName,
+          context: { quantity: input.quantity, dueDate: input.expectedReturnDate },
+        },
+        tx,
+      );
+
+      return borrowId;
+    });
+
+    return this.requireView(id);
   }
 
   /** `executor` so a borrow number can be drawn inside the caller's transaction. */

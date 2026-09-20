@@ -3,7 +3,12 @@ import { randomUUID } from 'node:crypto';
 import { BorrowStatus, ErrorCode, Role } from '@ims/shared';
 import { createTestApp, httpClient, type HttpClient, type TestApp } from './app';
 import { createUser, login, resetData } from './factories';
-import { createStockFixture, placementOf, type StockFixture } from './stock-factories';
+import {
+  createStockFixture,
+  ledgerRows,
+  placementOf,
+  type StockFixture,
+} from './stock-factories';
 import { StockService } from '../src/modules/stock/stock.service';
 
 /**
@@ -545,6 +550,88 @@ describe('borrowing', () => {
       await raise();
       const response = await requester.client.get('/borrowing/pending-count');
       expect(response.status).toBe(403);
+    });
+  });
+
+  /**
+   * Ten arrive, somebody takes one off the shelf and tells the IM to put it against them.
+   * `POST /requisitions/:id/borrow-to-user` already covers goods arriving on a purchase; this
+   * is the same act for stock already on a shelf, with no request behind it.
+   */
+  describe('issuing straight from stock', () => {
+    const issueFromStock = (overrides: Record<string, unknown> = {}) =>
+      im.client.post('/borrowing/issue-from-stock').send({
+        borrowerId: requester.id,
+        productId: fixture.productId,
+        compartmentId: fixture.compartmentA,
+        quantity: 2,
+        isReturnable: true,
+        expectedReturnDate: '2026-12-31',
+        purpose: 'Taken off the shelf',
+        ...overrides,
+      });
+
+    it('creates an ISSUED borrow against the holder, not the IM who recorded it', async () => {
+      const issued = await issueFromStock();
+      expect(issued.status).toBe(201);
+      expect(issued.body.status).toBe(BorrowStatus.ISSUED);
+      expect(issued.body.issuedAt).not.toBeNull();
+      // The borrow belongs to the person holding it; the IM is only the actor.
+      expect(issued.body.requesterId).toBe(requester.id);
+    });
+
+    it('moves the stock, leaving nothing reserved behind', async () => {
+      await issueFromStock({ quantity: 3 });
+
+      const placement = await placementOf(ctx.db, fixture.productId, fixture.compartmentA);
+      expect(placement!.quantity).toBe(7);
+      // The reservation was consumed by the issue in the same transaction (G-14).
+      expect(placement!.reserved_qty).toBe(0);
+    });
+
+    it('writes exactly one ISSUE row for the handover', async () => {
+      const issued = await issueFromStock({ quantity: 4 });
+      const rows = await ledgerRows(ctx.db, fixture.productId);
+      const issues = rows.filter((row) => row.movement_type === 'ISSUE');
+      expect(issues).toHaveLength(1);
+      expect(Number(issues[0]!.quantity)).toBe(4);
+      expect(issues[0]!.ref_id).toBe(issued.body.id);
+    });
+
+    it('tells the person it was put against, who never asked for it', async () => {
+      await issueFromStock();
+      const inbox = await requester.client.get('/notifications?unreadOnly=true&page=1&limit=50');
+      expect(inbox.body.items.map((n: { type: string }) => n.type)).toContain(
+        'borrowing.issued_to_you',
+      );
+    });
+
+    it('refuses a general user, because this hands over stock', async () => {
+      const denied = await requester.client.post('/borrowing/issue-from-stock').send({
+        borrowerId: requester.id,
+        productId: fixture.productId,
+        compartmentId: fixture.compartmentA,
+        quantity: 1,
+        isReturnable: false,
+      });
+      expect(denied.status).toBe(403);
+    });
+
+    it('refuses more than is on the shelf, and moves nothing', async () => {
+      const refused = await issueFromStock({ quantity: 99 });
+      expect(refused.status).toBe(409);
+      expect(refused.body.code).toBe(ErrorCode.INSUFFICIENT_STOCK);
+
+      const placement = await placementOf(ctx.db, fixture.productId, fixture.compartmentA);
+      expect(placement!.quantity).toBe(10);
+      // The whole point of the single transaction: a refused issue leaves no reservation.
+      expect(placement!.reserved_qty).toBe(0);
+    });
+
+    it('refuses a deactivated holder, who could never return it', async () => {
+      const gone = await createUser(ctx.db, { roles: [Role.GENERAL], isActive: false });
+      const refused = await issueFromStock({ borrowerId: gone.id });
+      expect(refused.status).toBe(400);
     });
   });
 });

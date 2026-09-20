@@ -312,10 +312,21 @@ export class StockService {
    * reservation changes availability, not the physical shelf, and the ledger records physical
    * reality. Reconciliation would break if reservations appeared there.
    */
-  async reserve(input: ReserveInput, _context: StockContext): Promise<PlacementRow> {
+  async reserve(
+    input: ReserveInput,
+    _context: StockContext,
+    /**
+     * As on `receive`, `release` and `issue`. Added for issuing straight off the shelf to
+     * somebody, where the reservation and the issue that consumes it are one handover: without
+     * it the reserve commits on its own connection, and a later failure in the caller's
+     * transaction leaves a reservation held by nothing — the G-14 state `reconcileReservations`
+     * exists to find. Every existing caller passes nothing and is unaffected.
+     */
+    existingTx?: Tx,
+  ): Promise<PlacementRow> {
     this.assertPositive(input.quantity);
 
-    return this.db.transaction().execute(async (tx) => {
+    const run = async (tx: Tx): Promise<PlacementRow> => {
       const placement = await this.lockPlacement(tx, input.productId, input.compartmentId);
       if (!placement) throw new NotFoundError('Stock in that compartment');
 
@@ -330,7 +341,9 @@ export class StockService {
       }
 
       return this.applyDelta(tx, placement.id, 0, input.quantity);
-    });
+    };
+
+    return existingTx ? run(existingTx) : this.db.transaction().execute(run);
   }
 
   /** Releases a reservation — the borrow was rejected or cancelled. */
