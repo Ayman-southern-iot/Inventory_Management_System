@@ -662,6 +662,7 @@ export class StockService {
         'stock_placements.compartment_id',
       )
       .innerJoin('storage_zones', 'storage_zones.id', 'storage_compartments.zone_id')
+      .innerJoin('storage_rooms', 'storage_rooms.id', 'storage_zones.room_id')
       .where('stock_placements.product_id', '=', productId)
       .select([
         'stock_placements.id',
@@ -673,7 +674,11 @@ export class StockService {
         'storage_compartments.code as compartment_code',
         'storage_zones.id as zone_id',
         'storage_zones.name as zone_name',
+        'storage_rooms.id as room_id',
+        'storage_rooms.name as room_name',
       ])
+      // Room first: "where is this product" is answered building by building.
+      .orderBy('storage_rooms.name')
       .orderBy('storage_zones.name')
       .orderBy('storage_compartments.code')
       .execute();

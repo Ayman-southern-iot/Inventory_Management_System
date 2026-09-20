@@ -2,8 +2,10 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'kysely';
 import {
   BorrowStatus,
+  OUTSTANDING_STATUSES,
   ReturnCondition,
   Role,
+  type AssignHolderInput,
   type BorrowRequest,
   type CreateBorrowRequestInput,
   type DecideBorrowInput,
@@ -35,6 +37,16 @@ import {
 
 /** Ledger provenance, so a movement can be traced back to the request that caused it. */
 const BORROW_REF_TYPE = 'BORROW';
+
+/**
+ * `expected_return_date` is a `date` column, and since D-014 the driver hands it back as raw
+ * `YYYY-MM-DD` text. The `Date` branch is a guard: if that parser is ever removed this shifts a
+ * calendar day rather than throwing, which is the bug it exists to stop.
+ */
+function toDateOnly(value: Date | string | null): string | null {
+  if (value === null) return null;
+  return typeof value === 'string' ? value : value.toISOString().slice(0, 10);
+}
 
 @Injectable()
 export class BorrowingService {
@@ -225,7 +237,10 @@ export class BorrowingService {
       await this.notifications.notify(
         {
           type: input.approve ? 'borrowing.approved' : 'borrowing.rejected',
-          userIds: [request.requester_id],
+          // The holder, not the requester. They are the same person on a freshly raised
+          // borrow; they differ on one that was reassigned and later reverted to PENDING, and
+          // the decision is about equipment that will land with whoever is holding the record.
+          userIds: [request.current_holder_id],
           ref: request.borrow_no,
           link: NOTIFICATION_LINKS.myBorrowings,
           entityType: 'borrowing',
@@ -328,12 +343,13 @@ export class BorrowingService {
       );
 
       // The IM usually records the return on the borrower's behalf, so the borrower is the one
-      // who needs telling. `notify` drops the actor, so an IM returning their own borrow gets
-      // nothing — which is correct.
+      // who needs telling — and the borrower is whoever is *holding* it, which after a
+      // reassignment is not the person who asked for it. `notify` drops the actor, so an IM
+      // returning their own borrow gets nothing — which is correct.
       await this.notifications.notify(
         {
           type: 'borrowing.returned',
-          userIds: [request.requester_id],
+          userIds: [request.current_holder_id],
           ref: request.borrow_no,
           link: NOTIFICATION_LINKS.myBorrowings,
           entityType: 'borrowing',
@@ -551,11 +567,17 @@ export class BorrowingService {
         tx,
       );
 
-      // The borrower had this issued and now does not. That is theirs to know about.
+      // The borrower had this issued and now does not. That is theirs to know about — and the
+      // person who had it is the holder, not necessarily the one who asked for it.
+      //
+      // The reassignment is deliberately NOT undone here. `current_holder_id` records who the
+      // loan is against, and a revert says the issue was wrong, not that a later custody
+      // correction was. Silently resetting it to `requester_id` would throw away a decision an
+      // IM made on purpose.
       await this.notifications.notify(
         {
           type: 'borrowing.reverted',
-          userIds: [request.requester_id],
+          userIds: [request.current_holder_id],
           ref: request.borrow_no,
           link: NOTIFICATION_LINKS.myBorrowings,
           entityType: 'borrowing',
@@ -569,6 +591,164 @@ export class BorrowingService {
     });
 
     return this.requireView(id);
+  }
+
+  /**
+   * Move an issued loan onto somebody else's name.
+   *
+   * Ten cables are issued to Rana; three end up with Farah, or Rana leaves and hands the lot
+   * over. Until now the only way to record that was a return followed by a fresh issue, which
+   * is a lie about the shelf: the units never came back to a compartment.
+   *
+   * **No `StockService` call and no ledger row, by design** (plan decision D5). The units left
+   * the shelf when the borrow was issued; who is holding them afterwards is not a placement
+   * fact. Writing a compensating RECEIPT/ISSUE pair here would make the ledger assert a
+   * physical movement that did not happen, and `SUM(ledger) = placements.quantity` would still
+   * balance — so nobody would ever catch it. If a future change to this method finds itself
+   * reaching for `this.stock`, that is the signal the model has gone wrong, not the fix.
+   *
+   * Restricted to ISSUED / PARTIALLY_RETURNED. A PENDING borrow has nothing in anyone's hands
+   * to reassign, and a RETURNED or CANCELLED one is closed history.
+   */
+  async assignHolder(
+    id: string,
+    input: AssignHolderInput,
+    actorId: string,
+    context: AuditContext,
+  ): Promise<BorrowRequest> {
+    const request = await this.repo.findById(id);
+    if (!request) throw new NotFoundError('Borrow request');
+    if (
+      request.status !== BorrowStatus.ISSUED &&
+      request.status !== BorrowStatus.PARTIALLY_RETURNED
+    ) {
+      throw new InvalidBorrowTransitionError(request.status, 'reassigned to another holder');
+    }
+    if (request.current_holder_id === input.holderId) {
+      // The DB CHECK says the same thing; this turns it into a sentence instead of a 500.
+      throw new ConflictError('That borrow is already recorded against that person');
+    }
+
+    return this.db.transaction().execute(async (tx) => {
+      const incoming = await tx
+        .selectFrom('users')
+        .where('id', '=', input.holderId)
+        .select(['id', 'full_name', 'is_active'])
+        .executeTakeFirst();
+      if (!incoming) throw new NotFoundError('User');
+      // Same rule and wording as `issueFromStock`: a deactivated account cannot return
+      // anything, so making them liable for it creates a loan nobody can close.
+      if (!incoming.is_active) {
+        throw new ValidationFailedError({
+          path: 'holderId',
+          message: 'That user is deactivated, so nothing can be recorded against them',
+        });
+      }
+
+      const outgoing = await tx
+        .selectFrom('users')
+        .where('id', '=', request.current_holder_id)
+        .select(['id', 'full_name'])
+        .executeTakeFirstOrThrow();
+
+      // Conditional on the holder and the status the caller read. Two IMs reassigning at once
+      // would otherwise both write a transfer out of the same person.
+      const didClaim = await this.repo.claimHolderChange(
+        id,
+        {
+          toUserId: input.holderId,
+          expectedHolderId: request.current_holder_id,
+          allowedStatuses: OUTSTANDING_STATUSES,
+        },
+        tx,
+      );
+      if (!didClaim) {
+        throw new ConflictError('Someone already moved this borrow. Refresh to see who has it.');
+      }
+
+      await this.repo.insertHolderChange(
+        {
+          borrowRequestId: id,
+          fromUserId: request.current_holder_id,
+          toUserId: input.holderId,
+          changedBy: actorId,
+          reason: input.reason,
+        },
+        tx,
+      );
+
+      await this.audit.record(
+        {
+          action: 'borrowing.holder_changed',
+          entityType: 'borrowing',
+          entityId: id,
+          entityRef: request.borrow_no,
+          summary:
+            `Moved borrow ${request.borrow_no} from ${outgoing.full_name} ` +
+            `to ${incoming.full_name}`,
+          metadata: {
+            borrowNo: request.borrow_no,
+            productId: request.product_id,
+            quantity: request.quantity,
+            outstandingQty: request.quantity - request.returned_qty,
+            fromUserId: request.current_holder_id,
+            toUserId: input.holderId,
+            // Recorded so the log shows this was a custody correction, not a re-issue.
+            stockMoved: false,
+            reason: input.reason,
+          },
+        },
+        context,
+        tx,
+      );
+
+      const dueDate = toDateOnly(request.expected_return_date);
+      const outstanding = request.quantity - request.returned_qty;
+
+      // The new holder: this is now yours.
+      await this.notifications.notify(
+        {
+          type: 'borrowing.holder_assigned',
+          userIds: [input.holderId],
+          ref: request.borrow_no,
+          link: NOTIFICATION_LINKS.myBorrowings,
+          entityType: 'borrowing',
+          entityId: id,
+          actorId,
+          actorName: context.actorName,
+          context: {
+            counterpartName: outgoing.full_name,
+            quantity: outstanding,
+            dueDate,
+            note: input.reason,
+          },
+        },
+        tx,
+      );
+
+      // The previous holder: this is no longer yours. This half is the point. A transfer that
+      // only tells the incoming person leaves the outgoing one unable to show, months later,
+      // that they handed it on — which makes the trail paperwork rather than proof.
+      //
+      // `notify` drops the actor, so an IM moving a loan off their own name is not told about
+      // their own action. That is the system-wide rule and it is right here too.
+      await this.notifications.notify(
+        {
+          type: 'borrowing.holder_released',
+          userIds: [request.current_holder_id],
+          ref: request.borrow_no,
+          link: NOTIFICATION_LINKS.myBorrowings,
+          entityType: 'borrowing',
+          entityId: id,
+          actorId,
+          actorName: context.actorName,
+          context: { counterpartName: incoming.full_name, note: input.reason },
+        },
+        tx,
+      );
+
+      return this.requireView(id, tx);
+    });
   }
 
   /** The requester withdrawing their own request before anyone has acted on it. */

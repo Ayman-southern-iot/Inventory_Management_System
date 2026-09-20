@@ -37,6 +37,7 @@ import { createDatabase, type Db } from '../../src/database/create-db';
 import { createTestApp, httpClient, type HttpClient, type TestApp } from '../app';
 import {
   createUserAndLogin,
+  ensureSeedRoom,
   login,
   seedSubthresholdApprover,
   type Client,
@@ -858,7 +859,7 @@ async function ensureCompartment(db: Db, zoneName: string, code: string): Promis
     zoneId = (
       await db
         .insertInto('storage_zones')
-        .values({ name: zoneName })
+        .values({ name: zoneName, room_id: await ensureSeedRoom(db) })
         .returning('id')
         .executeTakeFirstOrThrow()
     ).id;
@@ -1219,6 +1220,8 @@ async function insertOverdueBorrow(db: Db, actors: ApprovalActors): Promise<void
       .values({
         borrow_no: borrowNo,
         requester_id: actors.requester.id,
+        // Migration 0032: NOT NULL, and a freshly seeded borrow is held by whoever raised it.
+        current_holder_id: actors.requester.id,
         product_id: product.id,
         placement_id: placement.id,
         compartment_id: compartment.id,

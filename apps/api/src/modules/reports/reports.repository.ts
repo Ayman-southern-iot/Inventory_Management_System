@@ -219,6 +219,7 @@ export class ReportsRepository {
         p.unit             AS unit,
         p.is_active        AS is_active,
         z.name             AS zone_name,
+        rm.name            AS room_name,
         -- The compartment's human label is \`code\` ("1A", "3C"), not \`name\` — only the zone
         -- carries a name. Getting this wrong fails at run time, not at compile time.
         cm.code            AS compartment_name,
@@ -243,10 +244,11 @@ export class ReportsRepository {
       LEFT JOIN stock_placements sp ON sp.product_id = p.id
       LEFT JOIN storage_compartments cm ON cm.id = sp.compartment_id
       LEFT JOIN storage_zones z ON z.id = cm.zone_id
+      LEFT JOIN storage_rooms rm ON rm.id = z.room_id
       WHERE (${query.includeInactive} OR p.is_active)
         AND (${categoryId}::uuid IS NULL OR p.category_id = ${categoryId}::uuid)
         AND (${zoneId}::uuid IS NULL OR z.id = ${zoneId}::uuid)
-      ORDER BY p.name ASC, z.name ASC NULLS LAST, cm.code ASC NULLS LAST
+      ORDER BY p.name ASC, rm.name ASC NULLS LAST, z.name ASC NULLS LAST, cm.code ASC NULLS LAST
     `.execute(this.db);
 
     return rows.rows;
@@ -323,6 +325,7 @@ export interface InventoryRow {
   unit: string;
   is_active: boolean;
   zone_name: string | null;
+  room_name: string | null;
   compartment_name: string | null;
   quantity: number | null;
   reserved_qty: number | null;

@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { Compartment, Zone } from '@ims/shared';
+import type { Compartment, Room, Zone } from '@ims/shared';
 import type { Transaction } from 'kysely';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
@@ -13,15 +13,67 @@ export class LocationsRepository {
   constructor(@Inject(DB) private readonly db: Db) {}
 
   /**
-   * Zones with their compartments in two queries, not one per zone. The location tree is small
-   * enough to assemble in memory and a join would duplicate every zone row.
+   * Rooms with their zones with their compartments, in three queries, not one per level. The
+   * location tree is small enough to assemble in memory and a join would duplicate every room
+   * row once per compartment underneath it.
    */
-  async listZones(includeInactive: boolean): Promise<Zone[]> {
-    const zones = await this.db
-      .selectFrom('storage_zones')
+  async listRooms(includeInactive: boolean): Promise<Room[]> {
+    const rooms = await this.db
+      .selectFrom('storage_rooms')
       .select(['id', 'name', 'is_active'])
       .$if(!includeInactive, (qb) => qb.where('is_active', '=', true))
       .orderBy('name')
+      .execute();
+
+    if (rooms.length === 0) return [];
+
+    const zones = await this.listZonesIn(
+      rooms.map((room) => room.id),
+      includeInactive,
+    );
+
+    const byRoom = new Map<string, Zone[]>();
+    for (const zone of zones) {
+      const list = byRoom.get(zone.roomId) ?? [];
+      list.push(zone);
+      byRoom.set(zone.roomId, list);
+    }
+
+    return rooms.map((room) => ({
+      id: room.id,
+      name: room.name,
+      isActive: room.is_active,
+      zones: byRoom.get(room.id) ?? [],
+    }));
+  }
+
+  /**
+   * Every zone, flat, each carrying its room. Kept as its own method because the pickers want a
+   * flat list and the Locations page wants the tree, and deriving one from the other in the
+   * caller is how the two drift.
+   */
+  async listZones(includeInactive: boolean): Promise<Zone[]> {
+    return this.listZonesIn(undefined, includeInactive);
+  }
+
+  private async listZonesIn(roomIds: string[] | undefined, includeInactive: boolean): Promise<Zone[]> {
+    if (roomIds !== undefined && roomIds.length === 0) return [];
+
+    const zones = await this.db
+      .selectFrom('storage_zones')
+      .innerJoin('storage_rooms', 'storage_rooms.id', 'storage_zones.room_id')
+      .select([
+        'storage_zones.id',
+        'storage_zones.name',
+        'storage_zones.is_active',
+        'storage_zones.room_id',
+        'storage_rooms.name as room_name',
+      ])
+      .$if(roomIds !== undefined, (qb) => qb.where('storage_zones.room_id', 'in', roomIds!))
+      .$if(!includeInactive, (qb) => qb.where('storage_zones.is_active', '=', true))
+      // Room first, so a flat zone list still reads in building order.
+      .orderBy('storage_rooms.name')
+      .orderBy('storage_zones.name')
       .execute();
 
     if (zones.length === 0) return [];
@@ -29,12 +81,15 @@ export class LocationsRepository {
     const compartments = await this.db
       .selectFrom('storage_compartments')
       .innerJoin('storage_zones', 'storage_zones.id', 'storage_compartments.zone_id')
+      .innerJoin('storage_rooms', 'storage_rooms.id', 'storage_zones.room_id')
       .select((eb) => [
         'storage_compartments.id',
         'storage_compartments.zone_id',
         'storage_compartments.code',
         'storage_compartments.is_active',
         'storage_zones.name as zone_name',
+        'storage_zones.room_id as room_id',
+        'storage_rooms.name as room_name',
         // Correlated subquery rather than a second round trip per compartment.
         eb
           .selectFrom('stock_placements')
@@ -59,6 +114,8 @@ export class LocationsRepository {
         id: row.id,
         zoneId: row.zone_id,
         zoneName: row.zone_name,
+        roomId: row.room_id,
+        roomName: row.room_name,
         code: row.code,
         isActive: row.is_active,
         placementCount: Number(row.placement_count ?? 0),
@@ -69,16 +126,73 @@ export class LocationsRepository {
     return zones.map((zone) => ({
       id: zone.id,
       name: zone.name,
+      roomId: zone.room_id,
+      roomName: zone.room_name,
       isActive: zone.is_active,
       compartments: byZone.get(zone.id) ?? [],
     }));
   }
 
-  async insertZone(name: string, tx?: Tx): Promise<string> {
+  async insertRoom(name: string, tx?: Tx): Promise<string> {
+    const conn = tx ?? this.db;
+    const row = await conn
+      .insertInto('storage_rooms')
+      .values({ name })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    return row.id;
+  }
+
+  async updateRoom(
+    id: string,
+    values: { name?: string; isActive?: boolean },
+    tx?: Tx,
+  ): Promise<number> {
+    const patch = {
+      ...(values.name === undefined ? {} : { name: values.name }),
+      ...(values.isActive === undefined ? {} : { is_active: values.isActive }),
+    };
+    if (Object.keys(patch).length === 0) return 1;
+
+    const conn = tx ?? this.db;
+    const result = await conn
+      .updateTable('storage_rooms')
+      .set(patch)
+      .where('id', '=', id)
+      .executeTakeFirst();
+    return Number(result.numUpdatedRows ?? 0n);
+  }
+
+  async findRoom(id: string): Promise<{ id: string; name: string; is_active: boolean } | undefined> {
+    return this.db
+      .selectFrom('storage_rooms')
+      .select(['id', 'name', 'is_active'])
+      .where('id', '=', id)
+      .executeTakeFirst();
+  }
+
+  /** Stock anywhere under a room blocks its deactivation, same rule as a zone. */
+  async countStockInRoom(roomId: string): Promise<number> {
+    const row = await this.db
+      .selectFrom('stock_placements')
+      .innerJoin(
+        'storage_compartments',
+        'storage_compartments.id',
+        'stock_placements.compartment_id',
+      )
+      .innerJoin('storage_zones', 'storage_zones.id', 'storage_compartments.zone_id')
+      .where('storage_zones.room_id', '=', roomId)
+      .where('stock_placements.quantity', '>', 0)
+      .select((eb) => eb.fn.countAll<number>().as('count'))
+      .executeTakeFirst();
+    return Number(row?.count ?? 0);
+  }
+
+  async insertZone(name: string, roomId: string, tx?: Tx): Promise<string> {
     const conn = tx ?? this.db;
     const row = await conn
       .insertInto('storage_zones')
-      .values({ name })
+      .values({ name, room_id: roomId })
       .returning('id')
       .executeTakeFirstOrThrow();
     return row.id;
@@ -104,10 +218,12 @@ export class LocationsRepository {
     return Number(result.numUpdatedRows ?? 0n);
   }
 
-  async findZone(id: string): Promise<{ id: string; name: string; is_active: boolean } | undefined> {
+  async findZone(
+    id: string,
+  ): Promise<{ id: string; name: string; room_id: string; is_active: boolean } | undefined> {
     return this.db
       .selectFrom('storage_zones')
-      .select(['id', 'name', 'is_active'])
+      .select(['id', 'name', 'room_id', 'is_active'])
       .where('id', '=', id)
       .executeTakeFirst();
   }

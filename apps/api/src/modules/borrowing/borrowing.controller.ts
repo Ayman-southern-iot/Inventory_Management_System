@@ -13,6 +13,7 @@ import {
 import {
   IDEMPOTENCY_HEADER,
   Role,
+  assignHolderSchema,
   createBorrowRequestSchema,
   decideBorrowSchema,
   issueFromStockSchema,
@@ -20,6 +21,7 @@ import {
   returnBorrowSchema,
   revertBorrowSchema,
   reverseReturnSchema,
+  type AssignHolderInput,
   type BorrowRequest,
   type BorrowReturnView,
   type CreateBorrowRequestInput,
@@ -66,6 +68,9 @@ export class BorrowingController {
     @CurrentUser() actor: RequestUser,
   ): Promise<Paginated<BorrowRequest>> {
     const isStockRole = STOCK_ROLES.some((role) => actor.roles.includes(role));
+    // The restriction is on who *holds* it, not who asked for it: "my borrowings" means what is
+    // against my name right now. A loan reassigned away from me leaves my list on the same
+    // request that puts it on the new holder's.
     const restrictTo = !isStockRole || query.mine ? actor.id : undefined;
     return this.repo.list(query, restrictTo);
   }
@@ -155,6 +160,26 @@ export class BorrowingController {
     @CurrentAuditContext() ctx: AuditContext,
   ): Promise<BorrowRequest> {
     return this.borrowing.revertToPending(id, body, actor.id, ctx);
+  }
+
+  /**
+   * Move an issued loan onto somebody else's name.
+   *
+   * IM/Admin only, and only while the item is actually out (ISSUED / PARTIALLY_RETURNED). No
+   * idempotency key: this writes no stock, and a repeated call is refused by the conditional
+   * update because the holder has already moved — the second attempt gets a 409 rather than a
+   * duplicate transfer.
+   */
+  @Roles(...STOCK_ROLES)
+  @Post(':id/holder')
+  @HttpCode(HttpStatus.OK)
+  async assignHolder(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(zodPipe(assignHolderSchema)) body: AssignHolderInput,
+    @CurrentUser() actor: RequestUser,
+    @CurrentAuditContext() ctx: AuditContext,
+  ): Promise<BorrowRequest> {
+    return this.borrowing.assignHolder(id, body, actor.id, ctx);
   }
 
   /** The requester withdrawing their own request. Ownership is checked in the service. */

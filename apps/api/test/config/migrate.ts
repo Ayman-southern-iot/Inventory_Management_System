@@ -40,6 +40,22 @@ export async function migrateUp<Schema>(db: Kysely<Schema>): Promise<string[]> {
   return (results.results ?? []).map((r) => r.migrationName);
 }
 
+/**
+ * Migrate up to, and including, one named migration and stop.
+ *
+ * Exists so a migration with a **backfill** can be tested the way rules/40-database.md asks
+ * for: stop just before it, put real rows in, then run it. An empty-schema migration proves the
+ * DDL and nothing about the UPDATE, which is the half that touches user data.
+ */
+export async function migrateToNamed<Schema>(
+  db: Kysely<Schema>,
+  migrationName: string,
+): Promise<string[]> {
+  const results = await migratorFor(db).migrateTo(migrationName);
+  assertOk(results, `migrateTo(${migrationName})`);
+  return (results.results ?? []).map((r) => r.migrationName);
+}
+
 export async function migrateAllTheWayDown<Schema>(db: Kysely<Schema>): Promise<string[]> {
   const results = await migratorFor(db).migrateTo(NO_MIGRATIONS);
   assertOk(results, 'migrateTo(NO_MIGRATIONS)');

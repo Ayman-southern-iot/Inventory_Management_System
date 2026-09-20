@@ -134,6 +134,13 @@ export async function resetData(db: Db): Promise<void> {
   // trigger in the isolated test database only — production code never touches the trigger.
   // This is the documented escape hatch in the Phase 06 plan.
   await sql`ALTER TABLE audit_log DISABLE TRIGGER audit_log_no_update`.execute(db);
+  // Migration 0032: the custody trail is append-only by the same trigger pattern, and it holds
+  // `borrow_request_id` ON DELETE RESTRICT — so the `borrow_requests` delete below would be
+  // blocked by rows the trigger then refuses to remove. Same test-only escape hatch, same
+  // reason: production code never disables either trigger.
+  await sql`
+    ALTER TABLE borrow_holder_changes DISABLE TRIGGER borrow_holder_changes_no_update
+  `.execute(db);
   try {
     // Borrow rows first: they reference users with ON DELETE RESTRICT. Unlike the ledger these
   // are ordinary history and may be cleared between tests. The ledger rows they produced stay,
@@ -145,6 +152,9 @@ export async function resetData(db: Db): Promise<void> {
   await db.deleteFrom('delegations').execute();
 
   await db.deleteFrom('borrow_returns').execute();
+  // Before `borrow_requests`: the FK is RESTRICT, because a borrow with custody history is not
+  // deletable in production either.
+  await db.deleteFrom('borrow_holder_changes').execute();
   await db.deleteFrom('borrow_requests').execute();
   // Same reasoning as the `users`/`departments` guards below: `requisitions.project_id` is
   // ON DELETE RESTRICT and requisitions outlive this reset, so a project still charged by a
@@ -279,8 +289,11 @@ export async function resetData(db: Db): Promise<void> {
     )
     .execute();
   } finally {
-    // Re-enable the trigger so the rest of the suite still proves the append-only guarantee.
+    // Re-enable the triggers so the rest of the suite still proves the append-only guarantee.
     await sql`ALTER TABLE audit_log ENABLE TRIGGER audit_log_no_update`.execute(db);
+    await sql`
+      ALTER TABLE borrow_holder_changes ENABLE TRIGGER borrow_holder_changes_no_update
+    `.execute(db);
   }
 }
 

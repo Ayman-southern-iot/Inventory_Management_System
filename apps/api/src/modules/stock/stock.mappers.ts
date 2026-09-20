@@ -14,6 +14,8 @@ export function toPlacement(row: PlacementView): Placement {
     compartmentCode: row.compartment_code,
     zoneId: row.zone_id,
     zoneName: row.zone_name,
+    roomId: row.room_id,
+    roomName: row.room_name,
     quantity: row.quantity,
     reservedQty: row.reserved_qty,
     /**

@@ -32,6 +32,12 @@ export interface NotificationCopyContext {
    * whether to surface it — the copy knows it as a string and never inspects the enum.
    */
   condition?: string | null;
+  /**
+   * The other party in a two-sided event. On a custody reassignment each side is told who the
+   * other one is, because "this is no longer against you" without saying who has it now sends
+   * the reader to ask somebody.
+   */
+  counterpartName?: string | null;
 }
 
 const by = (actorName?: string | null): string => (actorName ? ` by ${actorName}` : '');
@@ -151,6 +157,36 @@ export const NOTIFICATION_COPY: Record<NotificationType, NotificationTemplate> =
         c.dueDate ? `due back on ${c.dueDate}` : null,
       ].filter(Boolean);
       return parts.length > 0 ? parts.join(', ') : null;
+    },
+  },
+  /**
+   * The two halves of a custody reassignment. They are separate types rather than one with a
+   * flag because they say opposite things to different people, and the second one — "it is no
+   * longer against you" — is what turns the trail into something the previous holder can point
+   * at. A transfer that only tells the new holder is paperwork.
+   */
+  'borrowing.holder_assigned': {
+    severity: 'action_required',
+    title: (ref, actor) => `Borrow ${ref} is now recorded against you${by(actor)}`,
+    body: (c) => {
+      const parts = [
+        c.counterpartName ? `Transferred from ${c.counterpartName}` : null,
+        c.quantity ? `${c.quantity} unit(s)` : null,
+        c.dueDate ? `due back on ${c.dueDate}` : null,
+        c.note ? `Reason: ${c.note}` : null,
+      ].filter(Boolean);
+      return parts.length > 0 ? parts.join(' — ') : null;
+    },
+  },
+  'borrowing.holder_released': {
+    severity: 'info',
+    title: (ref, actor) => `Borrow ${ref} is no longer recorded against you${by(actor)}`,
+    body: (c) => {
+      const parts = [
+        c.counterpartName ? `Now held by ${c.counterpartName}` : null,
+        c.note ? `Reason: ${c.note}` : null,
+      ].filter(Boolean);
+      return parts.length > 0 ? parts.join(' — ') : null;
     },
   },
   'borrowing.due_soon': {

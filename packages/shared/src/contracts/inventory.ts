@@ -85,6 +85,8 @@ export const placementSchema = z.object({
   compartmentCode: z.string(),
   zoneId: z.string().uuid(),
   zoneName: z.string(),
+  roomId: z.string().uuid(),
+  roomName: z.string(),
   quantity: z.number().int(),
   reservedQty: z.number().int(),
   /**
@@ -162,12 +164,52 @@ export interface ProductDetail extends Product {
 
 /* --------------------------------------------------------------------- locations */
 
-export const createZoneSchema = z.object({ name: nameSchema });
+/**
+ * Location reads Room → Zone → Compartment (migration 0033, ask #3).
+ *
+ * **Every** place that renders a location goes through `formatLocation` below. There were five
+ * separate `${zone} / ${compartment}` concatenations before rooms existed — the ledger, the
+ * borrow row, the inventory export, the CSV and the product detail chip — and a sixth level
+ * would have meant finding all five again. One function, one separator, one decision about
+ * what happens when a part is missing.
+ */
+export const LOCATION_SEPARATOR = ' / ';
+
+export function formatLocation(
+  parts: { roomName?: string | null; zoneName?: string | null; compartmentCode?: string | null },
+): string {
+  return [parts.roomName, parts.zoneName, parts.compartmentCode]
+    // A null part is dropped rather than rendered as "null" or an empty segment. The ledger
+    // legitimately has movements with only one end (a receipt has no `from`), and a half-built
+    // label reading " / / A1" is worse than a short one.
+    .filter((part): part is string => typeof part === 'string' && part.trim().length > 0)
+    .join(LOCATION_SEPARATOR);
+}
+
+export const createRoomSchema = z.object({ name: nameSchema });
+export type CreateRoomInput = z.infer<typeof createRoomSchema>;
+
+export const updateRoomSchema = z.object({
+  name: nameSchema.optional(),
+  isActive: z.boolean().optional(),
+});
+export type UpdateRoomInput = z.infer<typeof updateRoomSchema>;
+
+export const createZoneSchema = z.object({
+  name: nameSchema,
+  /** A zone cannot exist outside a room, so this is required rather than nullable. */
+  roomId: z.string().uuid(),
+});
 export type CreateZoneInput = z.infer<typeof createZoneSchema>;
 
 export const updateZoneSchema = z.object({
   name: nameSchema.optional(),
   isActive: z.boolean().optional(),
+  /**
+   * Deliberately absent: moving a zone between rooms would change the room token inside every
+   * Storage ID already printed on the shelves underneath it (migration 0034 keeps those
+   * immutable). Renaming a room is fine; re-parenting a zone is a different feature.
+   */
 });
 export type UpdateZoneInput = z.infer<typeof updateZoneSchema>;
 
@@ -189,6 +231,8 @@ export const compartmentSchema = z.object({
   id: z.string().uuid(),
   zoneId: z.string().uuid(),
   zoneName: z.string(),
+  roomId: z.string().uuid(),
+  roomName: z.string(),
   code: z.string(),
   isActive: z.boolean(),
   /** Distinct products held here — a compartment with stock cannot be deactivated. */
@@ -199,10 +243,20 @@ export type Compartment = z.infer<typeof compartmentSchema>;
 export const zoneSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
+  roomId: z.string().uuid(),
+  roomName: z.string(),
   isActive: z.boolean(),
   compartments: z.array(compartmentSchema),
 });
 export type Zone = z.infer<typeof zoneSchema>;
+
+export const roomSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  isActive: z.boolean(),
+  zones: z.array(zoneSchema),
+});
+export type Room = z.infer<typeof roomSchema>;
 
 /* ------------------------------------------------------------------- stock moves */
 

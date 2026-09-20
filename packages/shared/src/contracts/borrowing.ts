@@ -222,6 +222,23 @@ export const revertBorrowSchema = z.object({
 });
 export type RevertBorrowInput = z.infer<typeof revertBorrowSchema>;
 
+/**
+ * Moving an issued loan onto somebody else's name.
+ *
+ * This is a correction to the record, not a movement of stock: the units left the shelf when
+ * the borrow was issued, and handing them to a colleague moves no placement and writes no
+ * ledger row (plan decision D5). What it does move is who the overdue reminder chases and
+ * whose name the equipment sits against.
+ *
+ * `reason` is required and the database CHECKs it, because an unexplained transfer of
+ * liability is worth less than no record at all.
+ */
+export const assignHolderSchema = z.object({
+  holderId: z.string().uuid(),
+  reason: z.string().trim().min(3).max(500),
+});
+export type AssignHolderInput = z.infer<typeof assignHolderSchema>;
+
 export const BorrowFilter = {
   ALL: 'ALL',
   PENDING: 'PENDING',
@@ -246,8 +263,16 @@ export type ListBorrowsQuery = z.infer<typeof listBorrowsQuerySchema>;
 export const borrowRequestSchema = z.object({
   id: z.string().uuid(),
   borrowNo: z.string(),
+  /** Who asked for it. Never changes, not even when custody moves. */
   requesterId: z.string().uuid(),
   requesterName: z.string(),
+  /**
+   * Who has it now. Equal to the requester until somebody calls
+   * `POST /borrowing/:id/holder`. Anything answering "who is holding this" reads these two
+   * fields, never `requesterId`.
+   */
+  currentHolderId: z.string().uuid(),
+  currentHolderName: z.string(),
   productId: z.string().uuid(),
   productName: z.string(),
   productCode: z.string(),

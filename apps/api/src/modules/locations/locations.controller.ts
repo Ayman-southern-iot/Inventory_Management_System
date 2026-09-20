@@ -3,14 +3,19 @@ import { z } from 'zod';
 import {
   Role,
   createCompartmentSchema,
+  createRoomSchema,
   createZoneSchema,
   queryBoolean,
   updateCompartmentSchema,
+  updateRoomSchema,
   updateZoneSchema,
   type Compartment,
   type CreateCompartmentInput,
+  type CreateRoomInput,
   type CreateZoneInput,
+  type Room,
   type UpdateCompartmentInput,
+  type UpdateRoomInput,
   type UpdateZoneInput,
   type Zone,
 } from '@ims/shared';
@@ -39,6 +44,36 @@ export class LocationsController {
     @Query(zodPipe(listQuerySchema)) query: z.infer<typeof listQuerySchema>,
   ): Promise<Zone[]> {
     return this.locations.list(query.includeInactive);
+  }
+
+  /**
+   * The full tree, Room → Zone → Compartment. The Locations page renders this; the pickers use
+   * `GET /locations` above, which stays a flat zone list so an existing caller is unaffected.
+   */
+  @Get('rooms')
+  async listRooms(
+    @Query(zodPipe(listQuerySchema)) query: z.infer<typeof listQuerySchema>,
+  ): Promise<Room[]> {
+    return this.locations.listRooms(query.includeInactive);
+  }
+
+  @Roles(Role.INVENTORY_MANAGER, Role.ADMIN)
+  @Post('rooms')
+  async createRoom(
+    @Body(zodPipe(createRoomSchema)) body: CreateRoomInput,
+    @CurrentAuditContext() ctx: AuditContext,
+  ): Promise<Room> {
+    return this.locations.createRoom(body, ctx);
+  }
+
+  @Roles(Role.INVENTORY_MANAGER, Role.ADMIN)
+  @Patch('rooms/:id')
+  async updateRoom(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(zodPipe(updateRoomSchema)) body: UpdateRoomInput,
+    @CurrentAuditContext() ctx: AuditContext,
+  ): Promise<Room> {
+    return this.locations.updateRoom(id, body, ctx);
   }
 
   @Roles(Role.INVENTORY_MANAGER, Role.ADMIN)

@@ -47,7 +47,10 @@ export class ProjectsRepository {
     return this.db
       .selectFrom('borrow_requests as br')
       .innerJoin('products as p', 'p.id', 'br.product_id')
-      .innerJoin('users as u', 'u.id', 'br.requester_id')
+      // The holder, not the requester. This column is called `borrowerName` and the screen reads
+      // it as "who has this on the project", so after a custody reassignment (migration 0032)
+      // it has to be the current holder or the project page contradicts the borrowing list.
+      .innerJoin('users as u', 'u.id', 'br.current_holder_id')
       .where('br.project_id', '=', projectId)
       .where('br.status', 'in', [...VISIBLE_STATUSES]);
   }

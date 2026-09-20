@@ -1,6 +1,7 @@
 import { randomId } from '@/lib/random-id';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
+  AssignHolderInput,
   BorrowRequest,
   CreateBorrowRequestInput,
   DecideBorrowInput,
@@ -92,6 +93,21 @@ export function useRevertBorrow() {
   return useBorrowMutation(
     ({ id, input }: { id: string; input: RevertBorrowInput }) =>
       api.post<BorrowRequest>(`/borrowing/${id}/revert`, input),
+    (_input, result) => result.productId,
+  );
+}
+
+/**
+ * Move an issued loan onto someone else's name.
+ *
+ * No idempotency key, unlike the others on this page: the others move stock and a double-click
+ * would issue or return twice. This moves no stock, and the server's conditional update refuses
+ * the second attempt anyway because the holder has already changed.
+ */
+export function useAssignHolder() {
+  return useBorrowMutation(
+    ({ id, input }: { id: string; input: AssignHolderInput }) =>
+      api.post<BorrowRequest>(`/borrowing/${id}/holder`, input),
     (_input, result) => result.productId,
   );
 }

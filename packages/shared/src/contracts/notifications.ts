@@ -54,6 +54,17 @@ export const NOTIFICATION_TYPES = [
   'borrowing.cancelled',
   'borrowing.returned',
   'borrowing.issued_to_you',
+  /**
+   * A loan has been moved onto this person's name. They may never have touched the borrow
+   * form — the IM corrected the record — so this is the first they hear of being liable.
+   */
+  'borrowing.holder_assigned',
+  /**
+   * The other half, and the half that makes the trail proof rather than paperwork: the person
+   * it came off learns it is no longer against them. Without it, somebody discovers months
+   * later that a loan they handed on was still in their name, and has nothing to point at.
+   */
+  'borrowing.holder_released',
   'borrowing.due_soon',
   'borrowing.overdue',
   // Projects

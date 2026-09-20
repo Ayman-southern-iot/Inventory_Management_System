@@ -87,6 +87,28 @@ export async function findOrCreateProduct(
 }
 
 /**
+ * The room every seeded zone hangs under (migration 0033). Idempotent, and shared by both seed
+ * paths so re-running does not accumulate a room per scenario run.
+ */
+const SEED_ROOM_NAME = 'Main Store';
+
+export async function ensureSeedRoom(db: Db): Promise<string> {
+  const existing = await db
+    .selectFrom('storage_rooms')
+    .select('id')
+    .where('name', '=', SEED_ROOM_NAME)
+    .executeTakeFirst();
+  if (existing) return existing.id;
+
+  const created = await db
+    .insertInto('storage_rooms')
+    .values({ name: SEED_ROOM_NAME })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  return created.id;
+}
+
+/**
  * Looks up a storage compartment by zone name + code, or creates both. Kept for scenarios
  * that need a stable destination; the current scenarios call `ensureCompartment` inline so
  * they always have a guaranteed slot.
@@ -111,7 +133,7 @@ export async function findOrCreateCompartment(
     zoneId = (
       await db
         .insertInto('storage_zones')
-        .values({ name: options.zoneName })
+        .values({ name: options.zoneName, room_id: await ensureSeedRoom(db) })
         .returning('id')
         .executeTakeFirstOrThrow()
     ).id;

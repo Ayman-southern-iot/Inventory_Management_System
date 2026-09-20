@@ -9,7 +9,7 @@ import { cn } from '@/lib/cn';
 import { t } from '@/i18n/en';
 import { formatDate, formatDateTime } from '@/lib/format';
 import { ROUTES } from '@/routes/paths';
-import { Role, ReturnCondition } from '@ims/shared';
+import { Role, ReturnCondition, formatLocation } from '@ims/shared';
 import { useAuth } from '@/features/auth/auth-context';
 import { BorrowDialog } from '@/features/borrowing/components/BorrowDialog';
 import { LEDGER_PAGE_LIMIT } from '../constants';
@@ -52,7 +52,11 @@ function PlacementChip({
       )}
     >
       <span className="text-xs font-medium opacity-80">
-        {placement.zoneName} / {placement.compartmentCode}
+        {formatLocation({
+          roomName: placement.roomName,
+          zoneName: placement.zoneName,
+          compartmentCode: placement.compartmentCode,
+        })}
       </span>
       <span className="text-lg font-semibold tabular-nums">{placement.quantity}</span>
       {placement.reservedQty > 0 ? (

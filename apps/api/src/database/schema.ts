@@ -152,9 +152,23 @@ export interface ProductsTable {
   updated_at: UpdatedAt;
 }
 
-export interface StorageZonesTable {
+/**
+ * The level above a zone (migration 0033). Location reads Room → Zone → Compartment, and the
+ * room is the first token of a compartment's Storage ID.
+ */
+export interface StorageRoomsTable {
   id: Generated<string>;
   name: string;
+  is_active: Generated<boolean>;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
+export interface StorageZonesTable {
+  id: Generated<string>;
+  /** Unique within its room, not globally — two rooms may each have a "Shelf A". */
+  name: string;
+  room_id: string;
   is_active: Generated<boolean>;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
@@ -281,7 +295,14 @@ export interface ProjectsTable {
 export interface BorrowRequestsTable {
   id: Generated<string>;
   borrow_no: string;
+  /** Who asked. History — never rewritten, not even by a custody reassignment. */
   requester_id: string;
+  /**
+   * Who has it now. Seeded from `requester_id` and moved by `POST /borrowing/:id/holder`.
+   * Every "who is holding this" read goes through this column; `requester_id` answers a
+   * different question and the two diverge the first time a loan changes hands.
+   */
+  current_holder_id: string;
   product_id: string;
   /** The exact placement the reservation is held against. */
   placement_id: string | null;
@@ -312,6 +333,22 @@ export interface BorrowReturnsTable {
   received_by: string | null;
   condition: ReturnConditionValue;
   returned_at: Generated<Date>;
+}
+
+/**
+ * Append-only custody trail (migration 0032). One row per reassignment: who it came from, who
+ * it went to, who moved it and why. Enforced append-only by trigger — there is no UPDATE and no
+ * DELETE, and a mistake is corrected by reassigning again.
+ */
+export interface BorrowHolderChangesTable {
+  id: Generated<string>;
+  borrow_request_id: string;
+  from_user_id: string;
+  to_user_id: string;
+  /** The IM who made the correction, separate from both parties. */
+  changed_by: string;
+  reason: string;
+  changed_at: Generated<Date>;
 }
 
 /** Makes a mutating endpoint safe to repeat (rules/20-backend.md). */
@@ -692,9 +729,11 @@ export interface Database {
   projects: ProjectsTable;
   borrow_requests: BorrowRequestsTable;
   borrow_returns: BorrowReturnsTable;
+  borrow_holder_changes: BorrowHolderChangesTable;
   idempotency_keys: IdempotencyKeysTable;
   categories: CategoriesTable;
   products: ProductsTable;
+  storage_rooms: StorageRoomsTable;
   storage_zones: StorageZonesTable;
   storage_compartments: StorageCompartmentsTable;
   stock_placements: StockPlacementsTable;

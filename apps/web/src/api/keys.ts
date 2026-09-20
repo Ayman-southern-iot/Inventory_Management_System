@@ -8,6 +8,7 @@ import type {
   ListProjectItemsQuery,
   ProjectStatus,
   ListUsersQuery,
+  SelectableUsersQuery,
   ListAuditQuery,
   ListNotificationsQuery,
   ExpenseReportQuery,
@@ -27,6 +28,12 @@ export const queryKeys = {
     all: () => ['users'] as const,
     list: (query: ListUsersQuery) => ['users', 'list', query] as const,
     detail: (id: string) => ['users', 'detail', id] as const,
+    /**
+     * The name-picker list (`GET /users/selectable`), which is not admin-only. Kept under the
+     * same `users` root so an admin edit invalidates both, but keyed separately because the
+     * two return different shapes to different audiences.
+     */
+    selectable: (query: SelectableUsersQuery) => ['users', 'selectable', query] as const,
   },
   departments: {
     all: () => ['departments'] as const,
@@ -52,6 +59,8 @@ export const queryKeys = {
   locations: {
     all: () => ['locations'] as const,
     zones: () => ['locations', 'zones'] as const,
+    /** The full Room → Zone → Compartment tree the Locations page renders. */
+    rooms: () => ['locations', 'rooms'] as const,
   },
   ledger: {
     all: () => ['ledger'] as const,

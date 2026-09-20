@@ -89,6 +89,10 @@ export class DashboardRepository {
    * — how many times they took something out. The condition counts are **units**, because
    * returning three of five cables damaged is three damaged units on a single request, and
    * counting requests would report one.
+   *
+   * Keyed on `current_holder_id`, not `requester_id` (migration 0032). This card answers "what
+   * is against my name", and "still out" in particular has to agree with the borrowing list and
+   * the overdue sweep — a loan reassigned away from someone must stop counting against them.
    */
   async borrowingFor(userId: string): Promise<BorrowingRecord> {
     const issued = [
@@ -99,7 +103,7 @@ export class DashboardRepository {
 
     const requests = await this.db
       .selectFrom('borrow_requests')
-      .where('requester_id', '=', userId)
+      .where('current_holder_id', '=', userId)
       .select((eb) => [
         // A pending or rejected request never put anything in anyone's hands.
         eb.fn.count<string>('id').filterWhere('status', 'in', issued).as('borrowed'),
@@ -117,7 +121,7 @@ export class DashboardRepository {
     const conditions = await this.db
       .selectFrom('borrow_returns')
       .innerJoin('borrow_requests', 'borrow_requests.id', 'borrow_returns.borrow_request_id')
-      .where('borrow_requests.requester_id', '=', userId)
+      .where('borrow_requests.current_holder_id', '=', userId)
       .select((eb) => [
         eb.fn
           .sum<string>('borrow_returns.quantity')

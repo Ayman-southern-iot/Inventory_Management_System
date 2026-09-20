@@ -9,6 +9,7 @@ import type { Db } from '../src/database/create-db';
 export interface StockFixture {
   categoryId: string;
   productId: string;
+  roomId: string;
   zoneId: string;
   compartmentA: string;
   compartmentB: string;
@@ -48,10 +49,27 @@ export async function createProduct(
   return row.id;
 }
 
-export async function createZone(db: Db, name?: string): Promise<string> {
+export async function createRoom(db: Db, name?: string): Promise<string> {
+  const row = await db
+    .insertInto('storage_rooms')
+    .values({ name: name ?? `Room ${randomUUID().slice(0, 8)}` })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  return row.id;
+}
+
+/**
+ * `roomId` is optional so the eighteen specs that only ever wanted "a zone to put stock in" do
+ * not each have to grow a room they never mention. One is created on demand; a spec that cares
+ * about the room level passes its own.
+ */
+export async function createZone(db: Db, name?: string, roomId?: string): Promise<string> {
   const row = await db
     .insertInto('storage_zones')
-    .values({ name: name ?? `Zone ${randomUUID().slice(0, 8)}` })
+    .values({
+      name: name ?? `Zone ${randomUUID().slice(0, 8)}`,
+      room_id: roomId ?? (await createRoom(db)),
+    })
     .returning('id')
     .executeTakeFirstOrThrow();
   return row.id;
@@ -74,10 +92,11 @@ export async function createCompartment(
 export async function createStockFixture(db: Db): Promise<StockFixture> {
   const categoryId = await createCategory(db);
   const productId = await createProduct(db, { categoryId });
-  const zoneId = await createZone(db);
+  const roomId = await createRoom(db);
+  const zoneId = await createZone(db, undefined, roomId);
   const compartmentA = await createCompartment(db, zoneId, 'A1');
   const compartmentB = await createCompartment(db, zoneId, 'B2');
-  return { categoryId, productId, zoneId, compartmentA, compartmentB };
+  return { categoryId, productId, roomId, zoneId, compartmentA, compartmentB };
 }
 
 export async function placementOf(

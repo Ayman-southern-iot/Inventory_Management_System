@@ -25,6 +25,9 @@ const ARGON2 = {
  * environment. Their password is deliberately obvious and comes from config — with demo mode
  * on it is also printed on the login page, which is the whole point and the whole risk.
  */
+/** The room the seeded zones hang under. Reference data, so a literal belongs here. */
+const SEED_ROOM_NAME = 'Main Store';
+
 const demoEnabled = config.demo.accountsEnabled || !config.isProduction;
 const DEMO_PASSWORD = config.demo.password;
 
@@ -236,17 +239,45 @@ async function main(): Promise<void> {
         { name: 'Nvidia', compartments: ['3C', '4D'] },
       ];
       const compartmentIds = new Map<string, string>();
+
+      // Zones live in a room since migration 0033. Seeded idempotently like everything else
+      // here, and named neutrally because a fresh install renames it on day one.
+      await db
+        .insertInto('storage_rooms')
+        .values({ name: SEED_ROOM_NAME })
+        .onConflict((oc) => oc.doNothing())
+        .execute();
+      const roomRow = await db
+        .selectFrom('storage_rooms')
+        .select('id')
+        .where('name', '=', SEED_ROOM_NAME)
+        .executeTakeFirstOrThrow();
+
       for (const zone of zones) {
-        await db
-          .insertInto('storage_zones')
-          .values({ name: zone.name })
-          .onConflict((oc) => oc.doNothing())
-          .execute();
-        const zoneRow = await db
+        /**
+         * Look first, insert second — and look across **every** room, not just the seeded one.
+         *
+         * This used to lean on `ON CONFLICT DO NOTHING` against the global unique index on zone
+         * name. Migration 0033 replaced that index with a per-room one, so the conflict stopped
+         * matching and a second run happily created a second "Meta" in a different room. On an
+         * existing database that is exactly what happens: the migration parks the real zones in
+         * a backfill room, then the seed adds its own copies. The seed's intent has always been
+         * "ensure a zone called Meta exists" — that intent is name-global, so the lookup has to
+         * be too, even though the constraint no longer is.
+         */
+        let zoneRow = await db
           .selectFrom('storage_zones')
           .select('id')
           .where('name', '=', zone.name)
           .executeTakeFirst();
+
+        if (!zoneRow) {
+          zoneRow = await db
+            .insertInto('storage_zones')
+            .values({ name: zone.name, room_id: roomRow.id })
+            .returning('id')
+            .executeTakeFirst();
+        }
         if (!zoneRow) continue;
 
         for (const code of zone.compartments) {

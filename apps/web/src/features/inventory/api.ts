@@ -8,6 +8,7 @@ import type {
   CreateCategoryInput,
   CreateCompartmentInput,
   CreateProductInput,
+  CreateRoomInput,
   CreateZoneInput,
   LedgerEntry,
   ListLedgerQuery,
@@ -18,9 +19,11 @@ import type {
   ProductDetail,
   ReceiveStockInput,
   ResolveQuarantineInput,
+  Room,
   UpdateCategoryInput,
   UpdateCompartmentInput,
   UpdateProductInput,
+  UpdateRoomInput,
   UpdateZoneInput,
   Zone,
 } from '@ims/shared';
@@ -110,6 +113,32 @@ export function useZones(includeInactive = false) {
     queryKey: [...queryKeys.locations.zones(), { includeInactive }],
     queryFn: ({ signal }) =>
       api.get<Zone[]>(`/locations${includeInactive ? '?includeInactive=true' : ''}`, signal),
+  });
+}
+
+/** The full tree. The pickers use `useZones` above, which stays a flat list. */
+export function useRooms(includeInactive = false) {
+  return useQuery({
+    queryKey: [...queryKeys.locations.rooms(), { includeInactive }],
+    queryFn: ({ signal }) =>
+      api.get<Room[]>(`/locations/rooms${includeInactive ? '?includeInactive=true' : ''}`, signal),
+  });
+}
+
+export function useCreateRoom() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateRoomInput) => api.post<Room>('/locations/rooms', input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.locations.all() }),
+  });
+}
+
+export function useUpdateRoom() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateRoomInput }) =>
+      api.patch<Room>(`/locations/rooms/${id}`, input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.locations.all() }),
   });
 }
 

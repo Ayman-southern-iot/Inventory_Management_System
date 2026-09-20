@@ -4,6 +4,7 @@ import {
   BorrowFilter,
   BorrowStatus,
   OUTSTANDING_STATUSES,
+  formatLocation,
   type BorrowRequest,
   type ListBorrowsQuery,
   type Paginated,
@@ -74,6 +75,10 @@ export class BorrowingRepository {
       .values({
         borrow_no: values.borrowNo,
         requester_id: values.requesterId,
+        // A new borrow is held by whoever it is raised for. They diverge only when an IM
+        // reassigns custody later; `current_holder_id` is NOT NULL, so it is set here and
+        // never left for a later UPDATE to fill in.
+        current_holder_id: values.requesterId,
         product_id: values.productId,
         placement_id: values.placementId,
         compartment_id: values.compartmentId,
@@ -156,6 +161,60 @@ export class BorrowingRepository {
   // captured before the claim, used to unwind a return whose stock movement failed. It was
   // removed with G-15 — the return and its stock movement now share one transaction, so there is
   // nothing to compensate. Reintroducing a hand-rolled compensation is the bug, not the fix.
+
+  /**
+   * Move custody, conditional on the row still being where the caller read it.
+   *
+   * Same shape as `claimPendingDecision` and for the same reason: two IMs reassigning the same
+   * borrow at once must not both succeed, or the trail records two transfers out of a holder
+   * who only had it once. The WHERE on `current_holder_id` *and* `status` means the database
+   * decides the winner; zero updated rows is how the loser finds out.
+   *
+   * Deliberately does not touch `requester_id`, `issued_at`, or anything stock-related. The
+   * units are already off the shelf — this moves a name, nothing else.
+   */
+  async claimHolderChange(
+    id: string,
+    values: {
+      toUserId: string;
+      expectedHolderId: string;
+      allowedStatuses: readonly BorrowStatus[];
+    },
+    tx: Tx,
+  ): Promise<boolean> {
+    const result = await tx
+      .updateTable('borrow_requests')
+      .set({ current_holder_id: values.toUserId })
+      .where('id', '=', id)
+      .where('current_holder_id', '=', values.expectedHolderId)
+      .where('status', 'in', [...values.allowedStatuses])
+      .executeTakeFirst();
+
+    return Number(result.numUpdatedRows ?? 0n) === 1;
+  }
+
+  /** One append-only row per reassignment. The table refuses UPDATE and DELETE by trigger. */
+  async insertHolderChange(
+    values: {
+      borrowRequestId: string;
+      fromUserId: string;
+      toUserId: string;
+      changedBy: string;
+      reason: string;
+    },
+    tx: Tx,
+  ): Promise<void> {
+    await tx
+      .insertInto('borrow_holder_changes')
+      .values({
+        borrow_request_id: values.borrowRequestId,
+        from_user_id: values.fromUserId,
+        to_user_id: values.toUserId,
+        changed_by: values.changedBy,
+        reason: values.reason,
+      })
+      .execute();
+  }
 
   async revertToPending(id: string, tx?: Tx): Promise<void> {
     const writer: Writer = tx ?? this.db;
@@ -377,6 +436,9 @@ export class BorrowingRepository {
     return writer
       .selectFrom('borrow_requests')
       .innerJoin('users as requester', 'requester.id', 'borrow_requests.requester_id')
+      // Both people, always. The requester is who asked and the holder is who has it; a screen
+      // that renders only one of them is guessing which question its reader is asking.
+      .innerJoin('users as holder', 'holder.id', 'borrow_requests.current_holder_id')
       .innerJoin('products', 'products.id', 'borrow_requests.product_id')
       .innerJoin(
         'storage_compartments',
@@ -384,6 +446,7 @@ export class BorrowingRepository {
         'borrow_requests.compartment_id',
       )
       .innerJoin('storage_zones', 'storage_zones.id', 'storage_compartments.zone_id')
+      .innerJoin('storage_rooms', 'storage_rooms.id', 'storage_zones.room_id')
       .leftJoin('projects', 'projects.id', 'borrow_requests.project_id')
       .leftJoin('users as decider', 'decider.id', 'borrow_requests.decided_by')
       .select([
@@ -391,6 +454,8 @@ export class BorrowingRepository {
         'borrow_requests.borrow_no',
         'borrow_requests.requester_id',
         'requester.full_name as requester_name',
+        'borrow_requests.current_holder_id',
+        'holder.full_name as current_holder_name',
         'borrow_requests.product_id',
         'products.name as product_name',
         'products.product_code',
@@ -398,6 +463,7 @@ export class BorrowingRepository {
         'borrow_requests.compartment_id',
         'storage_compartments.code as compartment_code',
         'storage_zones.name as zone_name',
+        'storage_rooms.name as room_name',
         'borrow_requests.quantity',
         'borrow_requests.returned_qty',
         'borrow_requests.project_id',
@@ -423,16 +489,22 @@ export class BorrowingRepository {
     return row ? toBorrowRequest(row, this.today()) : undefined;
   }
 
+  /**
+   * `restrictToHolderId` is the holder, not the requester. "My borrowings" means the equipment
+   * that is against my name right now — after a reassignment the loan must appear on the new
+   * holder's list and leave the old one's, or the screen contradicts the overdue reminder.
+   * Who *asked* is still on every row as `requesterName`.
+   */
   async list(
     query: ListBorrowsQuery,
-    restrictToRequesterId?: string,
+    restrictToHolderId?: string,
   ): Promise<Paginated<BorrowRequest>> {
     const offset = (query.page - 1) * query.limit;
 
     const applyFilters = <T extends ReturnType<typeof this.viewSelect>>(qb: T) =>
       qb
-        .$if(restrictToRequesterId !== undefined, (b) =>
-          b.where('borrow_requests.requester_id', '=', restrictToRequesterId!),
+        .$if(restrictToHolderId !== undefined, (b) =>
+          b.where('borrow_requests.current_holder_id', '=', restrictToHolderId!),
         )
         .$if(query.productId !== undefined, (b) =>
           b.where('borrow_requests.product_id', '=', query.productId!),
@@ -497,10 +569,17 @@ export class BorrowingRepository {
     return Number(row?.count ?? 0);
   }
 
-  async findOverdue(): Promise<Array<{ id: string; borrow_no: string; requester_id: string }>> {
+  /**
+   * The overdue sweep chases the person who has the item, which after a reassignment is not
+   * the person who asked for it. This is the read the plan singles out: get it wrong and the
+   * reminder goes to somebody who handed the equipment on weeks ago.
+   */
+  async findOverdue(): Promise<
+    Array<{ id: string; borrow_no: string; current_holder_id: string }>
+  > {
     return this.db
       .selectFrom('borrow_requests')
-      .select(['id', 'borrow_no', 'requester_id'])
+      .select(['id', 'borrow_no', 'current_holder_id'])
       .where('status', 'in', [...OUTSTANDING_STATUSES])
       .where('expected_return_date', '<', sql<string>`current_date`)
       .execute();
@@ -600,6 +679,8 @@ interface BorrowViewRow {
   borrow_no: string;
   requester_id: string;
   requester_name: string;
+  current_holder_id: string;
+  current_holder_name: string;
   product_id: string;
   product_name: string;
   product_code: string;
@@ -607,6 +688,7 @@ interface BorrowViewRow {
   compartment_id: string;
   compartment_code: string;
   zone_name: string;
+  room_name: string;
   quantity: number;
   returned_qty: number;
   project_id: string | null;
@@ -639,12 +721,19 @@ function toBorrowRequest(row: BorrowViewRow, today: string): BorrowRequest {
     borrowNo: row.borrow_no,
     requesterId: row.requester_id,
     requesterName: row.requester_name,
+    currentHolderId: row.current_holder_id,
+    currentHolderName: row.current_holder_name,
     productId: row.product_id,
     productName: row.product_name,
     productCode: row.product_code,
     unit: row.unit,
     compartmentId: row.compartment_id,
-    location: `${row.zone_name} / ${row.compartment_code}`,
+    // Room → Zone → Compartment (0033), via the one shared formatter.
+    location: formatLocation({
+      roomName: row.room_name,
+      zoneName: row.zone_name,
+      compartmentCode: row.compartment_code,
+    }),
     quantity: row.quantity,
     returnedQty: row.returned_qty,
     outstandingQty: outstanding,

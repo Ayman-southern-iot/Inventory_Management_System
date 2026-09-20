@@ -23,7 +23,9 @@ export class OverdueBorrowJob {
 
     this.logger.warn(`${overdue.length} borrow(s) past their expected return date`);
     for (const row of overdue) {
-      this.logger.warn(`  overdue ${row.borrow_no} (requester ${row.requester_id})`);
+      // The holder, not the requester. Chasing whoever raised the request is how the reminder
+      // reaches someone who handed the equipment on weeks ago.
+      this.logger.warn(`  overdue ${row.borrow_no} (holder ${row.current_holder_id})`);
     }
     return overdue.length;
   }

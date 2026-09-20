@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { LedgerEntry, ListLedgerQuery, Paginated } from '@ims/shared';
+import { formatLocation, type LedgerEntry, type ListLedgerQuery, type Paginated } from '@ims/shared';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
 
@@ -8,9 +8,17 @@ import type { Db } from '../../database/create-db';
  * write path and keeping reads out of it makes "who writes stock?" answerable by looking at
  * one file (ADR-0001).
  */
-/** Null on the side a movement did not touch — a RECEIPT has no origin, an ISSUE no destination. */
-function locationLabel(zoneName: string | null, code: string | null): string | null {
-  return zoneName && code ? `${zoneName} / ${code}` : null;
+/**
+ * Null on the side a movement did not touch — a RECEIPT has no origin, an ISSUE no destination.
+ * Room → Zone → Compartment since migration 0033, built by the one shared formatter so this
+ * label cannot drift from the four other places that render a location.
+ */
+function locationLabel(
+  roomName: string | null,
+  zoneName: string | null,
+  code: string | null,
+): string | null {
+  return zoneName && code ? formatLocation({ roomName, zoneName, compartmentCode: code }) : null;
 }
 
 @Injectable()
@@ -31,8 +39,10 @@ export class StockLedgerRepository {
         'stock_ledger.from_compartment_id',
       )
       .leftJoin('storage_zones as from_zone', 'from_zone.id', 'from_comp.zone_id')
+      .leftJoin('storage_rooms as from_room', 'from_room.id', 'from_zone.room_id')
       .leftJoin('storage_compartments as to_comp', 'to_comp.id', 'stock_ledger.to_compartment_id')
       .leftJoin('storage_zones as to_zone', 'to_zone.id', 'to_comp.zone_id')
+      .leftJoin('storage_rooms as to_room', 'to_room.id', 'to_zone.room_id')
       .leftJoin('users', 'users.id', 'stock_ledger.performed_by')
       // For BORROW-referencing rows, the latest `borrow_returns.condition` at-or-before the
       // ledger timestamp is what the IM actually recorded about the returned unit's state. A
@@ -76,8 +86,10 @@ export class StockLedgerRepository {
           'users.full_name as performed_by_name',
           'from_comp.code as from_code',
           'from_zone.name as from_zone_name',
+          'from_room.name as from_room_name',
           'to_comp.code as to_code',
           'to_zone.name as to_zone_name',
+          'to_room.name as to_room_name',
           'latest_return.condition as condition',
         ])
         // Newest first, and by id as the tiebreak: several movements can share a timestamp,
@@ -95,8 +107,8 @@ export class StockLedgerRepository {
         id: String(row.id),
         productId: row.product_id,
         productName: row.product_name,
-        fromCompartment: locationLabel(row.from_zone_name, row.from_code),
-        toCompartment: locationLabel(row.to_zone_name, row.to_code),
+        fromCompartment: locationLabel(row.from_room_name, row.from_zone_name, row.from_code),
+        toCompartment: locationLabel(row.to_room_name, row.to_zone_name, row.to_code),
         quantity: row.quantity,
         movementType: row.movement_type,
         refType: row.ref_type,

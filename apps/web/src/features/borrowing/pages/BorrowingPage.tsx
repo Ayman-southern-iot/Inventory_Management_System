@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Check, RotateCcw, Undo2, X } from 'lucide-react';
+import { ArrowLeftRight, Check, RotateCcw, Undo2, X } from 'lucide-react';
 import {
   BorrowFilter,
   BorrowStatus,
@@ -22,6 +22,7 @@ import { SEARCH_DEBOUNCE_MS } from '@/features/inventory/constants';
 import { useDebouncedValue } from '@/features/inventory/hooks/useDebouncedValue';
 import { useBorrows, useCancelBorrow, useDecideBorrow, useRevertBorrow } from '../api';
 import { BorrowStatusBadge } from '../components/BorrowStatusBadge';
+import { ReassignHolderDialog } from '../components/ReassignHolderDialog';
 import { ReturnDialog } from '../components/ReturnDialog';
 
 const FILTERS: Array<{ value: BorrowFilter; label: string }> = [
@@ -45,6 +46,8 @@ export function BorrowingPage({ mine = false }: { mine?: boolean }) {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [returning, setReturning] = useState<BorrowRequest | undefined>(undefined);
+  /** The borrow whose holder is being changed, or undefined. */
+  const [reassigning, setReassigning] = useState<BorrowRequest | undefined>(undefined);
   /** The borrow whose decision is being reverted, or null. */
   const [reverting, setReverting] = useState<string | null>(null);
 
@@ -142,7 +145,7 @@ export function BorrowingPage({ mine = false }: { mine?: boolean }) {
                 headers={[
                   t.borrowing.borrowNo,
                   t.borrowing.product,
-                  mine ? t.borrowing.project : t.borrowing.borrower,
+                  mine ? t.borrowing.project : t.borrowing.holder,
                   t.borrowing.quantity,
                   t.borrowing.expectedReturn,
                   t.users.status,
@@ -159,7 +162,24 @@ export function BorrowingPage({ mine = false }: { mine?: boolean }) {
                       <p className="text-xs text-ink-subtle">{borrow.location}</p>
                     </td>
                     <td className="px-4 py-2.5 text-ink-muted">
-                      {mine ? (borrow.projectName ?? t.common.none) : borrow.requesterName}
+                      {mine ? (
+                        (borrow.projectName ?? t.common.none)
+                      ) : (
+                        <>
+                          {borrow.currentHolderName}
+                          {/*
+                            Only when they differ. On the overwhelming majority of rows the
+                            holder is the requester, and printing "Requested by <same name>"
+                            under every one of them is noise that trains people to skip the
+                            column — which defeats the point on the rows where it matters.
+                          */}
+                          {borrow.currentHolderId !== borrow.requesterId ? (
+                            <span className="block text-xs text-ink-subtle">
+                              {t.borrowing.requestedBy}: {borrow.requesterName}
+                            </span>
+                          ) : null}
+                        </>
+                      )}
                     </td>
                     <td className="px-4 py-2.5 tabular-nums text-ink">
                       {borrow.quantity} {borrow.unit}
@@ -235,6 +255,25 @@ export function BorrowingPage({ mine = false }: { mine?: boolean }) {
                           </Button>
                         ) : null}
 
+                        {/*
+                          Custody reassignment. Offered for the whole time the item is out,
+                          including a partially returned borrow — unlike Revert, which is only
+                          legal before anything has come back. It moves no stock.
+                        */}
+                        {canManage &&
+                        (borrow.status === BorrowStatus.ISSUED ||
+                          borrow.status === BorrowStatus.PARTIALLY_RETURNED) ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            aria-label={`${t.borrowing.reassign} ${borrow.borrowNo}`}
+                            icon={<ArrowLeftRight aria-hidden className="size-4" />}
+                            onClick={() => setReassigning(borrow)}
+                          >
+                            {t.borrowing.reassign}
+                          </Button>
+                        ) : null}
+
                         {/* OQ-04: only offered while nothing has come back yet. */}
                         {canManage &&
                         borrow.status === BorrowStatus.ISSUED &&
@@ -279,6 +318,11 @@ export function BorrowingPage({ mine = false }: { mine?: boolean }) {
       </Panel>
 
       <ReturnDialog borrow={returning} onClose={() => setReturning(undefined)} />
+
+      <ReassignHolderDialog
+        borrow={reassigning}
+        onClose={() => setReassigning(undefined)}
+      />
 
       <ReasonDialog
         open={reverting !== null}

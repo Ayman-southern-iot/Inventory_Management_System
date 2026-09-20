@@ -749,8 +749,11 @@ export const t = {
    * feature's copy is how one feature renaming a label breaks another screen.
    */
   compartmentPicker: {
+    room: 'Room',
+    roomPlaceholder: 'Choose a room',
     zone: 'Zone',
     zonePlaceholder: 'Choose a zone',
+    zonePickRoomFirst: 'Pick a room first',
     compartment: 'Compartment',
     compartmentPlaceholder: 'Choose a compartment',
     compartmentPickZoneFirst: 'Pick a zone first',
@@ -758,7 +761,16 @@ export const t = {
 
   locations: {
     title: 'Locations',
-    subtitle: 'Zones hold compartments. A product’s stock lives in a compartment.',
+    subtitle:
+      'Rooms hold zones, zones hold compartments. A product’s stock lives in a compartment.',
+    newRoom: 'New room',
+    editRoom: 'Edit room',
+    room: 'Room',
+    roomName: 'Room name',
+    zones: 'Zones',
+    roomCreated: 'Room created.',
+    roomUpdated: 'Room updated.',
+    noZones: 'No zones in this room yet.',
     newZone: 'New zone',
     editZone: 'Edit zone',
     newCompartment: 'New compartment',
@@ -772,8 +784,8 @@ export const t = {
     zoneUpdated: 'Zone updated.',
     compartmentCreated: 'Compartment created.',
     compartmentUpdated: 'Compartment updated.',
-    emptyTitle: 'No zones yet',
-    emptyBody: 'Create a zone, then add compartments to it.',
+    emptyTitle: 'No rooms yet',
+    emptyBody: 'Create a room, then add zones and compartments inside it.',
     noCompartments: 'No compartments in this zone yet.',
   },
 
@@ -785,6 +797,13 @@ export const t = {
     borrow: 'Borrow',
     borrowNo: 'Reference',
     borrower: 'Taken by',
+    /**
+     * Two different people once a loan has changed hands: `borrower` is who asked for it and
+     * `holder` is who has it now. The list shows the holder, because "who has the equipment" is
+     * the question that screen is read to answer.
+     */
+    holder: 'Held by',
+    requestedBy: 'Requested by',
     product: 'Product',
     project: 'Project',
     noProject: 'No project',
@@ -810,6 +829,21 @@ export const t = {
     revert: 'Revert to pending',
     revertTitle: 'Revert this borrow',
     revertReason: 'Why is this being reverted?',
+    // Custody reassignment. Nothing moves on the shelf — see migration 0032.
+    reassign: 'Change holder',
+    reassignTitle: 'Change who holds this',
+    reassignHolder: 'New holder',
+    reassignHolderHint: 'Who has the item now. The person it came off is told as well.',
+    reassignReason: 'Why is it moving?',
+    reassignReasonHint: 'Recorded permanently against the borrow, and shown to both people.',
+    /**
+     * Said plainly on the dialog because it is the thing an IM will otherwise assume wrongly:
+     * this is a correction to the record, not a return followed by a re-issue, and no stock
+     * moves anywhere.
+     */
+    reassignNoStockHint: 'This changes the record only. No stock is moved and nothing is returned.',
+    reassignCurrent: 'Currently held by',
+    reassigned: 'Holder changed. Both people have been notified.',
     cancel: 'Cancel request',
     decisionNote: 'Note',
     returnCondition: 'Return condition',

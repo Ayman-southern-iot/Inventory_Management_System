@@ -6,6 +6,7 @@ import { createDatabase, type Db } from '../src/database/create-db';
 import {
   listTables,
   migrateAllTheWayDown,
+  migrateToNamed,
   migrateUp,
   migratorFor,
   resetSchemaOn,
@@ -143,6 +144,132 @@ describe('migrations', () => {
         VALUES ('blank@designation.test', 'x', 'Someone', '   ')
       `.execute(db),
     ).rejects.toThrow();
+  });
+
+  /**
+   * 0032 is the first migration in this project with a **backfill**: `current_holder_id` is
+   * added nullable, filled from `requester_id`, and then made NOT NULL. Every other test in
+   * this file migrates an empty schema, where that UPDATE touches zero rows and proves
+   * nothing. rules/40-database.md asks for a run against data, so this is that run.
+   */
+  describe('0032 — custody backfill against existing rows', () => {
+    const BEFORE = '0031_project_proposals';
+
+    /** The smallest set of rows a `borrow_requests` insert will accept on a bare schema. */
+    async function seedOneBorrow(): Promise<{ requesterId: string; borrowId: string }> {
+      const user = await sql<{ id: string }>`
+        INSERT INTO users (email, password_hash, full_name, designation)
+        VALUES ('holder.backfill@ims.test', 'x', 'Backfill Borrower', 'Engineer')
+        RETURNING id
+      `.execute(db);
+      const requesterId = user.rows[0]!.id;
+
+      const category = await sql<{ id: string }>`
+        INSERT INTO categories (name) VALUES ('Backfill Category') RETURNING id
+      `.execute(db);
+      const product = await sql<{ id: string }>`
+        INSERT INTO products (product_code, name, category_id)
+        VALUES ('BF-0001', 'Backfill Product', ${category.rows[0]!.id})
+        RETURNING id
+      `.execute(db);
+      const zone = await sql<{ id: string }>`
+        INSERT INTO storage_zones (name) VALUES ('Backfill Zone') RETURNING id
+      `.execute(db);
+      const compartment = await sql<{ id: string }>`
+        INSERT INTO storage_compartments (zone_id, code)
+        VALUES (${zone.rows[0]!.id}, 'BF1')
+        RETURNING id
+      `.execute(db);
+
+      const borrow = await sql<{ id: string }>`
+        INSERT INTO borrow_requests
+          (borrow_no, requester_id, product_id, compartment_id, quantity, is_returnable, status)
+        VALUES
+          ('BR-999001', ${requesterId}, ${product.rows[0]!.id}, ${compartment.rows[0]!.id},
+           2, true, 'ISSUED')
+        RETURNING id
+      `.execute(db);
+
+      return { requesterId, borrowId: borrow.rows[0]!.id };
+    }
+
+    it('fills current_holder_id from requester_id on rows that already existed', async () => {
+      await migrateToNamed(db, BEFORE);
+
+      // The column does not exist yet — that is the state a real deployment is in.
+      const before = await sql<{ n: string }>`
+        SELECT count(*) AS n FROM information_schema.columns
+        WHERE table_name = 'borrow_requests' AND column_name = 'current_holder_id'
+      `.execute(db);
+      expect(Number(before.rows[0]!.n)).toBe(0);
+
+      const { requesterId, borrowId } = await seedOneBorrow();
+
+      await migrateUp(db);
+
+      const after = await sql<{ requester_id: string; current_holder_id: string }>`
+        SELECT requester_id, current_holder_id FROM borrow_requests WHERE id = ${borrowId}
+      `.execute(db);
+      // The grandfathered row is held by whoever asked for it, and `requester_id` is untouched.
+      expect(after.rows[0]).toEqual({
+        requester_id: requesterId,
+        current_holder_id: requesterId,
+      });
+    });
+
+    it('refuses a borrow with no holder once the backfill has run', async () => {
+      await migrateToNamed(db, BEFORE);
+      const { requesterId } = await seedOneBorrow();
+      await migrateUp(db);
+
+      // NOT NULL is the point of the third step. Without it "who has this" is answerable with
+      // "nobody", which is never true of equipment that has left the shelf.
+      await expect(
+        sql`
+          UPDATE borrow_requests SET current_holder_id = NULL WHERE requester_id = ${requesterId}
+        `.execute(db),
+      ).rejects.toThrow();
+    });
+
+    it('keeps the custody trail append-only', async () => {
+      await migrateToNamed(db, BEFORE);
+      const { requesterId, borrowId } = await seedOneBorrow();
+      await migrateUp(db);
+
+      const other = await sql<{ id: string }>`
+        INSERT INTO users (email, password_hash, full_name, designation)
+        VALUES ('second.holder@ims.test', 'x', 'Second Holder', 'Engineer')
+        RETURNING id
+      `.execute(db);
+
+      await sql`
+        INSERT INTO borrow_holder_changes
+          (borrow_request_id, from_user_id, to_user_id, changed_by, reason)
+        VALUES (${borrowId}, ${requesterId}, ${other.rows[0]!.id}, ${requesterId}, 'handover')
+      `.execute(db);
+
+      // The trigger fails every role including the owner, exactly as stock_ledger does.
+      await expect(
+        sql`UPDATE borrow_holder_changes SET reason = 'rewritten'`.execute(db),
+      ).rejects.toThrow();
+      await expect(sql`DELETE FROM borrow_holder_changes`.execute(db)).rejects.toThrow();
+
+      // And the two CHECKs, which are what stop an empty reason or a transfer to nobody.
+      await expect(
+        sql`
+          INSERT INTO borrow_holder_changes
+            (borrow_request_id, from_user_id, to_user_id, changed_by, reason)
+          VALUES (${borrowId}, ${requesterId}, ${requesterId}, ${requesterId}, 'same person')
+        `.execute(db),
+      ).rejects.toThrow();
+      await expect(
+        sql`
+          INSERT INTO borrow_holder_changes
+            (borrow_request_id, from_user_id, to_user_id, changed_by, reason)
+          VALUES (${borrowId}, ${requesterId}, ${other.rows[0]!.id}, ${requesterId}, '   ')
+        `.execute(db),
+      ).rejects.toThrow();
+    });
   });
 
   it('allows only one company-wide row per approver slot', async () => {

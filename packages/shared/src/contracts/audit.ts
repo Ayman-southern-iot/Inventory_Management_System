@@ -53,6 +53,9 @@ export const AUDIT_ACTIONS = [
   'product.create',
   'product.update',
   'product.set_active',
+  /** The level above a zone (migration 0033). Renaming one never rewrites a Storage ID. */
+  'room.create',
+  'room.update',
   'zone.create',
   'zone.update',
   'zone.set_active',
@@ -96,6 +99,8 @@ export const AUDIT_ACTIONS = [
   'borrowing.return',
   'borrowing.return_reversed',
   'borrowing.issue_on_behalf',
+  /** Custody moved from one person to another. No stock moved — see migration 0032. */
+  'borrowing.holder_changed',
   // Requisitions
   'requisition.create',
   'requisition.update',
@@ -188,6 +193,7 @@ export const AUDIT_ENTITY_TYPES = [
   'approver_slot',
   'category',
   'product',
+  'room',
   'zone',
   'compartment',
   'project',

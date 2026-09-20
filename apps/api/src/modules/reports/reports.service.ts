@@ -166,6 +166,7 @@ export class ReportsService {
       const quarantined = row.quarantined_qty ?? 0;
 
       product.placements.push({
+        roomName: row.room_name ?? '',
         zoneName: row.zone_name ?? '',
         compartmentName: row.compartment_name,
         quantity,

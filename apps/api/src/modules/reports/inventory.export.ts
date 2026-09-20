@@ -1,4 +1,4 @@
-import type { InventoryReport, InventoryReportRow } from '@ims/shared';
+import { formatLocation, type InventoryReport, type InventoryReportRow } from '@ims/shared';
 
 /**
  * EX-02, requirements §10: "Bill of Materials and inventory records can be exported as PDF for
@@ -37,6 +37,7 @@ const HEADERS = [
   'Category',
   'Unit',
   'Holding',
+  'Room',
   'Zone',
   'Compartment',
   'Quantity',
@@ -63,6 +64,7 @@ function csvRowsFor(row: InventoryReportRow): string[] {
     [
       ...common,
       SHELF,
+      csvField(placement.roomName),
       csvField(placement.zoneName),
       csvField(placement.compartmentName),
       placement.quantity,
@@ -138,7 +140,13 @@ export function inventoryReportToHtml(report: InventoryReport, timeZone: string)
               .map(
                 (placement) => `
                 <tr class="placement">
-                  <td>${escapeHtml(placement.zoneName)} / ${escapeHtml(placement.compartmentName)}</td>
+                  <td>${escapeHtml(
+                    formatLocation({
+                      roomName: placement.roomName,
+                      zoneName: placement.zoneName,
+                      compartmentCode: placement.compartmentName,
+                    }),
+                  )}</td>
                   <td class="num dim">&mdash;</td>
                   <td class="num">${placement.quantity}</td>
                   <td class="num dim">&mdash;</td>

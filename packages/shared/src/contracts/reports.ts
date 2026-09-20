@@ -198,6 +198,7 @@ export type InventoryReportQuery = z.infer<typeof inventoryReportQuerySchema>;
 
 /** Where one product physically sits, and how much of it is there. */
 export const inventoryReportPlacementSchema = z.object({
+  roomName: z.string(),
   zoneName: z.string(),
   compartmentName: z.string(),
   quantity: z.number().int(),
