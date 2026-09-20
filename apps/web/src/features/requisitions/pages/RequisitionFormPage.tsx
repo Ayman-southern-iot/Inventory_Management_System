@@ -26,7 +26,7 @@ import { messageForError } from '@/lib/error-message';
 import { formatBdt } from '@/lib/format';
 import { ROUTES } from '@/routes/paths';
 import { useDepartments } from '@/features/admin/api';
-import { useProjects } from '@/features/projects/api';
+import { useSelectableProjects } from '@/features/projects/api';
 import { useAllProducts } from '@/features/inventory/api';
 import { ItemRow } from '../components/ItemRow';
 import { lineTotalOf } from '../lineTotal';
@@ -94,7 +94,7 @@ export function RequisitionFormPage() {
 
   const existing = useRequisition(requisitionId ?? '');
   const departments = useDepartments(DEPARTMENTS_QUERY);
-  const projects = useProjects();
+  const projects = useSelectableProjects();
   const catalogue = useAllProducts(CATALOGUE_QUERY);
 
   const createRequisition = useCreateRequisition();

@@ -58,7 +58,7 @@ vi.mock('@/features/admin/api', () => ({
 }));
 
 vi.mock('@/features/projects/api', () => ({
-  useProjects: () => ({
+  useSelectableProjects: () => ({
     data: optionsLoaded ? PROJECTS : undefined,
     isPending: !optionsLoaded,
   }),

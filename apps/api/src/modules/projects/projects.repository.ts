@@ -1,9 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   BorrowStatus,
+  ProjectStatus,
   ProjectUsage,
   type ListProjectItemsQuery,
-  type PaginationQuery,
+  type ListProjectsQuery,
   type ProjectItem,
 } from '@ims/shared';
 import { DB } from '../../database/database.module';
@@ -149,21 +150,46 @@ export class ProjectsRepository {
     return Number(result.numUpdatedRows ?? 0n);
   }
 
-  async listProjects(query: PaginationQuery) {
+  /**
+   * Both name joins are LEFT, not INNER. `created_by` and `decided_by` are
+   * `ON DELETE SET NULL`, so either can legitimately be null — an inner join would drop the
+   * project from the list entirely once the person who raised it left the company.
+   */
+  private projectsBase() {
+    return this.db
+      .selectFrom('projects as pr')
+      .leftJoin('users as creator', 'creator.id', 'pr.created_by')
+      .leftJoin('users as decider', 'decider.id', 'pr.decided_by');
+  }
+
+  async listProjects(query: ListProjectsQuery) {
     const offset = (query.page - 1) * query.limit;
-    const rows = await this.db
-      .selectFrom('projects')
-      .select(['id', 'name', 'is_active', 'created_at'])
-      .where('is_active', '=', true)
-      .orderBy('name')
-      .orderBy('id')
+    const filtered = <T extends ReturnType<ProjectsRepository['projectsBase']>>(qb: T) =>
+      qb.where('pr.status', '=', query.status!);
+
+    const rows = await this.projectsBase()
+      .$if(query.status !== undefined, filtered)
+      .select([
+        'pr.id',
+        'pr.name',
+        'pr.is_active',
+        'pr.status',
+        'pr.decided_at',
+        'pr.decision_note',
+        'pr.created_at',
+        'creator.full_name as created_by_name',
+        'decider.full_name as decided_by_name',
+      ])
+      .where('pr.is_active', '=', true)
+      .orderBy('pr.name')
+      .orderBy('pr.id')
       .limit(query.limit)
       .offset(offset)
       .execute();
 
-    const counted = await this.db
-      .selectFrom('projects')
-      .where('is_active', '=', true)
+    const counted = await this.projectsBase()
+      .$if(query.status !== undefined, filtered)
+      .where('pr.is_active', '=', true)
       .select((eb) => eb.fn.countAll<number>().as('count'))
       .executeTakeFirst();
 
@@ -171,10 +197,47 @@ export class ProjectsRepository {
   }
 
   async findById(id: string) {
-    return this.db
-      .selectFrom('projects')
-      .select(['id', 'name', 'is_active', 'created_at'])
-      .where('id', '=', id)
+    return this.projectsBase()
+      .select([
+        'pr.id',
+        'pr.name',
+        'pr.is_active',
+        'pr.status',
+        'pr.decided_at',
+        'pr.decision_note',
+        'pr.created_at',
+        'pr.created_by',
+        'creator.full_name as created_by_name',
+        'decider.full_name as decided_by_name',
+      ])
+      .where('pr.id', '=', id)
       .executeTakeFirst();
+  }
+
+  /**
+   * Conditional on the project still being PROPOSED, the same shape `detachItem` uses: two IMs
+   * on the same screen is the normal case, and zero rows updated is how the second one finds
+   * out rather than silently overwriting the first one's verdict.
+   */
+  async decide(
+    id: string,
+    status: Exclude<ProjectStatus, 'PROPOSED'>,
+    decidedBy: string,
+    note: string | null,
+    tx?: Tx,
+  ): Promise<number> {
+    const writer: Db | Tx = tx ?? this.db;
+    const result = await writer
+      .updateTable('projects')
+      .set({
+        status,
+        decided_by: decidedBy,
+        decided_at: new Date(),
+        decision_note: note,
+      })
+      .where('id', '=', id)
+      .where('status', '=', ProjectStatus.PROPOSED)
+      .executeTakeFirst();
+    return Number(result.numUpdatedRows ?? 0n);
   }
 }

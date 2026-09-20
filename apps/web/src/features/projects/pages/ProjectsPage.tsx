@@ -1,13 +1,11 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { PageHeader, Panel } from '@/components/ui/primitives';
 import { EmptyState, QueryBoundary, SkeletonRows } from '@/components/ui/states';
-import { formatDateTime } from '@/lib/format';
 import { t } from '@/i18n/en';
-import { ROUTES } from '@/routes/paths';
 import { useProjects } from '../api';
+import { ProjectRow } from '../components/ProjectRow';
 import { ProjectFormDialog } from '../components/ProjectFormDialog';
 
 /**
@@ -49,17 +47,7 @@ export function ProjectsPage() {
           {(items) => (
             <ul className="divide-y divide-border">
               {items.map((project) => (
-                <li key={project.id}>
-                  <Link
-                    to={ROUTES.projects.detail(project.id)}
-                    className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-surface-muted"
-                  >
-                    <span className="font-medium text-ink">{project.name}</span>
-                    <span className="text-xs text-ink-subtle">
-                      {t.projects.createdOn(formatDateTime(project.createdAt))}
-                    </span>
-                  </Link>
-                </li>
+                <ProjectRow key={project.id} project={project} />
               ))}
             </ul>
           )}

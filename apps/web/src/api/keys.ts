@@ -6,6 +6,7 @@ import type {
   ListLedgerQuery,
   ListProductsQuery,
   ListProjectItemsQuery,
+  ProjectStatus,
   ListUsersQuery,
   ListAuditQuery,
   ListNotificationsQuery,
@@ -63,8 +64,14 @@ export const queryKeys = {
   },
   projects: {
     all: () => ['projects'] as const,
-    /** Every project in one array. The hook pages through the API to build it. */
-    list: () => ['projects', 'list'] as const,
+    /**
+     * Every project in one array. The hook pages through the API to build it.
+     *
+     * `status` is part of the key: the pickers ask for ACTIVE only, the hub asks for all, and
+     * a shared key would serve one of them the other's answer — which for the pickers means
+     * offering projects nobody has accepted yet.
+     */
+    list: (status?: ProjectStatus) => ['projects', 'list', status ?? 'all'] as const,
     detail: (id: string) => ['projects', 'detail', id] as const,
     /** Prefix for one project's item pages, whatever the usage filter. */
     itemsFor: (id: string) => ['projects', 'items', id] as const,

@@ -38,7 +38,7 @@ vi.mock('@/features/admin/api', () => ({
   useDepartments: () => ({ data: { items: [] }, isPending: false }),
 }));
 vi.mock('@/features/projects/api', () => ({
-  useProjects: () => ({ data: [], isPending: false }),
+  useSelectableProjects: () => ({ data: [], isPending: false }),
 }));
 vi.mock('@/features/inventory/api', () => ({
   useAllProducts: () => ({

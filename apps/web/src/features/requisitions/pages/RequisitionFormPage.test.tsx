@@ -33,7 +33,7 @@ vi.mock('@/features/admin/api', () => ({
 }));
 
 vi.mock('@/features/projects/api', () => ({
-  useProjects: () => ({ data: [], isPending: false }),
+  useSelectableProjects: () => ({ data: [], isPending: false }),
 }));
 
 /**

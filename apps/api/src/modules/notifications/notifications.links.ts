@@ -27,5 +27,12 @@ export const NOTIFICATION_LINKS = {
   borrowingQueue: '/borrowing',
   myBorrowings: '/my-borrowings',
 
+  /**
+   * A proposal has no screen of its own. The IM reviews it from the project hub, which is also
+   * where the proposer goes to see the verdict, so both sides of the decision land here.
+   */
+  projects: '/projects',
+  project: (id: string) => `/projects/${id}`,
+
   bom: (id: string) => `/boms/${id}`,
 } as const;

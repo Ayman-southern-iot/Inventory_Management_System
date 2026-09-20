@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Paginated, Project } from '@ims/shared';
+import { ProjectStatus, type Paginated, type Project } from '@ims/shared';
 import { api } from '@/api/client';
 import { fetchAllProjects } from './api';
 
@@ -14,7 +14,17 @@ vi.mock('@/api/client', () => ({
 }));
 
 function project(id: string): Project {
-  return { id, name: `Project ${id}`, isActive: true, createdAt: '2026-01-01T00:00:00.000Z' };
+  return {
+    id,
+    name: `Project ${id}`,
+    isActive: true,
+    status: ProjectStatus.ACTIVE,
+    decidedAt: null,
+    decidedByName: null,
+    decisionNote: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    createdByName: null,
+  };
 }
 
 function makePage(items: Project[], pageNo: number, total: number): Paginated<Project> {

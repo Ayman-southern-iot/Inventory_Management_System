@@ -15,13 +15,57 @@ export const createProjectSchema = z.object({
 });
 export type CreateProjectInput = z.infer<typeof createProjectSchema>;
 
+/**
+ * Whether a proposed project has been accepted into use.
+ *
+ * Distinct from `isActive`, which archives a project that *was* accepted: an archived project
+ * has history charged to it, a rejected one never became real. Collapsing the two would make
+ * "why has this project vanished from the list" unanswerable.
+ */
+export const ProjectStatus = {
+  PROPOSED: 'PROPOSED',
+  ACTIVE: 'ACTIVE',
+  REJECTED: 'REJECTED',
+} as const;
+export type ProjectStatus = (typeof ProjectStatus)[keyof typeof ProjectStatus];
+
+export const projectStatusSchema = z.enum(
+  Object.values(ProjectStatus) as [ProjectStatus, ...ProjectStatus[]],
+);
+
 export const projectSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
   isActive: z.boolean(),
+  status: projectStatusSchema,
+  decidedAt: z.string().nullable(),
+  decidedByName: z.string().nullable(),
+  decisionNote: z.string().nullable(),
   createdAt: z.string(),
+  createdByName: z.string().nullable(),
 });
 export type Project = z.infer<typeof projectSchema>;
+
+/**
+ * The IM's verdict on a proposal. A rejection must say why — the proposer is notified, and a
+ * refusal with no reason invites the same project being proposed again next week.
+ */
+export const decideProjectSchema = z
+  .object({
+    approve: z.boolean(),
+    note: z.string().trim().max(500).optional(),
+  })
+  .refine((value) => value.approve || (value.note?.length ?? 0) > 0, {
+    path: ['note'],
+    message: 'Say why the project was rejected.',
+  });
+export type DecideProjectInput = z.infer<typeof decideProjectSchema>;
+
+/** Which projects to list. Pickers ask for ACTIVE; the management screen asks for all. */
+export const listProjectsQuerySchema = paginationQuerySchema.extend({
+  status: projectStatusSchema.optional(),
+});
+export type ListProjectsQuery = z.infer<typeof listProjectsQuerySchema>;
 
 /* ------------------------------------------------------------------- borrowing */
 

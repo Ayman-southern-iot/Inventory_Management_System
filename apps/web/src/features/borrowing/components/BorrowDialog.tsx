@@ -15,7 +15,7 @@ import { useToast } from '@/components/ui/Toast';
 import { t } from '@/i18n/en';
 import { messageForError } from '@/lib/error-message';
 import { QuantityField } from '@/features/inventory/components/QuantityField';
-import { useCreateProject, useProjects } from '@/features/projects/api';
+import { useCreateProject, useSelectableProjects } from '@/features/projects/api';
 import { useCreateBorrow } from '../api';
 
 interface Props {
@@ -30,7 +30,7 @@ export function BorrowDialog({ open, onClose, product }: Props) {
   const toast = useToast();
   const createBorrow = useCreateBorrow();
   const createProject = useCreateProject();
-  const projects = useProjects();
+  const projects = useSelectableProjects();
 
   const [newProjectName, setNewProjectName] = useState('');
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
@@ -185,6 +185,7 @@ export function BorrowDialog({ open, onClose, product }: Props) {
             <div className="flex flex-col gap-2">
               <TextField
                 label={t.borrowing.projectName}
+                hint={t.projects.proposalHint}
                 value={newProjectName}
                 onChange={(event) => {
                   setNewProjectName(event.target.value);

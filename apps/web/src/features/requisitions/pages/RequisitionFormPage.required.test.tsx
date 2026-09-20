@@ -35,7 +35,7 @@ vi.mock('@/features/admin/api', async (importOriginal) => {
 
 vi.mock('@/features/projects/api', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
-  return { ...actual, useProjects: () => ({ data: [], isPending: false }) };
+  return { ...actual, useSelectableProjects: () => ({ data: [], isPending: false }) };
 });
 
 const createSpy = vi.fn();

@@ -164,6 +164,24 @@ export const NOTIFICATION_COPY: Record<NotificationType, NotificationTemplate> =
     body: (c) => (c.dueDate ? `Was due on ${c.dueDate}` : null),
   },
 
+  /* -------------------------------------------------------------- projects */
+  'project.proposed': {
+    severity: 'action_required',
+    title: (ref, actor) => `${actor ?? 'Someone'} proposed the project ${ref}`,
+    body: () => 'It cannot be charged to until you accept it.',
+  },
+  'project.approved': {
+    severity: 'success',
+    title: (ref, actor) => `Your project ${ref} was accepted${by(actor)}`,
+    body: (c) => (c.note ? c.note : null),
+  },
+  'project.rejected': {
+    severity: 'warning',
+    title: (ref, actor) => `Your project ${ref} was not accepted${by(actor)}`,
+    // The reason is the whole point: without it the same project is proposed again next week.
+    body: (c) => (c.note ? c.note : null),
+  },
+
   /* ------------------------------------------------------------------- BOM */
   'bom.generated': {
     severity: 'success',

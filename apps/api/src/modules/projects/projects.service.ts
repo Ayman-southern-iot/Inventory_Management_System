@@ -1,21 +1,50 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
+import { ProjectStatus, Role } from '@ims/shared';
 import type {
   CreateProjectInput,
+  DecideProjectInput,
   ListProjectItemsQuery,
+  ListProjectsQuery,
   Paginated,
-  PaginationQuery,
   Project,
   ProjectDetail,
   ProjectItem,
 } from '@ims/shared';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
-import { NotFoundError } from '../../common/errors';
+import { ConflictError, NotFoundError } from '../../common/errors';
 import { AuditService } from '../audit/audit.service';
 import type { AuditContext } from '../audit/audit-context';
 import { DuplicateProjectNameError } from '../borrowing/borrowing.errors';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NOTIFICATION_LINKS } from '../notifications/notifications.links';
 import { ProjectsRepository } from './projects.repository';
+
+/** One shape for the wire, so list, detail and decide cannot drift apart. */
+function toProject(row: {
+  id: string;
+  name: string;
+  is_active: boolean;
+  status: ProjectStatus;
+  decided_at: Date | null;
+  decision_note: string | null;
+  created_at: Date;
+  created_by_name: string | null;
+  decided_by_name: string | null;
+}): Project {
+  return {
+    id: row.id,
+    name: row.name,
+    isActive: row.is_active,
+    status: row.status,
+    decidedAt: row.decided_at?.toISOString() ?? null,
+    decidedByName: row.decided_by_name,
+    decisionNote: row.decision_note,
+    createdAt: row.created_at.toISOString(),
+    createdByName: row.created_by_name,
+  };
+}
 
 /**
  * Projects are created on the fly during a borrow, so this is deliberately thin.
@@ -29,6 +58,7 @@ export class ProjectsService {
     @Inject(DB) private readonly db: Db,
     private readonly repo: ProjectsRepository,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /**
@@ -53,7 +83,7 @@ export class ProjectsService {
       const inserted = await tx
         .insertInto('projects')
         .values({ name: input.name, created_by: createdBy })
-        .returning(['id', 'name', 'is_active', 'created_at'])
+        .returning(['id', 'name', 'is_active', 'status', 'created_at'])
         .executeTakeFirstOrThrow();
       await this.audit.record(
         {
@@ -67,6 +97,20 @@ export class ProjectsService {
         context,
         tx,
       );
+      // The IMs are the only people who can turn a proposal into a usable project.
+      await this.notifications.notify(
+        {
+          type: 'project.proposed',
+          userIds: await this.notifications.usersWithRole(Role.INVENTORY_MANAGER, tx),
+          ref: input.name,
+          link: NOTIFICATION_LINKS.projects,
+          entityType: 'project',
+          entityId: inserted.id,
+          actorId: createdBy,
+          actorName: context.actorName,
+        },
+        tx,
+      );
       return inserted;
     });
 
@@ -74,21 +118,91 @@ export class ProjectsService {
       id: row.id,
       name: row.name,
       isActive: row.is_active,
+      status: row.status,
+      decidedAt: null,
+      decidedByName: null,
+      decisionNote: null,
       createdAt: row.created_at.toISOString(),
+      createdByName: context.actorName,
     };
+  }
+
+  /**
+   * The IM's verdict on a proposal.
+   *
+   * A rejection does NOT detach the borrows or requisitions already charged to the project.
+   * Attribution is history: a borrow was raised against this project and clearing that would
+   * falsify the record of where the item went, for the sake of tidying a list. The project
+   * simply stops being offered — `listProjects` filters the pickers to ACTIVE.
+   *
+   * OPEN QUESTION: OQ-C — whether a rejected project holding outstanding items should instead
+   * be refused until they are moved. Rejecting-and-leaving is the smaller default; forcing the
+   * IM to reassign somebody else's borrow before they can decline a proposal is the bigger
+   * behaviour and nobody has asked for it.
+   */
+  async decide(
+    id: string,
+    input: DecideProjectInput,
+    actorId: string,
+    context: AuditContext,
+  ): Promise<Project> {
+    const project = await this.repo.findById(id);
+    if (!project) throw new NotFoundError('Project');
+    if (project.status !== ProjectStatus.PROPOSED) {
+      throw new ConflictError('That project has already been decided.');
+    }
+
+    const status = input.approve ? ProjectStatus.ACTIVE : ProjectStatus.REJECTED;
+    const note = input.note?.trim() ? input.note.trim() : null;
+
+    await this.db.transaction().execute(async (tx) => {
+      const updated = await this.repo.decide(id, status, actorId, note, tx);
+      // Zero rows means another IM decided it between the read above and this write.
+      if (updated === 0) throw new ConflictError('That project has already been decided.');
+
+      await this.audit.record(
+        {
+          action: 'project.decide',
+          entityType: 'project',
+          entityId: id,
+          entityRef: project.name,
+          summary: `${input.approve ? 'Accepted' : 'Rejected'} project ${project.name}`,
+          metadata: { status, note },
+        },
+        context,
+        tx,
+      );
+
+      // `notify` drops the actor, so an IM deciding their own proposal is not told about it.
+      if (project.created_by) {
+        await this.notifications.notify(
+          {
+            type: input.approve ? 'project.approved' : 'project.rejected',
+            userIds: [project.created_by],
+            ref: project.name,
+            link: NOTIFICATION_LINKS.project(id),
+            entityType: 'project',
+            entityId: id,
+            actorId,
+            actorName: context.actorName,
+            context: { note },
+          },
+          tx,
+        );
+      }
+    });
+
+    const decided = await this.repo.findById(id);
+    if (!decided) throw new NotFoundError('Project');
+    return toProject(decided);
   }
 
   /* ------------------------------------------------------------------ the hub */
 
-  async listPaged(query: PaginationQuery): Promise<Paginated<Project>> {
+  async listPaged(query: ListProjectsQuery): Promise<Paginated<Project>> {
     const { rows, total } = await this.repo.listProjects(query);
     return {
-      items: rows.map((row) => ({
-        id: row.id,
-        name: row.name,
-        isActive: row.is_active,
-        createdAt: row.created_at.toISOString(),
-      })),
+      items: rows.map(toProject),
       page: query.page,
       limit: query.limit,
       total,
@@ -100,10 +214,7 @@ export class ProjectsService {
     if (!row) throw new NotFoundError('Project');
     const counts = await this.repo.countsByUsage(id);
     return {
-      id: row.id,
-      name: row.name,
-      isActive: row.is_active,
-      createdAt: row.created_at.toISOString(),
+      ...toProject(row),
       inUseCount: counts.inUse,
       returnedCount: counts.returned,
     };

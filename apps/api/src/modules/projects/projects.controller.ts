@@ -13,12 +13,14 @@ import {
 import {
   Role,
   createProjectSchema,
+  decideProjectSchema,
   listProjectItemsQuerySchema,
-  paginationQuerySchema,
+  listProjectsQuerySchema,
   type CreateProjectInput,
+  type DecideProjectInput,
   type ListProjectItemsQuery,
+  type ListProjectsQuery,
   type Paginated,
-  type PaginationQuery,
   type Project,
   type ProjectDetail,
   type ProjectItem,
@@ -39,12 +41,20 @@ export class ProjectsController {
   /** The hub is everyone's: no @Roles here, deliberately. */
   @Get()
   async list(
-    @Query(zodPipe(paginationQuerySchema)) query: PaginationQuery,
+    @Query(zodPipe(listProjectsQuerySchema)) query: ListProjectsQuery,
   ): Promise<Paginated<Project>> {
     return this.projects.listPaged(query);
   }
 
-  /** Anyone raising a borrow or a requisition may create the project it is charged to. */
+  /**
+   * Anyone raising a borrow or a requisition may still create the project it is charged to,
+   * without leaving the form — but it lands as a PROPOSED row and does not reach the pickers
+   * until an IM accepts it.
+   *
+   * Deliberately still unguarded. The user review asked for creation to be IM-only; Ayman's
+   * ruling was propose-then-approve instead, because slamming this shut pushes the cost onto
+   * the person mid-form, who then has to stop and find an IM.
+   */
   @Post()
   async create(
     @Body(zodPipe(createProjectSchema)) body: CreateProjectInput,
@@ -52,6 +62,19 @@ export class ProjectsController {
     @CurrentAuditContext() ctx: AuditContext,
   ): Promise<Project> {
     return this.projects.create(body, actor.id, ctx);
+  }
+
+  /** Accepting a proposal is what puts a project in front of everyone else, so it is the IM's. */
+  @Roles(Role.INVENTORY_MANAGER, Role.ADMIN)
+  @Post(':id/decision')
+  @HttpCode(HttpStatus.OK)
+  async decide(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(zodPipe(decideProjectSchema)) body: DecideProjectInput,
+    @CurrentUser() actor: RequestUser,
+    @CurrentAuditContext() ctx: AuditContext,
+  ): Promise<Project> {
+    return this.projects.decide(id, body, actor.id, ctx);
   }
 
   @Get(':id')

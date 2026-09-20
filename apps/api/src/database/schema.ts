@@ -252,11 +252,28 @@ export const QuarantineAction = {
 
 export type QuarantineAction = (typeof QuarantineAction)[keyof typeof QuarantineAction];
 
+/**
+ * Whether a proposed project has been accepted. Separate from `is_active`, which archives a
+ * project that was accepted and has history charged to it.
+ */
+export const ProjectStatusValue = {
+  PROPOSED: 'PROPOSED',
+  ACTIVE: 'ACTIVE',
+  REJECTED: 'REJECTED',
+} as const;
+
+export type ProjectStatusValue = (typeof ProjectStatusValue)[keyof typeof ProjectStatusValue];
+
 export interface ProjectsTable {
   id: Generated<string>;
   name: string;
   created_by: string | null;
+  /** Archived — distinct from `status`, which is whether it was ever accepted. */
   is_active: Generated<boolean>;
+  status: Generated<ProjectStatusValue>;
+  decided_by: string | null;
+  decided_at: Date | null;
+  decision_note: string | null;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }

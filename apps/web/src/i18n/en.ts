@@ -893,6 +893,21 @@ export const t = {
     emptyBody: 'Create one here, or from the borrow dialog when you take something out.',
     duplicateTitle: 'A project with that name already exists',
     duplicateBody: 'Two teams can run projects with the same name. Continue anyway?',
+    // Said at the point of creation, not afterwards: the person needs to know the project is
+    // not yet everyone's before they name it, not once they have already used it.
+    proposalHint:
+      'This is charged to the new project straight away, but the Inventory Manager has to accept it before anyone else can pick it.',
+    statusProposed: 'Awaiting acceptance',
+    statusActive: 'Accepted',
+    statusRejected: 'Not accepted',
+    accept: 'Accept',
+    reject: 'Do not accept',
+    rejectReasonLabel: 'Why not?',
+    rejectReasonHint: 'The person who proposed it is told, so say enough for them to understand.',
+    accepted: 'Project accepted',
+    rejected: 'Project not accepted',
+    proposedBy: 'Proposed by',
+    decidedBy: 'Decided by',
     createAnyway: 'Create anyway',
     itemsHeading: 'Items in hand',
     itemsHint: 'Added automatically when someone borrows for this project.',

@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { PAGINATION_MAX_LIMIT } from '@ims/shared';
+import { PAGINATION_MAX_LIMIT, ProjectStatus } from '@ims/shared';
 import type {
   CreateProjectInput,
+  DecideProjectInput,
   ListProjectItemsQuery,
   Paginated,
   Project,
@@ -23,14 +24,18 @@ import { toSearchParams } from '@/api/search-params';
  * resolves to a plain `Project[]` and no consumer needs to change.
  */
 /** Exported only for the pagination unit test — not part of the feature's public surface. */
-export async function fetchAllProjects(signal: AbortSignal | undefined): Promise<Project[]> {
+export async function fetchAllProjects(
+  signal: AbortSignal | undefined,
+  status?: ProjectStatus,
+): Promise<Project[]> {
   const items: Project[] = [];
   let page = 1;
   let total = Infinity;
+  const statusFilter = status ? `&status=${status}` : '';
 
   while (items.length < total) {
     const result = await api.get<Paginated<Project>>(
-      `/projects?page=${page}&limit=${PAGINATION_MAX_LIMIT}`,
+      `/projects?page=${page}&limit=${PAGINATION_MAX_LIMIT}${statusFilter}`,
       signal,
     );
     items.push(...result.items);
@@ -44,10 +49,34 @@ export async function fetchAllProjects(signal: AbortSignal | undefined): Promise
   return items;
 }
 
+/** The hub's list: every project, whatever its status, so the IM can see what is waiting. */
 export function useProjects() {
   return useQuery({
     queryKey: queryKeys.projects.list(),
     queryFn: ({ signal }) => fetchAllProjects(signal),
+  });
+}
+
+/**
+ * What a picker offers. Only accepted projects: a proposal is not something a borrow or a
+ * requisition may be charged to, which is the whole point of the propose-then-approve flow.
+ */
+export function useSelectableProjects() {
+  return useQuery({
+    queryKey: queryKeys.projects.list(ProjectStatus.ACTIVE),
+    queryFn: ({ signal }) => fetchAllProjects(signal, ProjectStatus.ACTIVE),
+  });
+}
+
+export function useDecideProject() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: DecideProjectInput & { id: string }) =>
+      api.post<Project>(`/projects/${id}/decision`, body),
+    onSuccess: async (_project, { id }) => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.projects.all() });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(id) });
+    },
   });
 }
 

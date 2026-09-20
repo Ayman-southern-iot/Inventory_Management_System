@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Role, type AuthUser, type Project } from '@ims/shared';
+import { ProjectStatus, Role, type AuthUser, type Project } from '@ims/shared';
 import { ApiError } from '@/api/client';
 import { t } from '@/i18n/en';
 import { ROUTES } from '@/routes/paths';
@@ -31,6 +31,7 @@ vi.mock('@/features/auth/auth-context', () => ({
 vi.mock('../api', () => ({
   useProjects: () => ({ ...projectsQuery, refetch }),
   useCreateProject: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useDecideProject: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
 vi.mock('@/components/ui/Toast', () => ({
@@ -41,7 +42,12 @@ const ROVER: Project = {
   id: 'p-1',
   name: 'Rover',
   isActive: true,
+  status: ProjectStatus.ACTIVE,
+  decidedAt: null,
+  decidedByName: null,
+  decisionNote: null,
   createdAt: '2026-08-01T00:00:00.000Z',
+  createdByName: null,
 };
 
 function renderPage() {

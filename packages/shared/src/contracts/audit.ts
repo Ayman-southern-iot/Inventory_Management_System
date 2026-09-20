@@ -68,6 +68,12 @@ export const AUDIT_ACTIONS = [
    * is the only way an outstanding item silently leaves a project's list.
    */
   'project.item.detach',
+  /**
+   * The IM accepting or refusing a proposed project. Its own action rather than a
+   * `project.update`: it is the moment a project becomes real, and "who let this into the
+   * pickers" is the question the audit log gets asked afterwards.
+   */
+  'project.decide',
   // Stock
   'stock.receive',
   'stock.move',

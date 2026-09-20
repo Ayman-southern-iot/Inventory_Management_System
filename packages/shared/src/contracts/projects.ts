@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { paginationQuerySchema } from './common.js';
+import { projectSchema } from './borrowing.js';
 
 /**
  * What a project is currently doing with a borrowed item. Derived from `borrow_requests.status`,
@@ -46,11 +47,7 @@ export const listProjectItemsQuerySchema = paginationQuerySchema.extend({
 });
 export type ListProjectItemsQuery = z.infer<typeof listProjectItemsQuerySchema>;
 
-export const projectDetailSchema = z.object({
-  id: z.string().uuid(),
-  name: z.string(),
-  isActive: z.boolean(),
-  createdAt: z.string(),
+export const projectDetailSchema = projectSchema.extend({
   inUseCount: z.number().int(),
   returnedCount: z.number().int(),
 });

@@ -56,6 +56,13 @@ export const NOTIFICATION_TYPES = [
   'borrowing.issued_to_you',
   'borrowing.due_soon',
   'borrowing.overdue',
+  // Projects
+  /** The IM has a project proposal waiting. */
+  'project.proposed',
+  /** The proposer learns their project was accepted, and can now charge work to it. */
+  'project.approved',
+  /** The proposer learns it was refused, with the reason — otherwise they propose it again. */
+  'project.rejected',
   // BOM
   'bom.generated',
   'bom.over_budget_bounced',

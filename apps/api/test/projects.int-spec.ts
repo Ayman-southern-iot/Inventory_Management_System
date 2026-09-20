@@ -273,4 +273,94 @@ describe('projects hub', () => {
       expect(forced.status).toBe(201);
     });
   });
+
+  /**
+   * Propose-then-approve. The user review asked for project creation to be IM-only because
+   * "the lists keep piling up"; the ruling was to keep creation open — a project is raised
+   * mid-form, while borrowing — but hold it out of the pickers until an IM accepts it.
+   */
+  describe('proposals', () => {
+    const propose = async (name: string) =>
+      general.client.post('/projects').send({ name, allowDuplicateName: true });
+
+    it('creates a proposal, not a usable project', async () => {
+      const created = await propose(`Proposal ${Date.now()}`);
+      expect(created.status).toBe(201);
+      expect(created.body.status).toBe('PROPOSED');
+      expect(created.body.decidedAt).toBeNull();
+    });
+
+    it('keeps a proposal out of the pickers until it is accepted', async () => {
+      const created = await propose(`Hidden ${Date.now()}`);
+      const id = created.body.id as string;
+
+      // What a picker asks for.
+      const active = await general.client.get('/projects?status=ACTIVE&page=1&limit=100');
+      expect(active.body.items.map((p: { id: string }) => p.id)).not.toContain(id);
+
+      await im.client.post(`/projects/${id}/decision`).send({ approve: true });
+
+      const afterwards = await general.client.get('/projects?status=ACTIVE&page=1&limit=100');
+      expect(afterwards.body.items.map((p: { id: string }) => p.id)).toContain(id);
+    });
+
+    it('refuses the decision to a general user', async () => {
+      const created = await propose(`Guarded ${Date.now()}`);
+      const denied = await general.client
+        .post(`/projects/${created.body.id}/decision`)
+        .send({ approve: true });
+      expect(denied.status).toBe(403);
+    });
+
+    it('records who decided it, and tells the person who proposed it', async () => {
+      const created = await propose(`Accepted ${Date.now()}`);
+      const id = created.body.id as string;
+
+      const decided = await im.client.post(`/projects/${id}/decision`).send({ approve: true });
+      expect(decided.status).toBe(200);
+      expect(decided.body.status).toBe('ACTIVE');
+      expect(decided.body.decidedAt).not.toBeNull();
+      expect(decided.body.decidedByName).not.toBeNull();
+
+      const inbox = await general.client.get('/notifications?unreadOnly=true&page=1&limit=50');
+      expect(inbox.body.items.map((n: { type: string }) => n.type)).toContain('project.approved');
+    });
+
+    it('will not reject without a reason, because the proposer is told why', async () => {
+      const created = await propose(`Reasonless ${Date.now()}`);
+      const refused = await im.client
+        .post(`/projects/${created.body.id}/decision`)
+        .send({ approve: false });
+      expect(refused.status).toBe(400);
+    });
+
+    it('rejects with a reason and leaves the project unusable', async () => {
+      const created = await propose(`Declined ${Date.now()}`);
+      const id = created.body.id as string;
+
+      const rejected = await im.client
+        .post(`/projects/${id}/decision`)
+        .send({ approve: false, note: 'Duplicate of Rover.' });
+      expect(rejected.status).toBe(200);
+      expect(rejected.body.status).toBe('REJECTED');
+      expect(rejected.body.decisionNote).toBe('Duplicate of Rover.');
+
+      const active = await general.client.get('/projects?status=ACTIVE&page=1&limit=100');
+      expect(active.body.items.map((p: { id: string }) => p.id)).not.toContain(id);
+    });
+
+    /** Two IMs on the same screen: the second one is told, not silently overruled. */
+    it('refuses a second decision on a project already decided', async () => {
+      const created = await propose(`Twice ${Date.now()}`);
+      const id = created.body.id as string;
+
+      expect((await im.client.post(`/projects/${id}/decision`).send({ approve: true })).status).toBe(
+        200,
+      );
+      const again = await im.client
+        .post(`/projects/${id}/decision`)
+        .send({ approve: false, note: 'Changed my mind.' });
+      expect(again.status).toBe(409);
+    });
+  });
 });
