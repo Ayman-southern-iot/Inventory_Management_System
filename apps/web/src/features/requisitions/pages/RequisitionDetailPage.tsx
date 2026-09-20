@@ -17,6 +17,7 @@ import { t } from '@/i18n/en';
 import { messageForError } from '@/lib/error-message';
 import { ROUTES } from '@/routes/paths';
 import { useAuth } from '@/features/auth/auth-context';
+import { approverCountHint } from '../approver-hint';
 import { DecisionCard } from '../components/DecisionCard';
 import { ApprovalTracker } from '../components/ApprovalTracker';
 import { LifecycleTracker } from '../components/LifecycleTracker';
@@ -425,12 +426,10 @@ export function RequisitionDetailPage() {
                   hint={
                     detail.requiredApproverCount === null
                       ? undefined
-                      : t.requisitions.approverCountHint
-                          .replace('{n}', String(detail.requiredApproverCount))
-                          .replace(
-                            '{threshold}',
-                            (detail.thresholdAtSubmit ?? 0).toLocaleString(),
-                          )
+                      : approverCountHint(
+                          detail.requiredApproverCount,
+                          detail.thresholdAtSubmit ?? 0,
+                        )
                   }
                 />
               </Panel>

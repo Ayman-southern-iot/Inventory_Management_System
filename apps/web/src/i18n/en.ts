@@ -1029,7 +1029,9 @@ export const t = {
     decisionNoteOptional: 'Optional — the requester and the next approver both see it.',
     itemsSubtotalLabel: 'Items subtotal',
     // The approver count moved into the progress rail, where it explains the chain beside it.
-    approverCountHint: '{n} approvers required — threshold at submit was {threshold}.',
+    // `{count}` is already pluralised by `approver-hint.ts` from the One/Other pair above,
+    // so a requisition needing a single approver does not read "1 approvers required".
+    approverCountHint: '{count} required — threshold at submit was {threshold}.',
     // Revise sits behind a button, the way transportation does on the requisition form.
     reviseAmountOpen: 'Revise the approved amount',
     reviseAmountCancel: 'Cancel revision',
