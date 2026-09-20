@@ -93,8 +93,24 @@ describe('approval deadline reminders', () => {
     return refreshed.body;
   };
 
-  const yesterday = () => new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
-  const tomorrow = () => new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+  /**
+   * Full instants, not `YYYY-MM-DD`.
+   *
+   * `approval_deadline` has been a `timestamptz` since migration 0027, and the job compares it
+   * with `AND r.approval_deadline < now()`. A bare date collapses to midnight in the database's
+   * timezone (Asia/Dhaka), while `toISOString().slice(0, 10)` computes the calendar day in UTC
+   * — so for the six hours after Dhaka midnight, UTC is still on the previous date and
+   * "tomorrow" resolved to a midnight that had *already passed*. `says nothing about a deadline
+   * still in the future` then found a reminder and failed, but only between 00:00 and 06:00
+   * local, which is why a daytime baseline never saw it.
+   *
+   *   SHOW timezone;                          -> Asia/Dhaka
+   *   SELECT '2026-09-21'::timestamptz < now();  -> t     (at 2026-09-21 00:29+06)
+   *
+   * An instant has no such ambiguity: exactly 24 hours either side of now, in any timezone.
+   */
+  const yesterday = () => new Date(Date.now() - 86_400_000).toISOString();
+  const tomorrow = () => new Date(Date.now() + 86_400_000).toISOString();
 
   /** Makes one requisition's approvals eligible again, without touching anyone else's. */
   const clearReminders = (requisitionId: string) =>
