@@ -478,6 +478,56 @@ describe('BOMs PDF', () => {
       }
     });
 
+    it('names a delegate only where one actually acted', async () => {
+      const req = await approveRequisition(5000);
+      const bom = (
+        await im.client.post('/boms').send(generatePayload(req.id, req.items))
+      ).body as BomDetail;
+
+      const footprints = bom.sources[0]!.footprints;
+      // The IM decided their own assignment, so there is nobody to name as acting for them.
+      // `onBehalfOf` carrying the actor unconditionally makes the document read "for <the
+      // signer's own name>" on every cell — F-5.
+      const imFootprint = footprints.find((f) => f.stage === 'INVENTORY_MANAGER');
+      expect(imFootprint).toBeDefined();
+      expect(imFootprint!.onBehalfOf).toBeNull();
+
+      // The invariant that holds whether or not a delegate acted: one "for ..." line per
+      // footprint that actually records one. Counts the tag, not the CSS declaration.
+      const html = renderBomHtml(bom, CONTEXT);
+      const behalfLines = html.match(/<div class="signature-behalf">/g) ?? [];
+      expect(behalfLines).toHaveLength(footprints.filter((f) => f.onBehalfOf !== null).length);
+    });
+
+    it('names the delegate as the signer, not as the beneficiary', async () => {
+      const req = await approveRequisition(5000);
+      const bom = (
+        await im.client.post('/boms').send(generatePayload(req.id, req.items))
+      ).body as BomDetail;
+
+      // Drives the template directly, as the signature-image tests above do: constructing a
+      // real delegated approval needs a second approver slot and the substitution rules, which
+      // self-approval.int-spec.ts already owns. What is asserted here is the wording.
+      const delegated: BomDetail = {
+        ...bom,
+        sources: bom.sources.map((source, index) =>
+          index === 0
+            ? {
+                ...source,
+                footprints: source.footprints.map((footprint, i) =>
+                  i === 0 ? { ...footprint, onBehalfOf: 'Farhan Finance' } : footprint,
+                ),
+              }
+            : source,
+        ),
+      };
+
+      const html = renderBomHtml(delegated, CONTEXT);
+      expect(html).toContain('signed by Farhan Finance');
+      // "for X" reads as though the person who signed is who the signature was made out to.
+      expect(html).not.toContain('for Farhan Finance');
+    });
+
     it('places the signature image only where the approval was actually signed', async () => {
       const req = await approveRequisition(5000);
       const bom = (

@@ -263,8 +263,11 @@ function renderSignatures(detail: BomDetail, context: BomRenderContext): string 
         `      <div class="signature-name">${escape(footprint.name)}</div>`,
         `      <div class="signature-designation">${escape(footprint.designation)}</div>`,
         '      <div class="signature-approved">Approved</div>',
+        // Present only when a delegate acted. The name above is the assignee who owns the
+        // slot; this line names who actually signed it, so it has to read "signed by X" and
+        // not "for X" — the latter names the signer as the beneficiary of their own signature.
         footprint.onBehalfOf
-          ? `      <div class="signature-behalf">for ${escape(footprint.onBehalfOf)}</div>`
+          ? `      <div class="signature-behalf">signed by ${escape(footprint.onBehalfOf)}</div>`
           : '',
         `      <div class="signature-date">Date: ${escape(
           footprint.actedAt ? formatDateOnly(footprint.actedAt) : '',

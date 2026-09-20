@@ -947,6 +947,10 @@ export class BomsService {
         'assignee.full_name as assignee_name',
         'assignee.designation as assignee_designation',
         'actor.full_name as actor_name',
+        // Both ids, so the delegate test below compares identities rather than names —
+        // two people are allowed to share a full name.
+        'requisition_approvals.assigned_user_id',
+        'requisition_approvals.acted_by_user_id',
         'requisition_approvals.acted_at',
         // Task 5.2: frozen into the snapshot alongside the name, so replacing a signature later
         // cannot change what this document renders.
@@ -964,7 +968,14 @@ export class BomsService {
       name: row.assignee_name,
       designation: row.assignee_designation,
       actedAt: row.acted_at ? row.acted_at.toISOString() : null,
-      onBehalfOf: row.actor_name,
+      // Only a genuine delegate is named. `acted_by_user_id` is written for every decision,
+      // including the ordinary case where the assignee decides their own approval, so taking
+      // the actor unconditionally made the document print "for <the signer's own name>" in
+      // every cell. Same rule the live tracker applies (ApprovalTracker.tsx).
+      onBehalfOf:
+        row.acted_by_user_id !== null && row.acted_by_user_id !== row.assigned_user_id
+          ? row.actor_name
+          : null,
       signedWithSignature: row.signed_with_signature,
       signatureFileId: row.signature_file_id,
     }));
