@@ -1,18 +1,50 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Pencil, Plus } from 'lucide-react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { createCategorySchema, type Category, type CreateCategoryInput } from '@ims/shared';
-import { Button } from '@/components/ui/Button';
-import { Dialog } from '@/components/ui/Dialog';
-import { Checkbox, SelectField, TextField } from '@/components/ui/Field';
-import { Badge, PageHeader, Panel, Table } from '@/components/ui/primitives';
-import { EmptyState, QueryBoundary, SkeletonRows } from '@/components/ui/states';
+import { useCallback, useMemo, useState } from 'react';
+import { Search } from 'lucide-react';
+import type { CategoryNode } from '@ims/shared';
+import { QueryBoundary, SkeletonRows } from '@/components/ui/states';
 import { useToast } from '@/components/ui/Toast';
 import { t } from '@/i18n/en';
 import { messageForError } from '@/lib/error-message';
 import { useCategoryTree, useCreateCategory, useUpdateCategory } from '../api';
-import { flattenCategoryTree, indentFor } from '../category-tree';
+import { CategoryDetailPane } from '../components/CategoryDetailPane';
+import { CategoryTreePane, ROOT } from '../components/CategoryTreePane';
+
+/**
+ * Category management, rebuilt to Ayman's `category-clean.html` (2026-09-22).
+ *
+ * What changed is the shape of the job, not the data. The old screen was a flat table with
+ * two-space indentation standing in for hierarchy, four controls on every row, and a modal with
+ * a parent dropdown you had to find your own row in. This is a tree beside a detail panel: the
+ * tree answers "what exists and where", the panel answers "what can I do about this one", and
+ * adding a child happens on the parent's own row.
+ *
+ * **On the mockup's colours.** It proposes a copper accent and Manrope/IBM Plex Mono. The
+ * layout and interaction here follow it exactly; the palette and fonts do not, because those
+ * are app-wide identity rather than one page's design — a copper Categories screen beside a
+ * blue everything-else reads as a bug. Every one of the mockup's CSS variables has a project
+ * token that means the same thing, so this is a straight substitution.
+ *
+ * This file is orchestration only: the two panes are the components, and every mutation lands
+ * here so that error handling and cache invalidation happen once.
+ */
+
+/** Root first, the node itself last. Empty when the id is not in the tree. */
+function pathTo(nodes: CategoryNode[], id: string): CategoryNode[] {
+  for (const node of nodes) {
+    if (node.id === id) return [node];
+    const deeper = pathTo(node.children, id);
+    if (deeper.length > 0) return [node, ...deeper];
+  }
+  return [];
+}
+
+/** Sibling names at a given parent, for catching a duplicate before the round trip. */
+function siblingNames(nodes: CategoryNode[], parentId: string): string[] {
+  if (parentId === ROOT) return nodes.map((node) => node.name);
+  const path = pathTo(nodes, parentId);
+  const parent = path[path.length - 1];
+  return parent ? parent.children.map((node) => node.name) : [];
+}
 
 export function CategoriesPage() {
   const toast = useToast();
@@ -20,196 +52,220 @@ export function CategoriesPage() {
   const createCategory = useCreateCategory();
   const updateCategory = useUpdateCategory();
 
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editing, setEditing] = useState<Category | undefined>(undefined);
+  const [query, setQuery] = useState('');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
+  const [addingUnder, setAddingUnder] = useState<string | null>(null);
+  const [treeAddError, setTreeAddError] = useState<string | null>(null);
+  const [detailAddError, setDetailAddError] = useState<string | null>(null);
+  const [renameError, setRenameError] = useState<string | null>(null);
 
-  const flat = useMemo(() => flattenCategoryTree(categories.data ?? []), [categories.data]);
+  const tree = useMemo(() => categories.data ?? [], [categories.data]);
+  const path = useMemo(
+    () => (selectedId ? pathTo(tree, selectedId) : []),
+    [tree, selectedId],
+  );
+  const selected = path.length > 0 ? path[path.length - 1]! : null;
+
+  const isSaving = createCategory.isPending || updateCategory.isPending;
+
+  const toggleExpanded = useCallback((id: string) => {
+    setExpanded((current) => {
+      const next = new Set(current);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+  }, []);
 
   /**
-   * Candidate parents. A node at level 3 cannot take children (the tree caps at three), and a
-   * node cannot be its own parent — offering either is offering a choice the database will
-   * refuse. Descendants are left in the list on purpose: the trigger refuses that move with a
-   * sentence worth reading, and filtering the whole subtree out here would silently hide
-   * legitimate siblings too.
+   * Caught here rather than at the API, because the API's message is a constraint violation and
+   * this one names the parent. Not a second source of truth: the unique index still decides, and
+   * a name that slips past this still fails on the server.
    */
-  const parentOptions = useMemo(
-    () => flat.filter((row) => row.depth < 2 && row.isActive && row.id !== editing?.id),
-    [flat, editing],
-  );
-
-  // `parentId` stays in the form because the contract carries it, but nothing sets it any more:
-  // the parent picker was removed and every category is created at the top level. The API still
-  // accepts a parent, so re-adding the picker is the only change needed to bring nesting back.
-  const form = useForm<CreateCategoryInput>({
-    resolver: zodResolver(createCategorySchema),
-    defaultValues: { name: '', parentId: null, isTrackable: true },
-  });
-
-  useEffect(() => {
-    if (!dialogOpen) return;
-    form.reset(
-      editing
-        ? { name: editing.name, parentId: editing.parentId, isTrackable: editing.isTrackable }
-        : { name: '', parentId: null, isTrackable: true },
+  function duplicateMessage(parentId: string, name: string): string | null {
+    const taken = siblingNames(tree, parentId).some(
+      (sibling) => sibling.trim().toLowerCase() === name.trim().toLowerCase(),
     );
-  }, [dialogOpen, editing, form]);
+    if (!taken) return null;
+    if (parentId === ROOT) return t.categories.duplicateAtRoot.replace('{name}', name.trim());
+    const parent = pathTo(tree, parentId).at(-1);
+    return t.categories.duplicateUnder
+      .replace('{name}', name.trim())
+      .replace('{parent}', parent?.name ?? '');
+  }
 
-  async function onSubmit(values: CreateCategoryInput) {
+  async function addCategory(
+    parentId: string,
+    rawName: string,
+    setError: (message: string | null) => void,
+  ) {
+    const name = rawName.trim();
+    if (!name) {
+      setAddingUnder(null);
+      setError(null);
+      return;
+    }
+
+    const duplicate = duplicateMessage(parentId, name);
+    if (duplicate) {
+      setError(duplicate);
+      return;
+    }
+
     try {
-      if (editing) {
-        // `parentId` is deliberately not updatable — re-parenting a tree needs cycle handling
-        // that this hand-maintained list does not justify.
-        await updateCategory.mutateAsync({
-          id: editing.id,
-          input: { name: values.name, isTrackable: values.isTrackable },
-        });
-        toast.success(t.categories.updated);
-      } else {
-        await createCategory.mutateAsync(values);
-        toast.success(t.categories.created);
+      const created = await createCategory.mutateAsync({
+        name,
+        parentId: parentId === ROOT ? null : parentId,
+        isTrackable: true,
+      });
+      toast.success(t.categories.created);
+      setAddingUnder(null);
+      setError(null);
+      // Open the parent and select what was just made — otherwise the new row is invisible
+      // under a collapsed branch and the IM cannot tell whether it worked.
+      if (parentId !== ROOT) {
+        setExpanded((current) => new Set(current).add(parentId));
       }
-      setDialogOpen(false);
+      setSelectedId(created.id);
     } catch (error) {
-      toast.error(messageForError(error));
+      setError(messageForError(error));
     }
   }
 
-  async function toggleActive(category: Category) {
+  async function rename(id: string, rawName: string) {
+    const name = rawName.trim();
+    const current = pathTo(tree, id).at(-1);
+    if (!name || name === current?.name) {
+      setRenameError(null);
+      return;
+    }
+
+    const parentId = current?.parentId ?? ROOT;
+    const taken = siblingNames(tree, parentId).some(
+      (sibling) =>
+        sibling.trim().toLowerCase() === name.toLowerCase() && sibling !== current?.name,
+    );
+    if (taken) {
+      setRenameError(
+        parentId === ROOT
+          ? t.categories.duplicateAtRoot.replace('{name}', name)
+          : t.categories.duplicateUnder
+              .replace('{name}', name)
+              .replace('{parent}', pathTo(tree, parentId).at(-1)?.name ?? ''),
+      );
+      return;
+    }
+
     try {
-      await updateCategory.mutateAsync({ id: category.id, input: { isActive: !category.isActive } });
+      await updateCategory.mutateAsync({ id, input: { name } });
+      toast.success(t.categories.updated);
+      setRenameError(null);
+    } catch (error) {
+      setRenameError(messageForError(error));
+    }
+  }
+
+  async function setField(id: string, input: { isTrackable?: boolean; isActive?: boolean }) {
+    try {
+      await updateCategory.mutateAsync({ id, input });
       toast.success(t.categories.updated);
     } catch (error) {
+      // Deactivating a category that still holds products is refused by the API with a reason
+      // worth reading, so the message is surfaced rather than replaced.
       toast.error(messageForError(error));
     }
   }
 
   return (
-    <>
-      <PageHeader
-        title={t.categories.title}
-        subtitle={t.categories.subtitle}
-        action={
-          <Button
-            icon={<Plus aria-hidden className="size-4" />}
-            onClick={() => {
-              setEditing(undefined);
-              setDialogOpen(true);
-            }}
-          >
-            {t.categories.newCategory}
-          </Button>
-        }
-      />
+    <div className="flex min-h-0 flex-1 flex-col">
+      <header className="flex flex-col items-start justify-between gap-4 pb-4 sm:flex-row sm:items-baseline">
+        <div>
+          <h1 className="text-lg font-bold tracking-tight text-ink">{t.categories.title}</h1>
+          <p className="mt-1 text-sm text-ink-muted">{t.categories.subtitle}</p>
+        </div>
+        <div className="relative w-full sm:w-60">
+          <Search
+            aria-hidden
+            className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-ink-subtle"
+          />
+          <input
+            type="text"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={t.categories.filter}
+            aria-label={t.categories.filter}
+            autoComplete="off"
+            // 16px on mobile: below that iOS Safari zooms the viewport on focus and never returns.
+            className="h-9 w-full rounded-[--radius-control] border border-border bg-surface pl-8 pr-2.5 text-base text-ink outline-none placeholder:text-ink-subtle focus-visible:border-brand sm:text-sm"
+          />
+        </div>
+      </header>
 
-      <Panel>
-        <QueryBoundary
-          isLoading={categories.isPending}
-          error={categories.error}
-          data={flat}
-          onRetry={() => void categories.refetch()}
-          loadingFallback={<SkeletonRows columns={4} />}
-          isEmpty={(rows) => rows.length === 0}
-          emptyFallback={
-            <EmptyState title={t.categories.emptyTitle} body={t.categories.emptyBody} />
-          }
-        >
-          {(rows) => (
-            <Table
-              headers={[t.categories.name, t.categories.products, t.users.status, '']}
-            >
-              {rows.map((row) => (
-                <tr key={row.id} className="hover:bg-surface-muted/50">
-                  <td className="px-4 py-2.5 font-medium text-ink">
-                    <span className="whitespace-pre">{indentFor(row.depth)}</span>
-                    {row.name}
-                  </td>
-                  <td className="px-4 py-2.5 text-ink-muted">{row.productCount}</td>
-                  <td className="px-4 py-2.5">
-                    <div className="flex gap-1">
-                      <Badge tone={row.isActive ? 'success' : 'danger'}>
-                        {row.isActive ? t.common.active : t.common.inactive}
-                      </Badge>
-                      {row.isTrackable ? (
-                        <Badge tone="info">{t.categories.trackable}</Badge>
-                      ) : (
-                        <Badge tone="neutral">{t.inventory.notTracked}</Badge>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <div className="flex justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        aria-label={`${t.common.edit} ${row.name}`}
-                        icon={<Pencil aria-hidden className="size-4" />}
-                        onClick={() => {
-                          setEditing(row);
-                          setDialogOpen(true);
-                        }}
-                      />
-                      <Button variant="ghost" size="sm" onClick={() => void toggleActive(row)}>
-                        {row.isActive ? t.users.deactivate : t.users.activate}
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </Table>
-          )}
-        </QueryBoundary>
-      </Panel>
-
-      <Dialog
-      schema={createCategorySchema}
-        open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
-        title={editing ? t.categories.editCategory : t.categories.newCategory}
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setDialogOpen(false)}>
-              {t.common.cancel}
-            </Button>
-            <Button form="category-form" type="submit" isLoading={form.formState.isSubmitting}>
-              {t.common.save}
-            </Button>
-          </>
-        }
+      <QueryBoundary
+        isLoading={categories.isPending}
+        error={categories.error}
+        data={tree}
+        onRetry={() => void categories.refetch()}
+        loadingFallback={<SkeletonRows columns={2} />}
       >
-        <form
-          id="category-form"
-          noValidate
-          onSubmit={form.handleSubmit(onSubmit)}
-          className="flex flex-col gap-4"
-        >
-          <TextField
-            label={t.categories.name}
-            error={form.formState.errors.name?.message}
-            {...form.register('name')}
-          />
-          <SelectField
-            label={t.categories.parent}
-            hint={t.categories.parentHint}
-            value={form.watch('parentId') ?? ''}
-            onChange={(event) =>
-              form.setValue('parentId', event.target.value === '' ? null : event.target.value)
-            }
-          >
-            <option value="">{t.categories.noParent}</option>
-            {parentOptions.map((category) => (
-              <option key={category.id} value={category.id}>
-                {indentFor(category.depth)}
-                {category.name}
-              </option>
-            ))}
-          </SelectField>
-          <Checkbox
-            label={t.categories.trackable}
-            {...form.register('isTrackable')}
-          />
-          <p className="text-xs text-ink-subtle">{t.categories.trackableHint}</p>
-        </form>
-      </Dialog>
-    </>
+        {(nodes) => (
+          // On a narrow screen the two panes take turns: the tree until something is selected,
+          // the detail after, with a Back button. Side by side from `md` up.
+          <div className="flex min-h-0 flex-1 flex-col gap-4 md:min-h-150 md:flex-row">
+            <div className={selected ? 'hidden md:flex' : 'flex min-h-0 flex-1'}>
+              <CategoryTreePane
+                tree={nodes}
+                query={query}
+                selectedId={selectedId}
+                onSelect={(id) => {
+                  setSelectedId(id);
+                  setAddingUnder(null);
+                  setTreeAddError(null);
+                }}
+                expanded={expanded}
+                onToggleExpanded={toggleExpanded}
+                addingUnder={addingUnder}
+                onStartAdd={(parentId) => {
+                  setAddingUnder(parentId);
+                  setTreeAddError(null);
+                }}
+                onCancelAdd={() => {
+                  setAddingUnder(null);
+                  setTreeAddError(null);
+                }}
+                onSubmitAdd={(parentId, name) =>
+                  void addCategory(parentId, name, setTreeAddError)
+                }
+                addError={treeAddError}
+                isAdding={createCategory.isPending}
+              />
+            </div>
+
+            <div className={selected ? 'flex min-h-0 flex-1' : 'hidden md:flex md:flex-1'}>
+              <CategoryDetailPane
+                node={selected}
+                path={path}
+                onBack={() => setSelectedId(null)}
+                onRename={(id, name) => void rename(id, name)}
+                onToggleTrackable={(node) =>
+                  void setField(node.id, { isTrackable: !node.isTrackable })
+                }
+                onSetActive={(node, isActive) => void setField(node.id, { isActive })}
+                onAddChild={(parentId, name) =>
+                  void addCategory(parentId, name, setDetailAddError)
+                }
+                addError={detailAddError}
+                renameError={renameError}
+                isSaving={isSaving}
+                onStartAddRoot={() => {
+                  setAddingUnder(ROOT);
+                  setTreeAddError(null);
+                }}
+              />
+            </div>
+          </div>
+        )}
+      </QueryBoundary>
+    </div>
   );
 }

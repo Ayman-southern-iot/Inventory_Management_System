@@ -204,3 +204,11 @@ Filed 2026-09-21 (Phase 10). Implemented as: unknown, revoked or expired → `40
 (one code for all three, so an anonymous caller cannot learn that a key once existed); real but
 switched off → `403 API_KEY_DISABLED`, so the integrator asks their admin rather than hunting a
 typo. Revisit if the distinction turns out to leak more than it helps.
+
+## OQ-G3 — should deactivating a parent category cascade to its children?
+
+Filed 2026-09-22 (categories redesign). The new detail panel warns how many active subcategories
+and items sit beneath a branch, then deactivates **only the branch itself** — children keep their
+own status. That is the conservative reading, not a decision: the alternative is cascading, which
+is what most people expect from a tree and which cannot be undone in one click. Until it is
+decided, the warning says plainly which of the two the button does.

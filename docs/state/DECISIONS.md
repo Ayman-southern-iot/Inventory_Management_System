@@ -1175,3 +1175,15 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   available / inUse`, and categories pruned to those that hold something (ancestors kept, so the
   tree is still rebuildable; `?allCategories=true` returns the lot). The rule behind it: nothing
   in this payload should require a second lookup to render.
+- 2026-09-22 — The categories screen is a tree beside a detail panel (Ayman's
+  `category-clean.html`), replacing the indented table. The tree answers "what exists and where"
+  and carries exactly one action — `+` on a row, which *is* choosing that row as the parent,
+  replacing the modal's parent dropdown. Everything else lives in the panel, so a 120-row tree
+  has one affordance per row rather than four.
+- 2026-09-22 — The mockup's copper accent and Manrope/IBM Plex Mono were **not** adopted; its
+  layout and interaction were, using the project's existing tokens. Palette and typeface are
+  app-wide identity, and one copper screen beside a blue app reads as a bug. Every variable in
+  the mockup had a token that meant the same thing, so it was a straight substitution.
+- 2026-09-22 — `categories.updatedAt` is now on the contract. The column existed and is kept by
+  the `set_updated_at` trigger; the panel's activity section needed it, because "added" alone
+  cannot tell a category nobody has touched since 2024 from one edited this morning.

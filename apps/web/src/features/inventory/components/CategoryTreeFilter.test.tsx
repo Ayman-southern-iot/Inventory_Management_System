@@ -34,6 +34,7 @@ const node = (
   productCount: count,
   productCountInTree: count + children.reduce((sum, c) => sum + c.productCountInTree, 0),
   createdAt: '2026-09-01T00:00:00.000Z',
+    updatedAt: '2026-09-01T00:00:00.000Z',
   children,
 });
 

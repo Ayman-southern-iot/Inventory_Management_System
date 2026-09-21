@@ -46,6 +46,13 @@ export const categorySchema = z.object({
   isActive: z.boolean(),
   productCount: z.number().int().nonnegative(),
   createdAt: z.string(),
+  /**
+   * Maintained by the `set_updated_at` trigger, so it moves on a rename, a re-parent, or a
+   * tracking change without anybody remembering to set it. Surfaced for the management screen's
+   * activity panel — "added" alone cannot tell a category nobody has touched since 2024 from
+   * one somebody edited this morning.
+   */
+  updatedAt: z.string(),
 });
 export type Category = z.infer<typeof categorySchema>;
 

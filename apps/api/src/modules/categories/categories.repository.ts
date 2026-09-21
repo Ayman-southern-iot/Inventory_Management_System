@@ -24,6 +24,7 @@ export class CategoriesRepository {
       'categories.is_trackable',
       'categories.is_active',
       'categories.created_at',
+      'categories.updated_at',
       eb
         .selectFrom('products')
         .whereRef('products.category_id', '=', 'categories.id')
@@ -111,6 +112,7 @@ interface CategoryRow {
   is_trackable: boolean;
   is_active: boolean;
   created_at: Date;
+  updated_at: Date;
   product_count: number | null;
 }
 
@@ -123,5 +125,6 @@ function toCategory(row: CategoryRow): Category {
     isActive: row.is_active,
     productCount: Number(row.product_count ?? 0),
     createdAt: row.created_at.toISOString(),
+    updatedAt: row.updated_at.toISOString(),
   };
 }

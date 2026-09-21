@@ -836,6 +836,65 @@ export const t = {
     updated: 'Category updated.',
     emptyTitle: 'No categories yet',
     emptyBody: 'Create one before adding products.',
+
+    /* The tree pane. */
+    filter: 'Filter categories',
+    addRoot: 'Add top-level category',
+    addRootName: 'Top-level category name',
+    addChildName: 'Subcategory name',
+    addChildTo: 'Add subcategory to {name}',
+    expand: 'Expand {name}',
+    collapse: 'Collapse {name}',
+    countLabel: '{n} categories',
+    countOne: '1 category',
+    matchLabel: '{n} matches',
+    matchOne: '1 match',
+    noMatch: 'No categories match “{q}”.',
+    maxDepthTitle: 'Categories are capped at three levels deep',
+
+    /* The detail pane. */
+    nothingSelectedTitle: 'No category selected',
+    nothingSelectedBody:
+      'Choose one from the tree to see its details, or use the plus button on any row to add a subcategory.',
+    backToTree: 'Back to tree',
+    rename: 'Rename {name}',
+    subcategories: 'Subcategories',
+    itemsBelow: 'Items tracked below',
+    itemsInStock: 'Items in stock',
+    depth: 'Depth',
+    depthValue: '{n} of {max}',
+    trackableSub: 'Turn off for categories you don’t count unit-by-unit.',
+    addSubcategory: 'Add subcategory',
+    addSubcategoryPlaceholder: 'e.g. Laser Modules',
+    add: 'Add',
+    maxDepthNote: 'Categories are capped at three levels deep — {name} cannot have subcategories.',
+
+    /* Deactivation. */
+    dangerZone: 'Danger zone',
+    isInactive: 'This category is inactive',
+    deactivate: 'Deactivate',
+    reactivate: 'Reactivate',
+    deactivateOnlyThis: 'Deactivate just this category',
+    /**
+     * OQ-G3: whether deactivating a parent should cascade is undecided. The warning says what
+     * the button will actually do rather than implying a decision nobody has made.
+     */
+    deactivateWarning:
+      'Deactivating {name} affects {cats} and roughly {items} beneath it. This marks only {name} inactive — everything below it stays exactly as it is.',
+    warnCats: '{n} active subcategories',
+    warnCatsOne: '1 active subcategory',
+    warnItems: '{n} items',
+
+    /* Activity. */
+    activity: 'Activity',
+    added: 'Added',
+    lastChanged: 'Last changed',
+    activityNote:
+      'Who changed what is in the audit log; this panel shows when it last moved.',
+
+    /* Validation, shown inline under the field that caused it. */
+    duplicateAtRoot: '“{name}” already exists at the top level.',
+    duplicateUnder: '“{name}” already exists under {parent}.',
   },
 
   /*
