@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ArrowLeftRight, HandCoins, Pencil, PackagePlus, Scale } from 'lucide-react';
+import {
+  ArrowLeft,
+  ArrowLeftRight,
+  HandCoins,
+  Pencil,
+  PackagePlus,
+  Scale,
+  UserPlus,
+} from 'lucide-react';
 import type { ActiveProductBorrow, ListLedgerQuery, Placement, ProductDetail } from '@ims/shared';
 import { Button } from '@/components/ui/Button';
 import { Badge, PageHeader, Panel, Table } from '@/components/ui/primitives';
@@ -12,6 +20,7 @@ import { ROUTES } from '@/routes/paths';
 import { Role, ReturnCondition, formatLocation } from '@ims/shared';
 import { useAuth } from '@/features/auth/auth-context';
 import { BorrowDialog } from '@/features/borrowing/components/BorrowDialog';
+import { IssueFromStockDialog } from '@/features/borrowing/components/IssueFromStockDialog';
 import { LEDGER_PAGE_LIMIT } from '../constants';
 import { useLedger, useProduct, useZones } from '../api';
 import { zoneToneFor } from '../zone-colour';
@@ -27,6 +36,7 @@ type OpenDialog =
   | { kind: 'adjust' }
   | { kind: 'edit' }
   | { kind: 'borrow' }
+  | { kind: 'issue-from-stock' }
   | { kind: 'quarantine'; placement: Placement }
   | null;
 
@@ -334,6 +344,19 @@ function ProductDetailBody({
                 {t.borrowing.borrow}
               </Button>
             ) : null}
+{/*
+              Ask #4: the IM recording a handover that already happened, from this shelf to a
+              named person. Only shown when there is something to hand over.
+            */}
+            {canManageStock && detail.isTrackable && detail.isActive && detail.totalAvailable > 0 ? (
+              <Button
+                variant="secondary"
+                icon={<UserPlus aria-hidden className="size-4" />}
+                onClick={() => setDialog({ kind: 'issue-from-stock' })}
+              >
+                {t.borrowing.issueFromStock}
+              </Button>
+            ) : null}
             {canManageStock ? (
               <Button
                 variant="secondary"
@@ -541,6 +564,12 @@ function ProductDetailBody({
       ) : null}
       <ProductFormDialog open={dialog?.kind === 'edit'} onClose={close} editing={detail} />
       <BorrowDialog open={dialog?.kind === 'borrow'} onClose={close} product={detail} />
+
+      <IssueFromStockDialog
+        open={dialog?.kind === 'issue-from-stock'}
+        onClose={close}
+        product={detail}
+      />
     </>
   );
 }

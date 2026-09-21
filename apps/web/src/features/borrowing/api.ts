@@ -5,6 +5,7 @@ import type {
   BorrowRequest,
   CreateBorrowRequestInput,
   DecideBorrowInput,
+  IssueFromStockInput,
   ListBorrowsQuery,
   Paginated,
   ReturnBorrowInput,
@@ -94,6 +95,20 @@ export function useRevertBorrow() {
     ({ id, input }: { id: string; input: RevertBorrowInput }) =>
       api.post<BorrowRequest>(`/borrowing/${id}/revert`, input),
     (_input, result) => result.productId,
+  );
+}
+
+/**
+ * The IM recording a handover off the shelf (ask #4). Idempotency-keyed, unlike Change holder:
+ * this one moves stock, and a double-clicked button must not hand over twice.
+ */
+export function useIssueFromStock() {
+  return useBorrowMutation(
+    (input: IssueFromStockInput) =>
+      api.post<BorrowRequest>('/borrowing/issue-from-stock', input, {
+        idempotencyKey: newIdempotencyKey(),
+      }),
+    (input) => input.productId,
   );
 }
 

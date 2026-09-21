@@ -843,6 +843,12 @@ export const t = {
     revertTitle: 'Revert this borrow',
     revertReason: 'Why is this being reverted?',
     // Custody reassignment. Nothing moves on the shelf — see migration 0032.
+    issueFromStock: 'Issue from stock',
+    issueFromStockHint:
+      'Records a handover that already happened. The stock leaves the shelf now and the person is notified.',
+    issueTo: 'Issue to',
+    searchPeople: 'Search people',
+    issuedFromStock: 'Issued. The person has been notified.',
     reassign: 'Change holder',
     reassignTitle: 'Change who holds this',
     reassignHolder: 'New holder',
