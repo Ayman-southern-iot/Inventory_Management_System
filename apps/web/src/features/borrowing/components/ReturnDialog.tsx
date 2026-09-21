@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { MapPin } from 'lucide-react';
 import {
   returnBorrowSchema,
   ReturnCondition,
@@ -71,6 +72,9 @@ export function ReturnDialog({ borrow, onClose }: { borrow?: BorrowRequest; onCl
   }
 
   const { errors, isSubmitting } = form.formState;
+  /** The IM has chosen a different shelf, so the offer to undo that is worth showing. */
+  const isReshelving =
+    borrow !== undefined && form.watch('compartmentId') !== borrow.compartmentId;
 
   return (
     <Dialog
@@ -105,6 +109,34 @@ export function ReturnDialog({ borrow, onClose }: { borrow?: BorrowRequest; onCl
           max={borrow?.outstandingQty ?? 1}
         />
         <p className="-mt-2 text-xs text-ink-subtle">{t.borrowing.outstandingHint}</p>
+
+        {/*
+          Ayman: the IM should not have to go and look up where the thing came from. The picker
+          below already defaults to the origin, but three selects reading "Main Store / Meta /
+          1A" do not say *why* — this line does, and the button undoes a reshelve.
+        */}
+        {borrow ? (
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-[--radius-control] border border-border bg-surface-muted px-3 py-2 text-xs">
+            <MapPin aria-hidden className="size-3.5 shrink-0 text-ink-subtle" />
+            <span className="text-ink-subtle">{t.borrowing.takenFrom}</span>
+            <span className="font-medium text-ink">{borrow.location}</span>
+            {isReshelving ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="ml-auto"
+                onClick={() =>
+                  form.setValue('compartmentId', borrow.compartmentId, { shouldValidate: true })
+                }
+              >
+                {t.borrowing.putItBack}
+              </Button>
+            ) : (
+              <span className="ml-auto text-ink-subtle">{t.borrowing.takenFromHint}</span>
+            )}
+          </div>
+        ) : null}
 
         {/*
           Zone first, then the shelves inside it. This one asks "any shelf in the building",

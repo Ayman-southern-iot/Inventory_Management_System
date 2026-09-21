@@ -928,6 +928,10 @@ export const t = {
     myEmptyTitle: 'You have not borrowed anything yet',
     myEmptyBody: 'Find a product in the inventory and press Borrow.',
     outstandingHint: 'You can return part of a borrow; the rest stays out.',
+    /** Where the borrow left from, shown on the return form so the IM does not go looking. */
+    takenFrom: 'Taken from',
+    takenFromHint: 'Already selected below.',
+    putItBack: 'Put it back there',
     /**
      * "Currently in use" section on the product detail page. One row per active borrow, ordered
      * most-recently-issued first; "returned X of Y" lets a partial return show clearly.
