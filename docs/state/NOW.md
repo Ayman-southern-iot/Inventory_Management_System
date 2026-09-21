@@ -9,13 +9,19 @@
 
 **Phases 00–08 complete. Phase 09 is complete except Part E-a/E-b polish** —
 `plan/PHASE-09-taxonomy-location-and-custody.md`. All nine of Ayman's asks are built and on the
-demo stack. **Everything is pushed** — `origin/fix/lan-secure-context` is at `3bb8412`.
+demo stack. **Everything is pushed** — `origin/fix/lan-secure-context` is at `2107a79`.
 
 Landed this session: **E-b** custody (`current_holder_id` + append-only trail, both parties
 notified, UI), **A** rooms above zones, **B** auto Storage IDs on shelf slots, **C** optional
 nested categories with depth/cycle triggers and the ~200-node seed tree, **D** cascading picker
 with inline create + post-create navigation to receive stock, and a **UI for E-a** (issue from
 the shelf), which had shipped headless.
+
+Then three rounds of Ayman's design feedback: the category tree, the New product form and the
+issue-from-stock form all rebuilt to his mockups. The last of those found a **shipped defect** —
+a `__new__` sentinel written into a react-hook-form field whose schema validates it as a uuid
+killed `handleSubmit` silently, so **inline project creation on the Borrow form had never
+worked**. Fixed in both forms (`55d123a`), sentinel now held outside the form.
 
 ## Next action
 
@@ -26,7 +32,7 @@ category-management screen's move/merge affordances.
 
 ## Green as of 2026-09-21 — measured serially, not remembered
 
-- `pnpm typecheck` clean · `pnpm test` → shared 25 · api 90 · web 356
+- `pnpm typecheck` clean · `pnpm test` → shared 25 · api 90 · web 389
 - `pnpm lint` → **20 pre-existing errors. Not green.** Compare against 20, not zero.
 - `pnpm --filter @ims/api test:int` → **744 pass / 0 fail / 0 skipped (52 files)**
 - `guard-hardcoding.sh --scan-all` → **8**, against a documented baseline of 7.
@@ -57,6 +63,8 @@ category-management screen's move/merge affordances.
   pinned in `TEST_ENV` or the suite fails.
 - **`resetData` keeps requisitions**, so money accumulates across a spec file.
 - **`D-nnn` is the QA defect numbering** — cite decisions by `OQ-*` / `G-*`.
+- **A sentinel in a validated form field kills `handleSubmit` silently.** No error, no toast, the
+  button just does nothing. Keep `__new__`-style values in their own state, outside the form.
 
 ## Open debt
 
