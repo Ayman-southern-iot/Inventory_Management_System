@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown, ChevronRight, Search } from 'lucide-react';
 import type { CategoryNode } from '@ims/shared';
 import { t } from '@/i18n/en';
 import { cn } from '@/lib/cn';
+import { useAnchoredPosition } from '@/lib/useAnchoredPosition';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 
 /**
@@ -34,6 +36,12 @@ export type CategorySelection = typeof CATEGORY_ALL | typeof CATEGORY_UNCATEGORI
 
 /** ~140ms: long enough to skip the middle of a word, short enough not to feel laggy. */
 const SEARCH_DEBOUNCE_MS = 140;
+
+/**
+ * Must match the `w-96` on the panel below — the positioning hook needs the width as a number
+ * to keep the panel inside the right edge of the window.
+ */
+const PANEL_WIDTH_PX = 384;
 
 interface SearchSets {
   active: boolean;
@@ -124,8 +132,21 @@ export function CategoryTreeFilter({
   const debouncedQuery = useDebouncedValue(query, SEARCH_DEBOUNCE_MS);
 
   const wrapRef = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+
+  /**
+   * The panel is portalled to `document.body`, not positioned inside this component.
+   *
+   * `Panel` — the card the whole filter bar sits in — carries `overflow-hidden` to keep its
+   * children inside its rounded corners, which clips any absolutely positioned descendant, so
+   * the dropdown was cut off at the bottom of the card. `DateField` and the item-row suggestion
+   * list hit this first; this is the third caller of the shared hook they produced.
+   */
+  const {
+    anchorRef: triggerRef,
+    popoverRef: panelRef,
+    position,
+  } = useAnchoredPosition<HTMLButtonElement, HTMLDivElement>(open, PANEL_WIDTH_PX);
 
   const search = useMemo(() => computeSearchSets(tree, debouncedQuery), [tree, debouncedQuery]);
 
@@ -200,34 +221,44 @@ export function CategoryTreeFilter({
     if (returnFocus) triggerRef.current?.focus();
   }, []);
 
-  // Tabbing out closes the panel. `focusout` fires *before* the new element takes focus, so the
-  // check has to happen on the next tick — a timing assumption, which is why it has this
-  // comment and a regression test rather than being trusted silently.
+  /**
+   * Dismiss on a click or a Tab that lands outside both the trigger and the panel.
+   *
+   * `focusin` on the document, not `focusout` on the wrapper. The fix plan's version listened
+   * for `focusout` and re-checked containment on the next tick, which it flagged as a timing
+   * assumption rather than a guarantee — and once the panel is portalled to `document.body` it
+   * is no longer a descendant of the wrapper at all, so that check would fire the instant focus
+   * moved into the search box and close the panel on open. Asking "where did focus just land"
+   * needs no timer and no assumption about event ordering.
+   *
+   * Both containers are checked, because the trigger and the panel are now in different places
+   * in the DOM while still being one control to the user.
+   */
   useEffect(() => {
     if (!open) return undefined;
-    const wrap = wrapRef.current;
-    if (!wrap) return undefined;
+
+    const isInside = (node: Node | null): boolean =>
+      node !== null &&
+      Boolean(wrapRef.current?.contains(node) || panelRef.current?.contains(node));
 
     const dismiss = (): void => {
       setOpen(false);
       setActiveId(null);
     };
-    const onFocusOut = (): void => {
-      window.setTimeout(() => {
-        if (!wrap.contains(document.activeElement)) dismiss();
-      }, 0);
+    const onFocusIn = (event: FocusEvent): void => {
+      if (!isInside(event.target as Node)) dismiss();
     };
     const onPointerDown = (event: MouseEvent): void => {
-      if (!wrap.contains(event.target as Node)) dismiss();
+      if (!isInside(event.target as Node)) dismiss();
     };
 
-    wrap.addEventListener('focusout', onFocusOut);
+    document.addEventListener('focusin', onFocusIn);
     document.addEventListener('mousedown', onPointerDown);
     return () => {
-      wrap.removeEventListener('focusout', onFocusOut);
+      document.removeEventListener('focusin', onFocusIn);
       document.removeEventListener('mousedown', onPointerDown);
     };
-  }, [open]);
+  }, [open, panelRef]);
 
   useEffect(() => {
     if (open) searchRef.current?.focus();
@@ -444,10 +475,17 @@ export function CategoryTreeFilter({
         />
       </button>
 
-      {open ? (
+      {open
+        ? createPortal(
         <div
+          ref={panelRef}
           id="category-tree-panel"
-          className="absolute z-20 mt-1.5 w-[22rem] max-w-[90vw] overflow-hidden rounded-[--radius-panel] border border-border bg-surface shadow-[--shadow-overlay]"
+          style={{ top: position?.top ?? 0, left: position?.left ?? 0 }}
+          className={cn(
+            'fixed z-50 w-96 overflow-hidden rounded-[--radius-panel] border border-border bg-surface shadow-[--shadow-overlay]',
+            // Hidden until measured, so it cannot flash at 0,0 on the first frame.
+            position ? 'visible' : 'invisible',
+          )}
         >
           <div className="border-b border-border p-2.5">
             <div className="relative">
@@ -502,34 +540,34 @@ export function CategoryTreeFilter({
 
           <div className="border-t border-border px-1.5 py-1">{renderRow(uncatRow)}</div>
 
-          <div className="flex items-center justify-between gap-2 border-t border-border px-2.5 py-2">
-            <button
-              type="button"
-              onClick={() => choose(CATEGORY_ALL)}
-              className="rounded px-1.5 py-1 text-xs text-ink-muted hover:text-ink"
-            >
-              {t.inventory.categoryClear}
-            </button>
-            <span aria-hidden className="text-2xs text-ink-subtle">
+          {/*
+            No "Clear selection" button. The pinned "All categories" row above already is one,
+            and a second control for the same action is the duplication the Uncategorized
+            checkbox was removed for. Dropping it also lets the key legend have the whole row,
+            instead of being truncated by a button that did nothing new.
+          */}
+          <div className="flex items-center justify-center border-t border-border px-2.5 py-2">
+            <span aria-hidden className="whitespace-nowrap text-2xs text-ink-subtle">
               <Kbd>↑</Kbd>
               <Kbd>↓</Kbd> {t.inventory.categoryKeyMove} · <Kbd>→</Kbd>
               <Kbd>←</Kbd> {t.inventory.categoryKeyExpand} · <Kbd>Enter</Kbd>{' '}
               {t.inventory.categoryKeySelect}
             </span>
           </div>
-
           <p className="border-t border-border px-3 py-1.5 text-2xs text-ink-subtle">
             {t.inventory.categoryCountHint}
           </p>
-        </div>
-      ) : null}
+        </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
 
 function Kbd({ children }: { children: React.ReactNode }) {
   return (
-    <kbd className="mx-0.5 rounded border border-b-2 border-border bg-surface-muted px-1 py-px font-sans text-2xs text-ink-muted">
+    <kbd className="rounded border border-b-2 border-border bg-surface-muted px-1 font-sans text-2xs text-ink-muted">
       {children}
     </kbd>
   );
