@@ -55,6 +55,11 @@ export const TEST_ENV: Record<string, string> = {
   THROTTLE_PUBLIC_TTL_SECONDS: '60',
   THROTTLE_AUTHENTICATED_LIMIT: '300',
   THROTTLE_AUTHENTICATED_TTL_SECONDS: '60',
+  THROTTLE_APIKEY_LIMIT: '120',
+  THROTTLE_APIKEY_TTL_SECONDS: '60',
+  // Zero, so the integration suite sees `last_used_at` move on every call. In production the
+  // interval is what stops a busy integration writing once per read.
+  API_KEY_TOUCH_INTERVAL_SECONDS: '0',
   LOGIN_BURST_LIMIT: '10',
   LOGIN_BURST_TTL_SECONDS: '60',
   JSON_BODY_LIMIT: '100kb',

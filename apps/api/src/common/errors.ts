@@ -72,6 +72,34 @@ export class SessionRevokedError extends DomainError {
   }
 }
 
+/**
+ * Unknown, revoked or expired. One error for all three on purpose: an anonymous caller holding
+ * a wrong string should not learn that a similar one once existed.
+ */
+export class ApiKeyInvalidError extends DomainError {
+  constructor() {
+    super(ErrorCode.API_KEY_INVALID, 'API key is not valid', HttpStatus.UNAUTHORIZED);
+  }
+}
+
+/** Real and current, but switched off by an admin — a different action for the integrator. */
+export class ApiKeyDisabledError extends DomainError {
+  constructor() {
+    super(
+      ErrorCode.API_KEY_DISABLED,
+      'This API key has been disabled by an administrator',
+      HttpStatus.FORBIDDEN,
+    );
+  }
+}
+
+/** A valid key reached a route outside its scopes, or attempted a write. */
+export class ApiKeyScopeDeniedError extends DomainError {
+  constructor(message = 'This API key does not have access to that endpoint') {
+    super(ErrorCode.API_KEY_SCOPE_DENIED, message, HttpStatus.FORBIDDEN);
+  }
+}
+
 export class ForbiddenError extends DomainError {
   constructor(message = 'You do not have permission to do that') {
     super(ErrorCode.FORBIDDEN, message, HttpStatus.FORBIDDEN);

@@ -1,5 +1,6 @@
 import type { ColumnType, Generated, Insertable, Selectable, Updateable } from 'kysely';
 import type {
+  ApiKeyScope,
   AuditAction,
   AuditEntityType,
   AuditOutcome,
@@ -99,6 +100,30 @@ export interface RefreshTokensTable {
   replaced_by_id: string | null;
   user_agent: string | null;
   created_at: CreatedAt;
+}
+
+/**
+ * A credential issued to a system rather than a person (migration 0037, Phase 10).
+ *
+ * Mutable on purpose — enabling and disabling is the point — so there is no append-only
+ * trigger. The permanent record of who issued or revoked what lives in `audit_log`.
+ */
+export interface ApiKeysTable {
+  id: Generated<string>;
+  name: string;
+  /** A fragment of the key, for telling two rows apart in the admin list. Not usable. */
+  key_prefix: string;
+  /** SHA-256 of the key. A database leak must not yield working credentials. */
+  token_hash: string;
+  scopes: ApiKeyScope[];
+  is_active: ColumnType<boolean, boolean | undefined, boolean>;
+  /** Null means it never expires. */
+  expires_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
+  last_used_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
+  created_by: string;
+  created_at: CreatedAt;
+  revoked_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
+  revoked_by: ColumnType<string | null, string | null | undefined, string | null>;
 }
 
 export interface LoginAttemptsTable {
@@ -753,6 +778,7 @@ export interface Database {
   users: UsersTable;
   user_roles: UserRolesTable;
   refresh_tokens: RefreshTokensTable;
+  api_keys: ApiKeysTable;
   login_attempts: LoginAttemptsTable;
   approver_slots: ApproverSlotsTable;
 }

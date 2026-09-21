@@ -77,6 +77,18 @@ const rawSchema = z.object({
   THROTTLE_PUBLIC_TTL_SECONDS: durationSecondsSchema.default(60),
   THROTTLE_AUTHENTICATED_LIMIT: z.coerce.number().int().min(1).max(100_000).default(300),
   THROTTLE_AUTHENTICATED_TTL_SECONDS: durationSecondsSchema.default(60),
+  /**
+   * API keys get their own ceiling, lower than a human session's. An integration that needs
+   * more than two requests a second is paging badly, and a compromised key should not be able
+   * to drain the catalogue at the same rate a logged-in browser can.
+   */
+  THROTTLE_APIKEY_LIMIT: z.coerce.number().int().min(1).max(100_000).default(120),
+  THROTTLE_APIKEY_TTL_SECONDS: durationSecondsSchema.default(60),
+  /**
+   * How stale `api_keys.last_used_at` may be before the next request refreshes it. Without a
+   * floor this is one UPDATE per read on an otherwise read-only path. Zero means always.
+   */
+  API_KEY_TOUCH_INTERVAL_SECONDS: z.coerce.number().int().min(0).max(86_400).default(300),
   /** Replaces the previously hardcoded 10/60s login burst limit on `POST /auth/login`. */
   LOGIN_BURST_LIMIT: z.coerce.number().int().min(1).max(10_000).default(10),
   LOGIN_BURST_TTL_SECONDS: durationSecondsSchema.default(60),
@@ -395,8 +407,10 @@ export interface AppConfig {
     readonly auth: { readonly limit: number; readonly ttlSeconds: number };
     readonly public: { readonly limit: number; readonly ttlSeconds: number };
     readonly authenticated: { readonly limit: number; readonly ttlSeconds: number };
+    readonly apiKey: { readonly limit: number; readonly ttlSeconds: number };
     readonly loginBurst: { readonly limit: number; readonly ttlSeconds: number };
   };
+  readonly apiKeys: { readonly touchIntervalSeconds: number };
   readonly body: {
     readonly jsonLimit: string;
     readonly urlencodedLimit: string;
@@ -527,10 +541,17 @@ export function buildConfig(source: Record<string, string | undefined>): AppConf
         limit: env.THROTTLE_AUTHENTICATED_LIMIT,
         ttlSeconds: env.THROTTLE_AUTHENTICATED_TTL_SECONDS,
       }),
+      apiKey: Object.freeze({
+        limit: env.THROTTLE_APIKEY_LIMIT,
+        ttlSeconds: env.THROTTLE_APIKEY_TTL_SECONDS,
+      }),
       loginBurst: Object.freeze({
         limit: env.LOGIN_BURST_LIMIT,
         ttlSeconds: env.LOGIN_BURST_TTL_SECONDS,
       }),
+    }),
+    apiKeys: Object.freeze({
+      touchIntervalSeconds: env.API_KEY_TOUCH_INTERVAL_SECONDS,
     }),
     body: Object.freeze({
       jsonLimit: env.JSON_BODY_LIMIT,

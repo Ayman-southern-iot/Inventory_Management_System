@@ -170,6 +170,15 @@ export const AUDIT_ACTIONS = [
   'bom.over_budget_bounce',
   'bom.render',
   'bom.void',
+  /*
+   * API keys (Phase 10). Issuing and revoking are recorded; *using* a key is not — that would
+   * be a row per read, and `api_keys.last_used_at` answers "is this key still alive" without
+   * swamping the log (K8).
+   */
+  'api_key.create',
+  'api_key.enable',
+  'api_key.disable',
+  'api_key.revoke',
   // System
   'system.reminder_run',
   'system.check_failed',
@@ -202,6 +211,7 @@ export const AUDIT_ENTITY_TYPES = [
   'requisition',
   'delegation',
   'bom',
+  'api_key',
   'system',
   /**
    * Used by `POST /uploads/supporting-document` (orphan upload) so the audit row

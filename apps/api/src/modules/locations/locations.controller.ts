@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import { z } from 'zod';
 import {
+  ApiKeyScope,
   Role,
   createCompartmentSchema,
   createRoomSchema,
@@ -22,6 +23,7 @@ import {
 import { zodPipe } from '../../common/zod-validation.pipe';
 import { AuthenticatedThrottle } from '../../common/throttling';
 import { Roles } from '../auth/auth.decorators';
+import { ApiKeyScopes } from '../api-keys/api-key.decorators';
 import { CurrentAuditContext } from '../audit/audit.decorators';
 import type { AuditContext } from '../audit/audit-context';
 import { LocationsService } from './locations.service';
@@ -39,6 +41,11 @@ export class LocationsController {
   constructor(private readonly locations: LocationsService) {}
 
   /** Readable by any authenticated user — the borrow and move forms need the location list. */
+  @ApiKeyScopes({
+    summary: 'Every zone with its compartments, flat. Each compartment carries its Storage ID.',
+    scopes: [ApiKeyScope.INVENTORY_READ],
+    query: listQuerySchema,
+  })
   @Get()
   async list(
     @Query(zodPipe(listQuerySchema)) query: z.infer<typeof listQuerySchema>,
@@ -50,6 +57,11 @@ export class LocationsController {
    * The full tree, Room → Zone → Compartment. The Locations page renders this; the pickers use
    * `GET /locations` above, which stays a flat zone list so an existing caller is unaffected.
    */
+  @ApiKeyScopes({
+    summary: 'The full storage tree, Room to Zone to Compartment.',
+    scopes: [ApiKeyScope.INVENTORY_READ],
+    query: listQuerySchema,
+  })
   @Get('rooms')
   async listRooms(
     @Query(zodPipe(listQuerySchema)) query: z.infer<typeof listQuerySchema>,

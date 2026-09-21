@@ -2,12 +2,19 @@ import { type CanActivate, type ExecutionContext, Inject, Injectable } from '@ne
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
+import { API_KEY_TOKEN_PREFIX, type ApiKeyScope } from '@ims/shared';
 import { CONFIG, type AppConfig } from '../../config';
 import {
   AccountDeactivatedError,
+  ApiKeyScopeDeniedError,
   ForbiddenError,
   UnauthenticatedError,
 } from '../../common/errors';
+import { API_KEY_SCOPES_KEY } from '../api-keys/api-key.decorators';
+import {
+  ApiKeysService,
+  type AuthenticatedApiKey,
+} from '../api-keys/api-keys.service';
 import { ALLOW_PENDING_PASSWORD_KEY, IS_PUBLIC_KEY } from './auth.decorators';
 import { RefreshTokenRepository } from './refresh-token.repository';
 import type { AccessTokenPayload, RequestUser } from './request-user';
@@ -29,6 +36,7 @@ export class JwtAuthGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly jwt: JwtService,
     private readonly sessions: RefreshTokenRepository,
+    private readonly apiKeys: ApiKeysService,
     @Inject(CONFIG) private readonly config: AppConfig,
   ) {}
 
@@ -39,11 +47,19 @@ export class JwtAuthGuard implements CanActivate {
     ]);
     if (isPublic) return true;
 
-    const request = context.switchToHttp().getRequest<Request & { user?: RequestUser }>();
+    const request = context
+      .switchToHttp()
+      .getRequest<Request & { user?: RequestUser; apiKey?: AuthenticatedApiKey }>();
     const header = request.headers.authorization;
     if (!header?.startsWith(BEARER_PREFIX)) throw new UnauthenticatedError();
 
     const token = header.slice(BEARER_PREFIX.length).trim();
+
+    // A key is not a session and takes an entirely separate path — see authenticateApiKey.
+    if (token.startsWith(API_KEY_TOKEN_PREFIX)) {
+      request.apiKey = await this.authenticateApiKey(token, context, request.method);
+      return true;
+    }
 
     let payload: AccessTokenPayload;
     try {
@@ -80,5 +96,57 @@ export class JwtAuthGuard implements CanActivate {
 
     request.user = { id: payload.sub, email: session.email, roles: session.roles };
     return true;
+  }
+
+  /**
+   * Authenticate a key and decide, in the same breath, whether it may reach this route.
+   *
+   * The scope check lives here rather than in a guard of its own because a second global guard
+   * would have to run *after* this one to see the result, and global guard order follows module
+   * registration rather than anything declared. Deciding both here means there is no ordering
+   * to get wrong.
+   *
+   * **`request.user` is deliberately left undefined.** Populating it with a synthetic user is
+   * the obvious shortcut and it is a trap: `RolesGuard` reads `request.user.roles`, so a key
+   * carrying roles could satisfy `@Roles(Role.ADMIN)` and reach the endpoint that mints more
+   * keys; and `auditContextFromRequest` reads the same object, so every audited action would be
+   * attributed to a person who did not perform it. Leaving it undefined closes both by
+   * construction — `RolesGuard` already throws when it is missing, so every `@Roles` route is
+   * shut to keys with no extra code, and the audit context already tolerates a null actor.
+   */
+  private async authenticateApiKey(
+    token: string,
+    context: ExecutionContext,
+    method: string,
+  ): Promise<AuthenticatedApiKey> {
+    const required = this.reflector.getAllAndOverride<ApiKeyScope[] | undefined>(
+      API_KEY_SCOPES_KEY,
+      [context.getHandler(), context.getClass()],
+    );
+
+    /*
+     * Default-deny. An undecorated route is unreachable by a key — including every route that
+     * is merely "any signed-in user" and carries no `@Roles` at all, which is the gap a
+     * roles-only check would leave wide open.
+     *
+     * Checked before the key is looked up, so an unauthorised route cannot be used as an
+     * oracle for whether a given key string exists.
+     */
+    if (!required || required.length === 0) throw new ApiKeyScopeDeniedError();
+
+    /*
+     * Belt and braces. Every scope in the model today ends in `:read`, and the routes carrying
+     * them are all GETs — but a future write scope should have to delete this line deliberately
+     * rather than inherit write access by being added to an enum.
+     */
+    if (method !== 'GET') {
+      throw new ApiKeyScopeDeniedError('API keys are read-only');
+    }
+
+    const key = await this.apiKeys.authenticate(token);
+    if (!required.some((scope) => key.scopes.includes(scope))) {
+      throw new ApiKeyScopeDeniedError();
+    }
+    return key;
   }
 }

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, type ExecutionContext } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -25,19 +25,27 @@ import { FundsModule } from './modules/funds/funds.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { HealthController } from './modules/health/health.controller';
+import { ApiKeysModule } from './modules/api-keys/api-keys.module';
+import { isApiKeyRequest } from './common/throttling';
 
 const toMs = (seconds: number): number => seconds * 1000;
 
 /**
- * Four named throttler tiers. Each is per-IP and applied via `@Throttle` on the relevant
+ * Five named throttler tiers. Each is per-IP and applied via `@Throttle` on the relevant
  * controllers — there is no implicit "default" tier anymore.
  *
  * - `auth`           login, refresh, password change, signature download (strict)
  * - `public`         BOM PDF download, /health (moderate — these routes have no session)
  * - `authenticated`  every other authenticated route (looser)
+ * - `apiKey`         the same routes, when reached with an API key instead of a session
  * - `loginBurst`     layered on `auth` for `/auth/login` specifically — the burst limit and
  *                    the credential-exponential-backoff in `LoginThrottleService` solve
  *                    different problems; both belong.
+ *
+ * `authenticated` and `apiKey` are a mutually exclusive pair rather than two ceilings that both
+ * apply. A tier is chosen per *route*, but the limit here has to depend on the *caller*, and
+ * `skipIf` is the only place that distinction can be made — see `isApiKeyRequest`, which reads
+ * the raw header precisely so it does not depend on which global guard ran first.
  *
  * Without an explicit `@Throttle` decorator the request has no named tier and is therefore
  * not rate-limited at all (the global `ThrottlerGuard` only enforces named tiers). This is
@@ -55,6 +63,14 @@ const throttlerOptions = [
     name: 'authenticated',
     ttl: toMs(config.throttling.authenticated.ttlSeconds),
     limit: config.throttling.authenticated.limit,
+    // A key is measured against its own, lower ceiling — never this one.
+    skipIf: isApiKeyRequest,
+  },
+  {
+    name: 'apiKey',
+    ttl: toMs(config.throttling.apiKey.ttlSeconds),
+    limit: config.throttling.apiKey.limit,
+    skipIf: (context: ExecutionContext) => !isApiKeyRequest(context),
   },
   {
     name: 'loginBurst',
@@ -73,6 +89,7 @@ const throttlerOptions = [
     // In-process cron. At ~6 requisitions a day a queue server would be pure overhead
     // (DECISIONS.md); the jobs are a single indexed query each.
     ScheduleModule.forRoot(),
+    ApiKeysModule,
     AuthModule,
     UsersModule,
     DepartmentsModule,

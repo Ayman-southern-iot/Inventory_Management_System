@@ -1,5 +1,6 @@
-import { applyDecorators } from '@nestjs/common';
+import { applyDecorators, type ExecutionContext } from '@nestjs/common';
 import { SkipThrottle, Throttle } from '@nestjs/throttler';
+import { API_KEY_TOKEN_PREFIX } from '@ims/shared';
 import { config } from '../config';
 
 /**
@@ -38,11 +39,26 @@ const ms = (s: number): number => s * 1000;
 const only = (...active: readonly string[]) =>
   SkipThrottle(
     Object.fromEntries(
-      (['auth', 'public', 'authenticated', 'loginBurst'] as const)
+      (['auth', 'public', 'authenticated', 'apiKey', 'loginBurst'] as const)
         .filter((tier) => !active.includes(tier))
         .map((tier) => [tier, true]),
     ),
   );
+
+/**
+ * Is this request presenting an API key rather than a session?
+ *
+ * Decided from the **raw header**, not from `request.apiKey`, and that is deliberate. Both the
+ * throttler and the auth guard are global guards, and their relative order is a function of
+ * module registration rather than anything declared — reading state the auth guard may not have
+ * written yet would work until someone reorders an import. The prefix is syntax; it needs no
+ * validation to read, and a string that merely *looks* like a key is exactly what we want held
+ * to the tighter ceiling, since that is what a brute-force against key values looks like.
+ */
+export const isApiKeyRequest = (context: ExecutionContext): boolean => {
+  const request = context.switchToHttp().getRequest<{ headers?: { authorization?: string } }>();
+  return request.headers?.authorization?.startsWith(`Bearer ${API_KEY_TOKEN_PREFIX}`) ?? false;
+};
 
 /**
  * The default authenticated ceiling. Decoration order in Nest does not matter for metadata —
@@ -54,8 +70,17 @@ export const AuthenticatedThrottle = applyDecorators(
       limit: config.throttling.authenticated.limit,
       ttl: ms(config.throttling.authenticated.ttlSeconds),
     },
+    apiKey: {
+      limit: config.throttling.apiKey.limit,
+      ttl: ms(config.throttling.apiKey.ttlSeconds),
+    },
   }),
-  only('authenticated'),
+  /**
+   * Both ceilings are declared; exactly one applies. The tiers carry `skipIf` in
+   * `app.module.ts`, so a session is measured against `authenticated` and a key against the
+   * lower `apiKey` — a per-caller limit, which a per-route tier alone cannot express.
+   */
+  only('authenticated', 'apiKey'),
 );
 
 /** Strict tier for credential-bearing endpoints. */

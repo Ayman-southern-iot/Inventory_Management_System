@@ -206,6 +206,9 @@ export async function resetData(db: Db): Promise<void> {
   await db.deleteFrom('user_roles').execute();
   await db.deleteFrom('refresh_tokens').execute();
   await db.deleteFrom('login_attempts').execute();
+  // Migration 0037: `created_by` and `revoked_by` both reference users with no cascade, so a
+  // key issued by a spec would block the user delete below for every spec after it.
+  await db.deleteFrom('api_keys').execute();
   await db.updateTable('app_settings').set({ updated_by: null }).execute();
 
   /**

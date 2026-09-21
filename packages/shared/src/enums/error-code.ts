@@ -18,6 +18,22 @@ export const ErrorCode = {
   RATE_LIMITED: 'RATE_LIMITED',
 
   /**
+   * The presented API key is unknown, revoked or past its expiry. Deliberately one code for all
+   * three: telling an anonymous caller "that key existed once" is a hint they have not earned.
+   */
+  API_KEY_INVALID: 'API_KEY_INVALID',
+  /**
+   * The key is real and current but switched off by an admin. Distinct from INVALID so the
+   * integrator is told to ask their admin rather than hunt for a typo (OQ-G2).
+   */
+  API_KEY_DISABLED: 'API_KEY_DISABLED',
+  /**
+   * A valid key reached a route its scopes do not cover, or attempted a write. The route list
+   * is default-deny, so this is the code most integrators will meet first.
+   */
+  API_KEY_SCOPE_DENIED: 'API_KEY_SCOPE_DENIED',
+
+  /**
    * An upload exceeded the configured ceiling. Distinct from INTERNAL because the multipart
    * interceptor rejects the body before any handler runs — without its own code the user is told
    * the server broke, when in fact their file is simply too big.

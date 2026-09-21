@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
 import {
+  ApiKeyScope,
   Role,
   createCategorySchema,
   updateCategorySchema,
@@ -11,6 +12,7 @@ import {
 import { zodPipe } from '../../common/zod-validation.pipe';
 import { AuthenticatedThrottle } from '../../common/throttling';
 import { Roles } from '../auth/auth.decorators';
+import { ApiKeyScopes } from '../api-keys/api-key.decorators';
 import { CurrentAuditContext } from '../audit/audit.decorators';
 import type { AuditContext } from '../audit/audit-context';
 import { CategoriesService } from './categories.service';
@@ -25,6 +27,10 @@ export class CategoriesController {
    * Unpaginated on purpose: the response is the whole tree, and a page of a tree is not a tree.
    * The table is bounded by how many categories a human will maintain.
    */
+  @ApiKeyScopes({
+    summary: 'The whole category tree, nested. Each node carries its own and its subtree counts.',
+    scopes: [ApiKeyScope.INVENTORY_READ],
+  })
   @Get()
   async tree(): Promise<CategoryNode[]> {
     return this.categories.tree();
