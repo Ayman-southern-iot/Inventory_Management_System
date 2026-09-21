@@ -2,7 +2,11 @@ import { type CanActivate, type ExecutionContext, Inject, Injectable } from '@ne
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
-import { API_KEY_TOKEN_PREFIX, type ApiKeyScope } from '@ims/shared';
+import {
+  API_KEY_QUERY_PARAM,
+  API_KEY_TOKEN_PREFIX,
+  type ApiKeyScope,
+} from '@ims/shared';
 import { CONFIG, type AppConfig } from '../../config';
 import {
   AccountDeactivatedError,
@@ -51,7 +55,23 @@ export class JwtAuthGuard implements CanActivate {
       .switchToHttp()
       .getRequest<Request & { user?: RequestUser; apiKey?: AuthenticatedApiKey }>();
     const header = request.headers.authorization;
-    if (!header?.startsWith(BEARER_PREFIX)) throw new UnauthenticatedError();
+
+    /*
+     * A key may also arrive as `?api_key=...`, so a URL can be pasted into a browser and read
+     * (Ayman's call, over a header extension and over an expiring preview link). Only ever a
+     * key, never a session token: a JWT in a URL would be strictly worse and nobody asked for
+     * it. The header wins when both are present, so the safe habit stays the default.
+     */
+    const queryValue = request.query?.[API_KEY_QUERY_PARAM];
+    const queryKey = typeof queryValue === 'string' ? queryValue.trim() : undefined;
+
+    if (!header?.startsWith(BEARER_PREFIX)) {
+      if (queryKey?.startsWith(API_KEY_TOKEN_PREFIX)) {
+        request.apiKey = await this.authenticateApiKey(queryKey, context, request.method);
+        return true;
+      }
+      throw new UnauthenticatedError();
+    }
 
     const token = header.slice(BEARER_PREFIX.length).trim();
 

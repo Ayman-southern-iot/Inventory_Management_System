@@ -1,6 +1,6 @@
 import { applyDecorators, type ExecutionContext } from '@nestjs/common';
 import { SkipThrottle, Throttle } from '@nestjs/throttler';
-import { API_KEY_TOKEN_PREFIX } from '@ims/shared';
+import { API_KEY_QUERY_PARAM, API_KEY_TOKEN_PREFIX } from '@ims/shared';
 import { config } from '../config';
 
 /**
@@ -56,8 +56,18 @@ const only = (...active: readonly string[]) =>
  * to the tighter ceiling, since that is what a brute-force against key values looks like.
  */
 export const isApiKeyRequest = (context: ExecutionContext): boolean => {
-  const request = context.switchToHttp().getRequest<{ headers?: { authorization?: string } }>();
-  return request.headers?.authorization?.startsWith(`Bearer ${API_KEY_TOKEN_PREFIX}`) ?? false;
+  const request = context.switchToHttp().getRequest<{
+    headers?: { authorization?: string };
+    query?: Record<string, unknown>;
+  }>();
+
+  if (request.headers?.authorization?.startsWith(`Bearer ${API_KEY_TOKEN_PREFIX}`)) return true;
+
+  // A key may also arrive as `?api_key=...`. Without this it would be measured against the
+  // *human* ceiling — three times looser — which is the opposite of what a credential that
+  // travels in a URL deserves.
+  const queryValue = request.query?.[API_KEY_QUERY_PARAM];
+  return typeof queryValue === 'string' && queryValue.startsWith(API_KEY_TOKEN_PREFIX);
 };
 
 /**

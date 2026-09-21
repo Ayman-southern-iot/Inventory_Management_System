@@ -289,6 +289,9 @@ export const t = {
     usageExample: 'Try it',
     usageParams: 'Query parameters',
     usageNoParams: 'None',
+    usageBrowser: 'Open it in a browser',
+    usageBrowserBody:
+      'Paste this into the address bar. The key travels in the URL, so it is written into server logs, your browser history, and the Referer header sent to other sites. Use the header above for anything automated, and revoke this key if the link is ever shared.',
   },
 
   departments: {

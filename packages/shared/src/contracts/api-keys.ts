@@ -37,6 +37,22 @@ export const apiKeyScopeSchema = z.nativeEnum(ApiKeyScope);
 export const API_KEY_TOKEN_PREFIX = 'ims_';
 
 /**
+ * A key may also be presented as `?api_key=...` instead of a header, so a URL can be pasted
+ * into a browser and read (Ayman, 2026-09-21, chosen over a header extension and over an
+ * expiring preview link after the trade-off was put to him).
+ *
+ * **This is the less safe of the two ways in, and knowingly so.** A key in a URL is written
+ * down by things nobody thinks about: web-server access logs, browser history, and the
+ * `Referer` header sent to any third-party resource. A key that escapes that way escapes
+ * silently and keeps working until somebody revokes it. The header is still the right choice
+ * for anything automated; this exists for a human looking at data in a browser.
+ *
+ * What we do about it on our side: the name is defined once, here, so the guard, the rate
+ * limiter and the log redaction cannot disagree about what to look for or what to hide.
+ */
+export const API_KEY_QUERY_PARAM = 'api_key';
+
+/**
  * A key as the admin list shows it. There is no `token` field and there never will be — the
  * database holds only a hash, so this is everything the server itself can still say about it.
  */
@@ -132,6 +148,8 @@ export const apiKeyUsageDocSchema = z.object({
   basePath: z.string(),
   /** The header an integrator sets. Named here so the instructions cannot drift from the guard. */
   authHeader: z.string(),
+  /** The query parameter that carries a key instead of the header, for pasting into a browser. */
+  queryParam: z.string(),
   tokenPrefix: z.string(),
   /** Requests per minute a key is allowed, from config. */
   rateLimitPerMinute: z.number().int(),

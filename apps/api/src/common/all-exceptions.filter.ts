@@ -9,6 +9,7 @@ import {
 import type { Request, Response } from 'express';
 import { ErrorCode, type ApiErrorBody } from '@ims/shared';
 import { DomainError, RateLimitedError } from './errors';
+import { redactUrl } from './redact-url';
 
 /**
  * The single place an error becomes an HTTP response. Every response is `{ code, message }`,
@@ -26,13 +27,17 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     const { status, body, retryAfterSeconds } = this.toResponse(exception);
 
+    // Redacted, because a key may legitimately arrive as `?api_key=...` and a failed request is
+    // exactly when its URL gets written to the container log and kept.
+    const url = redactUrl(request.url);
+
     if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
       this.logger.error(
-        `${request.method} ${request.url} -> ${status}`,
+        `${request.method} ${url} -> ${status}`,
         exception instanceof Error ? exception.stack : String(exception),
       );
     } else {
-      this.logger.warn(`${request.method} ${request.url} -> ${status} ${body.code}`);
+      this.logger.warn(`${request.method} ${url} -> ${status} ${body.code}`);
     }
 
     if (retryAfterSeconds !== undefined && !response.headersSent) {

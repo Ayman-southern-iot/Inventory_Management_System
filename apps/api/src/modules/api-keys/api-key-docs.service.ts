@@ -5,6 +5,7 @@ import { Inject, Injectable, RequestMethod } from '@nestjs/common';
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { DiscoveryService, MetadataScanner } from '@nestjs/core';
 import {
+  API_KEY_QUERY_PARAM,
   API_KEY_TOKEN_PREFIX,
   PAGINATION_MAX_LIMIT,
   type ApiEndpointDoc,
@@ -44,6 +45,7 @@ export class ApiKeyDocsService {
     return {
       basePath: `/${this.config.http.globalPrefix}`.replace(/\/+/g, '/').replace(/\/$/, ''),
       authHeader: 'Authorization: Bearer <key>',
+      queryParam: API_KEY_QUERY_PARAM,
       tokenPrefix: API_KEY_TOKEN_PREFIX,
       rateLimitPerMinute: this.config.throttling.apiKey.limit,
       maxPageSize: PAGINATION_MAX_LIMIT,

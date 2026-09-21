@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Copy } from 'lucide-react';
+import { AlertTriangle, Copy } from 'lucide-react';
 import type { ApiKeyUsageDoc } from '@ims/shared';
 import { Button } from '@/components/ui/Button';
 import { t } from '@/i18n/en';
@@ -36,6 +36,15 @@ export function ApiKeyUsagePanel({ usage }: { usage: ApiKeyUsageDoc }) {
     return `curl -H "Authorization: Bearer ${usage.tokenPrefix}your_key_here" \\\n  "${baseUrl}${path}${paged ? '?limit=100' : ''}"`;
   }, [usage.endpoints, usage.tokenPrefix, baseUrl]);
 
+  /** The same call as a plain URL, for pasting into an address bar. */
+  const browserUrl = useMemo(() => {
+    const richest = [...usage.endpoints].sort(
+      (a, b) => b.queryParams.length - a.queryParams.length || a.path.length - b.path.length,
+    )[0];
+    const path = richest?.path ?? '/products';
+    return `${baseUrl}${path}?${usage.queryParam}=${usage.tokenPrefix}your_key_here`;
+  }, [usage.endpoints, usage.queryParam, usage.tokenPrefix, baseUrl]);
+
   return (
     <div className="flex flex-col gap-4 text-sm">
       <p className="text-ink-muted">{t.apiKeys.usageBody}</p>
@@ -66,6 +75,35 @@ export function ApiKeyUsagePanel({ usage }: { usage: ApiKeyUsageDoc }) {
         <pre className="overflow-x-auto rounded-[--radius-control] bg-surface-muted p-3 font-mono text-xs text-ink">
           {example}
         </pre>
+      </section>
+
+      {/*
+        Ayman chose the URL form over a header extension after the trade-off was put to him. It
+        is shown with the reason it is the riskier option attached, and directly under the
+        header example rather than instead of it — the warning belongs where the copy button is,
+        not in a document nobody opens twice.
+      */}
+      <section className="flex flex-col gap-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-subtle">
+            {t.apiKeys.usageBrowser}
+          </h3>
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<Copy aria-hidden className="size-4" />}
+            onClick={() => void copy(browserUrl)}
+          >
+            {t.apiKeys.copy}
+          </Button>
+        </div>
+        <pre className="overflow-x-auto rounded-[--radius-control] bg-surface-muted p-3 font-mono text-xs text-ink">
+          {browserUrl}
+        </pre>
+        <p className="flex items-start gap-1.5 rounded-[--radius-control] bg-pending-subtle px-3 py-2 text-xs text-ink">
+          <AlertTriangle aria-hidden className="mt-px size-4 shrink-0" />
+          {t.apiKeys.usageBrowserBody}
+        </p>
       </section>
 
       <section className="flex flex-col gap-2">

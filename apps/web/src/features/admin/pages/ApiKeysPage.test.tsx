@@ -41,6 +41,7 @@ function key(overrides: Partial<ApiKey> = {}): ApiKey {
 const USAGE: ApiKeyUsageDoc = {
   basePath: '/api/v1',
   authHeader: 'Authorization: Bearer <key>',
+  queryParam: 'api_key',
   tokenPrefix: 'ims_',
   rateLimitPerMinute: 120,
   maxPageSize: 100,
@@ -223,6 +224,21 @@ describe('ApiKeysPage', () => {
       expect(await screen.findByText('/api/v1/products')).toBeInTheDocument();
       expect(screen.getByText('/api/v1/categories')).toBeInTheDocument();
       expect(screen.getByText('Every product.')).toBeInTheDocument();
+    });
+
+    /**
+     * Ayman chose the URL form knowing the cost. The panel must therefore show it *and* the
+     * reason it is the riskier of the two, in the same place as the copy button — a warning
+     * somewhere else is a warning nobody reads.
+     */
+    it('offers the browser URL with its warning attached', async () => {
+      const user = userEvent.setup();
+      renderPage();
+
+      await user.click(screen.getByRole('button', { name: t.apiKeys.usageTitle }));
+
+      expect(await screen.findByText(/api_key=ims_your_key_here/)).toBeInTheDocument();
+      expect(screen.getByText(t.apiKeys.usageBrowserBody)).toBeInTheDocument();
     });
 
     /** `/categories` sorts first; an example of the category tree answers nobody's question. */

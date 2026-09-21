@@ -1157,3 +1157,13 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   silently missing its last hundred products has no way to know its search is incomplete.
 - 2026-09-21 — The catalogue carries no `activeBorrows` and no person's name. It is a product
   browser in another company system; how many are out is its business, who has them is not.
+- 2026-09-21 — An API key may also be presented as `?api_key=...`, not only as a bearer header.
+  **Ayman's call, made after the cost was put to him** and after being offered two safer
+  alternatives (a header browser extension, and an expiring signed preview link). The cost: a
+  key in a URL is recorded by web-server access logs, browser history and the `Referer` header
+  sent to third parties, and it stays valid until revoked. What we do about it: the parameter
+  name lives in one shared constant so the guard, the rate limiter and the log redaction cannot
+  disagree; `all-exceptions.filter` redacts it before logging (`redactUrl`); the query form is
+  rejected for session tokens, so only keys may travel this way; the header wins when both are
+  present; and the admin panel shows the URL form with the reason it is the riskier of the two
+  attached to the copy button rather than buried elsewhere.

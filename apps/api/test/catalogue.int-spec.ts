@@ -16,6 +16,7 @@ import { StockService } from '../src/modules/stock/stock.service';
 describe('catalogue', () => {
   let ctx: TestApp;
   let admin: HttpClient;
+  let adminId: string;
   let fixture: StockFixture;
 
   async function issueKey(): Promise<string> {
@@ -41,6 +42,7 @@ describe('catalogue', () => {
     fixture = await createStockFixture(ctx.db);
     const session = await createUserAndLogin(ctx.db, httpClient(ctx.app), { roles: [Role.ADMIN] });
     admin = session.client;
+    adminId = session.user.id;
   });
 
   it('returns products, categories and rooms in one call', async () => {
@@ -75,13 +77,8 @@ describe('catalogue', () => {
     beforeEach(async () => {
       const stock = ctx.app.get(StockService);
       await stock.receive(
-        {
-          productId: fixture.productId,
-          compartmentId: fixture.compartmentA,
-          quantity: 10,
-          note: null,
-        },
-        auditContextStub(),
+        { productId: fixture.productId, compartmentId: fixture.compartmentA, quantity: 10 },
+        { performedBy: adminId, note: 'catalogue fixture' },
       );
     });
 
@@ -162,17 +159,3 @@ describe('catalogue', () => {
     expect(response.status).toBe(401);
   });
 });
-
-/** The catalogue never writes, but `receive` needs an actor to audit. */
-function auditContextStub() {
-  return {
-    actorId: null,
-    actorName: null,
-    actorEmail: null,
-    actorRoles: [],
-    requestMethod: null,
-    requestPath: null,
-    requestIp: null,
-    userAgent: null,
-  };
-}

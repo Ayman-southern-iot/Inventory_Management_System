@@ -134,6 +134,53 @@ describe('API keys', () => {
       }
     });
 
+    /**
+     * Ayman chose the URL form over a header extension, having been told the cost: a key in a
+     * URL is recorded by access logs, browser history and the Referer header. These pin that it
+     * works, that it is held to the same rules as the header, and that it can never carry a
+     * session token.
+     */
+    describe('presented as ?api_key=', () => {
+      it('reads a scoped route', async () => {
+        const { token } = await issueKey();
+        const response = await httpClient(ctx.app).get(`/products?api_key=${token}`);
+        expect(response.status).toBe(200);
+      });
+
+      it('obeys the same scope rules as the header', async () => {
+        const { token } = await issueKey();
+        const response = await httpClient(ctx.app).get(`/borrowing?api_key=${token}`);
+        expect(response.status).toBe(403);
+        expect(response.body.code).toBe(ErrorCode.API_KEY_SCOPE_DENIED);
+      });
+
+      it('is refused once the key is disabled', async () => {
+        const { token, id } = await issueKey();
+        await admin.patch(`/admin/api-keys/${id}`).send({ isActive: false });
+        const response = await httpClient(ctx.app).get(`/products?api_key=${token}`);
+        expect(response.status).toBe(403);
+        expect(response.body.code).toBe(ErrorCode.API_KEY_DISABLED);
+      });
+
+      /** A session token in a URL would be strictly worse, and nobody asked for it. */
+      it('will not accept a session token', async () => {
+        const session = await createUserAndLogin(ctx.db, httpClient(ctx.app), {});
+        const response = await httpClient(ctx.app).get(
+          `/products?api_key=${session.session.accessToken}`,
+        );
+        expect(response.status).toBe(401);
+        expect(response.body.code).toBe(ErrorCode.UNAUTHENTICATED);
+      });
+
+      it('lets the header win when both are sent', async () => {
+        const { token } = await issueKey();
+        const response = await httpClient(ctx.app, { token }).get(
+          '/products?api_key=ims_aCompletelyBogusValue',
+        );
+        expect(response.status).toBe(200);
+      });
+    });
+
     it('is read-only, even on a route it is scoped for', async () => {
       const { token } = await issueKey();
       const response = await asKey(token)
