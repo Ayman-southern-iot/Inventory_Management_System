@@ -5,6 +5,7 @@ interface QuantityFieldProps<TValues extends FieldValues> {
   control: Control<TValues>;
   name: FieldPath<TValues>;
   label: string;
+  hideLabel?: boolean;
   hint?: string;
   error?: string;
   min?: number;
@@ -23,6 +24,7 @@ export function QuantityField<TValues extends FieldValues>({
   control,
   name,
   label,
+  hideLabel,
   hint,
   error,
   min,
@@ -36,6 +38,7 @@ export function QuantityField<TValues extends FieldValues>({
       render={({ field }) => (
         <TextField
           label={label}
+          hideLabel={hideLabel}
           hint={hint}
           error={error}
           type="number"

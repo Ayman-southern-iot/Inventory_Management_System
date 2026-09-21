@@ -864,6 +864,22 @@ export const t = {
     issueFromStockHint:
       'Records a handover that already happened. The stock leaves the shelf now and the person is notified.',
     issueTo: 'Issue to',
+    fromBin: 'From bin',
+    choosePerson: 'Choose a person',
+    noPeopleMatch: 'Nobody matches that.',
+    returns: 'Returns',
+    expectedBack: 'Expected back',
+    // Distinct from `expectedReturn`, which is also "Expected back": the checkbox and the date
+    // input sit in the same row, and two controls cannot answer to the same name.
+    returnDate: 'Expected return date',
+    takeAll: 'Take all',
+    ofAvailable: 'of {n}',
+    leftAfterThis: '{n} left after this',
+    plusWeek: '+1 week',
+    plusMonth: '+1 month',
+    backBy: 'back by',
+    issueSummary: '{qty} {unit} from {from} to {to}',
+    purposePlaceholder: 'Why it is being issued — optional',
     searchPeople: 'Search people',
     issuedFromStock: 'Issued. The person has been notified.',
     reassign: 'Change holder',

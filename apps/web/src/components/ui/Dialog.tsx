@@ -13,6 +13,8 @@ interface DialogProps {
   children: ReactNode;
   /** One line under the title. Use it for a standing fact about the form, not an instruction. */
   subtitle?: string;
+  /** A small glyph beside the title, for a dialog that performs an action rather than edits. */
+  icon?: ReactNode;
   footer?: ReactNode;
   /**
    * Pinned to the left of the footer, opposite the buttons — a secondary control that belongs
@@ -41,6 +43,7 @@ export function Dialog({
   open,
   title,
   subtitle,
+  icon,
   onClose,
   children,
   footer,
@@ -111,9 +114,19 @@ export function Dialog({
         )}
       >
         <header className="flex items-start justify-between gap-4 border-b border-border px-5 py-3.5">
-          <div>
-            <h2 className="text-base font-semibold text-ink">{title}</h2>
-            {subtitle ? <p className="mt-0.5 text-xs text-ink-subtle">{subtitle}</p> : null}
+          <div className="flex items-start gap-3">
+            {icon ? (
+              <span
+                aria-hidden
+                className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-[--radius-control] bg-brand-subtle text-brand"
+              >
+                {icon}
+              </span>
+            ) : null}
+            <div>
+              <h2 className="text-base font-semibold text-ink">{title}</h2>
+              {subtitle ? <p className="mt-0.5 text-xs text-ink-subtle">{subtitle}</p> : null}
+            </div>
           </div>
           <button
             type="button"

@@ -1119,3 +1119,11 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   Postgres CHECK cannot reference other rows, and both rules require walking `parent_id`.
 - 2026-09-21 — Overdue notifications stay unwired (OQ-E, Ayman's call) — a deliberate deferral,
   not a gap. Wiring them needs a `last_overdue_notified_at` column so the job does not nag daily.
+- 2026-09-21 — A sentinel option value never goes into a react-hook-form field whose schema
+  validates it. `projectId` is `uuid().nullable()`, so registering the select wrote `__new__`
+  into the form, `zodResolver` rejected it and `handleSubmit` short-circuited — the Borrow
+  button did nothing at all, silently, on shipped surface. The select is now controlled by its
+  own state and only a real id reaches the form. Same shape fixed in the issue-from-stock form.
+- 2026-09-21 — Issuing from stock carries a project (Ayman's ask) — the borrow form has one for
+  any general user, so a handover the IM records on their behalf must too, or the project's item
+  list is quietly short a row.

@@ -21,6 +21,12 @@ interface FieldShellProps {
   hint?: string;
   error?: string;
   required?: boolean;
+  /**
+   * Keeps the label for screen readers but takes it off screen. For a control whose label is
+   * already rendered beside it by the layout — a label-left form row — where showing it twice
+   * is visual noise and removing it would leave the input unnamed.
+   */
+  hideLabel?: boolean;
   children: ReactNode;
 }
 
@@ -33,10 +39,18 @@ interface FieldShellProps {
  * failed field gets the red border *and* the message underneath, and the marker is there from
  * the start so the requirement is known before the submit is refused.
  */
-function FieldShell({ label, htmlFor, hint, error, required, children }: FieldShellProps) {
+function FieldShell({
+  label,
+  htmlFor,
+  hint,
+  error,
+  required,
+  hideLabel,
+  children,
+}: FieldShellProps) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={htmlFor} className="text-sm font-medium text-ink">
+      <label htmlFor={htmlFor} className={hideLabel ? 'sr-only' : 'text-sm font-medium text-ink'}>
         {label}
         {required ? (
           <span aria-hidden className="ml-0.5 text-danger">
@@ -60,18 +74,26 @@ function FieldShell({ label, htmlFor, hint, error, required, children }: FieldSh
 
 interface TextFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'id'> {
   label: string;
+  hideLabel?: boolean;
   hint?: string;
   error?: string;
 }
 
 export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function TextField(
-  { label, hint, error, required, className, onWheel, ...rest },
+  { label, hideLabel, hint, error, required, className, onWheel, ...rest },
   ref,
 ) {
   const id = useId();
   const isRequired = useIsRequired(rest.name, required);
   return (
-    <FieldShell label={label} htmlFor={id} hint={hint} error={error} required={isRequired}>
+    <FieldShell
+      label={label}
+      hideLabel={hideLabel}
+      htmlFor={id}
+      hint={hint}
+      error={error}
+      required={isRequired}
+    >
       <input
         ref={ref}
         id={id}
@@ -156,19 +178,27 @@ export const CellInput = forwardRef<HTMLInputElement, CellInputProps>(function C
 
 interface SelectFieldProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'id'> {
   label: string;
+  hideLabel?: boolean;
   hint?: string;
   error?: string;
   children: ReactNode;
 }
 
 export const SelectField = forwardRef<HTMLSelectElement, SelectFieldProps>(function SelectField(
-  { label, hint, error, required, className, children, ...rest },
+  { label, hideLabel, hint, error, required, className, children, ...rest },
   ref,
 ) {
   const id = useId();
   const isRequired = useIsRequired(rest.name, required);
   return (
-    <FieldShell label={label} htmlFor={id} hint={hint} error={error} required={isRequired}>
+    <FieldShell
+      label={label}
+      hideLabel={hideLabel}
+      htmlFor={id}
+      hint={hint}
+      error={error}
+      required={isRequired}
+    >
       <select
         ref={ref}
         id={id}
