@@ -32,6 +32,13 @@ export function BorrowDialog({ open, onClose, product }: Props) {
   const createProject = useCreateProject();
   const projects = useSelectableProjects();
 
+  /**
+   * What the project select is showing, which is not the same thing as the project on the
+   * request. `projectId` goes to the API as `uuid | null`, so the `__new__` sentinel must never
+   * be written into the form — zod rejects it, `handleSubmit` short-circuits, and the Borrow
+   * button appears to do nothing at all. Held beside the form instead.
+   */
+  const [projectChoice, setProjectChoice] = useState('');
   const [newProjectName, setNewProjectName] = useState('');
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
 
@@ -61,6 +68,7 @@ export function BorrowDialog({ open, onClose, product }: Props) {
 
   useEffect(() => {
     if (!open) return;
+    setProjectChoice('');
     setNewProjectName('');
     setDuplicateWarning(null);
     form.reset({
@@ -81,8 +89,7 @@ export function BorrowDialog({ open, onClose, product }: Props) {
   }, [isReturnable, form]);
 
   async function ensureProject(force = false): Promise<string | null | undefined> {
-    const chosen = form.getValues('projectId');
-    if (chosen !== NEW_PROJECT) return chosen;
+    if (projectChoice !== NEW_PROJECT) return form.getValues('projectId');
     if (!newProjectName.trim()) return null;
 
     try {
@@ -171,7 +178,16 @@ export function BorrowDialog({ open, onClose, product }: Props) {
             max={maxQuantity}
           />
 
-          <SelectField label={t.borrowing.project} {...form.register('projectId')}>
+          <SelectField
+            label={t.borrowing.project}
+            value={projectChoice}
+            onChange={(event) => {
+              const next = event.target.value;
+              setProjectChoice(next);
+              // Only a real id reaches the form; "new" and "none" are both null until created.
+              form.setValue('projectId', next === '' || next === NEW_PROJECT ? null : next);
+            }}
+          >
             <option value="">{t.borrowing.noProject}</option>
             {(projects.data ?? []).map((project) => (
               <option key={project.id} value={project.id}>
@@ -181,7 +197,7 @@ export function BorrowDialog({ open, onClose, product }: Props) {
             <option value={NEW_PROJECT}>{t.borrowing.newProject}</option>
           </SelectField>
 
-          {form.watch('projectId') === NEW_PROJECT ? (
+          {projectChoice === NEW_PROJECT ? (
             <div className="flex flex-col gap-2">
               <TextField
                 label={t.borrowing.projectName}
