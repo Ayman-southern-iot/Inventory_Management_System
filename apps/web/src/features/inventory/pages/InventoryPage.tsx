@@ -9,7 +9,7 @@ import { EmptyState, QueryBoundary, SkeletonRows } from '@/components/ui/states'
 import { useAuth } from '@/features/auth/auth-context';
 import { t } from '@/i18n/en';
 import { ROUTES } from '@/routes/paths';
-import { useCategoryTree, useProducts } from '../api';
+import { useCategoryTree, useProducts, useUncategorizedCount } from '../api';
 import { SEARCH_DEBOUNCE_MS } from '../constants';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { ProductFormDialog } from '../components/ProductFormDialog';
@@ -62,6 +62,8 @@ export function InventoryPage() {
 
   const products = useProducts(query);
   const categories = useCategoryTree();
+  // Drives the badge on the tree filter's pinned Uncategorized row.
+  const uncategorizedCount = useUncategorizedCount();
   /**
    * EX-02, requirements §10: inventory records exportable as PDF for Accounts. One hook per
    * button, matching the expense report — a slow PDF render must not disable the CSV button.
@@ -148,6 +150,7 @@ export function InventoryPage() {
           <div className="min-w-56">
             <CategoryTreeFilter
               tree={categories.data ?? []}
+              uncategorizedCount={uncategorizedCount.data ?? null}
               value={category}
               onChange={(next) => {
                 setCategory(next);

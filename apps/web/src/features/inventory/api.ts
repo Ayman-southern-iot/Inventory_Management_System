@@ -82,6 +82,31 @@ export function useProducts(query: ListProductsQuery) {
   });
 }
 
+/**
+ * How many products have no category — the badge on the tree filter's "Uncategorized" row, and
+ * the size of the backlog that row exists to clear.
+ *
+ * Asks the products list for one row and reads `total`, rather than widening the categories
+ * endpoint. That endpoint returns `CategoryNode[]` to four callers; wrapping it in an object to
+ * carry one number would mean touching all four and their fixtures for no gain.
+ */
+export function useUncategorizedCount(enabled = true) {
+  const query: ListProductsQuery = {
+    page: 1,
+    limit: 1,
+    uncategorized: true,
+    includeInactive: false,
+    inStockOnly: false,
+  };
+  return useQuery({
+    queryKey: queryKeys.products.list(query),
+    queryFn: ({ signal }) =>
+      api.get<Paginated<Product>>(`/products${toSearchParams(query)}`, signal),
+    enabled,
+    select: (page) => page.total,
+  });
+}
+
 export function useProduct(productId: string) {
   return useQuery({
     queryKey: queryKeys.products.detail(productId),

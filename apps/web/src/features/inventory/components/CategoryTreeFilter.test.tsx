@@ -45,11 +45,22 @@ const TREE: CategoryNode[] = [
   node('mechanical', 'Mechanical', 0, [node('bearings', 'Bearings', 7)]),
 ];
 
-function Host({ initial = CATEGORY_ALL }: { initial?: CategorySelection }) {
+function Host({
+  initial = CATEGORY_ALL,
+  uncategorizedCount = null,
+}: {
+  initial?: CategorySelection;
+  uncategorizedCount?: number | null;
+}) {
   const [value, setValue] = useState<CategorySelection>(initial);
   return (
     <>
-      <CategoryTreeFilter tree={TREE} value={value} onChange={setValue} />
+      <CategoryTreeFilter
+        tree={TREE}
+        value={value}
+        onChange={setValue}
+        uncategorizedCount={uncategorizedCount}
+      />
       <output data-testid="chosen">{value}</output>
       <button type="button">after</button>
     </>
@@ -67,14 +78,18 @@ async function open(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe('the category tree filter', () => {
-  it('opens showing only the top level, plus the two pinned rows', async () => {
+  /**
+   * 'All categories' is pinned above the tree and 'Uncategorized' below it, so neither scrolls
+   * away. Keyboard order follows the screen, which is why the two are first and last here.
+   */
+  it('pins All categories above the tree and Uncategorized below it', async () => {
     const user = userEvent.setup();
     render(<Host />);
     await open(user);
 
     const names = rowNames();
     expect(names?.[0]).toContain(t.inventory.allCategories);
-    expect(names?.[1]).toContain(t.inventory.uncategorized);
+    expect(names?.[names.length - 1]).toContain(t.inventory.uncategorized);
     expect(names?.some((n) => n?.includes('Electronics'))).toBe(true);
     // Nothing below the top level until a branch is expanded.
     expect(names?.some((n) => n?.includes('Sensors'))).toBe(false);
@@ -132,8 +147,8 @@ describe('the category tree filter', () => {
     render(<Host />);
     await open(user);
 
-    // Down past the two pinned rows to Electronics, right to open it, down to Sensors.
-    await user.keyboard('{ArrowDown}{ArrowDown}{ArrowRight}{ArrowDown}');
+    // Down past the pinned 'All categories' to Electronics, right to open it, down to Sensors.
+    await user.keyboard('{ArrowDown}{ArrowRight}{ArrowDown}');
     await user.keyboard('{Enter}');
 
     expect(chosen()).toBe('sensors');
@@ -157,7 +172,10 @@ describe('the category tree filter', () => {
     await open(user);
 
     await user.keyboard('{End}');
-    expect(searchBox().getAttribute('aria-activedescendant')).toBe('category-opt-mechanical');
+    // Last row is the pinned Uncategorized, not the last category.
+    expect(searchBox().getAttribute('aria-activedescendant')).toBe(
+      `category-opt-${CATEGORY_UNCATEGORIZED}`,
+    );
 
     await user.keyboard('{Home}');
     expect(searchBox().getAttribute('aria-activedescendant')).toBe(`category-opt-${CATEGORY_ALL}`);
@@ -227,6 +245,18 @@ describe('the category tree filter', () => {
     await user.click(trigger());
 
     await waitFor(() => expect(chosen()).toBe(CATEGORY_ALL));
+  });
+
+  /** The backlog size is the whole reason that row is worth pinning. */
+  it('shows how many products are uncategorised', async () => {
+    const user = userEvent.setup();
+    render(<Host uncategorizedCount={14} />);
+    await open(user);
+
+    const row = screen
+      .getAllByRole('treeitem')
+      .find((r) => r.textContent?.includes(t.inventory.uncategorized));
+    expect(row?.textContent).toContain('14');
   });
 
   it('filters to uncategorised from the pinned row', async () => {
