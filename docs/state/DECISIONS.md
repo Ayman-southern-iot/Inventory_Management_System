@@ -1167,3 +1167,11 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   rejected for session tokens, so only keys may travel this way; the header wins when both are
   present; and the admin panel shows the URL form with the reason it is the riskier of the two
   attached to the copy button rather than buried elsewhere.
+- 2026-09-21 — `GET /catalogue` returns the shape the consuming screen needs, not the database's.
+  The first cut handed over 35 KB: 120 categories of which 113 held nothing, four UUIDs per
+  shelf, `createdAt` on every node. Ayman: "i dont want this many information ... only important
+  information, in a structured way". Now 5.9 KB — a resolved category **path** instead of a
+  `parentId` to chase, a formatted location **label** instead of three ids to join, `total /
+  available / inUse`, and categories pruned to those that hold something (ancestors kept, so the
+  tree is still rebuildable; `?allCategories=true` returns the lot). The rule behind it: nothing
+  in this payload should require a second lookup to render.

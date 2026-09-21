@@ -34,9 +34,20 @@ export async function createCategory(
 
 export async function createProduct(
   db: Db,
-  options: { categoryId?: string; name?: string; code?: string; isActive?: boolean } = {},
+  options: {
+    /**
+     * Explicit `null` means uncategorised, which has been a supported state since migration
+     * 0035 — distinct from omitting it, which still makes one so the common case stays a
+     * one-liner. `??` cannot tell those apart, which is why this reads `undefined`.
+     */
+    categoryId?: string | null;
+    name?: string;
+    code?: string;
+    isActive?: boolean;
+  } = {},
 ): Promise<string> {
-  const categoryId = options.categoryId ?? (await createCategory(db));
+  const categoryId =
+    options.categoryId !== undefined ? options.categoryId : await createCategory(db);
   const row = await db
     .insertInto('products')
     .values({

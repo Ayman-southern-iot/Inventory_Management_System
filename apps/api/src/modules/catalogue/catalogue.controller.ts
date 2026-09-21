@@ -28,7 +28,7 @@ export class CatalogueController {
 
   @ApiKeyScopes({
     summary:
-      'Everything in one response: products with their shelves and stock, the category tree, and the room/zone/compartment tree. Built for a system that mirrors this catalogue.',
+      'Everything a search screen needs, in one response: each product with its category path, its shelves as readable labels, and how many are total, available and in use. Plus flat category and location lists to filter by.',
     scopes: [ApiKeyScope.INVENTORY_READ],
     query: catalogueQuerySchema,
   })
