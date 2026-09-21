@@ -45,6 +45,7 @@ const TITLES: ReadonlyArray<readonly [string, string]> = [
   [ROUTES.admin.departments, t.departments.title],
   [ROUTES.admin.settings, t.settings.title],
   [ROUTES.admin.auditLog, t.auditLog.title],
+  [ROUTES.admin.apiKeys, t.apiKeys.title],
 
   [ROUTES.dashboard, t.dashboard.title],
 ];

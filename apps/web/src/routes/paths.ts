@@ -61,6 +61,7 @@ export const ROUTES = {
     departments: '/admin/departments',
     settings: '/admin/settings',
     auditLog: '/admin/audit-log',
+    apiKeys: '/admin/api-keys',
   },
   /** Per-user settings. `changePassword` stays top-level: ProtectedRoute redirects to it. */
   account: {

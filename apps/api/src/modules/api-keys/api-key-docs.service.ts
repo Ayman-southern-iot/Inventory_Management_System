@@ -139,15 +139,15 @@ function zodTypeName(field: z.ZodTypeAny): string {
   const typeName = (inner._def as { typeName?: string }).typeName ?? 'ZodUnknown';
 
   /*
-   * `queryBoolean` is a union of `boolean | 'true' | 'false'`, because a query string arrives as
-   * text and `z.coerce.boolean()` reads "false" as true. Printing "union" in the docs would be
-   * accurate and useless — the caller sends `?includeInactive=true` and wants to be told so.
+   * `queryBoolean` is `union([boolean, string])` with a transform, because a query string
+   * arrives as text and `z.coerce.boolean()` reads "false" as true. Reporting that union
+   * verbatim — "boolean | string" — is accurate and useless: the caller sends
+   * `?includeInactive=true` and needs to be told "boolean", not shown the shape of our parser.
    */
   if (typeName === 'ZodUnion') {
     const options = ((inner._def as { options?: z.ZodTypeAny[] }).options ?? []).map(zodTypeName);
-    const distinct = [...new Set(options)];
-    if (distinct.every((option) => option === 'boolean' || option === 'literal')) return 'boolean';
-    return distinct.join(' | ');
+    if (options.includes('boolean')) return 'boolean';
+    return [...new Set(options)].join(' | ');
   }
 
   return typeName.replace(/^Zod/, '').toLowerCase();

@@ -114,6 +114,7 @@ export const t = {
     adminDepartments: 'Departments',
     adminSettings: 'Settings',
     adminAuditLog: 'Audit log',
+    adminApiKeys: 'API keys',
     account: 'My account',
     inventoryProducts: 'Inventory',
     inventoryCategories: 'Categories',
@@ -223,6 +224,71 @@ export const t = {
     deactivated: 'User deactivated.',
     passwordReset: 'Password reset. Give the new password to the user directly.',
     emptyTitle: 'No users match this filter',
+  },
+
+  apiKeys: {
+    title: 'API keys',
+    subtitle: 'Credentials for other systems to read from this one. Read-only, and revocable.',
+    newKey: 'New key',
+    createTitle: 'Issue an API key',
+    createSubtitle: 'The key is shown once. Copy it before you close this.',
+    name: 'Name',
+    namePlaceholder: 'Nightly product sync',
+    nameHint: 'What uses it. A name nobody recognises in six months is a key nobody dares revoke.',
+    scopes: 'What it can read',
+    scopeInventoryRead: 'Inventory',
+    scopeInventoryReadHint: 'Products, categories and storage locations. No people, no money.',
+    expiry: 'Expires',
+    expiryDays: '{n} days',
+    expiryNever: 'Never',
+    expiryHint: 'A key with no expiry works until somebody revokes it.',
+    issue: 'Issue key',
+
+    // The one-time reveal.
+    createdTitle: 'Copy your key now',
+    createdBody:
+      'This is the only time it can be shown. It is stored hashed, so nobody — including an administrator — can read it back. If you lose it, revoke this key and issue another.',
+    copy: 'Copy',
+    copied: 'Copied to the clipboard.',
+    copyFailed: 'Could not copy. Select the key and copy it manually.',
+    done: 'I have copied it',
+
+    // The list.
+    prefix: 'Key',
+    status: 'Status',
+    active: 'Active',
+    disabled: 'Disabled',
+    expired: 'Expired',
+    revoked: 'Revoked',
+    lastUsed: 'Last used',
+    neverUsed: 'Never used',
+    createdBy: 'Issued by',
+    enable: 'Enable',
+    disable: 'Disable',
+    revoke: 'Revoke',
+    revokeConfirmTitle: 'Revoke this key?',
+    revokeConfirmBody:
+      'Anything using it stops working immediately, and it cannot be brought back. Disable it instead if you only want to pause it.',
+    created: 'API key issued.',
+    enabled: 'Key enabled.',
+    wasDisabled: 'Key disabled.',
+    wasRevoked: 'Key revoked.',
+    showRevoked: 'Show revoked',
+    emptyTitle: 'No API keys yet',
+    emptyBody: 'Issue one to let another system read the inventory.',
+
+    // The generated instructions.
+    usageTitle: 'How to use a key',
+    usageBody:
+      'Send the key as a bearer token. This list is generated from the running API, so it is never out of date.',
+    usageAuth: 'Authentication',
+    usageEndpoints: 'What you can call',
+    usageLimits: 'Limits',
+    usageRateLimit: '{n} requests per minute',
+    usagePageSize: 'Up to {n} records per page; use page to get the rest',
+    usageExample: 'Try it',
+    usageParams: 'Query parameters',
+    usageNoParams: 'None',
   },
 
   departments: {
@@ -1471,6 +1537,11 @@ export const t = {
     CONFLICT: 'That change conflicts with the current state.',
     ACCOUNT_DEACTIVATED: 'This account has been deactivated.',
     RATE_LIMITED: 'Too many attempts. Wait a few minutes and try again.',
+    // Read by an integrator in a log file, not by a user on a screen, so each one says what to
+    // do next rather than only what went wrong.
+    API_KEY_INVALID: 'That API key is not valid. It may have been revoked or have expired.',
+    API_KEY_DISABLED: 'This API key has been disabled. Ask an administrator to enable it.',
+    API_KEY_SCOPE_DENIED: 'This API key does not have access to that endpoint.',
     UNKNOWN_SETTING: 'That setting does not exist.',
     INSUFFICIENT_STOCK: 'There is not enough stock in that compartment.',
     INSUFFICIENT_STOCK_QUARANTINED:

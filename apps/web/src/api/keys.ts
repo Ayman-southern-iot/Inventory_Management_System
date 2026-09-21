@@ -1,4 +1,5 @@
 import type {
+  ListApiKeysQuery,
   ListRequisitionsQuery,
   ListBorrowsQuery,
   ListBomsQuery,
@@ -34,6 +35,12 @@ export const queryKeys = {
      * two return different shapes to different audiences.
      */
     selectable: (query: SelectableUsersQuery) => ['users', 'selectable', query] as const,
+  },
+  apiKeys: {
+    all: () => ['api-keys'] as const,
+    list: (query: ListApiKeysQuery) => ['api-keys', 'list', query] as const,
+    /** The generated integration docs. Static for a build, so it caches indefinitely. */
+    usage: () => ['api-keys', 'usage'] as const,
   },
   departments: {
     all: () => ['departments'] as const,

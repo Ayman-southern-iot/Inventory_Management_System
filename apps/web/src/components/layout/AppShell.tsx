@@ -9,6 +9,7 @@ import {
   Files,
   Folder,
   History,
+  KeyRound,
   LayoutDashboard,
   LayoutGrid,
   ListTree,
@@ -140,6 +141,7 @@ const NAV: NavGroup[] = [
       { label: t.nav.adminDepartments, to: ROUTES.admin.departments, icon: Boxes },
       { label: t.nav.adminSettings, to: ROUTES.admin.settings, icon: Settings2 },
       { label: t.nav.adminAuditLog, to: ROUTES.admin.auditLog, icon: History },
+      { label: t.nav.adminApiKeys, to: ROUTES.admin.apiKeys, icon: KeyRound },
     ],
   },
 ];

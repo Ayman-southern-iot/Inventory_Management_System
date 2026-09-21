@@ -1,6 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
+  ApiKey,
+  ApiKeyUsageDoc,
   ApproverSlot,
+  CreateApiKeyInput,
+  CreatedApiKey,
+  ListApiKeysQuery,
   AuditEntry,
   CreateDepartmentInput,
   CreateUserInput,
@@ -154,5 +159,55 @@ export function useAuditLogEntry(id: string) {
     queryKey: queryKeys.auditLog.detail(id),
     queryFn: ({ signal }) => api.get<AuditEntry>(`/admin/audit-log/${id}`, signal),
     enabled: Boolean(id),
+  });
+}
+
+/* --------------------------------- api keys --------------------------------- */
+
+export function useApiKeys(query: ListApiKeysQuery) {
+  return useQuery({
+    queryKey: queryKeys.apiKeys.list(query),
+    queryFn: ({ signal }) =>
+      api.get<Paginated<ApiKey>>(`/admin/api-keys${toSearchParams(query)}`, signal),
+    placeholderData: (previous) => previous,
+  });
+}
+
+/**
+ * The integration instructions, generated on the server from the live route table. Static for
+ * a given build, so it is fetched once and never refetched — a route cannot appear or vanish
+ * while the page is open.
+ */
+export function useApiKeyUsage() {
+  return useQuery({
+    queryKey: queryKeys.apiKeys.usage(),
+    queryFn: ({ signal }) => api.get<ApiKeyUsageDoc>('/admin/api-keys/usage', signal),
+    staleTime: Infinity,
+  });
+}
+
+/** The response carries the raw token. It is not stored anywhere — show it or lose it. */
+export function useCreateApiKey() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateApiKeyInput) => api.post<CreatedApiKey>('/admin/api-keys', input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.apiKeys.all() }),
+  });
+}
+
+export function useSetApiKeyActive() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
+      api.patch<ApiKey>(`/admin/api-keys/${id}`, { isActive }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.apiKeys.all() }),
+  });
+}
+
+export function useRevokeApiKey() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.del<void>(`/admin/api-keys/${id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.apiKeys.all() }),
   });
 }

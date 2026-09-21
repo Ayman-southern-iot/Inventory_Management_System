@@ -29,6 +29,7 @@ import { ProjectDetailPage } from '@/features/projects/pages/ProjectDetailPage';
 import { SettingsPage } from '@/features/admin/pages/SettingsPage';
 import { UsersPage } from '@/features/admin/pages/UsersPage';
 import { AuditLogPage } from '@/features/admin/pages/AuditLogPage';
+import { ApiKeysPage } from '@/features/admin/pages/ApiKeysPage';
 import { t } from '@/i18n/en';
 import { ProtectedRoute } from '@/routes/ProtectedRoute';
 import { ROUTES } from '@/routes/paths';
@@ -140,6 +141,7 @@ export function App() {
                       <Route path={ROUTES.admin.departments} element={<DepartmentsPage />} />
                       <Route path={ROUTES.admin.settings} element={<SettingsPage />} />
                       <Route path={ROUTES.admin.auditLog} element={<AuditLogPage />} />
+                      <Route path={ROUTES.admin.apiKeys} element={<ApiKeysPage />} />
                     </Route>
 
                     <Route
