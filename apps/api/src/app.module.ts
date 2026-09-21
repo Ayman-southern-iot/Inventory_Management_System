@@ -26,6 +26,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { HealthController } from './modules/health/health.controller';
 import { ApiKeysModule } from './modules/api-keys/api-keys.module';
+import { CatalogueModule } from './modules/catalogue/catalogue.module';
 import { isApiKeyRequest } from './common/throttling';
 
 const toMs = (seconds: number): number => seconds * 1000;
@@ -90,6 +91,7 @@ const throttlerOptions = [
     // (DECISIONS.md); the jobs are a single indexed query each.
     ScheduleModule.forRoot(),
     ApiKeysModule,
+    CatalogueModule,
     AuthModule,
     UsersModule,
     DepartmentsModule,

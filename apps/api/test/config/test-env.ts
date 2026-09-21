@@ -60,6 +60,7 @@ export const TEST_ENV: Record<string, string> = {
   // Zero, so the integration suite sees `last_used_at` move on every call. In production the
   // interval is what stops a busy integration writing once per read.
   API_KEY_TOUCH_INTERVAL_SECONDS: '0',
+  CATALOGUE_MAX_PRODUCTS: '5000',
   LOGIN_BURST_LIMIT: '10',
   LOGIN_BURST_TTL_SECONDS: '60',
   JSON_BODY_LIMIT: '100kb',

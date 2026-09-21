@@ -685,6 +685,46 @@ export class StockService {
   }
 
   /**
+   * Every placement in the building, for the catalogue export.
+   *
+   * The same shape as `placementsForProduct` but unfiltered, because the catalogue endpoint
+   * returns every product at once and calling the per-product query in a loop is an N+1 that
+   * grows with the catalogue — the thing `rules/40-database.md` calls a review blocker. One
+   * scan, grouped by the caller.
+   *
+   * Bounded by the catalogue's own product ceiling rather than by a LIMIT here: a partial
+   * placement list would silently mislocate stock, which is worse than refusing to answer.
+   */
+  async allPlacements() {
+    return this.db
+      .selectFrom('stock_placements')
+      .innerJoin(
+        'storage_compartments',
+        'storage_compartments.id',
+        'stock_placements.compartment_id',
+      )
+      .innerJoin('storage_zones', 'storage_zones.id', 'storage_compartments.zone_id')
+      .innerJoin('storage_rooms', 'storage_rooms.id', 'storage_zones.room_id')
+      .select([
+        'stock_placements.product_id',
+        'stock_placements.compartment_id',
+        'stock_placements.quantity',
+        'stock_placements.reserved_qty',
+        'stock_placements.quarantined_qty',
+        'storage_compartments.code as compartment_code',
+        'storage_compartments.storage_id',
+        'storage_zones.id as zone_id',
+        'storage_zones.name as zone_name',
+        'storage_rooms.id as room_id',
+        'storage_rooms.name as room_name',
+      ])
+      .orderBy('storage_rooms.name')
+      .orderBy('storage_zones.name')
+      .orderBy('storage_compartments.code')
+      .execute();
+  }
+
+  /**
    * The nightly invariant (§7.3.5). Per (product, compartment) rather than per product: a
    * per-product check would pass while two compartments were individually wrong in opposite
    * directions, which is exactly the state a bad MOVE leaves behind.

@@ -1150,3 +1150,10 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   parser for a custom enum array and returns the literal `"{inventory:read}"` — a string that
   passes `.includes('inventory:read')` by substring, so the scope check silently stops being a
   scope check while every test of a single scope still passes.
+- 2026-09-21 — `GET /catalogue` returns the whole catalogue in one unpaginated response, for an
+  external frontend that mirrors this system, stores nothing and reloads on open. A considered
+  exception to `rules/40-database.md`: the bound is a hard ceiling (`CATALOGUE_MAX_PRODUCTS`,
+  default 5000) that **refuses** past the limit rather than truncating, because a consumer
+  silently missing its last hundred products has no way to know its search is incomplete.
+- 2026-09-21 — The catalogue carries no `activeBorrows` and no person's name. It is a product
+  browser in another company system; how many are out is its business, who has them is not.

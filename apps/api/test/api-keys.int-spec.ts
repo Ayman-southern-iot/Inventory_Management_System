@@ -265,7 +265,11 @@ describe('API keys', () => {
       expect(response.status).toBe(200);
 
       const paths = response.body.endpoints.map((e: { path: string }) => e.path).sort();
+      // Pinned deliberately. This list is the public surface of every key ever issued, so a
+      // route joining it should be a decision somebody made, not a diff nobody read — when this
+      // assertion fails, the question is "did we mean to open that?", not "update the test".
       expect(paths).toEqual([
+        '/catalogue',
         '/categories',
         '/locations',
         '/locations/rooms',

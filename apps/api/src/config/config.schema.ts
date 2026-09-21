@@ -89,6 +89,13 @@ const rawSchema = z.object({
    * floor this is one UPDATE per read on an otherwise read-only path. Zero means always.
    */
   API_KEY_TOUCH_INTERVAL_SECONDS: z.coerce.number().int().min(0).max(86_400).default(300),
+  /**
+   * The ceiling on `GET /catalogue`, which is deliberately unpaginated because its whole job is
+   * to hand a consuming frontend everything in one call. Past this it refuses loudly rather
+   * than truncating — a catalogue quietly missing its last hundred products is worse than one
+   * that says it cannot be served. Raise it when the catalogue genuinely outgrows it.
+   */
+  CATALOGUE_MAX_PRODUCTS: z.coerce.number().int().min(1).max(100_000).default(5_000),
   /** Replaces the previously hardcoded 10/60s login burst limit on `POST /auth/login`. */
   LOGIN_BURST_LIMIT: z.coerce.number().int().min(1).max(10_000).default(10),
   LOGIN_BURST_TTL_SECONDS: durationSecondsSchema.default(60),
@@ -411,6 +418,7 @@ export interface AppConfig {
     readonly loginBurst: { readonly limit: number; readonly ttlSeconds: number };
   };
   readonly apiKeys: { readonly touchIntervalSeconds: number };
+  readonly catalogue: { readonly maxProducts: number };
   readonly body: {
     readonly jsonLimit: string;
     readonly urlencodedLimit: string;
@@ -552,6 +560,9 @@ export function buildConfig(source: Record<string, string | undefined>): AppConf
     }),
     apiKeys: Object.freeze({
       touchIntervalSeconds: env.API_KEY_TOUCH_INTERVAL_SECONDS,
+    }),
+    catalogue: Object.freeze({
+      maxProducts: env.CATALOGUE_MAX_PRODUCTS,
     }),
     body: Object.freeze({
       jsonLimit: env.JSON_BODY_LIMIT,
