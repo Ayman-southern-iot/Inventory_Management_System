@@ -3,62 +3,63 @@
 > Auto-injected every session by the `SessionStart` hook. **Keep under ~60 lines.** Deeper, on
 > demand: `ASSIST.md` · `SESSION-LOG.md` · `DECISIONS.md` · `OPEN-QUESTIONS.md` · `docs/RUNBOOK.md`.
 
-**Updated:** 2026-09-20
+**Updated:** 2026-09-21
 
 ## Where the build is
 
-**Phases 00–08 complete and deployed. Phase 09 is open and part-done** —
-`plan/PHASE-09-taxonomy-location-and-custody.md`, nine asks from Ayman in dependency order.
-Landed: Part G (approver plural, BOM digital-approval footnote), Part F (projects are proposed
-by anyone, accepted by the IM), Part E-a (IM issues straight from shelf stock to a person), plus
-a rate-limit defect found on the way. **Ten commits, local only — `origin` is ten behind.**
+**Phases 00–08 complete. Phase 09 is complete except Part E-a/E-b polish** —
+`plan/PHASE-09-taxonomy-location-and-custody.md`. All nine of Ayman's asks are built and on the
+demo stack. **Everything is pushed** — `origin/fix/lan-secure-context` is at `3bb8412`.
+
+Landed this session: **E-b** custody (`current_holder_id` + append-only trail, both parties
+notified, UI), **A** rooms above zones, **B** auto Storage IDs on shelf slots, **C** optional
+nested categories with depth/cycle triggers and the ~200-node seed tree, **D** cascading picker
+with inline create + post-create navigation to receive stock, and a **UI for E-a** (issue from
+the shelf), which had shipped headless.
 
 ## Next action
 
-**Part E-b — holder reassignment.** Migration `0032`: `borrow_requests.current_holder_id` plus an
-append-only `borrow_holder_changes` trail. It touches no stock and writes no ledger row — issued
-units already left the shelf, so who holds them is not a placement fact.
+No assigned task. Phase 09 is done; ask Ayman what is next. Obvious candidates, none requested:
+the clickable category breadcrumb on the product page (spec §6 — the path is shown flat, not as
+links), searching the inventory by shelf label (OQ-B says it is not built), and the standalone
+category-management screen's move/merge affordances.
 
-The care is in the read sites, enumerated in the plan: `requester_id` stays as "who asked" (cancel
-check, display joins); "who has it" moves to `current_holder_id` (my-borrows, dashboard,
-return/revert notifications). Then Part C (categories), then A→B (rooms, shelf IDs).
+## Green as of 2026-09-21 — measured serially, not remembered
 
-## Green as of 2026-09-20 — measured serially, not remembered
-
-- `pnpm typecheck` clean · `pnpm test` → shared 25 · api 83 · web 336
+- `pnpm typecheck` clean · `pnpm test` → shared 25 · api 90 · web 356
 - `pnpm lint` → **20 pre-existing errors. Not green.** Compare against 20, not zero.
-- `pnpm --filter @ims/api test:int` → **711 pass / 0 fail / 0 skipped (51 files)**
+- `pnpm --filter @ims/api test:int` → **744 pass / 0 fail / 0 skipped (52 files)**
 - `guard-hardcoding.sh --scan-all` → **8**, against a documented baseline of 7.
-- Migrations 0001–**0031** applied.
+- Migrations 0001–**0036** applied.
 
 ## Needs the operator
 
-1. **Ten commits are local only.** Ayman declined to push; the remote is public GitHub.
-2. **The rate-limit fix has not reached the VM.** Until it does, every user there is refused on
-   their 11th request in a minute. It is one commit (`03426df`) and independent of the rest.
-3. **Demo mode is ON on the VM** — `GET /auth/demo-accounts` answers unauthenticated with every
+1. **The VM is still on old code.** The rate-limit fix (`03426df`) is pushed but not deployed —
+   `infra/deploy.sh` has not been run. Until it is, every user there is refused on their 11th
+   request in a minute.
+2. **Demo mode is ON on the VM** — `GET /auth/demo-accounts` answers unauthenticated with every
    email and the shared password. Before real data: redeploy via `infra/`, do not migrate the
    testing database across.
-4. Offsite backups (**G-16**) and a restore drill (**G-17**).
+3. Offsite backups (**G-16**) and a restore drill (**G-17**).
 
 ## Landmines — full list in `ASSIST.md` §9
 
-- **Never run two test suites at once.** The integration suite is `singleFork` against one shared
-  `db-test`; two runs truncate each other mid-assertion and produce a *convincing fake regression*
-  in a random innocent spec. It cost three wasted investigations in one session. Use
-  `scratchpad/gate.sh`, which waits for any live `vitest` before starting — and check for a
-  background gate you already started before launching another.
-- **Shell heredocs mangle scripts.** Write scripts with the Write tool, never `<<'EOF'`.
-- **Two compose files.** Root = demo, secrets hardcoded in the public repo. `infra/` = production.
-- **Built output goes stale and lies confidently.** A config default needs `--build`.
+- **Never run two test suites at once.** One shared `db-test`; two runs truncate each other and
+  produce a *convincing fake regression* in a random innocent spec. Use `scripts/gate.sh`.
+- **Shell heredocs and `node -e` mangle prose.** Backticks and `${...}` in a comment get eaten by
+  bash. Write files with the Write/Edit tools, not shell string surgery.
+- **Built output goes stale and lies confidently.** A seed or config change needs `--build`; a
+  "fix" verified against `dist/` that was built before the edit proves nothing.
 - **`pnpm typecheck` reads `packages/shared/dist`.** Change a contract, rebuild shared.
-- **`D-nnn` is the QA defect numbering** — cite decisions by `OQ-*` / `G-*`.
+- **Two compose files.** Root = demo, secrets hardcoded in the public repo. `infra/` = production.
+- **A Storage ID is immutable by trigger.** Renaming a room does not rewrite it. By design.
+- **`test-env.int-spec` refuses an unpinned config key.** A new `config.schema.ts` key must be
+  pinned in `TEST_ENV` or the suite fails.
 - **`resetData` keeps requisitions**, so money accumulates across a spec file.
-- Never `npx`/`npm` at the root. **`test:int -- <spec>` does not filter**; use
-  `vitest run --config vitest.integration.config.ts <pattern>`.
+- **`D-nnn` is the QA defect numbering** — cite decisions by `OQ-*` / `G-*`.
 
 ## Open debt
 
 `G-14` · `G-16` · `G-17` · `G-18` · `G-19` · PM 6/12/14/15 · `OQ-30` · `OQ-31` · `OQ-33` ·
-`OQ-A`–`OQ-D` (phase 09) · **overdue notifications are dead code** — `borrowing.due_soon` and
-`borrowing.overdue` have copy but nothing sends them; the job only logs.
+`OQ-C` · `OQ-D` · **`OQ-F`** (uncategorised products are treated as trackable) ·
+**overdue notifications are unwired on purpose (`OQ-E`, Ayman's call) — not a gap, do not "fix"**

@@ -8,8 +8,8 @@
 >
 > **Maintenance rule:** see `.claude/rules/05-ai-playbook.md`. A `PostToolUse` hook
 > (`.claude/hooks/playbook-reminder.sh`) reminds Claude to update this file after every
-> meaningful edit. Last updated: 2026-09-02 (QA rounds 3–4: four new skills in §15, the two
-> deferral flags in §11, deployment and harness landmines in §16, new surface in §17).
+> meaningful edit. Last updated: 2026-09-21 (phase 09: Room above Zone, shelf-slot Storage IDs,
+> optional nested categories, borrow custody — §10 migrations, §16 landmines, §17, §18).
 >
 > **⚠ This file has known drift as of 2026-08-17** — §5.1 (`available` omits `quarantined_qty`),
 > §5.3 and §20 (the over-budget BOM gate was retired in `5435fac`), §5.3 (lifecycle list omits
@@ -691,20 +691,27 @@ src/modules/<feature>/
 
 ## 10. Database — schema, constraints, locking recipe
 
-### 10.1 Tables (33 tables, 24 migrations)
+### 10.1 Tables (35 tables, 36 migrations)
 
 **Identity & admin** — `app_settings`, `departments`, `users`, `user_roles`, `refresh_tokens`,
 `login_attempts`, `approver_slots`, `delegations`, `projects`, and the `user_role` /
 `refresh_revocation_reason` enums.
 
-**Catalogue & locations** — `categories` (parent of itself for sub-categories), `products`,
-`storage_zones`, `storage_compartments`.
+**Catalogue & locations** — `categories` (self-parenting; max depth 3 and cycle-freedom are
+enforced by the `categories_tree_shape` trigger, migration 0035, because a `CHECK` cannot look at
+other rows), `products` (`category_id` is **nullable** — "Uncategorized" is a supported state, so
+every join to `categories` must be LEFT, and `product_code` auto-generates as `NAM-0001`),
+`storage_rooms` → `storage_zones` (name unique **per room**, not globally) →
+`storage_compartments` (carries `storage_id`, the printed shelf label, immutable by trigger).
 
 **Stock** — `stock_placements`, `stock_ledger`, `asset_units` (dormant, optional serial
 tracking via `is_trackable` on **category**).
 
-**Borrow** — `borrow_requests` (status: `PENDING|REJECTED|ISSUED|PARTIALLY_RETURNED|RETURNED|CANCELLED`),
-`borrow_returns` (partial returns supported).
+**Borrow** — `borrow_requests` (status:
+`PENDING|REJECTED|ISSUED|PARTIALLY_RETURNED|RETURNED|CANCELLED`; `requester_id` is *who asked*
+and is never rewritten, `current_holder_id` is *who has it* and is what every "who holds this"
+read uses), `borrow_returns` (partial returns supported), `borrow_holder_changes` (append-only
+custody trail, migration 0032 — **no stock moves with a custody change**).
 
 **Requisitions** — `requisitions` (status enum: full lifecycle, see §5.3; a single
 nullable `supporting_document_file_id` FK for the requester-attached quote / proposal /
@@ -1019,6 +1026,25 @@ reason the locking exists).
 
 ## 16. Landmines (each has cost a session before)
 
+- **A Storage ID is immutable, enforced by trigger** (migration 0034). Renaming a room does not
+  rewrite the labels underneath it, and any `UPDATE` that changes an assigned
+  `storage_compartments.storage_id` is refused. That is deliberate: the label is already stuck
+  on the shelf and quoted in audit rows. The room token is a snapshot of the name at creation.
+- **A unique index that a seed leans on can move out from under it.** Migration 0033 replaced the
+  *global* unique on zone name with a per-room one, and `pnpm db:seed` had been relying on the
+  old one for `ON CONFLICT DO NOTHING`. The conflict silently stopped matching and a second run
+  created duplicate zones on the live demo database. When you change a unique index, grep the
+  seeds for `onConflict`.
+- **`test-env.int-spec` refuses an unpinned config key.** Add a key to `config.schema.ts` and the
+  integration suite fails until it is pinned in `TEST_ENV` (or allowlisted with a reason). This
+  is correct — `migrations.int-spec` asserts the exact Storage-ID labels the backfill produces,
+  and a developer's `.env` must not be able to change them.
+- **Overdue notifications are unwired on purpose** (OQ-E, Ayman 2026-09-21). The copy exists and
+  nothing sends it. Do not "helpfully" wire it.
+- **A date string in a `timestamptz` column is a time bomb.** `approval-deadline.int-spec` built
+  "tomorrow" with `toISOString().slice(0, 10)` — a calendar day computed in UTC, stored as
+  midnight in Asia/Dhaka. It passed all day and failed for the six hours after Dhaka midnight.
+  Use instants for instant columns.
 - **A backtick inside a `` sql`…` `` template ends the literal.** Cost two debugging rounds:
   migration 0027 first, then `reports.repository.ts` in phase 08 — a SQL comment that quoted a
   table name in backticks terminated the query and produced a syntax error pointing at an
@@ -1196,7 +1222,9 @@ Current best view is `docs/state/OPEN-QUESTIONS.md`. Snapshot of operator-action
 |---------|-----------|---------|
 | Borrow request raised | Inventory Manager | socket popup + badge + bell |
 | Borrow approved / rejected | Requester | bell (+ email) |
-| Item overdue | Borrower + IM | daily job |
+| Item overdue | nobody | **job logs only — unwired on purpose, OQ-E** |
+| Borrow custody reassigned | new holder **and** previous holder | bell |
+| Issued straight from the shelf | the person it was issued to | bell |
 | Requisition submitted | Inventory Manager | popup + badge |
 | IM approved | Approver 1 & 2 (or delegates) | badge + email |
 | Approval deadline passed, still pending | Assigned approver | job, repeats every 24h until acted |
@@ -1208,6 +1236,12 @@ Current best view is `docs/state/OPEN-QUESTIONS.md`. Snapshot of operator-action
 **Deliberately absent per the requirements doc:** the IM is never pinged when the remaining
 balance arrives; there is no low-stock alerting. Both omissions are easy to reverse later —
 the job scaffolding is already there.
+
+**Also deliberately absent (Ayman, 2026-09-21, OQ-E):** overdue and due-soon notifications.
+`borrowing.due_soon` and `borrowing.overdue` have copy in `notifications.copy.ts` and nothing
+sends either; `overdue.job.ts` writes a server log and stops. This is a decision, not an
+oversight — **do not "fix" it.** Wiring it needs a `last_overdue_notified_at` column so the
+daily job does not nag.
 
 **Login popup:** on socket connect the server pushes any `PENDING` items for that user. The
 IM sees the modal, can dismiss it, and the items remain in Pending Approvals with the badge

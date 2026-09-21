@@ -838,3 +838,50 @@ or a per-borrow choice?) answered, because both change the catalogue's shape and
 ask and expensive to migrate. Phase 01 also carries the mandatory concurrency test from
 `rules/50-testing.md`: N simultaneous borrows against stock 1, exactly one wins, exactly one
 ledger row.
+
+## 2026-09-20 → 21 — Phase 09 finished: custody, rooms, storage IDs, categories
+
+Started on Part E-b alone and ended up closing the whole phase after Ayman pointed out, fairly,
+that two slices in a row had shipped with no UI and the screen he checks looked untouched.
+
+**E-b — custody.** `borrow_requests.current_holder_id` plus an append-only
+`borrow_holder_changes` trail (migration 0032). No `StockService` call and no ledger row: the
+units left the shelf at issue, so custody is not a placement fact, and a compensating pair would
+make the ledger assert a movement that never happened while staying balanced — invisible forever.
+Both parties are notified. Every "who has it" read moved to the holder, including
+`projects.repository`'s `borrowerName` join, which was not on the enumerated list but is a
+custody read by the same definition.
+
+**A — rooms.** Location reads Room → Zone → Compartment (0033). Compartment stays the physical
+leaf, so no placement or ledger row changed. Zone names went from globally unique to unique per
+room. All five location-string builders now go through one `formatLocation`.
+
+**B — Storage IDs.** Ayman ruled, against warehouse sources he checked, that the ID names a
+**shelf slot** (fixed slotting), confirming plan D1/D2. `ROOM-ZONE-CODE-0001`, immutable by
+trigger, generated for every existing shelf (0034). Product codes now generate themselves as
+`NAM-0001` (0036), so the New product form's hand-typed "Storage ID" field is gone.
+
+**C/D — categories.** Optional `category_id`, depth-3 and cycle triggers, the ~200-node seed
+tree, a cascading picker with inline create, and post-create navigation to receive stock (0035).
+
+**Three defects found and fixed, two of them mine:**
+
+- *Mine.* Migration 0033 broke the seed's idempotency — it leaned on the **global** unique index
+  on zone name for `ON CONFLICT DO NOTHING`, which became per-room, so a second run created a
+  duplicate Meta and Nvidia. Caught on the live demo DB. Now look-then-insert across all rooms.
+- *Mine, nearly missed.* The first "proof" that the seed fix worked ran the **stale compiled
+  image** and duplicated the zones again. The source was fixed; `dist/scripts/seed.js` was not.
+- *Pre-existing.* `approval-deadline.int-spec` went red at 00:29. Not ours — it fails the same way
+  on a clean HEAD. `approval_deadline` has been `timestamptz` since 0027 but the fixture built
+  "tomorrow" as a UTC calendar day, which lands before `now()` for the six hours after Dhaka
+  midnight. Fixed to use instants; it would have bitten at random every night.
+
+`CompartmentPicker.test.tsx` and `CategoriesPage.parent.test.tsx` both asserted the *old* rule and
+were rewritten to the new one — inverted deliberately, never skipped.
+
+**Decisions taken by Ayman:** push everything (done, `3bb8412`); leave overdue notifications
+unwired (OQ-E — a deferral, not a gap); generate Storage IDs for all existing shelves (OQ-A).
+**Filed:** OQ-F, what `is_trackable` means for an uncategorised product.
+
+Gate at handoff: typecheck 0 · lint 20 (unchanged) · unit 25/90/356 · integration 744/0 across
+52 files · migrations through 0036.

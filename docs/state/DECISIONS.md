@@ -1082,3 +1082,40 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   block prints a name and "Approved" whether or not an image was uploaded, so a footnote about
   "the signatures above" would be false on every BOM where nobody uploaded one. It claims nothing
   about legal sufficiency — that is policy, not something the code can evidence.
+- 2026-09-21 — Custody is a borrow-record change, never a stock movement — issued units already
+  left the shelf, so a compensating RECEIPT/ISSUE pair would make the ledger assert a physical
+  movement that never happened while `SUM(ledger) = quantity` stayed balanced, so nothing would
+  catch it. `POST /borrowing/:id/holder` writes no ledger row and calls no `StockService` method.
+- 2026-09-21 — `requester_id` is never rewritten; `current_holder_id` answers "who has it" —
+  one column cannot honestly answer both "who asked" and "who holds", and after a reassignment
+  the second is the one every reminder, list and dashboard needs.
+- 2026-09-21 — Both parties are notified on a custody change — telling only the new holder is
+  paperwork; the previous holder's "no longer against you" is what makes the trail proof.
+- 2026-09-21 — Room sits above Zone; the compartment stays the physical leaf — placements and
+  the append-only ledger keep pointing at `compartment_id`, which is the only reason a change
+  this wide was one release rather than a multi-release column move.
+- 2026-09-21 — Zone names are unique per room, not globally — two rooms may each have a
+  "Shelf A", which the old global index made impossible.
+- 2026-09-21 — One `formatLocation` for every location string — there were five separate
+  `zone / compartment` concatenations, and a sixth level would have meant finding them all again.
+- 2026-09-21 — **The auto-generated Storage ID names a shelf slot, not a product** (Ayman,
+  against warehouse sources he checked) — this is fixed slotting: the location carries the
+  identity and the label goes on the shelf edge. A product legitimately sits in two rooms at
+  once, so a location cannot live inside a per-product identifier. Confirms plan D1/D2.
+- 2026-09-21 — Storage ID shape is `ROOM-ZONE-CODE-0001` — broad to narrow, hyphenated, the tail
+  zero-padded so codes sort alphanumerically (the one mistake that cannot be fixed without
+  reprinting every label), and four segments against a product code's two so the two are not
+  confused under pressure.
+- 2026-09-21 — A Storage ID is immutable once assigned, enforced by trigger — renaming the room
+  above a shelf must not rewrite a label already stuck to it or quoted in an audit row. The room
+  token is a snapshot of the name at creation, not a view of it.
+- 2026-09-21 — Product codes generate themselves as `NAM-0001` — the New product form asked the
+  IM to type a "Storage ID" that was really `product_code` wearing a borrowed label. Shape
+  matches the codes already in use, so nothing printed changes meaning.
+- 2026-09-21 — `products.category_id` is nullable and "Uncategorized" is a first-class filter —
+  blocking a save on categorisation is what produces junk categories, because somebody picks the
+  nearest wrong node to get past the form.
+- 2026-09-21 — Category depth (3) and cycle prevention are database triggers, not CHECKs — a
+  Postgres CHECK cannot reference other rows, and both rules require walking `parent_id`.
+- 2026-09-21 — Overdue notifications stay unwired (OQ-E, Ayman's call) — a deliberate deferral,
+  not a gap. Wiring them needs a `last_overdue_notified_at` column so the job does not nag daily.

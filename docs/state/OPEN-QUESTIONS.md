@@ -153,12 +153,12 @@ rediscovered as a surprise.
 
 ## Phase 09 (opened 2026-09-20)
 
-- **OQ-A — the storage IDs of compartments that already exist.** Generate them in the migration,
-  or leave them null until someone edits the compartment? Generating is tidier; leaving null
-  admits that no physical label exists yet. Decide before writing migration `0032`'s successor
-  for Part B.
-- **OQ-B — what "Search by name or storage ID" means once slots have IDs.** `en.ts` already says
-  it; today it means `product_code`. Product code, slot ID, or both?
+- **OQ-F — what `is_trackable` means for an uncategorised product.** New with migration 0035:
+  the flag lives on the category, and a product may now have none. Implemented as **trackable**,
+  matching the column default and the spec rule that a missing category never blocks an action —
+  refusing to stock or lend anything uncategorised would make the field mandatory through the
+  back door. Marked at `stock.service.ts` (`assertProductIsTrackable`) and
+  `borrowing.repository.ts` (`findProductForBorrow`). Cheap to reverse; nobody has been asked.
 - **OQ-C — a requisition or borrow attached to a project that is later REJECTED.** Current
   behaviour: attribution stays, the project simply stops being offered. The alternative is
   refusing the rejection until outstanding items are moved, which makes the IM reassign somebody
@@ -166,12 +166,23 @@ rediscovered as a surprise.
 - **OQ-D — a `specs` text field on products.** `category-taxonomy-spec.md` §7 recommends it for
   in-category search (sizes, values, tolerances) and explicitly defers the decision; `jsonb` would
   not ride the existing `pg_trgm` index. Out of scope for phase 09 as written.
-- **OQ-E — should anyone be told when a borrow is overdue?** `borrowing.due_soon` and
-  `borrowing.overdue` have copy in `notifications.copy.ts` and **nothing sends either**;
-  `overdue.job.ts` writes a server log and stops. Found 2026-09-20. Either the notifications were
-  intended and never wired, or the log is deliberate — no decision is recorded anywhere.
 
 ### Answered this session
+
+- **OQ-A — storage IDs for the compartments that already exist?** → **Generate for all of them**
+  (Ayman, 2026-09-21). His own warehouse source is the argument: a location that is not labelled
+  effectively does not exist in the system. Done in migration `0034`, in building order.
+- **OQ-B — what does "Search by name or storage ID" mean now?** → **Product code.** Since `0034`
+  the Storage ID names a shelf slot, so that placeholder was pointing at the wrong identifier.
+  The copy now says "product code"; the slot IDs are listed on the Locations page instead.
+  Searching the *inventory* by shelf label is not built — say if it is wanted.
+- **OQ-E — should anyone be told when a borrow is overdue?** → **Leave it alone for now**
+  (Ayman, 2026-09-21). `borrowing.due_soon` and `borrowing.overdue` keep their copy, nothing
+  sends them, and `overdue.job.ts` keeps logging only. **A deliberate deferral, not a gap — do
+  not "fix" it without asking.** Wiring it needs a `last_overdue_notified_at` column so it does
+  not nag daily, which is why it was a decision rather than a tidy-up.
+- **What does the auto-generated Storage ID identify?** → **A shelf slot**, per the fixed-slotting
+  practice Ayman checked against warehouse sources. See `DECISIONS.md`.
 
 - **What should the auto-generated Storage ID identify?** → **A shelf slot.** See DECISIONS.md.
 - **Multi-category: many categories per product, or a deeper tree?** → **A tree, one category per
