@@ -51,6 +51,19 @@ export type Category = z.infer<typeof categorySchema>;
 
 /** A category plus its descendants, for the tree view. */
 export interface CategoryNode extends Category {
+  /**
+   * This category plus everything beneath it.
+   *
+   * The tree picker shows one number per row, and on a branch that number has to mean "what I
+   * would get if I clicked this" — selecting a branch filters to its whole subtree, so the
+   * rollup is the honest figure. `productCount` stays the *direct* count for the management
+   * screen, which asks the different question of how many are filed at this exact node.
+   *
+   * Always the unfiltered total: it does not shrink when "In stock only" is ticked elsewhere on
+   * the page. A count that moved when an unrelated filter changed would make the tree feel
+   * unstable, and the number people actually want here is "how big is this branch".
+   */
+  productCountInTree: number;
   children: CategoryNode[];
 }
 

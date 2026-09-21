@@ -3,17 +3,22 @@ import { Plus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PAGINATION_DEFAULT_LIMIT, Role, type ListProductsQuery, type Product } from '@ims/shared';
 import { Button } from '@/components/ui/Button';
-import { Checkbox, SelectField, TextField } from '@/components/ui/Field';
+import { Checkbox, TextField } from '@/components/ui/Field';
 import { Badge, PageHeader, Pagination, Panel, Table } from '@/components/ui/primitives';
 import { EmptyState, QueryBoundary, SkeletonRows } from '@/components/ui/states';
 import { useAuth } from '@/features/auth/auth-context';
 import { t } from '@/i18n/en';
 import { ROUTES } from '@/routes/paths';
 import { useCategoryTree, useProducts } from '../api';
-import { flattenCategoryTree, indentFor } from '../category-tree';
 import { SEARCH_DEBOUNCE_MS } from '../constants';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { ProductFormDialog } from '../components/ProductFormDialog';
+import {
+  CATEGORY_ALL,
+  CATEGORY_UNCATEGORIZED,
+  CategoryTreeFilter,
+  type CategorySelection,
+} from '../components/CategoryTreeFilter';
 import { RECEIVE_ON_ARRIVAL_PARAM } from './ProductDetailPage';
 import { inventoryExportPath } from '@/features/reports/api';
 import { useExportDownload } from '@/features/reports/use-export-download';
@@ -27,12 +32,9 @@ export function InventoryPage() {
   // The server enforces this on POST too — hiding the button just removes a dead-end 403.
   const canManageStock = hasRole(Role.INVENTORY_MANAGER, Role.ADMIN);
   const [search, setSearch] = useState('');
-  const [categoryId, setCategoryId] = useState('');
+  const [category, setCategory] = useState<CategorySelection>(CATEGORY_ALL);
   const [includeInactive, setIncludeInactive] = useState(false);
   const [inStockOnly, setInStockOnly] = useState(false);
-  // Spec §6: clearing the uncategorised backlog is a filter the IM can use in a spare five
-  // minutes, not a scheduled report somebody has to build.
-  const [uncategorized, setUncategorized] = useState(false);
   const [page, setPage] = useState(1);
   const [formOpen, setFormOpen] = useState(false);
 
@@ -46,20 +48,20 @@ export function InventoryPage() {
       limit: PAGINATION_DEFAULT_LIMIT,
       includeInactive,
       inStockOnly,
-      uncategorized,
+      // One control, two possible filters. 'Uncategorized' is a pinned row in the tree rather
+      // than a separate checkbox: two widgets writing overlapping filter state is how a screen
+      // starts disagreeing with itself (category-tree-fix-plan §2.4).
+      uncategorized: category === CATEGORY_UNCATEGORIZED,
       ...(debouncedSearch.trim() ? { search: debouncedSearch.trim() } : {}),
-      ...(categoryId ? { categoryId } : {}),
+      ...(category !== CATEGORY_ALL && category !== CATEGORY_UNCATEGORIZED
+        ? { categoryId: category }
+        : {}),
     }),
-    [page, includeInactive, inStockOnly, uncategorized, debouncedSearch, categoryId],
+    [page, includeInactive, inStockOnly, category, debouncedSearch],
   );
 
   const products = useProducts(query);
   const categories = useCategoryTree();
-  const categoryOptions = useMemo(
-    () => flattenCategoryTree(categories.data ?? []),
-    [categories.data],
-  );
-
   /**
    * EX-02, requirements §10: inventory records exportable as PDF for Accounts. One hook per
    * button, matching the expense report — a slow PDF render must not disable the CSV button.
@@ -79,7 +81,9 @@ export function InventoryPage() {
           {
             includeInactive,
             inStockOnly,
-            ...(categoryId ? { categoryId } : {}),
+            ...(category !== CATEGORY_ALL && category !== CATEGORY_UNCATEGORIZED
+              ? { categoryId: category }
+              : {}),
           },
           format,
         ),
@@ -141,23 +145,15 @@ export function InventoryPage() {
               }}
             />
           </div>
-          <div className="min-w-48">
-            <SelectField
-              label={t.inventory.category}
-              value={categoryId}
-              onChange={(event) => {
-                setCategoryId(event.target.value);
+          <div className="min-w-56">
+            <CategoryTreeFilter
+              tree={categories.data ?? []}
+              value={category}
+              onChange={(next) => {
+                setCategory(next);
                 resetToFirstPage();
               }}
-            >
-              <option value="">{t.inventory.allCategories}</option>
-              {categoryOptions.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {indentFor(category.depth)}
-                  {category.name}
-                </option>
-              ))}
-            </SelectField>
+            />
           </div>
           <div className="flex flex-col gap-2 pb-2.5">
             <Checkbox
@@ -176,14 +172,10 @@ export function InventoryPage() {
                 resetToFirstPage();
               }}
             />
-            <Checkbox
-              label={t.inventory.uncategorizedOnly}
-              checked={uncategorized}
-              onChange={(event) => {
-                setUncategorized(event.target.checked);
-                resetToFirstPage();
-              }}
-            />
+            {/*
+              No "Uncategorized only" checkbox. It is the pinned row at the top of the category
+              tree instead — one control, so the two cannot disagree about what is filtered.
+            */}
           </div>
         </div>
 

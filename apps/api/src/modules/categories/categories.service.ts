@@ -186,7 +186,9 @@ function duplicateName(): ConflictError {
  */
 export function buildTree(categories: readonly Category[]): CategoryNode[] {
   const nodes = new Map<string, CategoryNode>();
-  for (const category of categories) nodes.set(category.id, { ...category, children: [] });
+  for (const category of categories) {
+    nodes.set(category.id, { ...category, productCountInTree: category.productCount, children: [] });
+  }
 
   const roots: CategoryNode[] = [];
   for (const node of nodes.values()) {
@@ -194,5 +196,28 @@ export function buildTree(categories: readonly Category[]): CategoryNode[] {
     if (parent) parent.children.push(node);
     else roots.push(node);
   }
+
+  rollUpCounts(roots);
   return roots;
+}
+
+/**
+ * `productCountInTree` = this category plus everything under it.
+ *
+ * The tree picker shows one number per row, and on a branch that number has to mean "what I
+ * would get if I clicked this" — which, since selecting a branch filters to its whole subtree,
+ * is the rollup. `productCount` stays the direct count, because the category-management screen
+ * asks a different question ("how many are filed *here*") and silently changing it under that
+ * screen would make its delete guard read wrong.
+ *
+ * Computed here rather than in SQL: the whole table is already in memory to build the tree, and
+ * a recursive count query would be a second pass over the same rows for no gain at this size.
+ */
+function rollUpCounts(nodes: CategoryNode[]): number {
+  let total = 0;
+  for (const node of nodes) {
+    node.productCountInTree = node.productCount + rollUpCounts(node.children);
+    total += node.productCountInTree;
+  }
+  return total;
 }

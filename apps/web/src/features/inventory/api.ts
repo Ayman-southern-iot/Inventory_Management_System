@@ -37,6 +37,16 @@ export function useCategoryTree() {
   return useQuery({
     queryKey: queryKeys.categories.tree(),
     queryFn: ({ signal }) => api.get<CategoryNode[]>('/categories', signal),
+    /**
+     * Refetched when the tab regains focus.
+     *
+     * The tree filter checks its selection against this data when it opens, but that only helps
+     * once somebody opens it. Another IM can delete or rename a category while this tab sits
+     * idle, and the filter would keep showing a dead label until then. Refetching on focus is
+     * the half that makes the check timely rather than eventual, and the tree is one small
+     * request.
+     */
+    refetchOnWindowFocus: true,
   });
 }
 

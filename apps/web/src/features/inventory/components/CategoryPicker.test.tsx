@@ -34,6 +34,7 @@ const node = (id: string, name: string, children: CategoryNode[] = []): Category
   isTrackable: true,
   isActive: true,
   productCount: 0,
+  productCountInTree: 0,
   createdAt: '2026-09-01T00:00:00.000Z',
   children,
 });

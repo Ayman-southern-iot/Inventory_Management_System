@@ -96,8 +96,27 @@ export class ProductsRepository {
 
     const base = this.baseSelect()
       .$if(!query.includeInactive, (qb) => qb.where('products.is_active', '=', true))
+      /**
+       * "This category **or anything under it**", not `= categoryId`.
+       *
+       * Picking a branch like "Sensors" with a literal equality returns nothing at all, because
+       * every actual product is filed on a leaf beneath it — a filter that silently reports an
+       * empty catalogue rather than an error. The recursive CTE walks `parent_id` downward; it
+       * is the same mechanism as the depth trigger in migration 0035, pointed the other way.
+       *
+       * Bounded by the depth cap that trigger enforces, so the walk is three levels at most.
+       */
       .$if(query.categoryId !== undefined, (qb) =>
-        qb.where('products.category_id', '=', query.categoryId!),
+        qb.where(
+          sql<boolean>`products.category_id IN (
+            WITH RECURSIVE subtree AS (
+              SELECT id FROM categories WHERE id = ${query.categoryId!}
+              UNION ALL
+              SELECT c.id FROM categories c JOIN subtree s ON c.parent_id = s.id
+            )
+            SELECT id FROM subtree
+          )`,
+        ),
       )
       // The "Uncategorized" chip (spec §6). What makes clearing the backlog a five-minute job
       // the IM can do between other things, rather than something needing a scheduled report.
