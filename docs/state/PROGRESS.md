@@ -363,6 +363,8 @@
 | 07 | QA round 2 defect burndown | ✅ done and verified | 22 of 22, plus EX-02 |
 | 08 | Reversible money stages, lifecycle truth, personal dashboard | ✅ done and verified | migration 0028, 656 int tests |
 | — | QA rounds 3–4, expenses page, deferral flags, first deploy | ✅ done and verified | no plan file — driven by QA, see SESSION-LOG 2026-09-02 |
+| 09 | Taxonomy, rooms, Storage IDs, custody, project governance | ✅ done and verified | migrations 0032–0036, 744 int tests |
+| 10 | API keys — scoped read access for external systems | ✅ done and verified | migration 0037, 762 int tests |
 
 Legend: ⬜ not started · 🟡 in progress · ✅ done and verified
 

@@ -1127,3 +1127,26 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
 - 2026-09-21 — Issuing from stock carries a project (Ayman's ask) — the borrow form has one for
   any general user, so a handover the IM records on their behalf must too, or the project's item
   list is quietly short a row.
+- 2026-09-21 — External systems get an **API key**, not a long-lived JWT (K1). A JWT cannot be
+  revoked without a per-request database check, which costs the same as a key lookup and gives
+  none of the enable/disable the admin panel needs.
+- 2026-09-21 — A key's scope is `inventory:read` only, and the model is read-only (K2, K3,
+  Ayman's choice from four offered). Products, categories, locations. Not borrowing, which names
+  employees; not requisitions or expenses, which are the money.
+- 2026-09-21 — **A key reaches a route only if that route carries `@ApiKeyScopes`** (K4).
+  Default-deny, like the global `JwtAuthGuard`. The alternative — give the key a synthetic
+  `request.user` — would have opened every "any signed-in user" route, let a key satisfy
+  `@Roles(ADMIN)` and mint more keys, and written a fabricated actor into `audit_log`.
+- 2026-09-21 — The scope check lives **inside `JwtAuthGuard`**, not in a second global guard.
+  Global guard order follows module registration rather than anything declared, so a separate
+  guard could be reordered into running before the one that authenticates — and would then wave
+  keys through. One guard, one decision, no ordering to get wrong.
+- 2026-09-21 — Integration docs are **generated from the live route table** (K7), not written.
+  The ask was "so that we dont have to search codebase again"; hand-written docs are wrong the
+  first time a query parameter is renamed. The guard and the docs read the same metadata.
+- 2026-09-21 — Key *usage* is a `last_used_at` stamp, not an audit row per request (K8). Issue,
+  enable, disable and revoke are audited; reads would swamp the log.
+- 2026-09-21 — `api_keys.scopes` is always read as `scopes::text[]`. `node-postgres` has no
+  parser for a custom enum array and returns the literal `"{inventory:read}"` — a string that
+  passes `.includes('inventory:read')` by substring, so the scope check silently stops being a
+  scope check while every test of a single scope still passes.

@@ -8,7 +8,8 @@
 >
 > **Maintenance rule:** see `.claude/rules/05-ai-playbook.md`. A `PostToolUse` hook
 > (`.claude/hooks/playbook-reminder.sh`) reminds Claude to update this file after every
-> meaningful edit. Last updated: 2026-09-21 (phase 09: Room above Zone, shelf-slot Storage IDs,
+> meaningful edit. Last updated: 2026-09-21 (phase 10: API keys — §6 layout, §16 landmines,
+> §19 screen map. Earlier the same day, phase 09: Room above Zone, shelf-slot Storage IDs,
 > optional nested categories, borrow custody — §10 migrations, §16 landmines, §17, §18).
 >
 > **⚠ This file has known drift as of 2026-08-17** — §5.1 (`available` omits `quarantined_qty`),
@@ -570,10 +571,10 @@ their own DRAFT. The rule is deliberately narrow — it is reference material fo
 │   │       ├── database/         Kysely, migrations dir
 │   │       ├── common/           shared filters, decorators, guards, pipes
 │   │       ├── security/         hashing, throttling, sanitisation
-│   │       └── modules/          audit, auth, boms, borrowing, categories, departments,
-│   │                             files, funds, health, locations, maintenance,
-│   │                             notifications, pdf, products, projects, reports,
-│   │                             requisitions, settings, stock, users
+│   │       └── modules/          api-keys, audit, auth, boms, borrowing, categories,
+│   │                             departments, files, funds, health, locations,
+│   │                             maintenance, notifications, pdf, products, projects,
+│   │                             reports, requisitions, settings, stock, users
 │   └── web/                      React/Vite SPA
 │       └── src/
 │           ├── App.tsx, main.tsx
@@ -1026,6 +1027,15 @@ reason the locking exists).
 
 ## 16. Landmines (each has cost a session before)
 
+- **`pg` has no parser for a custom Postgres enum array.** `scopes api_key_scope[]` comes back as
+  the literal string `"{inventory:read}"`, typed as an array and behaving like one just enough to
+  fool you: `.includes('inventory:read')` is `true` by *substring*, so a scope check keeps passing
+  while it silently stops being a scope check. Read such a column as `::text[]` — see the
+  `scopesAsArray` helper in `modules/api-keys/api-keys.repository.ts`.
+- **An API key is not a `RequestUser`, and must never be given one.** `JwtAuthGuard` leaves
+  `request.user` undefined for a key (migration 0037, Phase 10). Populating it is the obvious
+  shortcut and it opens `@Roles` — including the endpoint that mints more keys — and writes a
+  fabricated actor into `audit_log`. A key reaches a route only if it carries `@ApiKeyScopes`.
 - **A Storage ID is immutable, enforced by trigger** (migration 0034). Renaming a room does not
   rewrite the labels underneath it, and any `UPDATE` that changes an assigned
   `storage_compartments.storage_id` is refused. That is deliberate: the label is already stuck
@@ -1260,7 +1270,7 @@ does not serve.
 | **General** | Inventory (browse/search/borrow) · Projects → Project Detail (borrowed items with in-use/returned tags + project requisitions) · Make Requisition (with **supporting document panel** on DRAFT, §5.7) · My Requisitions (tracker) · My Borrowings · Notifications |
 | **Inventory Manager** | Inventory (full CRUD, categories, zones/compartments, moves) · Projects (may detach a borrow from project attribution; borrow + stock history remain) · Pending Approvals ⁽ᵇᵃᵈᵍᵉ⁾ · Accepted Approvals · Product Borrowing Approvals · BOM workspace · Funds & Purchases · + all General screens |
 | **Approver** | Projects → Project Detail · Pending Approvals ⁽ᵇᵃᵈᵍᵉ⁾ · Accepted Approvals (sees **supporting document card** on the requisition detail page when the requester attached one) · Delegate settings · + all General screens |
-| **Admin** | Projects (same detach permission as IM) · Users · Roles & Approvers · Departments · Settings · Audit log |
+| **Admin** | Projects (same detach permission as IM) · Users · Roles & Approvers · Departments · Settings · Audit log · **API keys** (issue/disable/revoke, generated integration docs) |
 
 For the **per-screen click-by-click walkthrough**, open `docs/reference/05-user-flows.md`.
 That file is intentionally not inlined here because (a) it is 227 lines and changes when

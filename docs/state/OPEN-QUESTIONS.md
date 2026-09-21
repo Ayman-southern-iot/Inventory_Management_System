@@ -191,3 +191,16 @@ rediscovered as a surprise.
 - **What does #4 (custody) actually need?** → **Both**: issuing from existing shelf stock (done,
   E-a) and reassigning an already-issued borrow (E-b, not started).
 - **Restrict project creation?** → **Propose-then-approve**, not IM-only. See DECISIONS.md.
+
+## OQ-G1 — is `GET /stock/ledger` part of `inventory:read`?
+
+Filed 2026-09-21 (Phase 10). The ledger is the stock movement history and names the actor on
+every row, which puts it closer to personal data than to a product catalogue. **Left out of the
+scope for now.** Adding it is one decorator; ask before doing so.
+
+## OQ-G2 — should a disabled key answer 401 or 403?
+
+Filed 2026-09-21 (Phase 10). Implemented as: unknown, revoked or expired → `401 API_KEY_INVALID`
+(one code for all three, so an anonymous caller cannot learn that a key once existed); real but
+switched off → `403 API_KEY_DISABLED`, so the integrator asks their admin rather than hunting a
+typo. Revisit if the distinction turns out to leak more than it helps.
