@@ -11,24 +11,18 @@
 `plan/PHASE-09-taxonomy-location-and-custody.md`. All nine of Ayman's asks are built and on the
 demo stack. **Everything is pushed** — `origin/fix/lan-secure-context` is at `2107a79`.
 
-Landed this session: **E-b** custody (`current_holder_id` + append-only trail, both parties
-notified, UI), **A** rooms above zones, **B** auto Storage IDs on shelf slots, **C** optional
-nested categories with depth/cycle triggers and the ~200-node seed tree, **D** cascading picker
-with inline create + post-create navigation to receive stock, and a **UI for E-a** (issue from
-the shelf), which had shipped headless.
+Landed this session: **E-b** custody, **A** rooms above zones, **B** auto Storage IDs, **C**
+nested categories with depth/cycle triggers + seed tree, **D** cascading picker with inline
+create, a **UI for E-a**, then three rounds of Ayman's design feedback — category tree, New
+product form and issue-from-stock form each rebuilt to his mockups.
 
-Then three rounds of Ayman's design feedback: the category tree, the New product form and the
-issue-from-stock form all rebuilt to his mockups. The last of those found a **shipped defect** —
-a `__new__` sentinel written into a react-hook-form field whose schema validates it as a uuid
-killed `handleSubmit` silently, so **inline project creation on the Borrow form had never
-worked**. Fixed in both forms (`55d123a`), sentinel now held outside the form.
+The last of those found a **shipped defect**: inline project creation on the Borrow form had
+never worked. Fixed in both forms (`55d123a`) — see the sentinel landmine below.
 
 ## Next action
 
-No assigned task. Phase 09 is done; ask Ayman what is next. Obvious candidates, none requested:
-the clickable category breadcrumb on the product page (spec §6 — the path is shown flat, not as
-links), searching the inventory by shelf label (OQ-B says it is not built), and the standalone
-category-management screen's move/merge affordances.
+No assigned task. Ask Ayman. Unrequested candidates: clickable category breadcrumb on the
+product page (spec §6), inventory search by shelf label (OQ-B), category move/merge.
 
 ## Green as of 2026-09-21 — measured serially, not remembered
 
