@@ -10,20 +10,15 @@
 **Phases 00–10 complete.** All nine of Ayman's Phase 09 asks are built and on the demo stack, and
 **Phase 10 (API keys) landed this session** — `plan/PHASE-10-api-keys.md`.
 
-Landed this session: **E-b** custody, **A** rooms above zones, **B** auto Storage IDs, **C**
-nested categories with depth/cycle triggers + seed tree, **D** cascading picker with inline
-create, a **UI for E-a**, then three rounds of Ayman's design feedback — category tree, New
-product form and issue-from-stock form each rebuilt to his mockups.
+Phase 09 landed rooms above zones, shelf-slot Storage IDs, nested categories, borrow custody and
+three rounds of Ayman's design feedback. It also turned up a shipped defect — inline project
+creation on the Borrow form had never worked (`55d123a`, see the sentinel landmine).
 
-The last of those found a **shipped defect**: inline project creation on the Borrow form had
-never worked. Fixed in both forms (`55d123a`) — see the sentinel landmine below.
-
-**Phase 10 — API keys.** An external system can now read products, categories and locations with
-a credential of its own. Admin panel issues, disables and revokes; the key is sha256 at rest and
-shown once. Scope is `inventory:read`, read-only, **default-deny by route** — a key reaches a
-route only if it carries `@ApiKeyScopes`, and `request.user` stays undefined so `@Roles` and the
-audit actor are closed by construction. The integration docs are generated from the live route
-table, so decorating a route is all it takes to document it.
+**Phase 10 — API keys.** An external system can read products, categories and locations with a
+credential of its own. Admin panel issues, disables and revokes; sha256 at rest, shown once.
+Scope `inventory:read`, read-only, **default-deny by route**: a key reaches a route only if it
+carries `@ApiKeyScopes`, and `request.user` stays undefined so `@Roles` and the audit actor are
+closed by construction. Integration docs generate from the live route table.
 
 ## Next action
 
