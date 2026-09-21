@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
+import { cn } from '@/lib/cn';
 import { t } from '@/i18n/en';
 import type { ZodTypeAny } from 'zod';
 import { RequiredFields } from './RequiredFields';
@@ -10,13 +11,22 @@ interface DialogProps {
   title: string;
   onClose: () => void;
   children: ReactNode;
+  /** One line under the title. Use it for a standing fact about the form, not an instruction. */
+  subtitle?: string;
   footer?: ReactNode;
+  /**
+   * Pinned to the left of the footer, opposite the buttons — a secondary control that belongs
+   * to the submit rather than to any one field, like 'Save and add another'.
+   */
+  footerStart?: ReactNode;
   /**
    * The form contract this dialog edits. Every control inside then marks itself required from
    * the same schema the resolver validates with, instead of each field carrying a hand-kept
    * `required` that drifts when the contract changes. See `RequiredFields`.
    */
   schema?: ZodTypeAny;
+  /** 'lg' for a form with side-by-side columns. Default is the narrow single-column width. */
+  size?: 'md' | 'lg';
 }
 
 const FOCUSABLE =
@@ -27,7 +37,17 @@ const FOCUSABLE =
  * rather than pulled from a library because it is 60 lines and this is the only dialog
  * behaviour the app needs.
  */
-export function Dialog({ open, title, onClose, children, footer, schema }: DialogProps) {
+export function Dialog({
+  open,
+  title,
+  subtitle,
+  onClose,
+  children,
+  footer,
+  footerStart,
+  schema,
+  size = 'md',
+}: DialogProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const restoreFocusTo = useRef<HTMLElement | null>(null);
 
@@ -85,10 +105,16 @@ export function Dialog({ open, title, onClose, children, footer, schema }: Dialo
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="relative w-full max-w-lg rounded-[--radius-panel] border border-border bg-surface shadow-[--shadow-overlay]"
+        className={cn(
+          'relative w-full rounded-[--radius-panel] border border-border bg-surface shadow-[--shadow-overlay]',
+          size === 'lg' ? 'max-w-2xl' : 'max-w-lg',
+        )}
       >
-        <header className="flex items-center justify-between border-b border-border px-5 py-3.5">
-          <h2 className="text-base font-semibold text-ink">{title}</h2>
+        <header className="flex items-start justify-between gap-4 border-b border-border px-5 py-3.5">
+          <div>
+            <h2 className="text-base font-semibold text-ink">{title}</h2>
+            {subtitle ? <p className="mt-0.5 text-xs text-ink-subtle">{subtitle}</p> : null}
+          </div>
           <button
             type="button"
             onClick={onClose}
@@ -102,8 +128,14 @@ export function Dialog({ open, title, onClose, children, footer, schema }: Dialo
           {schema ? <RequiredFields schema={schema}>{children}</RequiredFields> : children}
         </div>
         {footer ? (
-          <footer className="flex justify-end gap-2 border-t border-border px-5 py-3.5">
-            {footer}
+          <footer
+            className={cn(
+              'flex items-center gap-2 border-t border-border px-5 py-3.5',
+              footerStart ? 'justify-between' : 'justify-end',
+            )}
+          >
+            {footerStart ? <div>{footerStart}</div> : null}
+            <div className="flex items-center gap-2">{footer}</div>
           </footer>
         ) : null}
       </div>

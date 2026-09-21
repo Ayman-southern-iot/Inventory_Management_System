@@ -140,18 +140,16 @@ describe('the category picker', () => {
   });
 
   /** §5: creating inline selects the new node immediately — that is the point of it. */
-  it('creates a category inline and selects it', async () => {
+  it('creates a category inline from the + New option and selects it', async () => {
     const user = userEvent.setup();
     createMutate.mockResolvedValue({ id: 'c-new' });
     renderPicker();
 
     await user.selectOptions(level1(), 'c-electronics');
-    await user.click(
-      screen.getByRole('button', {
-        name: new RegExp(t.categories.newCategory + '.*' + t.inventory.categoryLevel2),
-      }),
-    );
-    await user.type(screen.getByLabelText(t.categories.newCategory), 'Actuators');
+    // Inline creation is the last option in the select, not a button beside it — three
+    // columns plus three buttons does not fit the row.
+    await user.selectOptions(level2(), '__new__');
+    await user.type(screen.getByLabelText(new RegExp(t.categories.newCategory)), 'Actuators');
     await user.click(screen.getByRole('button', { name: t.common.add }));
 
     // Created under whatever is selected one level up.
@@ -161,6 +159,21 @@ describe('the category picker', () => {
     expect(chosen()).toBe('c-new');
   });
 
+  /**
+   * Three narrow selects truncate long names, so the breadcrumb is the only place the chosen
+   * path is legible in full.
+   */
+  it('shows the chosen path as a breadcrumb', async () => {
+    const user = userEvent.setup();
+    renderPicker();
+
+    await user.selectOptions(level1(), 'c-electronics');
+    await user.selectOptions(level2(), 'c-sensors');
+
+    const crumb = screen.getByLabelText(t.inventory.categoryPathLabel);
+    expect(crumb.textContent).toContain('Electronics');
+    expect(crumb.textContent).toContain('Sensors');
+  });
   it('hides inline creation from anyone who cannot manage the catalogue', () => {
     renderPicker({ canCreate: false });
 
