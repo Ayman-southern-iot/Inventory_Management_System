@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ArrowLeftRight, HandCoins, Pencil, PackagePlus, Scale } from 'lucide-react';
 import type { ActiveProductBorrow, ListLedgerQuery, Placement, ProductDetail } from '@ims/shared';
 import { Button } from '@/components/ui/Button';
@@ -231,9 +231,28 @@ function ActiveBorrowsSection({ borrows }: { borrows: ActiveProductBorrow[] }) {
   );
 }
 
+/** Ask #2: a freshly created product lands here with the receive dialog already open. */
+export const RECEIVE_ON_ARRIVAL_PARAM = 'receive';
+
 export function ProductDetailPage() {
   const { productId = '' } = useParams<{ productId: string }>();
-  const [dialog, setDialog] = useState<OpenDialog>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  /**
+   * Read once, on the first render, rather than watched: the param is consumed immediately
+   * below, and treating it as live state would reopen the dialog every time the IM closed it.
+   */
+  const [dialog, setDialog] = useState<OpenDialog>(() =>
+    searchParams.get(RECEIVE_ON_ARRIVAL_PARAM) === '1' ? { kind: 'receive' } : null,
+  );
+
+  // Drop the flag out of the URL so a refresh, a back button or a shared link does not
+  // reopen a dialog the IM has already dealt with.
+  useEffect(() => {
+    if (!searchParams.has(RECEIVE_ON_ARRIVAL_PARAM)) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete(RECEIVE_ON_ARRIVAL_PARAM);
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
   const { hasRole } = useAuth();
   const canManageStock = hasRole(Role.INVENTORY_MANAGER, Role.ADMIN);
 
@@ -304,7 +323,7 @@ function ProductDetailBody({
     <>
       <PageHeader
         title={detail.name}
-        subtitle={`${detail.productCode} · ${detail.categoryName} · ${detail.unit}`}
+        subtitle={[detail.productCode, detail.categoryName ?? t.inventory.uncategorized, detail.unit].join(' · ')}
         action={
           <div className="flex flex-wrap gap-2">
             {detail.isTrackable && detail.isActive && detail.totalAvailable > 0 ? (

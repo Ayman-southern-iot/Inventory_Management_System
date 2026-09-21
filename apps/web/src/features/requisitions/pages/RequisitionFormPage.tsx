@@ -79,6 +79,7 @@ export const CATALOGUE_QUERY = {
   limit: PAGINATION_MAX_LIMIT,
   includeInactive: false,
   inStockOnly: false,
+  uncategorized: false,
 } as const;
 export const DEPARTMENTS_QUERY = { page: 1, limit: PAGINATION_MAX_LIMIT, includeInactive: false } as const;
 

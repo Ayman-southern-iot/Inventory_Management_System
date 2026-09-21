@@ -14,6 +14,7 @@ import { flattenCategoryTree, indentFor } from '../category-tree';
 import { SEARCH_DEBOUNCE_MS } from '../constants';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { ProductFormDialog } from '../components/ProductFormDialog';
+import { RECEIVE_ON_ARRIVAL_PARAM } from './ProductDetailPage';
 import { inventoryExportPath } from '@/features/reports/api';
 import { useExportDownload } from '@/features/reports/use-export-download';
 import { messageForError } from '@/lib/error-message';
@@ -29,6 +30,9 @@ export function InventoryPage() {
   const [categoryId, setCategoryId] = useState('');
   const [includeInactive, setIncludeInactive] = useState(false);
   const [inStockOnly, setInStockOnly] = useState(false);
+  // Spec §6: clearing the uncategorised backlog is a filter the IM can use in a spare five
+  // minutes, not a scheduled report somebody has to build.
+  const [uncategorized, setUncategorized] = useState(false);
   const [page, setPage] = useState(1);
   const [formOpen, setFormOpen] = useState(false);
 
@@ -42,10 +46,11 @@ export function InventoryPage() {
       limit: PAGINATION_DEFAULT_LIMIT,
       includeInactive,
       inStockOnly,
+      uncategorized,
       ...(debouncedSearch.trim() ? { search: debouncedSearch.trim() } : {}),
       ...(categoryId ? { categoryId } : {}),
     }),
-    [page, includeInactive, inStockOnly, debouncedSearch, categoryId],
+    [page, includeInactive, inStockOnly, uncategorized, debouncedSearch, categoryId],
   );
 
   const products = useProducts(query);
@@ -171,6 +176,14 @@ export function InventoryPage() {
                 resetToFirstPage();
               }}
             />
+            <Checkbox
+              label={t.inventory.uncategorizedOnly}
+              checked={uncategorized}
+              onChange={(event) => {
+                setUncategorized(event.target.checked);
+                resetToFirstPage();
+              }}
+            />
           </div>
         </div>
 
@@ -208,7 +221,11 @@ export function InventoryPage() {
                       {product.productCode}
                     </td>
                     <td className="px-4 py-2.5 font-medium text-ink">{product.name}</td>
-                    <td className="px-4 py-2.5 text-ink-muted">{product.categoryName}</td>
+                    <td className="px-4 py-2.5 text-ink-muted">
+                      {product.categoryName ?? (
+                        <span className="text-ink-subtle">{t.inventory.uncategorized}</span>
+                      )}
+                    </td>
                     <td className="px-4 py-2.5 tabular-nums text-ink">
                       {product.totalOwned} {product.unit}
                     </td>
@@ -243,7 +260,21 @@ export function InventoryPage() {
         </QueryBoundary>
       </Panel>
 
-      <ProductFormDialog open={formOpen} onClose={() => setFormOpen(false)} />
+      {/*
+        Ask #2: straight to the new product with the receive dialog open, because creating a
+        product is almost always the first half of putting some of it on a shelf.
+      */}
+      {/*
+        Ask #2: straight to the new product with the receive dialog already open, because
+        creating a product is almost always the first half of putting some of it on a shelf.
+      */}
+      <ProductFormDialog
+        open={formOpen}
+        onClose={() => setFormOpen(false)}
+        onCreated={(productId) =>
+          navigate(`${ROUTES.inventory.product(productId)}?${RECEIVE_ON_ARRIVAL_PARAM}=1`)
+        }
+      />
     </>
   );
 }

@@ -67,13 +67,15 @@ export class CategoriesRepository {
 
   async update(
     id: string,
-    values: { name?: string; isTrackable?: boolean; isActive?: boolean },
+    values: { name?: string; isTrackable?: boolean; isActive?: boolean; parentId?: string | null },
     tx?: Tx,
   ): Promise<void> {
     const patch = {
       ...(values.name === undefined ? {} : { name: values.name }),
       ...(values.isTrackable === undefined ? {} : { is_trackable: values.isTrackable }),
       ...(values.isActive === undefined ? {} : { is_active: values.isActive }),
+      // undefined leaves the parent alone; null makes it a top-level category.
+      ...(values.parentId === undefined ? {} : { parent_id: values.parentId }),
     };
     if (Object.keys(patch).length === 0) return;
 

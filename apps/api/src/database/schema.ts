@@ -140,7 +140,12 @@ export interface ProductsTable {
   /** The Storage ID on the shelf label. */
   product_code: string;
   name: string;
-  category_id: string;
+  /**
+   * Nullable since migration 0035. "Uncategorised" is a supported state, not a defect — a
+   * product is never blocked from being saved because the right category does not exist yet.
+   * Every read of this column has to tolerate null; three INNER JOINs had to become LEFT.
+   */
+  category_id: string | null;
   unit: Generated<string>;
   /** OQ-08 — the borrow form's default, overridable per line. */
   default_returnable: Generated<boolean>;

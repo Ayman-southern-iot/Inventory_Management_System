@@ -978,18 +978,29 @@ export class StockService {
     };
   }
 
-  /** requirements §11 — an untracked category's products exist but hold no stock. */
+  /**
+   * requirements §11 — an untracked category's products exist but hold no stock.
+   *
+   * LEFT joined since migration 0035: category is optional, and an INNER JOIN here would have
+   * turned every uncategorised product into a 404 on receive, move and
+   * adjust — a product that plainly exists, refused as missing.
+   *
+   * OQ-F: with no category there is no is_trackable flag, so the product is treated as
+   * trackable. That matches the column default and the spec's rule that a missing category
+   * never blocks an action; refusing to stock anything uncategorised would make the field
+   * mandatory through the back door.
+   */
   private async assertProductIsTrackable(tx: Tx, productId: string): Promise<void> {
     const row = await tx
       .selectFrom('products')
-      .innerJoin('categories', 'categories.id', 'products.category_id')
+      .leftJoin('categories', 'categories.id', 'products.category_id')
       .where('products.id', '=', productId)
       .select(['products.is_active', 'categories.is_trackable', 'categories.name as category_name'])
       .executeTakeFirst();
 
     if (!row) throw new NotFoundError('Product');
     if (!row.is_active) throw new ConflictError('That product has been deactivated');
-    if (!row.is_trackable) throw new UntrackedCategoryError(row.category_name);
+    if (row.is_trackable === false) throw new UntrackedCategoryError(row.category_name ?? '');
   }
 
   private async assertCompartmentUsable(tx: Tx, compartmentId: string): Promise<void> {

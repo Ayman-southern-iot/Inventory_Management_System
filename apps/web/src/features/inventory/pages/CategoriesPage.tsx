@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { createCategorySchema, type Category, type CreateCategoryInput } from '@ims/shared';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
-import { Checkbox, TextField } from '@/components/ui/Field';
+import { Checkbox, SelectField, TextField } from '@/components/ui/Field';
 import { Badge, PageHeader, Panel, Table } from '@/components/ui/primitives';
 import { EmptyState, QueryBoundary, SkeletonRows } from '@/components/ui/states';
 import { useToast } from '@/components/ui/Toast';
@@ -24,6 +24,18 @@ export function CategoriesPage() {
   const [editing, setEditing] = useState<Category | undefined>(undefined);
 
   const flat = useMemo(() => flattenCategoryTree(categories.data ?? []), [categories.data]);
+
+  /**
+   * Candidate parents. A node at level 3 cannot take children (the tree caps at three), and a
+   * node cannot be its own parent — offering either is offering a choice the database will
+   * refuse. Descendants are left in the list on purpose: the trigger refuses that move with a
+   * sentence worth reading, and filtering the whole subtree out here would silently hide
+   * legitimate siblings too.
+   */
+  const parentOptions = useMemo(
+    () => flat.filter((row) => row.depth < 2 && row.isActive && row.id !== editing?.id),
+    [flat, editing],
+  );
 
   // `parentId` stays in the form because the contract carries it, but nothing sets it any more:
   // the parent picker was removed and every category is created at the top level. The API still
@@ -175,8 +187,22 @@ export function CategoriesPage() {
             error={form.formState.errors.name?.message}
             {...form.register('name')}
           />
-          {/* No parent picker: every new category is top level. The column and the tree
-              rendering stay, so a category that already has a parent still reads correctly. */}
+          <SelectField
+            label={t.categories.parent}
+            hint={t.categories.parentHint}
+            value={form.watch('parentId') ?? ''}
+            onChange={(event) =>
+              form.setValue('parentId', event.target.value === '' ? null : event.target.value)
+            }
+          >
+            <option value="">{t.categories.noParent}</option>
+            {parentOptions.map((category) => (
+              <option key={category.id} value={category.id}>
+                {indentFor(category.depth)}
+                {category.name}
+              </option>
+            ))}
+          </SelectField>
           <Checkbox
             label={t.categories.trackable}
             {...form.register('isTrackable')}

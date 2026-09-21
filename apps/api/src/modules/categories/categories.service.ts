@@ -8,7 +8,7 @@ import type {
 import { ConflictError, NotFoundError } from '../../common/errors';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
-import { isUniqueViolation } from '../../common/pg-errors';
+import { checkViolationMessage, isUniqueViolation } from '../../common/pg-errors';
 import { AuditService } from '../audit/audit.service';
 import type { AuditContext } from '../audit/audit-context';
 import { diffSafeFields } from '../audit/audit-sanitizer';
@@ -72,14 +72,23 @@ export class CategoriesService {
       return await this.require(id);
     } catch (error) {
       if (isUniqueViolation(error)) throw duplicateName();
+      const refused = checkViolationMessage(error);
+      if (refused) throw new ConflictError(refused);
       throw error;
     }
   }
 
   /**
    * `is_trackable` is an ordinary updatable field — requirements §11 wants furniture switched on
-   * from the category screen, never from a deploy. `parentId` is deliberately absent from
-   * `updateCategorySchema`, so re-parenting cannot introduce a cycle here.
+   * from the category screen, never from a deploy.
+   *
+   * `parentId` moves a node (spec §4). It was absent until migration 0035 with the note
+   * "re-parenting needs cycle handling"; 0035 supplies that handling as a trigger, so the guard
+   * sits in the database where a direct API call meets it too rather than only the UI. Products
+   * and child nodes travel with the node, because they reference its id and not its position.
+   *
+   * The trigger's own sentences are surfaced verbatim by `checkViolationMessage` below. Writing
+   * a second, vaguer message here would drift from the rule it claims to describe.
    */
   async update(
     id: string,
@@ -116,6 +125,7 @@ export class CategoriesService {
             name: input.name,
             isTrackable: input.isTrackable,
             isActive: input.isActive,
+            parentId: input.parentId,
           },
           tx,
         );
@@ -124,13 +134,15 @@ export class CategoriesService {
             name: existing.name,
             isTrackable: existing.isTrackable,
             isActive: existing.isActive,
+            parentId: existing.parentId,
           },
           {
             ...(input.name !== undefined ? { name: input.name } : {}),
+            ...(input.parentId !== undefined ? { parentId: input.parentId } : {}),
             ...(input.isTrackable !== undefined ? { isTrackable: input.isTrackable } : {}),
             ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
           },
-          ['name', 'isTrackable', 'isActive'],
+          ['name', 'isTrackable', 'isActive', 'parentId'],
         );
         if (Object.keys(changes).length > 0) {
           await this.audit.record(
@@ -149,6 +161,8 @@ export class CategoriesService {
       });
     } catch (error) {
       if (isUniqueViolation(error)) throw duplicateName();
+      const refused = checkViolationMessage(error);
+      if (refused) throw new ConflictError(refused);
       throw error;
     }
 

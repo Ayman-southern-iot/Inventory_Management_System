@@ -11,7 +11,8 @@
 import { hash, Algorithm } from '@node-rs/argon2';
 import { Role, SETTING_KEYS, getSettingDefinition } from '@ims/shared';
 import { config } from '../src/config';
-import { createDatabase } from '../src/database/create-db';
+import { createDatabase, type Db } from '../src/database/create-db';
+import { CATEGORY_SEED_TREE, type SeedCategory } from '../src/database/category-seed-tree';
 import { generateStorageId } from '../src/modules/locations/storage-id';
 
 const ARGON2 = {
@@ -72,6 +73,47 @@ const DEV_DEPARTMENTS = ['Engineering', 'Operations', 'Accounts'];
 
 /** The room the seeded zones hang under. Reference data, so a literal belongs here. */
 const SEED_ROOM_NAME = 'Main Store';
+
+/**
+ * Insert the taxonomy tree, skipping anything already there.
+ *
+ * Look-then-insert rather than ON CONFLICT DO NOTHING: sibling uniqueness is enforced by two
+ * *partial* indexes (one for roots, one for children, migration 0006), and an unqualified
+ * ON CONFLICT cannot target a partial index. Re-running is a no-op, and a node an IM has since
+ * renamed is left alone rather than resurrected under its old name beside the new one.
+ */
+async function seedCategoryTree(db: Db): Promise<number> {
+  let added = 0;
+
+  async function walk(nodes: SeedCategory[], parentId: string | null): Promise<void> {
+    for (const node of nodes) {
+      // `is null` rather than `= null`, which matches nothing — the root nodes would then be
+      // re-inserted on every run, which is exactly the bug idempotency is meant to prevent.
+      let row = await db
+        .selectFrom('categories')
+        .select('id')
+        .where('name', '=', node.name)
+        .$if(parentId === null, (qb) => qb.where('parent_id', 'is', null))
+        .$if(parentId !== null, (qb) => qb.where('parent_id', '=', parentId!))
+        .executeTakeFirst();
+
+      if (!row) {
+        row = await db
+          .insertInto('categories')
+          .values({ name: node.name, parent_id: parentId })
+          .returning('id')
+          .executeTakeFirst();
+        added += 1;
+      }
+      if (!row) continue;
+
+      if (node.children && node.children.length > 0) await walk(node.children, row.id);
+    }
+  }
+
+  await walk(CATEGORY_SEED_TREE, null);
+  return added;
+}
 
 async function main(): Promise<void> {
   const { db, pool } = createDatabase(config);
@@ -206,6 +248,13 @@ async function main(): Promise<void> {
         console.log(`  slot     global #${slotNo} -> ${approver.email}`);
       }
     }
+
+    // --- category taxonomy ------------------------------------------------------
+    // Reference data for every install, not demo-only: `category-taxonomy-spec.md` §1/§9 puts
+    // the tree in the seed precisely so a new subcategory never needs a deploy. Everything
+    // here is renameable, movable and deletable from the management screen the moment it lands.
+    const seededCategories = await seedCategoryTree(db);
+    if (seededCategories > 0) console.log(`  category ${seededCategories} node(s) added`);
 
     // --- demo inventory (development only) ------------------------------------
     // Enough of a catalogue that the inventory screens show something real on a fresh

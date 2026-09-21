@@ -34,7 +34,10 @@ export class ProductsRepository {
   private baseSelect() {
     return this.db
       .selectFrom('products')
-      .innerJoin('categories', 'categories.id', 'products.category_id')
+      // LEFT, not INNER. Category is optional since migration 0035, and an inner join would
+      // drop every uncategorised product out of the list with no error — spec C.12, the one
+      // failure mode a nullable FK plus an existing join reliably produces.
+      .leftJoin('categories', 'categories.id', 'products.category_id')
       .leftJoinLateral(
         (eb) =>
           eb
@@ -96,6 +99,9 @@ export class ProductsRepository {
       .$if(query.categoryId !== undefined, (qb) =>
         qb.where('products.category_id', '=', query.categoryId!),
       )
+      // The "Uncategorized" chip (spec §6). What makes clearing the backlog a five-minute job
+      // the IM can do between other things, rather than something needing a scheduled report.
+      .$if(query.uncategorized, (qb) => qb.where('products.category_id', 'is', null))
       .$if(query.inStockOnly, (qb) => qb.where('totals.total_quantity', '>', 0))
       .$if(query.search !== undefined, (qb) => {
         /**
@@ -139,7 +145,7 @@ export class ProductsRepository {
     values: {
       productCode: string;
       name: string;
-      categoryId: string;
+      categoryId: string | null;
       unit: string;
       defaultReturnable: boolean;
       description: string | null;
@@ -167,7 +173,7 @@ export class ProductsRepository {
     values: {
       productCode?: string;
       name?: string;
-      categoryId?: string;
+      categoryId?: string | null;
       unit?: string;
       defaultReturnable?: boolean;
       description?: string | null;
@@ -197,14 +203,16 @@ interface ProductRow {
   id: string;
   product_code: string;
   name: string;
-  category_id: string;
+  category_id: string | null;
   unit: string;
   default_returnable: boolean;
   description: string | null;
   is_active: boolean;
   created_at: Date;
-  category_name: string;
-  is_trackable: boolean;
+  category_name: string | null;
+  // Null when the product has no category. OQ-F: an uncategorised product is treated as
+  // trackable, matching the column default and the rule that a missing category blocks nothing.
+  is_trackable: boolean | null;
   total_quantity: number | null;
   total_reserved: number | null;
   total_quarantined: number | null;
@@ -222,7 +230,7 @@ function toProduct(row: ProductRow): Product {
     name: row.name,
     categoryId: row.category_id,
     categoryName: row.category_name,
-    isTrackable: row.is_trackable,
+    isTrackable: row.is_trackable ?? true,
     unit: row.unit,
     defaultReturnable: row.default_returnable,
     description: row.description,

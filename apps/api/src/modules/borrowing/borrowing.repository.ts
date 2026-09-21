@@ -35,13 +35,17 @@ export class BorrowingRepository {
   async findProductForBorrow(productId: string) {
     return this.db
       .selectFrom('products')
-      .innerJoin('categories', 'categories.id', 'products.category_id')
+      .leftJoin('categories', 'categories.id', 'products.category_id')
       .where('products.id', '=', productId)
       .select([
         'products.id',
         'products.is_active',
         'products.default_returnable',
-        'categories.is_trackable',
+        // OPEN QUESTION: OQ-F — an uncategorised product has no `is_trackable` flag to read.
+        // Defaulting to true keeps it borrowable, matching the column default and the spec's
+        // rule that a missing category must never block an action. The alternative — refusing
+        // to lend anything uncategorised — would make category mandatory through the back door.
+        sql<boolean>`coalesce(categories.is_trackable, true)`.as('is_trackable'),
       ])
       .executeTakeFirst();
   }

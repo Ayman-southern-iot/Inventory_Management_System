@@ -12,6 +12,7 @@ import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
 import { isForeignKeyViolation, isUniqueViolation } from '../../common/pg-errors';
 import { AuditService } from '../audit/audit.service';
+import { generateProductCode } from './product-code';
 import type { AuditContext } from '../audit/audit-context';
 import { diffSafeFields } from '../audit/audit-sanitizer';
 import { StockService } from '../stock/stock.service';
@@ -113,9 +114,14 @@ export class ProductsService {
   ): Promise<string> {
     {
       {
+        // Generated unless the caller supplied one. Nothing in the UI supplies one any more —
+        // ask #1 — but the requisition-line promotion path may carry a code the buyer already
+        // used on an invoice, and overwriting that would lose the only link back to the paper.
+        const productCode = input.productCode ?? (await generateProductCode(tx, input.name));
+
         const newId = await this.repo.insert(
           {
-            productCode: input.productCode,
+            productCode,
             name: input.name,
             categoryId: input.categoryId,
             unit: input.unit,
@@ -131,10 +137,10 @@ export class ProductsService {
             action: 'product.create',
             entityType: 'product',
             entityId: newId,
-            entityRef: input.productCode,
-            summary: `Created product ${input.productCode}`,
+            entityRef: productCode,
+            summary: `Created product ${productCode}`,
             metadata: {
-              productCode: input.productCode,
+              productCode: productCode,
               name: input.name,
               categoryId: input.categoryId,
               unit: input.unit,

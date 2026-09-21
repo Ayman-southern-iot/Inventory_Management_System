@@ -387,6 +387,107 @@ describe('migrations', () => {
     });
   });
 
+  /**
+   * 0035 makes category optional and puts the tree's two shape rules in the database. The spec
+   * (§4) is explicit that a `CHECK` cannot express either: Postgres `CHECK` constraints cannot
+   * reference other rows, and both depth and cycles mean walking `parent_id`.
+   */
+  describe('0035 — the category tree keeps its shape', () => {
+    const BEFORE = '0034_compartment_storage_id';
+
+    async function chain(): Promise<{ l1: string; l2: string; l3: string }> {
+      const l1 = (
+        await sql<{ id: string }>`
+          INSERT INTO categories (name) VALUES ('Electronics') RETURNING id
+        `.execute(db)
+      ).rows[0]!.id;
+      const l2 = (
+        await sql<{ id: string }>`
+          INSERT INTO categories (name, parent_id) VALUES ('Sensors', ${l1}) RETURNING id
+        `.execute(db)
+      ).rows[0]!.id;
+      const l3 = (
+        await sql<{ id: string }>`
+          INSERT INTO categories (name, parent_id) VALUES ('Motion', ${l2}) RETURNING id
+        `.execute(db)
+      ).rows[0]!.id;
+      return { l1, l2, l3 };
+    }
+
+    it('allows three levels and refuses a fourth', async () => {
+      await migrateUp(db);
+      const { l3 } = await chain();
+
+      await expect(
+        sql`INSERT INTO categories (name, parent_id) VALUES ('Too Deep', ${l3})`.execute(db),
+      ).rejects.toThrow(/three levels deep/);
+    });
+
+    it('refuses to move a node underneath its own descendant', async () => {
+      await migrateUp(db);
+      const { l1, l3 } = await chain();
+
+      await expect(
+        sql`UPDATE categories SET parent_id = ${l3} WHERE id = ${l1}`.execute(db),
+      ).rejects.toThrow(/underneath itself/);
+    });
+
+    it('allows a legal move, and the products travel with the node', async () => {
+      await migrateUp(db);
+      const { l1, l2 } = await chain();
+      const other = (
+        await sql<{ id: string }>`
+          INSERT INTO categories (name) VALUES ('Mechanical') RETURNING id
+        `.execute(db)
+      ).rows[0]!.id;
+
+      await sql`
+        INSERT INTO products (product_code, name, category_id) VALUES ('P-1', 'IMU', ${l2})
+      `.execute(db);
+
+      await sql`UPDATE categories SET parent_id = ${other} WHERE id = ${l2}`.execute(db);
+
+      const product = await sql<{ category_id: string }>`
+        SELECT category_id FROM products WHERE product_code = 'P-1'
+      `.execute(db);
+      // The product points at the node's id, not its position, so a move costs it nothing.
+      expect(product.rows[0]!.category_id).toBe(l2);
+      expect(l1).not.toBe(other);
+    });
+
+    /** A move that would push a whole subtree past level 3 is still a depth violation. */
+    it('refuses a move that would push the node itself too deep', async () => {
+      await migrateUp(db);
+      const { l3 } = await chain();
+      const loose = (
+        await sql<{ id: string }>`INSERT INTO categories (name) VALUES ('Loose') RETURNING id`.execute(
+          db,
+        )
+      ).rows[0]!.id;
+
+      await expect(
+        sql`UPDATE categories SET parent_id = ${l3} WHERE id = ${loose}`.execute(db),
+      ).rejects.toThrow(/three levels deep/);
+    });
+
+    it('lets a product exist with no category at all', async () => {
+      await migrateToNamed(db, BEFORE);
+
+      // Before 0035 the column is NOT NULL, so this is the state the migration unlocks.
+      await expect(
+        sql`INSERT INTO products (product_code, name) VALUES ('P-NULL', 'Mystery')`.execute(db),
+      ).rejects.toThrow();
+
+      await migrateUp(db);
+
+      await sql`INSERT INTO products (product_code, name) VALUES ('P-NULL', 'Mystery')`.execute(db);
+      const row = await sql<{ category_id: string | null }>`
+        SELECT category_id FROM products WHERE product_code = 'P-NULL'
+      `.execute(db);
+      expect(row.rows[0]!.category_id).toBeNull();
+    });
+  });
+
   it('allows only one company-wide row per approver slot', async () => {
     await migrateUp(db);
     await sql`INSERT INTO approver_slots (department_id, slot_no) VALUES (NULL, 1)`.execute(db);

@@ -24,6 +24,17 @@ export const updateCategorySchema = z.object({
   name: nameSchema.optional(),
   isTrackable: z.boolean().optional(),
   isActive: z.boolean().optional(),
+  /**
+   * Re-parenting a node. Absent until migration 0035 with the note "re-parenting needs cycle
+   * handling" — that comment was the specification, and 0035 supplies the guard: a trigger
+   * refuses a move under the node's own descendant, and refuses anything that would land at a
+   * fourth level. Products and child nodes travel with the node because they reference its id,
+   * not its position (spec §4).
+   *
+   * `null` means "make this a top-level category", which is why it is nullable rather than
+   * merely optional: `undefined` leaves the parent alone, `null` clears it.
+   */
+  parentId: z.string().uuid().nullable().optional(),
 });
 export type UpdateCategoryInput = z.infer<typeof updateCategorySchema>;
 
@@ -48,9 +59,20 @@ export interface CategoryNode extends Category {
 export const productCodeSchema = z.string().trim().min(1).max(64);
 
 export const createProductSchema = z.object({
-  productCode: productCodeSchema,
+  /**
+   * Server-generated when absent (migration 0036, ask #1). The New product form no longer asks
+   * for it at all — it was labelled Storage ID, which since 0034 means a shelf slot, not a
+   * catalogue entry. Still accepted from the requisition-line promotion path, where the buyer
+   * may already have quoted a code on an invoice.
+   */
+  productCode: productCodeSchema.optional(),
   name: nameSchema,
-  categoryId: z.string().uuid(),
+  /**
+   * Optional since migration 0035 (spec §1). A product is never blocked from being saved
+   * because the right category does not exist yet — that is what produces junk categories,
+   * because somebody picks the nearest wrong node to get past the form.
+   */
+  categoryId: z.string().uuid().nullable().default(null),
   unit: z.string().trim().min(1).max(24).default('pcs'),
   /** OQ-08 — the borrow form's default, overridable per borrow line. */
   defaultReturnable: z.boolean().default(true),
@@ -61,7 +83,7 @@ export type CreateProductInput = z.infer<typeof createProductSchema>;
 export const updateProductSchema = z.object({
   productCode: productCodeSchema.optional(),
   name: nameSchema.optional(),
-  categoryId: z.string().uuid().optional(),
+  categoryId: z.string().uuid().nullable().optional(),
   unit: z.string().trim().min(1).max(24).optional(),
   defaultReturnable: z.boolean().optional(),
   description: z.string().trim().max(2000).nullable().optional(),
@@ -72,6 +94,12 @@ export type UpdateProductInput = z.infer<typeof updateProductSchema>;
 export const listProductsQuerySchema = paginationQuerySchema.extend({
   search: z.string().trim().max(160).optional(),
   categoryId: z.string().uuid().optional(),
+  /**
+   * The "Uncategorized" chip (spec §6). Its own flag rather than a magic categoryId value,
+   * because "no category" is a different question from "this category" and collapsing them
+   * into one parameter is how a filter starts lying.
+   */
+  uncategorized: queryBoolean(false),
   includeInactive: queryBoolean(false),
   /** Only products that currently have stock somewhere. */
   inStockOnly: queryBoolean(false),
@@ -104,8 +132,9 @@ export const productSchema = z.object({
   id: z.string().uuid(),
   productCode: z.string(),
   name: z.string(),
-  categoryId: z.string().uuid(),
-  categoryName: z.string(),
+  /** Null when the product has not been categorised — a supported state, not a defect. */
+  categoryId: z.string().uuid().nullable(),
+  categoryName: z.string().nullable(),
   isTrackable: z.boolean(),
   unit: z.string(),
   defaultReturnable: z.boolean(),
