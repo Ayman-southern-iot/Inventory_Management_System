@@ -471,6 +471,41 @@ describe('validateImport', () => {
       expect(created.productId).toBeNull();
       expect(created.shelves).toHaveLength(2);
     });
+
+    /**
+     * The subtle half of §4.3: the code typed on one row and forgotten on the other, which is
+     * what editing a spreadsheet actually produces. Grouping is per row, so the coded row and
+     * the blank one land in different buckets and each looks like a perfectly good lone new
+     * product — two products created, half the stock each, and no error anywhere.
+     */
+    it('refuses a new product whose rows do not all carry its code', () => {
+      const result = validateImport(
+        [
+          newRow({ product_code: 'HUB-9001' }),
+          newRow({ storage_id: 'MAI-MET-1B-0002', compartment: '1B' }),
+          ...everything(),
+        ],
+        world(),
+      );
+
+      expect(result.plan).toBeNull();
+      expect(messages(result.errors)).toMatch(/only some of them carry a product_code/);
+    });
+
+    /** Different SKUs from different factories sharing a name is not hypothetical (§4.3). */
+    it('allows two new products with one name when each carries its own code', () => {
+      const result = validateImport(
+        [
+          newRow({ product_code: 'HUB-A' }),
+          newRow({ product_code: 'HUB-B', storage_id: 'MAI-MET-1B-0002', compartment: '1B' }),
+          ...everything(),
+        ],
+        world(),
+      );
+
+      expect(result.errors).toEqual([]);
+      expect(result.plan!.products.filter((p) => p.name === 'Anker USB-C Hub')).toHaveLength(2);
+    });
   });
 
   describe('what the file says about the catalogue', () => {

@@ -741,6 +741,15 @@ a change to §5.5 and §11.3, not a config edit.
 `rules/70`, and this is an architectural decision, not a slice. Flagged here so it is decided
 deliberately rather than discovered as a support ticket the day the catalogue crosses the cap.
 
+**And it fixes only one of the two axes.** A changed-shelf ceiling bounds *apply*. It does nothing
+to the four bulk-loaded maps of §11.1, which are deliberately uncapped — the deactivation sweep
+has to read every product or it retires the ones it was never shown — and which therefore scale
+with the **catalogue**, not with the file or with how much the file changes. Every import pays
+that cost, including a zero-change reexport. Right at today's volumes and right for the reason
+OPEN #3 gives, but it means validation-phase cost has no ceiling at all and is tied to a number
+nobody is watching. **If the catalogue itself grows an order of magnitude, measure the lookup load
+before anything else** — it is the axis this round did not touch.
+
 ---
 
 ## 12. Corner cases

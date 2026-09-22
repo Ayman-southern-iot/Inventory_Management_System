@@ -438,6 +438,7 @@ function groupRows(rows: TypedRow[]): Grouped {
 
   for (const group of groups) errors.push(...checkGroupAgrees(group));
   errors.push(...checkCodesAreUnique(groups));
+  errors.push(...checkNewProductsAreDistinct(groups));
 
   return { groups, errors: sortIssues(errors) };
 }
@@ -497,6 +498,53 @@ function checkCodesAreUnique(groups: RowGroup[]): ImportIssue[] {
             'product_code',
             row.productCode,
             `Two different products in this file share the product code "${row.productCode}". A code identifies one product. Rows: ${lines.join(', ')}.`,
+          ),
+        );
+      }
+    }
+  }
+  return issues;
+}
+
+/**
+ * The other half of §4.3: a new product whose rows do not all carry its code.
+ *
+ * Grouping is per row — id, else code, else name — so a product code typed on one row and
+ * forgotten on the next lands the two rows in different buckets, and each looks like a perfectly
+ * good lone new product. The result is two products created, half the intended stock on each,
+ * and no error anywhere. That is exactly the failure §4.3 exists to prevent, reached by a subtler
+ * path than leaving the code off every row, and it is what editing a spreadsheet actually
+ * produces: you type a value once and do not repeat it down the column.
+ *
+ * Two new products genuinely sharing a name is allowed and stays allowed — different SKUs from
+ * different factories is not hypothetical — but only when **each** carries its own code, because
+ * that is the file saying so rather than the importer guessing.
+ */
+function checkNewProductsAreDistinct(groups: RowGroup[]): ImportIssue[] {
+  const byName = new Map<string, RowGroup[]>();
+  for (const group of groups) {
+    // An existing product's identity is settled by its id; names are not unique and never were.
+    if (group.productId !== null) continue;
+    push(byName, lookupKey(group.rows[0]!.name), group);
+  }
+
+  const issues: ImportIssue[] = [];
+  for (const [, sharing] of byName) {
+    if (sharing.length < 2) continue;
+    if (sharing.every((group) => group.productCode !== null)) continue;
+
+    const lines = sharing
+      .flatMap((group) => group.rows.map((row) => row.line))
+      .sort((a, b) => a - b);
+
+    for (const group of sharing) {
+      for (const row of group.rows) {
+        issues.push(
+          issue(
+            row.line,
+            'product_code',
+            row.productCode,
+            `Rows ${lines.join(', ')} look like one new product called "${row.name}" on several shelves, but only some of them carry a product_code. Give every row of one product the same code, or, if these really are different products, give each one its own code.`,
           ),
         );
       }
