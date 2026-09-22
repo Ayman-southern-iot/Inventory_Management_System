@@ -4,6 +4,8 @@ import { LocationsModule } from '../locations/locations.module';
 import { ProductsModule } from '../products/products.module';
 import { SettingsModule } from '../settings/settings.module';
 import { StockModule } from '../stock/stock.module';
+import { ImportJobsRepository } from './import-jobs.repository';
+import { ImportJobsService } from './import-jobs.service';
 import { ImportValidationService } from './import-validation.service';
 import { ImportsController } from './imports.controller';
 import { ProductExportService } from './product-export.service';
@@ -22,7 +24,12 @@ import { ProductExportService } from './product-export.service';
 @Module({
   imports: [ProductsModule, CategoriesModule, LocationsModule, StockModule, SettingsModule],
   controllers: [ImportsController],
-  providers: [ProductExportService, ImportValidationService],
-  exports: [ProductExportService, ImportValidationService],
+  providers: [
+    ProductExportService,
+    ImportValidationService,
+    ImportJobsRepository,
+    ImportJobsService,
+  ],
+  exports: [ProductExportService, ImportValidationService, ImportJobsService],
 })
 export class ImportsModule {}

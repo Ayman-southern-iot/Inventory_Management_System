@@ -230,6 +230,14 @@ export const importJobSchema = z.object({
   canRestore: z.boolean(),
   /** Set when this job is itself a rollback of an earlier one. */
   restoredFromJobId: uuidSchema.nullable(),
+  /**
+   * When an unconfirmed job gives up its slot, or null once it is no longer waiting.
+   *
+   * Derived from `created_at` plus config rather than stored (§3.6: no job framework, and the
+   * heartbeat guard already checks staleness lazily). Changing the window therefore needs no
+   * migration and does not rewrite rows created under the old one.
+   */
+  expiresAt: z.string().nullable(),
   createdById: uuidSchema,
   createdByName: z.string(),
   createdAt: z.string(),

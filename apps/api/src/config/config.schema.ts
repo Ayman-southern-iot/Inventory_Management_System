@@ -142,6 +142,13 @@ const rawSchema = z.object({
    * feature is called done.
    */
   IMPORT_FUZZY_MATCH_THRESHOLD: z.coerce.number().min(0.3).max(1).default(0.45),
+  /**
+   * How long a validated import waits for somebody to approve it before it releases the
+   * one-live slot. Checked when a request next looks at the job, never by a timer.
+   */
+  IMPORT_CONFIRMATION_TTL_MINUTES: z.coerce.number().int().min(1).max(1440).default(60),
+  /** Rows on the import history screen. */
+  IMPORT_HISTORY_LIMIT: z.coerce.number().int().min(1).max(500).default(50),
   /** Replaces the previously hardcoded 10/60s login burst limit on `POST /auth/login`. */
   LOGIN_BURST_LIMIT: z.coerce.number().int().min(1).max(10_000).default(10),
   LOGIN_BURST_TTL_SECONDS: durationSecondsSchema.default(60),
@@ -473,6 +480,8 @@ export interface AppConfig {
     readonly snapshotRetentionDays: number;
     readonly fuzzyMatchMaxNewNames: number;
     readonly fuzzyMatchThreshold: number;
+    readonly confirmationTtlMinutes: number;
+    readonly historyLimit: number;
   };
   readonly body: {
     readonly jsonLimit: string;
@@ -627,6 +636,8 @@ export function buildConfig(source: Record<string, string | undefined>): AppConf
       snapshotRetentionDays: env.IMPORT_SNAPSHOT_RETENTION_DAYS,
       fuzzyMatchMaxNewNames: env.IMPORT_FUZZY_MATCH_MAX_NEW_NAMES,
       fuzzyMatchThreshold: env.IMPORT_FUZZY_MATCH_THRESHOLD,
+      confirmationTtlMinutes: env.IMPORT_CONFIRMATION_TTL_MINUTES,
+      historyLimit: env.IMPORT_HISTORY_LIMIT,
     }),
     body: Object.freeze({
       jsonLimit: env.JSON_BODY_LIMIT,
