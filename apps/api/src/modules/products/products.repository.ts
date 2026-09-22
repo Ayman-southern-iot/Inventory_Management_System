@@ -32,63 +32,65 @@ export class ProductsRepository {
    * for, in any state" without double-counting the reservations.
    */
   private baseSelect() {
-    return this.db
-      .selectFrom('products')
-      // LEFT, not INNER. Category is optional since migration 0035, and an inner join would
-      // drop every uncategorised product out of the list with no error — spec C.12, the one
-      // failure mode a nullable FK plus an existing join reliably produces.
-      .leftJoin('categories', 'categories.id', 'products.category_id')
-      .leftJoinLateral(
-        (eb) =>
-          eb
-            .selectFrom('stock_placements')
-            .whereRef('stock_placements.product_id', '=', 'products.id')
-            .select([
-              sql<number>`coalesce(sum(stock_placements.quantity), 0)::int`.as('total_quantity'),
-              sql<number>`coalesce(sum(stock_placements.reserved_qty), 0)::int`.as(
-                'total_reserved',
-              ),
-              sql<number>`coalesce(sum(stock_placements.quarantined_qty), 0)::int`.as(
-                'total_quarantined',
-              ),
-            ])
-            .as('totals'),
-        (join) => join.onTrue(),
-      )
-      .leftJoinLateral(
-        (eb) =>
-          eb
-            .selectFrom('borrow_requests')
-            .whereRef('borrow_requests.product_id', '=', 'products.id')
-            .where('borrow_requests.status', 'in', [
-              BorrowStatus.ISSUED,
-              BorrowStatus.PARTIALLY_RETURNED,
-            ])
-            .select([
-              sql<number>`coalesce(sum(borrow_requests.quantity - borrow_requests.returned_qty), 0)::int`.as(
-                'total_in_use',
-              ),
-            ])
-            .as('in_use'),
-        (join) => join.onTrue(),
-      )
-      .select([
-        'products.id',
-        'products.product_code',
-        'products.name',
-        'products.category_id',
-        'products.unit',
-        'products.default_returnable',
-        'products.description',
-        'products.is_active',
-        'products.created_at',
-        'categories.name as category_name',
-        'categories.is_trackable',
-        'totals.total_quantity',
-        'totals.total_reserved',
-        'totals.total_quarantined',
-        'in_use.total_in_use',
-      ]);
+    return (
+      this.db
+        .selectFrom('products')
+        // LEFT, not INNER. Category is optional since migration 0035, and an inner join would
+        // drop every uncategorised product out of the list with no error — spec C.12, the one
+        // failure mode a nullable FK plus an existing join reliably produces.
+        .leftJoin('categories', 'categories.id', 'products.category_id')
+        .leftJoinLateral(
+          (eb) =>
+            eb
+              .selectFrom('stock_placements')
+              .whereRef('stock_placements.product_id', '=', 'products.id')
+              .select([
+                sql<number>`coalesce(sum(stock_placements.quantity), 0)::int`.as('total_quantity'),
+                sql<number>`coalesce(sum(stock_placements.reserved_qty), 0)::int`.as(
+                  'total_reserved',
+                ),
+                sql<number>`coalesce(sum(stock_placements.quarantined_qty), 0)::int`.as(
+                  'total_quarantined',
+                ),
+              ])
+              .as('totals'),
+          (join) => join.onTrue(),
+        )
+        .leftJoinLateral(
+          (eb) =>
+            eb
+              .selectFrom('borrow_requests')
+              .whereRef('borrow_requests.product_id', '=', 'products.id')
+              .where('borrow_requests.status', 'in', [
+                BorrowStatus.ISSUED,
+                BorrowStatus.PARTIALLY_RETURNED,
+              ])
+              .select([
+                sql<number>`coalesce(sum(borrow_requests.quantity - borrow_requests.returned_qty), 0)::int`.as(
+                  'total_in_use',
+                ),
+              ])
+              .as('in_use'),
+          (join) => join.onTrue(),
+        )
+        .select([
+          'products.id',
+          'products.product_code',
+          'products.name',
+          'products.category_id',
+          'products.unit',
+          'products.default_returnable',
+          'products.description',
+          'products.is_active',
+          'products.created_at',
+          'categories.name as category_name',
+          'categories.is_trackable',
+          'totals.total_quantity',
+          'totals.total_reserved',
+          'totals.total_quarantined',
+          'in_use.total_in_use',
+        ])
+    );
   }
 
   async list(query: ListProductsQuery): Promise<{ items: Product[]; total: number }> {
@@ -215,6 +217,35 @@ export class ProductsRepository {
 
     const conn = tx ?? this.db;
     await conn.updateTable('products').set(patch).where('id', '=', id).execute();
+  }
+
+  /**
+   * Existing products whose names are close to any of `candidates` — the import's near-duplicate
+   * warning (`importing_data.md` §5.3 stage 7, §11.1).
+   *
+   * One query for the whole batch, not one per candidate: `unnest` turns the candidate list into
+   * a relation and the join runs against `products_name_trgm_idx`, so the cost is a single index
+   * scan rather than N round trips. `%` is what reaches that index; `similarity()` in the WHERE
+   * then applies this deployment's own, stricter threshold on top of pg_trgm's 0.3 default.
+   *
+   * Retired products are included. A name that collides with something retired is still the
+   * warning somebody wants — it usually means they are recreating what they already had.
+   */
+  async findSimilarNames(
+    candidates: string[],
+    threshold: number,
+  ): Promise<{ candidate: string; id: string; name: string; score: number }[]> {
+    if (candidates.length === 0) return [];
+
+    const rows = await sql<{ candidate: string; id: string; name: string; score: number }>`
+      SELECT c.candidate, p.id, p.name, similarity(p.name, c.candidate)::float8 AS score
+      FROM unnest(${sql.val(candidates)}::text[]) AS c(candidate)
+      JOIN products p ON p.name % c.candidate
+      WHERE similarity(p.name, c.candidate) >= ${sql.val(threshold)}
+      ORDER BY score DESC, p.name
+    `.execute(this.db);
+
+    return rows.rows;
   }
 }
 

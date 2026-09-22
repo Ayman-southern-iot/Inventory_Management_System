@@ -125,6 +125,15 @@ const rawSchema = z.object({
    * opposite of what it is for.
    */
   IMPORT_FUZZY_MATCH_MAX_NEW_NAMES: z.coerce.number().int().min(0).max(100_000).default(500),
+  /**
+   * How alike two names have to be before the import says so. 1 is identical.
+   *
+   * The floor is 0.3 and not lower on purpose: the query reaches the trigram index through
+   * pg_trgm's `%` operator, which prunes at the `pg_trgm.similarity_threshold` GUC — 0.3 by
+   * default — before this value is applied. Allowing 0.1 here would look like a setting and do
+   * nothing, which is worse than not having the knob.
+   */
+  IMPORT_FUZZY_MATCH_THRESHOLD: z.coerce.number().min(0.3).max(1).default(0.45),
   /** Replaces the previously hardcoded 10/60s login burst limit on `POST /auth/login`. */
   LOGIN_BURST_LIMIT: z.coerce.number().int().min(1).max(10_000).default(10),
   LOGIN_BURST_TTL_SECONDS: durationSecondsSchema.default(60),
@@ -455,6 +464,7 @@ export interface AppConfig {
     readonly heartbeatTimeoutSeconds: number;
     readonly snapshotRetentionDays: number;
     readonly fuzzyMatchMaxNewNames: number;
+    readonly fuzzyMatchThreshold: number;
   };
   readonly body: {
     readonly jsonLimit: string;
@@ -608,6 +618,7 @@ export function buildConfig(source: Record<string, string | undefined>): AppConf
       heartbeatTimeoutSeconds: env.IMPORT_HEARTBEAT_TIMEOUT_SECONDS,
       snapshotRetentionDays: env.IMPORT_SNAPSHOT_RETENTION_DAYS,
       fuzzyMatchMaxNewNames: env.IMPORT_FUZZY_MATCH_MAX_NEW_NAMES,
+      fuzzyMatchThreshold: env.IMPORT_FUZZY_MATCH_THRESHOLD,
     }),
     body: Object.freeze({
       jsonLimit: env.JSON_BODY_LIMIT,

@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { Category } from '@ims/shared';
-import type { Transaction } from 'kysely';
+import { sql, type Transaction } from 'kysely';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
 import type { Database } from '../../database/schema';
@@ -102,6 +102,31 @@ export class CategoriesRepository {
       .select((eb) => eb.fn.countAll<number>().as('count'))
       .executeTakeFirst();
     return Number(row?.count ?? 0);
+  }
+
+  /**
+   * Existing categories whose names are close to any of `candidates`, for the import's
+   * near-duplicate warning (`importing_data.md` §5.3 stage 7).
+   *
+   * There is no trigram index on `categories.name` and none is wanted: the table is a dozen rows
+   * against several thousand products, so a sequential scan here is cheaper than the index would
+   * be to maintain. The shape of the query matches the products one so the two read alike.
+   */
+  async findSimilarNames(
+    candidates: string[],
+    threshold: number,
+  ): Promise<{ candidate: string; id: string; name: string; score: number }[]> {
+    if (candidates.length === 0) return [];
+
+    const rows = await sql<{ candidate: string; id: string; name: string; score: number }>`
+      SELECT c.candidate, cat.id, cat.name, similarity(cat.name, c.candidate)::float8 AS score
+      FROM unnest(${sql.val(candidates)}::text[]) AS c(candidate)
+      JOIN categories cat ON similarity(cat.name, c.candidate) >= ${sql.val(threshold)}
+      WHERE lower(btrim(cat.name)) <> lower(btrim(c.candidate))
+      ORDER BY score DESC, cat.name
+    `.execute(this.db);
+
+    return rows.rows;
   }
 }
 

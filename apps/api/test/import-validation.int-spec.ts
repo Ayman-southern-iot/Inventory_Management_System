@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { ImportIssueCode, Role } from '@ims/shared';
+import { ImportIssueCode, Role, isImportWarning } from '@ims/shared';
 import { createTestApp, httpClient, type TestApp } from './app';
 import { createUserAndLogin, resetData } from './factories';
 import {
@@ -266,6 +266,110 @@ describe('import validation', () => {
 
       const outcome = await validator.validate(file(lines), { isRestore: true });
       expect(outcome.errors).toEqual([]);
+    });
+  });
+
+  describe('near-duplicate names', () => {
+    /** One row for a product that does not exist yet, at no location and no quantity. */
+    function newProductRow(name: string, categoryPath = ''): string {
+      return IMPORT_COLUMNS.map((column) => {
+        if (column === 'product_name') return name;
+        if (column === 'unit') return 'pcs';
+        if (column === 'default_returnable') return 'yes';
+        if (column === 'status') return 'Active';
+        if (column === 'category_path') return categoryPath;
+        if (column === 'on_hand') return '0';
+        return '';
+      }).join(',');
+    }
+
+    it('warns that a new product looks like one already in the catalogue', async () => {
+      await createProduct(ctx.db, {
+        categoryId: fixture.categoryId,
+        name: 'Lenovo ThinkPad T14 Gen 3',
+      });
+
+      const outcome = await validator.validate(
+        file([...(await exported()), newProductRow('Lenovo ThinkPad T14 Gen 4')]),
+      );
+
+      expect(outcome.errors).toEqual([]);
+      const warning = outcome.warnings.find((i) => i.code === ImportIssueCode.NAME_NEAR_DUPLICATE);
+      expect(warning).toBeDefined();
+      expect(warning!.message).toMatch(/Lenovo ThinkPad T14 Gen 3/);
+    });
+
+    /** The whole point of a threshold: an unrelated name must not produce advice. */
+    it('says nothing about a name that resembles nothing', async () => {
+      const outcome = await validator.validate(
+        file([...(await exported()), newProductRow('Hokuyo UST-10LX')]),
+      );
+
+      expect(outcome.warnings.map((i) => i.code)).not.toContain(
+        ImportIssueCode.NAME_NEAR_DUPLICATE,
+      );
+    });
+
+    it('warns that a new category looks like an existing one', async () => {
+      // Randomised: `resetData` keeps categories, and `categories_root_name_key` is global,
+      // so a fixed name collides with the next test in this same file.
+      const stem = `Power Tools ${randomUUID().slice(0, 8)}`;
+      await createCategory(ctx.db, { name: stem });
+
+      const outcome = await validator.validate(
+        file([...(await exported()), newProductRow('Some New Thing', `${stem} Set`)]),
+      );
+
+      expect(outcome.errors).toEqual([]);
+      expect(outcome.warnings.map((i) => i.code)).toContain(
+        ImportIssueCode.CATEGORY_NEAR_DUPLICATE,
+      );
+    });
+
+    /** It never blocks: §2.4. A near match is advice, and the human decides. */
+    it('never turns a near duplicate into an error', async () => {
+      await createProduct(ctx.db, { categoryId: fixture.categoryId, name: 'Widget Mark II' });
+
+      const outcome = await validator.validate(
+        file([...(await exported()), newProductRow('Widget Mark III')]),
+      );
+
+      expect(outcome.errors).toEqual([]);
+      expect(outcome.plan).not.toBeNull();
+    });
+
+    /**
+     * Every issue this service produces, on the right side of the severity partition — the same
+     * check the validator spec makes, extended to the three codes only reachable with a
+     * database. Without it those three would be the enum's blind spot.
+     */
+    it('puts each of its own warnings on the warning side of the partition', async () => {
+      await createProduct(ctx.db, { categoryId: fixture.categoryId, name: 'Widget Mark II' });
+      const stem = `Hand Tools ${randomUUID().slice(0, 8)}`;
+      await createCategory(ctx.db, { name: stem });
+
+      const outcome = await validator.validate(
+        file([...(await exported()), newProductRow('Widget Mark III', `${stem} Set`)]),
+      );
+
+      for (const warning of outcome.warnings) {
+        expect({ code: warning.code, warning: isImportWarning(warning.code) }).toEqual({
+          code: warning.code,
+          warning: true,
+        });
+      }
+      for (const error of outcome.errors) {
+        expect({ code: error.code, warning: isImportWarning(error.code) }).toEqual({
+          code: error.code,
+          warning: false,
+        });
+      }
+      expect(outcome.warnings.map((i) => i.code)).toEqual(
+        expect.arrayContaining([
+          ImportIssueCode.NAME_NEAR_DUPLICATE,
+          ImportIssueCode.CATEGORY_NEAR_DUPLICATE,
+        ]),
+      );
     });
   });
 

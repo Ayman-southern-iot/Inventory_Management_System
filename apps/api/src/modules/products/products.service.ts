@@ -76,6 +76,14 @@ export class ProductsService {
     return collected;
   }
 
+  /** Delegates to the repository's trigram query; see it for why this is one query. */
+  async findSimilarNames(
+    candidates: string[],
+    threshold: number,
+  ): Promise<{ candidate: string; id: string; name: string; score: number }[]> {
+    return this.repo.findSimilarNames(candidates, threshold);
+  }
+
   async findById(id: string): Promise<ProductDetail> {
     const product = await this.repo.findById(id);
     if (!product) throw new NotFoundError('Product');
@@ -123,11 +131,7 @@ export class ProductsService {
    * Deliberately not a second code path: `create` below is this plus its own transaction and a
    * read-back, so the audit row and the insert stay identical for both callers.
    */
-  async createWithin(
-    tx: Tx,
-    input: CreateProductInput,
-    context: AuditContext,
-  ): Promise<string> {
+  async createWithin(tx: Tx, input: CreateProductInput, context: AuditContext): Promise<string> {
     try {
       return await this.insertAndAudit(tx, input, context);
     } catch (error) {
@@ -137,9 +141,9 @@ export class ProductsService {
 
   async create(input: CreateProductInput, context: AuditContext): Promise<ProductDetail> {
     try {
-      const id = await this.db.transaction().execute(async (tx) =>
-        this.insertAndAudit(tx, input, context),
-      );
+      const id = await this.db
+        .transaction()
+        .execute(async (tx) => this.insertAndAudit(tx, input, context));
       return await this.findById(id);
     } catch (error) {
       throw translate(error);

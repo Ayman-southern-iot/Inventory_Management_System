@@ -1,10 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type {
-  Category,
-  CategoryNode,
-  CreateCategoryInput,
-  UpdateCategoryInput,
-} from '@ims/shared';
+import type { Category, CategoryNode, CreateCategoryInput, UpdateCategoryInput } from '@ims/shared';
 import { ConflictError, NotFoundError } from '../../common/errors';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
@@ -31,6 +26,14 @@ export class CategoriesService {
    */
   async tree(): Promise<CategoryNode[]> {
     return buildTree(await this.repo.listAll());
+  }
+
+  /** Delegates to the repository's similarity query, for the import's duplicate warning. */
+  async findSimilarNames(
+    candidates: string[],
+    threshold: number,
+  ): Promise<{ candidate: string; id: string; name: string; score: number }[]> {
+    return this.repo.findSimilarNames(candidates, threshold);
   }
 
   async create(input: CreateCategoryInput, context: AuditContext): Promise<Category> {
@@ -90,11 +93,7 @@ export class CategoriesService {
    * The trigger's own sentences are surfaced verbatim by `checkViolationMessage` below. Writing
    * a second, vaguer message here would drift from the rule it claims to describe.
    */
-  async update(
-    id: string,
-    input: UpdateCategoryInput,
-    context: AuditContext,
-  ): Promise<Category> {
+  async update(id: string, input: UpdateCategoryInput, context: AuditContext): Promise<Category> {
     const existing = await this.repo.findById(id);
     if (!existing) throw new NotFoundError('Category');
 
@@ -187,7 +186,11 @@ function duplicateName(): ConflictError {
 export function buildTree(categories: readonly Category[]): CategoryNode[] {
   const nodes = new Map<string, CategoryNode>();
   for (const category of categories) {
-    nodes.set(category.id, { ...category, productCountInTree: category.productCount, children: [] });
+    nodes.set(category.id, {
+      ...category,
+      productCountInTree: category.productCount,
+      children: [],
+    });
   }
 
   const roots: CategoryNode[] = [];

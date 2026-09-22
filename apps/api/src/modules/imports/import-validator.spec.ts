@@ -934,29 +934,113 @@ describe('validateImport', () => {
      * rather than a preview screen quietly rendering a blocking problem as advice.
      */
     it('never puts a warning code among the errors, or an error code among the warnings', () => {
-      const files: ParsedRow[][] = [
-        [row({ on_hand: '-1' })],
-        [row({ product_name: '' })],
-        [row({ compartment: '1B' }), gpuRow()],
-        [row({ category_path: 'Electronics' }), gpuRow()],
-        [row({ unit: 'box', on_hand: '0', reserved: '4' }), gpuRow()],
-        [row({ zone: 'Mezzanine', product_code: '2-Jan' }), gpuRow()],
-        [row({ category_id: '', category_path: 'ELECTRONICS' }), gpuRow()],
-        [row({ status: 'Inactive' })],
-        [newRow(), newRow({ storage_id: 'MAI-MET-1B-0002', compartment: '1B' }), ...everything()],
-        [row({ product_id: '99999999-9999-4999-8999-999999999999' })],
-        [newRow({ product_code: 'LAP-0001' })],
-        [row({ category_id: RETIRED, category_path: '' })],
-        [row({ storage_id: '', compartment: '4Q' })],
-        [row(), row({ on_hand: '3' }), gpuRow()],
-        [row(), gpuRow({ on_hand: '1' })],
-        [row({ category_id: SERVICES, category_path: 'Services' }), gpuRow()],
-        [row({ default_returnable: 'maybe', on_hand: '2.5' })],
+      /** A world where the ThinkPad has units out on loan — the only case needing its own. */
+      const onLoan = () =>
+        world({
+          products: [
+            product({
+              id: LAPTOP,
+              productCode: 'LAP-0001',
+              name: 'Lenovo ThinkPad T14',
+              categoryId: LAPTOPS,
+              totalOnHand: 7,
+              totalInUse: 4,
+            }),
+          ],
+          placements: [
+            {
+              productId: LAPTOP,
+              compartmentId: SHELF_1A,
+              quantity: 7,
+              reservedQty: 0,
+              quarantinedQty: 0,
+            },
+          ],
+        });
+
+      const files: { rows: ParsedRow[]; lookups?: ImportLookups }[] = [
+        { rows: [row({ on_hand: '-1' })] },
+        { rows: [row({ product_name: '' })] },
+        { rows: [row({ compartment: '1B' }), gpuRow()] },
+        { rows: [row({ category_path: 'Electronics' }), gpuRow()] },
+        { rows: [row({ unit: 'box', on_hand: '0', reserved: '4' }), gpuRow()] },
+        { rows: [row({ zone: 'Mezzanine', product_code: '2-Jan' }), gpuRow()] },
+        { rows: [row({ category_id: '', category_path: 'ELECTRONICS' }), gpuRow()] },
+        { rows: [row({ status: 'Inactive' })] },
+        {
+          rows: [
+            newRow(),
+            newRow({ storage_id: 'MAI-MET-1B-0002', compartment: '1B' }),
+            ...everything(),
+          ],
+        },
+        { rows: [row({ product_id: '99999999-9999-4999-8999-999999999999' })] },
+        { rows: [newRow({ product_code: 'LAP-0001' })] },
+        { rows: [row({ category_id: RETIRED, category_path: '' })] },
+        { rows: [row({ storage_id: '', compartment: '4Q' })] },
+        { rows: [row(), row({ on_hand: '3' }), gpuRow()] },
+        { rows: [row(), gpuRow({ on_hand: '1' })] },
+        { rows: [row({ category_id: SERVICES, category_path: 'Services' }), gpuRow()] },
+        { rows: [row({ default_returnable: 'maybe', on_hand: '2.5' })] },
+        { rows: [row({ category_id: '11111111-1111-4111-8111-00000000000e' })] },
+        { rows: [row({ category_id: '', category_path: 'A //  C' })] },
+        { rows: [row({ category_id: '', category_path: 'A / B / C / D' })] },
+        { rows: [row({ category_path: 'Electronics / Computers / Portables' }), gpuRow()] },
+        { rows: [row({ product_code: 'GPU-0001' })] },
+        { rows: [row(), gpuRow({ product_code: 'LAP-0001' })] },
+        { rows: [row({ product_id: 'LAP-0001' })] },
+        { rows: [row({ zone: '' })] },
+        {
+          rows: [row({ storage_id: '', room: '', zone: '', compartment: '', on_hand: '4' })],
+        },
+        {
+          rows: [
+            newRow({ product_code: 'HUB-9001' }),
+            newRow({ storage_id: 'MAI-MET-1B-0002', compartment: '1B' }),
+            ...everything(),
+          ],
+        },
+        {
+          rows: [
+            row(),
+            row({
+              product_name: 'Lenovo ThinkPad T15',
+              storage_id: 'MAI-MET-1B-0002',
+              compartment: '1B',
+            }),
+            gpuRow(),
+          ],
+        },
+        { rows: [row({ on_hand: '99999999' })] },
+        { rows: [row({ reserved: 'seven' }), gpuRow()] },
+        { rows: [row({ status: 'Inactive' })], lookups: onLoan() },
+        {
+          rows: [row(), gpuRow({ storage_id: 'MAI-MET-1A-0001', compartment: '1A', on_hand: '0' })],
+        },
+        {
+          rows: [
+            row({ storage_id: 'MAI-MET-1B-0002', compartment: '1B', on_hand: '7' }),
+            gpuRow(),
+          ],
+        },
+        {
+          rows: [
+            row({
+              storage_id: 'XXX-YYY-1A-9999',
+              room: '',
+              zone: '',
+              compartment: '',
+              on_hand: '0',
+            }),
+          ],
+        },
+        { rows: [row({ storage_id: 'MAI-MET-9Z-0003', compartment: '9Z' })] },
+        { rows: [row({ product_name: 'x'.repeat(200) })] },
       ];
 
       const seen = new Set<ImportIssueCode>();
-      for (const rows of files) {
-        const result = validateImport(rows, world());
+      for (const { rows, lookups } of files) {
+        const result = validateImport(rows, lookups ?? world());
         for (const error of result.errors) {
           seen.add(error.code);
           expect({ code: error.code, isWarning: isImportWarning(error.code) }).toEqual({
@@ -973,8 +1057,48 @@ describe('validateImport', () => {
         }
       }
 
-      // Guards the guard: a battery that stopped producing issues would pass vacuously.
-      expect(seen.size).toBeGreaterThanOrEqual(20);
+      /*
+       * Guards the guard, as a ratchet rather than a floor.
+       *
+       * A numeric minimum is the wrong instrument: it passes for ever at whatever coverage the
+       * battery happened to reach, and every member added after it goes unexercised while the
+       * test stays green. Instead the *uncovered* members are listed explicitly, so adding a
+       * code turns this red until somebody either puts it through the battery or writes it down
+       * here with a reason. The list is meant to shrink.
+       */
+      const uncovered = Object.values(ImportIssueCode)
+        .filter((code) => !seen.has(code))
+        .sort();
+      expect(uncovered).toEqual(NOT_EXERCISED_HERE);
     });
   });
 });
+
+/**
+ * Members the severity battery above does not reach, and why.
+ *
+ * Structural codes belong to the parser and are covered in `import-parser.spec.ts`; the rest are
+ * produced outside `validateImport`. Everything else must be exercised, which is what keeps the
+ * severity partition honest as the enum grows.
+ */
+const NOT_EXERCISED_HERE: ImportIssueCode[] = [
+  // Produced by the parser, before any row reaches this module.
+  ImportIssueCode.COLUMNS_ABSENT,
+  ImportIssueCode.COLUMNS_DUPLICATED,
+  ImportIssueCode.COLUMNS_MISSING,
+  ImportIssueCode.COLUMNS_UNKNOWN,
+  ImportIssueCode.FILE_EMPTY,
+  ImportIssueCode.FILE_FOREIGN_DEPLOYMENT,
+  ImportIssueCode.FILE_MALFORMED_CSV,
+  ImportIssueCode.FILE_NOT_AN_EXPORT,
+  ImportIssueCode.FILE_NO_PRODUCTS,
+  ImportIssueCode.FILE_TOO_MANY_ROWS,
+  ImportIssueCode.FILE_WRONG_FORMAT_VERSION,
+  ImportIssueCode.FILE_WRONG_SCHEMA_VERSION,
+  ImportIssueCode.ROW_WRONG_WIDTH,
+  // Produced by ImportValidationService, which needs a database: the near-duplicate pass.
+  // Their side of the partition is asserted in `import-validation.int-spec.ts`.
+  ImportIssueCode.NAME_NEAR_DUPLICATE,
+  ImportIssueCode.CATEGORY_NEAR_DUPLICATE,
+  ImportIssueCode.NEAR_DUPLICATE_CHECK_SKIPPED,
+].sort();

@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { ImportIssue } from '@ims/shared';
+import { ImportIssueCode, type ImportIssue } from '@ims/shared';
 import { CONFIG, type AppConfig } from '../../config';
 import { CategoriesService } from '../categories/categories.service';
 import { LocationsService } from '../locations/locations.service';
@@ -69,7 +69,89 @@ export class ImportValidationService {
     const lookups = await this.loadLookups();
     const result = validateImport(parsed.rows, lookups);
 
+    // Only worth asking when there is something to approve. A file that is going to be refused
+    // does not need advice about what its names look like.
+    if (result.plan) {
+      result.warnings.push(...(await this.findNearDuplicates(result.plan)));
+    }
+
     return { ...result, rowCount: parsed.rows.length };
+  }
+
+  /**
+   * "This looks like something you already have" — §5.3 stage 7, and the one superlinear step in
+   * the whole pipeline (§11.1).
+   *
+   * Warning-only by construction. §2.4: the brief asked that no wrong name be accepted, and a
+   * fuzzy match cannot tell a typo from two genuinely similar products — `Cable HDMI 2m` and
+   * `Cable HDMI 3m` are neither a mistake nor the same thing. Blocking on a guess would make the
+   * importer unusable for any catalogue with a naming convention, so it advises and the human
+   * decides.
+   *
+   * Above `IMPORT_FUZZY_MATCH_MAX_NEW_NAMES` it does not run, and **says so in the report**.
+   * Dropping a check silently on precisely the largest imports is the opposite of what it is for.
+   */
+  private async findNearDuplicates(plan: ImportPlan): Promise<ImportIssue[]> {
+    const newProducts = plan.products.filter((product) => product.productId === null);
+    const newCategories = plan.categoriesToCreate;
+    const total = newProducts.length + newCategories.length;
+
+    if (total === 0) return [];
+
+    if (total > this.config.imports.fuzzyMatchMaxNewNames) {
+      return [
+        {
+          code: ImportIssueCode.NEAR_DUPLICATE_CHECK_SKIPPED,
+          row: 2,
+          column: null,
+          value: null,
+          message: `This file introduces ${total} new names, above the ${this.config.imports.fuzzyMatchMaxNewNames} this check will compare. It has been skipped, so nothing here says whether any of them duplicate something you already have.`,
+        },
+      ];
+    }
+
+    const threshold = this.config.imports.fuzzyMatchThreshold;
+    const [productMatches, categoryMatches] = await Promise.all([
+      this.products.findSimilarNames(
+        newProducts.map((product) => product.name),
+        threshold,
+      ),
+      this.categories.findSimilarNames(
+        // The leaf is the only new name; the ancestors of a new path are created too, and each
+        // arrives here as its own planned category.
+        newCategories.map((category) => category.path[category.path.length - 1]!),
+        threshold,
+      ),
+    ]);
+
+    const issues: ImportIssue[] = [];
+
+    for (const product of newProducts) {
+      const matches = productMatches.filter((match) => match.candidate === product.name);
+      if (matches.length === 0) continue;
+      issues.push({
+        code: ImportIssueCode.NAME_NEAR_DUPLICATE,
+        row: product.lines[0] ?? 2,
+        column: 'product_name',
+        value: product.name,
+        message: `"${product.name}" is new, and the catalogue already has ${describeMatches(matches)}. Check this is not the same thing under a different spelling — importing it creates a second product.`,
+      });
+    }
+
+    for (const category of newCategories) {
+      const leaf = category.path[category.path.length - 1]!;
+      const matches = categoryMatches.filter((match) => match.candidate === leaf);
+      if (matches.length === 0) continue;
+      issues.push({
+        code: ImportIssueCode.CATEGORY_NEAR_DUPLICATE,
+        row: 2,
+        column: 'category_path',
+        value: category.path.join(' / '),
+        message: `The category "${leaf}" is new, and there is already ${describeMatches(matches)}. Check this is not the same category under a different spelling.`,
+      });
+    }
+
+    return issues;
   }
 
   /**
@@ -110,4 +192,12 @@ export class ImportValidationService {
       })),
     });
   }
+}
+
+/** At most two, because a list of nine near-matches is not advice, it is noise. */
+function describeMatches(matches: { name: string }[]): string {
+  const names = matches.slice(0, 2).map((match) => `"${match.name}"`);
+  const rest = matches.length - names.length;
+  const shown = names.join(' and ');
+  return rest > 0 ? `${shown} and ${rest} other similar name${rest === 1 ? '' : 's'}` : shown;
 }

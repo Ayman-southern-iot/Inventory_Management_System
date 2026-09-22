@@ -119,6 +119,15 @@ export const ImportIssueCode = {
   PRODUCTS_RETIRED_BY_OMISSION: 'PRODUCTS_RETIRED_BY_OMISSION',
   RETIRED_WITH_UNITS_ON_LOAN: 'RETIRED_WITH_UNITS_ON_LOAN',
   UNIT_CHANGED_UNDER_STOCK: 'UNIT_CHANGED_UNDER_STOCK',
+  /** A new product's name is close to one already in the catalogue (§5.3 stage 7). */
+  NAME_NEAR_DUPLICATE: 'NAME_NEAR_DUPLICATE',
+  CATEGORY_NEAR_DUPLICATE: 'CATEGORY_NEAR_DUPLICATE',
+  /**
+   * The near-duplicate check did not run, because the file introduces more new names than
+   * `IMPORT_FUZZY_MATCH_MAX_NEW_NAMES`. Said out loud rather than skipped quietly: losing the
+   * check on the largest imports is the opposite of what it is for.
+   */
+  NEAR_DUPLICATE_CHECK_SKIPPED: 'NEAR_DUPLICATE_CHECK_SKIPPED',
 } as const;
 export type ImportIssueCode = (typeof ImportIssueCode)[keyof typeof ImportIssueCode];
 
@@ -146,6 +155,9 @@ export const IMPORT_WARNING_CODES: readonly ImportIssueCode[] = [
   ImportIssueCode.PRODUCTS_RETIRED_BY_OMISSION,
   ImportIssueCode.RETIRED_WITH_UNITS_ON_LOAN,
   ImportIssueCode.UNIT_CHANGED_UNDER_STOCK,
+  ImportIssueCode.NAME_NEAR_DUPLICATE,
+  ImportIssueCode.CATEGORY_NEAR_DUPLICATE,
+  ImportIssueCode.NEAR_DUPLICATE_CHECK_SKIPPED,
 ];
 
 export function isImportWarning(code: ImportIssueCode): boolean {
