@@ -108,9 +108,15 @@ export class CategoriesRepository {
    * Existing categories whose names are close to any of `candidates`, for the import's
    * near-duplicate warning (`importing_data.md` §5.3 stage 7).
    *
-   * There is no trigram index on `categories.name` and none is wanted: the table is a dozen rows
-   * against several thousand products, so a sequential scan here is cheaper than the index would
-   * be to maintain. The shape of the query matches the products one so the two read alike.
+   * **This one is a sequential scan on purpose, and that decision has an expiry.** There is no
+   * trigram index on `categories.name` because the table is a dozen rows against several
+   * thousand products — the index would cost more to maintain than the scan costs to run. The
+   * products query next door does the opposite for the same reason pointed the other way.
+   *
+   * The condition, so it can be rechecked rather than assumed: this holds while `categories`
+   * stays in the low thousands. Past that, add `gin (name gin_trgm_ops)` and switch the join to
+   * `%` as `ProductsRepository.findSimilarNames` does. Nothing here will notice on its own — an
+   * import would just get quietly slower, which is the least visible kind of regression.
    */
   async findSimilarNames(
     candidates: string[],

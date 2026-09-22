@@ -883,6 +883,11 @@ the preview and apply are both built from). Next: E.
 - A red test before every green one, per `rules/70`.
 - A test for **every** row in §12 — including C46, idempotence (I11).
 - **Benchmarks published** for 500 / 5,000 / 20,000 rows, and `IMPORT_MAX_ROWS` set from them.
+- **`IMPORT_FUZZY_MATCH_THRESHOLD` set from one pass over real product names.** It ships at 0.45,
+  which separated the fixtures sensibly and has never met a real catalogue. Too high and the
+  check says nothing on the day somebody re-adds a product that already exists; too low and it
+  cries duplicate on every `Cable HDMI 2m` beside its 3m sibling. It is config, so revising it is
+  cheap — but a number nobody has ever checked should not be presented as a working safeguard.
 - End-to-end on the demo stack: export → edit → import → verify; one deliberately broken file; one
   crash during apply *and* one killed-task-live-process (C41 and C42 are different paths); one
   restore from a snapshot; one restore after renaming a category and a room (C12, C35).

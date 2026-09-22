@@ -128,10 +128,18 @@ const rawSchema = z.object({
   /**
    * How alike two names have to be before the import says so. 1 is identical.
    *
-   * The floor is 0.3 and not lower on purpose: the query reaches the trigram index through
-   * pg_trgm's `%` operator, which prunes at the `pg_trgm.similarity_threshold` GUC — 0.3 by
-   * default — before this value is applied. Allowing 0.1 here would look like a setting and do
-   * nothing, which is worse than not having the knob.
+   * **Two thresholds are stacked on one query and only the tighter one is visible.** The query
+   * reaches the trigram index through pg_trgm's `%` operator, which prunes at the
+   * `pg_trgm.similarity_threshold` GUC — 0.3 unless a DBA changed it — and this value is applied
+   * to what survives. So the *effective* floor is bounded by the GUC, not by 0: setting this to
+   * 0.2 expecting looser matching changes nothing at all, which is why the schema refuses it
+   * rather than accepting a number that would silently do nothing. To match more loosely than
+   * 0.3, the GUC has to move first (`SET pg_trgm.similarity_threshold`), and that is a database
+   * change, not a deploy one.
+   *
+   * 0.45 is **a guess, not a measurement** — it separated the fixtures sensibly and has never
+   * been run over real product names. `importing_data.md` §15 tracks that as work before this
+   * feature is called done.
    */
   IMPORT_FUZZY_MATCH_THRESHOLD: z.coerce.number().min(0.3).max(1).default(0.45),
   /** Replaces the previously hardcoded 10/60s login burst limit on `POST /auth/login`. */
