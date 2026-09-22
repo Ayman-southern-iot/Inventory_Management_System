@@ -1,11 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { ImportIssueCode, type ImportIssue } from '@ims/shared';
+import { ImportIssueCode, type ImportDiff, type ImportIssue } from '@ims/shared';
 import { CONFIG, type AppConfig } from '../../config';
 import { CategoriesService } from '../categories/categories.service';
 import { LocationsService } from '../locations/locations.service';
 import { ProductsService } from '../products/products.service';
 import { SettingsService } from '../settings/settings.service';
 import { StockService } from '../stock/stock.service';
+import { buildImportDiff } from './import-diff';
 import { buildImportLookups, type ImportLookups } from './import-lookups';
 import { parseImportCsv } from './import-parser';
 import { validateImport, type ImportPlan } from './import-validator';
@@ -25,6 +26,8 @@ import { validateImport, type ImportPlan } from './import-validator';
 export interface ValidationOutcome {
   /** Null whenever `errors` is non-empty. */
   plan: ImportPlan | null;
+  /** What the confirm screen shows. Null for the same reason `plan` is. */
+  diff: ImportDiff | null;
   errors: ImportIssue[];
   warnings: ImportIssue[];
   /** Data rows read, for the job's progress figures. */
@@ -63,7 +66,13 @@ export class ImportValidationService {
     });
 
     if (parsed.issues.length > 0) {
-      return { plan: null, errors: parsed.issues, warnings: [], rowCount: parsed.rows.length };
+      return {
+        plan: null,
+        diff: null,
+        errors: parsed.issues,
+        warnings: [],
+        rowCount: parsed.rows.length,
+      };
     }
 
     const lookups = await this.loadLookups();
@@ -75,7 +84,13 @@ export class ImportValidationService {
       result.warnings.push(...(await this.findNearDuplicates(result.plan)));
     }
 
-    return { ...result, rowCount: parsed.rows.length };
+    return {
+      ...result,
+      // Built last, so the warnings it carries are all of them — including the near-duplicate
+      // pass, which runs after the validator has finished.
+      diff: result.plan ? buildImportDiff(result.plan, lookups, result.warnings) : null,
+      rowCount: parsed.rows.length,
+    };
   }
 
   /**

@@ -191,8 +191,18 @@ export type ImportIssue = z.infer<typeof importIssueSchema>;
 /** What an import is about to do, shown before anything is written. */
 export const importDiffSchema = z.object({
   productsCreated: z.number().int().nonnegative(),
+  /**
+   * Products where something actually differs from what is stored.
+   *
+   * Not "products the file mentions". Re-importing an unedited export must read `0 updated`, or
+   * the number means nothing and the person approving learns to ignore it (I11, C46).
+   */
   productsUpdated: z.number().int().nonnegative(),
+  /** Both kinds: rows marked `Inactive`, and products the file never mentions (§4.5, I1). */
   productsDeactivated: z.number().int().nonnegative(),
+  /** Subsets of `productsUpdated`, called out because §5.4 shows them beside it. */
+  productsRenamed: z.number().int().nonnegative(),
+  productsRecategorised: z.number().int().nonnegative(),
   categoriesCreated: z.array(z.string()),
   shelvesChanged: z.number().int().nonnegative(),
   unitsAdded: z.number().int().nonnegative(),

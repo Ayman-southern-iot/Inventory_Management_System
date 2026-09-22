@@ -40,6 +40,9 @@ export interface LookupProduct {
   /** False only when the product's category is untrackable; uncategorised is trackable (OQ-F). */
   isTrackable: boolean;
   unit: string;
+  /** Carried so the diff can tell a description-only edit from no edit at all. */
+  description: string | null;
+  defaultReturnable: boolean;
   isActive: boolean;
   onHand: number;
   /** Out on loan. Cannot be imported (§2.1); read to warn before a deactivation. */
@@ -126,6 +129,8 @@ export function buildImportLookups(raw: RawLookups): ImportLookups {
     categoryId: product.categoryId,
     isTrackable: product.isTrackable,
     unit: product.unit,
+    description: product.description,
+    defaultReturnable: product.defaultReturnable,
     isActive: product.isActive,
     onHand: product.totalOnHand,
     inUse: product.totalInUse,

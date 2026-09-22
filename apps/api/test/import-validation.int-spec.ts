@@ -50,6 +50,19 @@ describe('import validation', () => {
 
   const file = (lines: string[]): string => `${lines.join('\r\n')}\r\n`;
 
+  /** One row for a product that does not exist yet, at no location and no quantity. */
+  function newProductRow(name: string, categoryPath = ''): string {
+    return IMPORT_COLUMNS.map((column) => {
+      if (column === 'product_name') return name;
+      if (column === 'unit') return 'pcs';
+      if (column === 'default_returnable') return 'yes';
+      if (column === 'status') return 'Active';
+      if (column === 'category_path') return categoryPath;
+      if (column === 'on_hand') return '0';
+      return '';
+    }).join(',');
+  }
+
   beforeAll(async () => {
     ctx = await createTestApp();
     exporter = ctx.app.get(ProductExportService);
@@ -269,20 +282,72 @@ describe('import validation', () => {
     });
   });
 
-  describe('near-duplicate names', () => {
-    /** One row for a product that does not exist yet, at no location and no quantity. */
-    function newProductRow(name: string, categoryPath = ''): string {
-      return IMPORT_COLUMNS.map((column) => {
-        if (column === 'product_name') return name;
-        if (column === 'unit') return 'pcs';
-        if (column === 'default_returnable') return 'yes';
-        if (column === 'status') return 'Active';
-        if (column === 'category_path') return categoryPath;
-        if (column === 'on_hand') return '0';
-        return '';
-      }).join(',');
-    }
+  describe('the diff the confirm screen shows', () => {
+    /**
+     * The same property as the unit test, but against a file this system actually wrote. If the
+     * exporter and the diff ever disagree about what "no change" looks like, every import after
+     * that reads as a large edit and the confirm step stops meaning anything.
+     */
+    it('is all zeroes for an unedited export', async () => {
+      const outcome = await validator.validate(file(await exported()));
 
+      expect(outcome.diff).toEqual({
+        productsCreated: 0,
+        productsUpdated: 0,
+        productsDeactivated: 0,
+        productsRenamed: 0,
+        productsRecategorised: 0,
+        categoriesCreated: [],
+        shelvesChanged: 0,
+        unitsAdded: 0,
+        unitsRemoved: 0,
+        warnings: [],
+      });
+    });
+
+    it('counts one changed shelf and the units on it', async () => {
+      const outcome = await validator.validate(
+        file(edit(await exported(), fixture.productId, 'on_hand', '4')),
+      );
+
+      expect(outcome.diff).toMatchObject({
+        productsUpdated: 1,
+        productsCreated: 0,
+        shelvesChanged: 1,
+        unitsAdded: 0,
+        unitsRemoved: 6,
+      });
+    });
+
+    it('carries every warning the run produced, the late ones included', async () => {
+      await createProduct(ctx.db, {
+        categoryId: fixture.categoryId,
+        name: 'Lenovo ThinkPad T14 Gen 3',
+      });
+
+      const outcome = await validator.validate(
+        file([...(await exported()), newProductRow('Lenovo ThinkPad T14 Gen 4')]),
+      );
+
+      // The near-duplicate pass runs after the validator, so this is also the check that the
+      // diff is built last rather than from a snapshot of the warnings taken too early.
+      expect(outcome.diff!.warnings.map((i) => i.code)).toContain(
+        ImportIssueCode.NAME_NEAR_DUPLICATE,
+      );
+      expect(outcome.diff!.warnings).toEqual(outcome.warnings);
+    });
+
+    it('has no diff to show when the file is refused', async () => {
+      const outcome = await validator.validate(
+        file(edit(await exported(), fixture.productId, 'on_hand', '-1')),
+      );
+
+      expect(outcome.errors).not.toEqual([]);
+      expect(outcome.diff).toBeNull();
+    });
+  });
+
+  describe('near-duplicate names', () => {
     it('warns that a new product looks like one already in the catalogue', async () => {
       await createProduct(ctx.db, {
         categoryId: fixture.categoryId,
