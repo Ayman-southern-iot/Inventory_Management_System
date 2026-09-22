@@ -1187,3 +1187,21 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
 - 2026-09-22 — `categories.updatedAt` is now on the contract. The column existed and is kept by
   the `set_updated_at` trigger; the panel's activity section needed it, because "added" alone
   cannot tell a category nobody has touched since 2024 from one edited this morning.
+- 2026-09-22 — CSV import, part D. Four judgement calls the plan did not settle, recorded because
+  each one decides what the importer *does* rather than how it is written.
+  **(1) A blank `product_id` whose `product_code` already belongs to an existing product is an
+  error**, not a silent update of that product. Creating would hit `products_code_key` halfway
+  through the apply transaction; updating would let one mistyped code overwrite an unrelated
+  product's name, unit and category with nobody ever seeing it. The message names the product the
+  code belongs to and says to paste its `product_id` if an update was meant.
+  **(2) An id that resolves to nothing is an error, never a fall back to the text.** §4.1's table
+  covers "id blank" and "text does not resolve" but not "id present, unresolvable" — and an id
+  this system never issued means the file is stale or foreign, where quietly matching by name is
+  how a restore files stock into the wrong shelf.
+  **(3) The lookup load is uncapped.** `IMPORT_MAX_ROWS` governs the size of the *file*; the
+  deactivation sweep reads every product, so a list truncated at the same ceiling would retire the
+  products it had simply never been shown.
+  **(4) Only `reserved` and `quarantined` raise the "you edited a read-only column" warning.**
+  `available`, `in_use_total` and `owned_total` are all derived from `on_hand`, which the person
+  was invited to edit, so a mismatch there is the expected consequence of a legitimate edit —
+  warning about it would fire on every changed row and teach people to ignore the warnings.

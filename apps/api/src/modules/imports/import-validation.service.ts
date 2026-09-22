@@ -1,0 +1,113 @@
+import { Inject, Injectable } from '@nestjs/common';
+import type { ImportIssue } from '@ims/shared';
+import { CONFIG, type AppConfig } from '../../config';
+import { CategoriesService } from '../categories/categories.service';
+import { LocationsService } from '../locations/locations.service';
+import { ProductsService } from '../products/products.service';
+import { SettingsService } from '../settings/settings.service';
+import { StockService } from '../stock/stock.service';
+import { buildImportLookups, type ImportLookups } from './import-lookups';
+import { parseImportCsv } from './import-parser';
+import { validateImport, type ImportPlan } from './import-validator';
+
+/**
+ * Stages 1–3 of the pipeline against the real catalogue: read the file, load what the rules need,
+ * decide what it would do (`importing_data.md` §5.2–5.3).
+ *
+ * Read-only from end to end. Nothing here writes, and nothing here decides to apply — the plan it
+ * returns is what the preview is built from (part E) and what apply executes (part G), and the
+ * human gate sits between the two.
+ *
+ * The four bulk loads (§11.1) are the whole performance story. Five lookups per row across five
+ * thousand rows is twenty-five thousand round trips before a single write; four queries and a
+ * handful of maps is the same answer in one.
+ */
+export interface ValidationOutcome {
+  /** Null whenever `errors` is non-empty. */
+  plan: ImportPlan | null;
+  errors: ImportIssue[];
+  warnings: ImportIssue[];
+  /** Data rows read, for the job's progress figures. */
+  rowCount: number;
+}
+
+export interface ValidateOptions {
+  /**
+   * A restore is exempt from the origin check and from the row cap (§10, C40).
+   *
+   * Both exist to protect the catalogue from a foreign or oversized *forward* import. Applied to
+   * a snapshot they would do the opposite: a backup taken from a catalogue larger than the cap,
+   * or restored after the database moved to a new machine, would be a backup that cannot be
+   * restored — discovered at the worst possible moment.
+   */
+  isRestore?: boolean;
+}
+
+@Injectable()
+export class ImportValidationService {
+  constructor(
+    private readonly products: ProductsService,
+    private readonly categories: CategoriesService,
+    private readonly locations: LocationsService,
+    private readonly stock: StockService,
+    private readonly settings: SettingsService,
+    @Inject(CONFIG) private readonly config: AppConfig,
+  ) {}
+
+  async validate(text: string, options: ValidateOptions = {}): Promise<ValidationOutcome> {
+    const isRestore = options.isRestore === true;
+
+    const parsed = parseImportCsv(text, {
+      maxRows: isRestore ? Number.POSITIVE_INFINITY : this.config.imports.maxRows,
+      expectedDeploymentId: isRestore ? null : await this.settings.deploymentId(),
+    });
+
+    if (parsed.issues.length > 0) {
+      return { plan: null, errors: parsed.issues, warnings: [], rowCount: parsed.rows.length };
+    }
+
+    const lookups = await this.loadLookups();
+    const result = validateImport(parsed.rows, lookups);
+
+    return { ...result, rowCount: parsed.rows.length };
+  }
+
+  /**
+   * The four queries of §11.1, run together because none depends on another.
+   *
+   * Inactive rows are included at every level on purpose: validation has to be able to say "that
+   * category is retired" rather than "that category does not exist", and the two call for
+   * completely different fixes by the person holding the spreadsheet.
+   */
+  async loadLookups(): Promise<ImportLookups> {
+    const [categories, rooms, placements] = await Promise.all([
+      this.categories.tree(),
+      this.locations.listRooms(true),
+      this.stock.allPlacements(),
+    ]);
+
+    /*
+     * Uncapped, deliberately. `IMPORT_MAX_ROWS` governs the size of the *file*, not the size of
+     * the catalogue it is applied to — and the deactivation sweep reads every product, so a
+     * truncated list would retire the products it had simply never been shown. The paging loop
+     * is complete by construction; the ceiling is the only part being waived.
+     */
+    const products = await this.products.listAll({
+      includeInactive: true,
+      max: Number.POSITIVE_INFINITY,
+    });
+
+    return buildImportLookups({
+      products,
+      categories,
+      rooms,
+      placements: placements.map((placement) => ({
+        productId: placement.product_id,
+        compartmentId: placement.compartment_id,
+        quantity: placement.quantity,
+        reservedQty: placement.reserved_qty,
+        quarantinedQty: placement.quarantined_qty,
+      })),
+    });
+  }
+}

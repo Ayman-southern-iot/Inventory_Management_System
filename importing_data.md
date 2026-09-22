@@ -794,6 +794,9 @@ number is fixed.
 | K | Restore (§10) | Thin: an import of an existing file, exempt from the caps |
 | L | The Claude skill | Independent of A–K; writable any time after B |
 
+**Landed:** A `4672b7e` · B `1687b78` · C `7f3ed96` · D (validator, bulk-loaded lookups, the plan
+the preview and apply are both built from). Next: E.
+
 ### Done means
 
 - Gate at baseline: typecheck 0, lint 20, integration green.

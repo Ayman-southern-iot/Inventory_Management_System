@@ -1,0 +1,302 @@
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { randomUUID } from 'node:crypto';
+import { Role } from '@ims/shared';
+import { createTestApp, httpClient, type TestApp } from './app';
+import { createUserAndLogin, resetData } from './factories';
+import {
+  createCategory,
+  createProduct,
+  createStockFixture,
+  type StockFixture,
+} from './stock-factories';
+import { StockService } from '../src/modules/stock/stock.service';
+import { ImportValidationService } from '../src/modules/imports/import-validation.service';
+import { ProductExportService } from '../src/modules/imports/product-export.service';
+import { IMPORT_COLUMNS, stripBom } from '../src/modules/imports/import-format';
+import { lookupKey } from '../src/modules/imports/import-lookups';
+
+/**
+ * Validation against the real catalogue (`importing_data.md` part D).
+ *
+ * The unit tests in `import-validator.spec.ts` cover the rules against a fixture world. What can
+ * only be proved here is that the rules and the **exporter** agree: the file this system writes
+ * has to validate clean and plan nothing, or the round trip the whole feature rests on is a lie.
+ * Everything below is that test, or a single edit away from it.
+ */
+describe('import validation', () => {
+  let ctx: TestApp;
+  let fixture: StockFixture;
+  let actorId: string;
+  let exporter: ProductExportService;
+  let validator: ImportValidationService;
+
+  /** The exported file, split for editing. Line 1 is the fingerprint, line 2 the headings. */
+  async function exported(): Promise<string[]> {
+    const csv = await exporter.toCsv();
+    return stripBom(csv)
+      .split('\r\n')
+      .filter((line) => line.length > 0);
+  }
+
+  function edit(lines: string[], productId: string, column: string, value: string): string[] {
+    const index = IMPORT_COLUMNS.indexOf(column as never);
+    return lines.map((line, position) => {
+      if (position < 2 || !line.includes(productId)) return line;
+      const cells = line.split(',');
+      cells[index] = value;
+      return cells.join(',');
+    });
+  }
+
+  const file = (lines: string[]): string => `${lines.join('\r\n')}\r\n`;
+
+  beforeAll(async () => {
+    ctx = await createTestApp();
+    exporter = ctx.app.get(ProductExportService);
+    validator = ctx.app.get(ImportValidationService);
+  });
+
+  afterAll(async () => {
+    await ctx.close();
+  });
+
+  beforeEach(async () => {
+    await resetData(ctx.db);
+    fixture = await createStockFixture(ctx.db);
+    const session = await createUserAndLogin(ctx.db, httpClient(ctx.app), {
+      roles: [Role.INVENTORY_MANAGER],
+    });
+    actorId = session.user.id;
+
+    await ctx.app
+      .get(StockService)
+      .receive(
+        { productId: fixture.productId, compartmentId: fixture.compartmentA, quantity: 10 },
+        { performedBy: actorId, note: 'validation fixture' },
+      );
+  });
+
+  describe('the round trip', () => {
+    /**
+     * The one that matters. Export, import the same bytes back, and the answer has to be "this
+     * changes nothing" — no errors, no warnings, no creates, no deactivations, every shelf
+     * already where the file says it is (C46).
+     */
+    it('plans nothing at all for an unedited export', async () => {
+      const outcome = await validator.validate(file(await exported()));
+
+      expect(outcome.errors).toEqual([]);
+      expect(outcome.warnings).toEqual([]);
+      expect(outcome.plan).not.toBeNull();
+      expect(outcome.plan!.categoriesToCreate).toEqual([]);
+      expect(outcome.plan!.deactivations).toEqual([]);
+
+      for (const product of outcome.plan!.products) {
+        expect(product.productId).not.toBeNull();
+        for (const shelf of product.shelves) {
+          expect(shelf.targetOnHand).toBe(shelf.currentOnHand);
+        }
+      }
+    });
+
+    it('survives a product whose name would break a naive CSV reader', async () => {
+      await createProduct(ctx.db, {
+        categoryId: fixture.categoryId,
+        name: 'Cable, 2m "premium"',
+      });
+
+      const outcome = await validator.validate(file(await exported()));
+      expect(outcome.errors).toEqual([]);
+      expect(outcome.plan!.products.some((p) => p.name === 'Cable, 2m "premium"')).toBe(true);
+    });
+
+    it('reads back a file that still carries the byte-order mark Excel wants', async () => {
+      const outcome = await validator.validate(await exporter.toCsv());
+      expect(outcome.errors).toEqual([]);
+    });
+  });
+
+  describe('an edited export', () => {
+    it('plans the quantity change and nothing else', async () => {
+      const outcome = await validator.validate(
+        file(edit(await exported(), fixture.productId, 'on_hand', '4')),
+      );
+
+      expect(outcome.errors).toEqual([]);
+      const planned = outcome.plan!.products.find((p) => p.productId === fixture.productId)!;
+      expect(planned.shelves).toEqual([
+        expect.objectContaining({
+          compartmentId: fixture.compartmentA,
+          currentOnHand: 10,
+          targetOnHand: 4,
+        }),
+      ]);
+    });
+
+    it('plans a new product and the categories its path asks for', async () => {
+      const lines = await exported();
+      const blank = IMPORT_COLUMNS.map((column) => {
+        switch (column) {
+          case 'product_name':
+            return 'Hokuyo UST-10LX';
+          case 'unit':
+            return 'pcs';
+          case 'default_returnable':
+            return 'yes';
+          case 'status':
+            return 'Active';
+          case 'category_path':
+            return 'Sensors / Lidar';
+          case 'on_hand':
+            // No location on this row, so no stock either — I3 allows exactly this shape, and
+            // the Claude skill relies on it: it may invent a category, never a shelf.
+            return '0';
+          default:
+            return '';
+        }
+      }).join(',');
+
+      const outcome = await validator.validate(file([...lines, blank]));
+
+      expect(outcome.errors).toEqual([]);
+      expect(outcome.plan!.categoriesToCreate.map((c) => c.path.join(' / '))).toEqual([
+        'Sensors',
+        'Sensors / Lidar',
+      ]);
+      const created = outcome.plan!.products.find((p) => p.name === 'Hokuyo UST-10LX')!;
+      expect(created.productId).toBeNull();
+      expect(created.newCategoryIndex).toBe(1);
+      // No shelf: the row has a quantity but no location, so nothing was resolved for it.
+      expect(created.shelves).toEqual([]);
+    });
+
+    it('retires a product whose rows are deleted from the file', async () => {
+      const doomed = await createProduct(ctx.db, {
+        categoryId: fixture.categoryId,
+        name: `Doomed ${randomUUID().slice(0, 8)}`,
+      });
+
+      const lines = (await exported()).filter((line) => !line.includes(doomed));
+      const outcome = await validator.validate(file(lines));
+
+      expect(outcome.errors).toEqual([]);
+      expect(outcome.plan!.deactivations.map((d) => d.productId)).toEqual([doomed]);
+    });
+
+    it('refuses a count below what the shelf has reserved', async () => {
+      // Reserve two of the ten, then try to count the shelf down to one.
+      await ctx.db
+        .updateTable('stock_placements')
+        .set({ reserved_qty: 2 })
+        .where('product_id', '=', fixture.productId)
+        .where('compartment_id', '=', fixture.compartmentA)
+        .execute();
+
+      const outcome = await validator.validate(
+        file(edit(await exported(), fixture.productId, 'on_hand', '1')),
+      );
+
+      expect(outcome.plan).toBeNull();
+      expect(outcome.errors[0]!.message).toMatch(/reserved or quarantined/);
+    });
+  });
+
+  describe('what the lookups know that the file cannot', () => {
+    it('refuses to file a product into a retired category', async () => {
+      const retired = await createCategory(ctx.db, { name: `Retired ${randomUUID().slice(0, 8)}` });
+      await ctx.db
+        .updateTable('categories')
+        .set({ is_active: false })
+        .where('id', '=', retired)
+        .execute();
+
+      // The path goes with it: an id and a path naming two different categories is its own
+      // error (C11), and it would fire before this one.
+      const lines = edit(await exported(), fixture.productId, 'category_id', retired);
+      const outcome = await validator.validate(
+        file(edit(lines, fixture.productId, 'category_path', '')),
+      );
+
+      expect(outcome.errors.some((i) => /is retired/.test(i.message))).toBe(true);
+    });
+
+    it('refuses a retired shelf', async () => {
+      await ctx.db
+        .updateTable('storage_compartments')
+        .set({ is_active: false })
+        .where('id', '=', fixture.compartmentB)
+        .execute();
+
+      const shelf = await ctx.db
+        .selectFrom('storage_compartments')
+        .select(['storage_id', 'code'])
+        .where('id', '=', fixture.compartmentB)
+        .executeTakeFirstOrThrow();
+
+      const lines = edit(
+        await exported(),
+        fixture.productId,
+        'storage_id',
+        `"${shelf.storage_id}"`,
+      );
+      const outcome = await validator.validate(
+        file(edit(lines, fixture.productId, 'compartment', shelf.code)),
+      );
+
+      expect(outcome.errors[0]!.message).toMatch(/is retired \(its compartment is not active\)/);
+    });
+  });
+
+  describe('the fingerprint', () => {
+    it('refuses a file exported from a different installation', async () => {
+      const lines = await exported();
+      lines[0] = lines[0]!.replace(/origin \S+/, `origin ${randomUUID()}`);
+
+      const outcome = await validator.validate(file(lines));
+      expect(outcome.errors[0]!.message).toMatch(/different installation/);
+    });
+
+    /** A snapshot is this deployment's own file by construction, even after a machine move. */
+    it('accepts a foreign origin when restoring', async () => {
+      const lines = await exported();
+      lines[0] = lines[0]!.replace(/origin \S+/, `origin ${randomUUID()}`);
+
+      const outcome = await validator.validate(file(lines), { isRestore: true });
+      expect(outcome.errors).toEqual([]);
+    });
+  });
+
+  describe('the bulk-loaded maps', () => {
+    /** Four queries whatever the file's size — the whole reason validation is not N+1 (§11.1). */
+    it('carries every product, category, shelf and placement, retired ones included', async () => {
+      const hidden = await createProduct(ctx.db, {
+        categoryId: fixture.categoryId,
+        name: `Hidden ${randomUUID().slice(0, 8)}`,
+        isActive: false,
+      });
+
+      const lookups = await validator.loadLookups();
+
+      expect(lookups.productById.has(hidden)).toBe(true);
+      expect(lookups.productById.has(fixture.productId)).toBe(true);
+      expect(lookups.categoryById.has(fixture.categoryId)).toBe(true);
+      expect(lookups.compartmentById.has(fixture.compartmentA)).toBe(true);
+      expect(lookups.compartmentById.has(fixture.compartmentB)).toBe(true);
+      expect(lookups.placementsByProduct.get(fixture.productId)).toHaveLength(1);
+    });
+
+    /**
+     * Keyed exactly as `products_code_key` is, on `lower(btrim(...))`. A map keyed any other way
+     * would disagree with the unique index — matching rows Postgres thinks are distinct, or
+     * creating a duplicate the index then rejects halfway through the apply transaction.
+     */
+    it('keys a product code the way the database does', async () => {
+      const lookups = await validator.loadLookups();
+      const code = lookups.productById.get(fixture.productId)!.productCode;
+
+      expect(lookups.productByCode.get(lookupKey(` ${code.toUpperCase()} `))?.id).toBe(
+        fixture.productId,
+      );
+    });
+  });
+});
