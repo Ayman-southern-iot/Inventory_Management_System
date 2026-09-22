@@ -212,3 +212,12 @@ and items sit beneath a branch, then deactivates **only the branch itself** — 
 own status. That is the conservative reading, not a decision: the alternative is cascading, which
 is what most people expect from a tree and which cannot be undone in one click. Until it is
 decided, the warning says plainly which of the two the button does.
+
+- **OQ-IMP-1 — `IMPORT_MAX_ROWS` contradicts I1 (the file is the whole catalogue).** Once the
+  catalogue passes the cap, the only supported bulk-edit workflow (export everything → edit →
+  reimport everything) is permanently refused, and the export refuses first: it passes the same
+  ceiling to `products.listAll`, while a file carries one row *per product per shelf*. The
+  restore exemption and part D's uncapped lookup load are two symptoms of the same cause. Apply
+  cost is driven by *changed shelves*, which part D now computes before the human gate, so the
+  gate can move there. Full statement and the proposed resolution: `importing_data.md` §11.6.
+  **Decision needed before part G.** Touches a config default (STOP) and §5.5/§11.3.

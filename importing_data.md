@@ -187,6 +187,7 @@ Resolution is id-first, with the text as both fallback and cross-check:
 | Id blank, text resolves | Use the text. *This is how you re-point a reference* |
 | Id blank, text does not resolve | Create it where the column allows creation (I8), else error |
 | Id resolves, text does not | Use the id, **warn**: renamed since the export |
+| Id does not resolve | **Error.** Never fall back to the text — see the carve-out below |
 | Both blank | The reference is empty, where that is allowed |
 
 The second-to-last row is why **restoring a snapshot survives a rename**. Without it, a snapshot
@@ -196,6 +197,29 @@ products into it while the renamed one sat empty (§16.7).
 This rule applies to `category_id`/`category_path` and to `storage_id`/`room`+`zone`+`compartment`
 today, **and to any mutable-text reference added to this file later**. A new such column inherits
 it rather than needing its own fix.
+
+#### The carve-out: blast radius, not column type
+
+The table above is safe for a *reference* — a column saying which existing thing this row points
+at. Guess wrong about a shelf or a category and the row lands in the wrong place: visible in the
+diff, visible on screen afterwards, one edit to correct. The cost of a wrong guess is bounded by
+the row that made it.
+
+**`product_id` and `product_code` are not references. They are the row's own identity, and a wrong
+guess there corrupts a *different, unrelated record*.** Fall back from a blank `product_id` to a
+`product_code` that happens to match, and a single mistyped code silently overwrites another
+product's name, unit, category and shelves — a product nobody was editing, which appears nowhere
+in the diff as a thing being changed, and which nobody will look at. So:
+
+- **Blank `product_id`, `product_code` matches an existing product → error**, naming the product
+  the code belongs to and saying to paste its `product_id` if an update was meant.
+- **`product_id` present and unresolvable → error** (C29), never "treat as new".
+- **Two blank-id rows sharing only a name → error** (§4.3, C4), never a name-match merge.
+
+The governing question for any column added later is therefore **not** "is this an id or a text
+path" but **"if the importer guesses wrong here, does the damage stay inside this row?"** If it
+can reach a record the file was not otherwise touching, the answer is an error and a message, not
+a fallback. Recorded in `DECISIONS.md` 2026-09-22.
 
 ### 4.2 Columns
 
@@ -669,6 +693,53 @@ is not steady-state traffic and autovacuum is tuned for steady state. **Watch ta
 autovacuum behaviour on both tables after the first few large imports**, and consider an explicit
 `VACUUM ANALYZE` as the last act of a large import rather than discovering the bloat a month later
 as a slow product list.
+
+### 11.6 The row cap contradicts I1 — named, unresolved, must be decided before part G
+
+**This is a design constraint, not a tuning knob, and it is not a rare edge case.** It is the
+general form of the snapshot-restore collision found in §16; exempting restore fixed one symptom
+and left the cause standing.
+
+I1 says the file is the **whole** desired state, and the only supported way to bulk-edit is
+export-everything → hand to Claude → reimport-everything. `IMPORT_MAX_ROWS` caps that same file at
+5,000 rows. The two cannot both hold: once the catalogue crosses the cap, every honest use of the
+documented workflow is refused by the thing meant to be gating abuse of it. Growth alone gets you
+there — no unusual file, no mistake.
+
+Worse, it bites at the *export* first and sooner than the number suggests:
+
+- `ProductExportService` passes `IMPORT_MAX_ROWS` as the ceiling on `products.listAll`, so the
+  export throws once the **product** count passes 5,000 — and a file has one row *per product per
+  shelf*, so a catalogue of 3,000 products across two shelves each is already a 6,000-row file
+  that cannot be re-imported even though the export succeeded.
+- Part D's lookup load is already exempt (OPEN #3): it must read every product or the deactivation
+  sweep retires the ones it was never shown. That exemption is correct and is *evidence* — the cap
+  is already being routed around wherever it meets the whole catalogue.
+
+**The cap is measuring the wrong thing.** Three separate concerns are collapsed into one number:
+
+| Concern | Right instrument | Status |
+|---|---|---|
+| Bounding memory while parsing | `IMPORT_MAX_FILE_BYTES` | Exists, already separate |
+| Bounding what one apply transaction touches | **changed shelves**, not rows | Missing |
+| Refusing an obviously wrong file | a sanity ceiling well above the catalogue | What the row cap should be |
+
+Apply cost is driven by **changed** shelves, not rows read (§11.2). A 20,000-row reimport that
+changes twelve shelves costs what a twelve-row one costs; C46 is precisely that file. Part D now
+computes the changed-shelf count exactly, before anything is written and before the human gate —
+so the meaningful limit can be checked where the number actually exists, with a message a person
+can act on ("this would change 31,000 shelves in one transaction"), instead of a row count that
+refuses a file which would have changed nothing.
+
+**Proposed resolution, for the lead:** keep `IMPORT_MAX_FILE_BYTES` as the memory bound; raise
+`IMPORT_MAX_ROWS` to a sanity ceiling rather than a policy gate; add the real gate against the
+plan's changed-shelf count at the preview step. If that ceiling is ever genuinely reached, part H
+(the batch-aware `StockService` entry point) stops being optional and the apply chunks — which is
+a change to §5.5 and §11.3, not a config edit.
+
+**Not implemented.** Changing a config default and adding a settings key are both STOP items under
+`rules/70`, and this is an architectural decision, not a slice. Flagged here so it is decided
+deliberately rather than discovered as a support ticket the day the catalogue crosses the cap.
 
 ---
 
