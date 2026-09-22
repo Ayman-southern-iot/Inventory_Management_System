@@ -18,3 +18,4 @@ export * from './contracts/files.js';
 export * from './contracts/dashboard.js';
 export * from './contracts/api-keys.js';
 export * from './contracts/catalogue.js';
+export * from './contracts/imports.js';

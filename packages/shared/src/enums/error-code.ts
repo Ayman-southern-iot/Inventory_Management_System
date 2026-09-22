@@ -33,6 +33,27 @@ export const ErrorCode = {
    */
   API_KEY_SCOPE_DENIED: 'API_KEY_SCOPE_DENIED',
 
+  /** One import at a time, enforced by a partial unique index rather than by a check. */
+  IMPORT_ALREADY_RUNNING: 'IMPORT_ALREADY_RUNNING',
+  /**
+   * The file did not pass validation. `details` carries every problem with its row and column,
+   * not just the first — an importer that reports one error per round trip is one people stop
+   * using.
+   */
+  IMPORT_VALIDATION_FAILED: 'IMPORT_VALIDATION_FAILED',
+  /**
+   * Confirm was attempted against a file other than the one whose diff was approved. Validation
+   * and apply are separate requests; the hash is what stops the second acting on a surprise.
+   */
+  IMPORT_FILE_CHANGED: 'IMPORT_FILE_CHANGED',
+  /** The backup was deleted to reclaim the bytes, so there is nothing left to restore. */
+  IMPORT_SNAPSHOT_DELETED: 'IMPORT_SNAPSHOT_DELETED',
+  /**
+   * What every other user gets while an import is applying. A 503 rather than a 403: the system
+   * is temporarily unavailable, not refusing them — and it tells intermediaries to retry.
+   */
+  SYSTEM_IMPORT_IN_PROGRESS: 'SYSTEM_IMPORT_IN_PROGRESS',
+
   /**
    * An upload exceeded the configured ceiling. Distinct from INTERNAL because the multipart
    * interceptor rejects the body before any handler runs — without its own code the user is told

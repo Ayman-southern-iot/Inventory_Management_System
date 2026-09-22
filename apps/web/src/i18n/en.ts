@@ -1604,6 +1604,14 @@ export const t = {
     API_KEY_INVALID: 'That API key is not valid. It may have been revoked or have expired.',
     API_KEY_DISABLED: 'This API key has been disabled. Ask an administrator to enable it.',
     API_KEY_SCOPE_DENIED: 'This API key does not have access to that endpoint.',
+    IMPORT_ALREADY_RUNNING:
+      'An import is already in progress. Wait for it to finish, or abandon it first.',
+    IMPORT_VALIDATION_FAILED: 'The file could not be imported. See the list of problems below.',
+    IMPORT_FILE_CHANGED:
+      'The file changed after it was checked. Upload it again and review the new summary.',
+    IMPORT_SNAPSHOT_DELETED:
+      'The backup for this import was deleted, so it can no longer be restored.',
+    SYSTEM_IMPORT_IN_PROGRESS: 'The inventory is being updated. Please wait.',
     UNKNOWN_SETTING: 'That setting does not exist.',
     INSUFFICIENT_STOCK: 'There is not enough stock in that compartment.',
     INSUFFICIENT_STOCK_QUARANTINED:

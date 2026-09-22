@@ -1,6 +1,7 @@
 import type { ColumnType, Generated, Insertable, Selectable, Updateable } from 'kysely';
 import type {
   ApiKeyScope,
+  ImportJobStatus,
   AuditAction,
   AuditEntityType,
   AuditOutcome,
@@ -124,6 +125,35 @@ export interface ApiKeysTable {
   created_at: CreatedAt;
   revoked_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
   revoked_by: ColumnType<string | null, string | null | undefined, string | null>;
+}
+
+/**
+ * One CSV import run (migration 0038).
+ *
+ * Mutable by design, unlike the ledger: this row *is* the progress. The permanent record of what
+ * an import did is the `import.apply` audit row plus the ledger entries it wrote.
+ */
+export interface ImportJobsTable {
+  id: Generated<string>;
+  kind: string;
+  status: ImportJobStatus;
+  file_id: string;
+  /** Rechecked at confirm, so a job cannot be applied against a file that changed underneath. */
+  file_sha256: string;
+  /** The pre-image, taken after the lockout engages and before the transaction opens. */
+  snapshot_file_id: ColumnType<string | null, string | null | undefined, string | null>;
+  snapshot_deleted_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
+  restored_from_job_id: ColumnType<string | null, string | null | undefined, string | null>;
+  total_rows: ColumnType<number | null, number | null | undefined, number | null>;
+  processed_rows: ColumnType<number, number | undefined, number>;
+  started_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
+  /** Stale means the run is dead and the system-wide lockout must be released. */
+  heartbeat_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
+  finished_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
+  estimated_finish_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
+  report: ColumnType<unknown, string | null | undefined, string | null>;
+  created_by: string;
+  created_at: CreatedAt;
 }
 
 export interface LoginAttemptsTable {
@@ -779,6 +809,7 @@ export interface Database {
   user_roles: UserRolesTable;
   refresh_tokens: RefreshTokensTable;
   api_keys: ApiKeysTable;
+  import_jobs: ImportJobsTable;
   login_attempts: LoginAttemptsTable;
   approver_slots: ApproverSlotsTable;
 }

@@ -100,6 +100,64 @@ export class ApiKeyScopeDeniedError extends DomainError {
   }
 }
 
+/* ------------------------------------------------------------------ CSV import */
+
+export class ImportAlreadyRunningError extends DomainError {
+  constructor() {
+    super(
+      ErrorCode.IMPORT_ALREADY_RUNNING,
+      'An import is already in progress. Wait for it to finish, or abandon it first.',
+      HttpStatus.CONFLICT,
+    );
+  }
+}
+
+/** `details` is the whole list, deliberately — see the code's docblock. */
+export class ImportValidationFailedError extends DomainError {
+  constructor(issues: unknown) {
+    super(
+      ErrorCode.IMPORT_VALIDATION_FAILED,
+      'The file could not be imported. See the list of problems.',
+      HttpStatus.UNPROCESSABLE_ENTITY,
+      issues,
+    );
+  }
+}
+
+export class ImportFileChangedError extends DomainError {
+  constructor() {
+    super(
+      ErrorCode.IMPORT_FILE_CHANGED,
+      'The file changed after it was checked. Upload it again and review the new summary.',
+      HttpStatus.CONFLICT,
+    );
+  }
+}
+
+export class ImportSnapshotDeletedError extends DomainError {
+  constructor() {
+    super(
+      ErrorCode.IMPORT_SNAPSHOT_DELETED,
+      'The backup for this import was deleted, so it can no longer be restored.',
+      HttpStatus.CONFLICT,
+    );
+  }
+}
+
+/**
+ * 503, not 403. The caller is not being refused — the system is briefly unavailable, and an
+ * intermediary reading this should understand it is worth retrying.
+ */
+export class SystemImportInProgressError extends DomainError {
+  constructor() {
+    super(
+      ErrorCode.SYSTEM_IMPORT_IN_PROGRESS,
+      'The inventory is being updated. Please wait.',
+      HttpStatus.SERVICE_UNAVAILABLE,
+    );
+  }
+}
+
 export class ForbiddenError extends DomainError {
   constructor(message = 'You do not have permission to do that') {
     super(ErrorCode.FORBIDDEN, message, HttpStatus.FORBIDDEN);

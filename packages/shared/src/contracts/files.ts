@@ -8,7 +8,15 @@ import { uuidSchema } from './common.js';
  * caller who wants the content asks for a short-lived signed URL, the same way BOM PDFs work.
  */
 
-export const STORED_FILE_KINDS = ['SIGNATURE', 'INVOICE', 'SUPPORTING_DOCUMENT'] as const;
+export const STORED_FILE_KINDS = [
+  'SIGNATURE',
+  'INVOICE',
+  'SUPPORTING_DOCUMENT',
+  /** The CSV an admin uploaded (migration 0038). */
+  'PRODUCT_IMPORT',
+  /** The round-trip export taken before an import overwrote anything — the rollback point. */
+  'PRODUCT_SNAPSHOT',
+] as const;
 export type StoredFileKind = (typeof STORED_FILE_KINDS)[number];
 export const storedFileKindSchema = z.enum(
   STORED_FILE_KINDS as readonly [StoredFileKind, ...StoredFileKind[]],

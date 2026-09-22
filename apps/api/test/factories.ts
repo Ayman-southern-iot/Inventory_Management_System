@@ -200,6 +200,9 @@ export async function resetData(db: Db): Promise<void> {
   // requisition with a doc attached would block the `stored_files` delete below. Clear the
   // pointer first, exactly the same surgery the signature reset does above.
   await db.updateTable('requisitions').set({ supporting_document_file_id: null }).execute();
+  // Migration 0038: `file_id` references `stored_files` with RESTRICT, so the jobs must go
+  // before the files they point at — and both before `users`, which they also reference.
+  await db.deleteFrom('import_jobs').execute();
   await db.deleteFrom('stored_files').execute();
 
   await db.deleteFrom('approver_slots').execute();

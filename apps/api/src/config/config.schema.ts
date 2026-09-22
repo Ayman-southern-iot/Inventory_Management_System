@@ -96,6 +96,35 @@ const rawSchema = z.object({
    * that says it cannot be served. Raise it when the catalogue genuinely outgrows it.
    */
   CATALOGUE_MAX_PRODUCTS: z.coerce.number().int().min(1).max(100_000).default(5_000),
+
+  // --- CSV product import (importing_data.md) ----------------------------------
+  /**
+   * The row ceiling for one import. 5,000 is ~10–15 s of apply by the plan's §11.2 arithmetic,
+   * and **the default is provisional until the benchmark in §15 replaces it with a measurement**.
+   * Restoring a snapshot deliberately bypasses this: a backup governed by the same cap as the
+   * forward import becomes unrestorable the moment the catalogue outgrows one batch.
+   */
+  IMPORT_MAX_ROWS: z.coerce.number().int().min(1).max(200_000).default(5_000),
+  IMPORT_MAX_FILE_BYTES: z.coerce.number().int().min(1024).default(5 * 1024 * 1024),
+  /**
+   * Added to the honest estimate before other users are told when the system will be back.
+   * Better to say ten minutes and take five.
+   */
+  IMPORT_LOCKOUT_PADDING_MINUTES: z.coerce.number().int().min(0).max(120).default(10),
+  /**
+   * How stale `import_jobs.heartbeat_at` may get before the job is presumed dead and the
+   * system-wide lockout is released. This is the number standing between one hung import and
+   * every user being locked out permanently — see the plan's §8.1.
+   */
+  IMPORT_HEARTBEAT_TIMEOUT_SECONDS: z.coerce.number().int().min(10).max(3600).default(60),
+  /** 0 keeps every backup forever, which is the default and what was asked for. */
+  IMPORT_SNAPSHOT_RETENTION_DAYS: z.coerce.number().int().min(0).max(3650).default(0),
+  /**
+   * Near-duplicate detection is O(n·m). Above this many *new* names it is skipped, with a line
+   * in the report saying so — losing the check silently on the largest imports would be the
+   * opposite of what it is for.
+   */
+  IMPORT_FUZZY_MATCH_MAX_NEW_NAMES: z.coerce.number().int().min(0).max(100_000).default(500),
   /** Replaces the previously hardcoded 10/60s login burst limit on `POST /auth/login`. */
   LOGIN_BURST_LIMIT: z.coerce.number().int().min(1).max(10_000).default(10),
   LOGIN_BURST_TTL_SECONDS: durationSecondsSchema.default(60),
@@ -419,6 +448,14 @@ export interface AppConfig {
   };
   readonly apiKeys: { readonly touchIntervalSeconds: number };
   readonly catalogue: { readonly maxProducts: number };
+  readonly imports: {
+    readonly maxRows: number;
+    readonly maxFileBytes: number;
+    readonly lockoutPaddingMinutes: number;
+    readonly heartbeatTimeoutSeconds: number;
+    readonly snapshotRetentionDays: number;
+    readonly fuzzyMatchMaxNewNames: number;
+  };
   readonly body: {
     readonly jsonLimit: string;
     readonly urlencodedLimit: string;
@@ -563,6 +600,14 @@ export function buildConfig(source: Record<string, string | undefined>): AppConf
     }),
     catalogue: Object.freeze({
       maxProducts: env.CATALOGUE_MAX_PRODUCTS,
+    }),
+    imports: Object.freeze({
+      maxRows: env.IMPORT_MAX_ROWS,
+      maxFileBytes: env.IMPORT_MAX_FILE_BYTES,
+      lockoutPaddingMinutes: env.IMPORT_LOCKOUT_PADDING_MINUTES,
+      heartbeatTimeoutSeconds: env.IMPORT_HEARTBEAT_TIMEOUT_SECONDS,
+      snapshotRetentionDays: env.IMPORT_SNAPSHOT_RETENTION_DAYS,
+      fuzzyMatchMaxNewNames: env.IMPORT_FUZZY_MATCH_MAX_NEW_NAMES,
     }),
     body: Object.freeze({
       jsonLimit: env.JSON_BODY_LIMIT,

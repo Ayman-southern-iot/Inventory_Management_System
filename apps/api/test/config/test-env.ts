@@ -61,6 +61,13 @@ export const TEST_ENV: Record<string, string> = {
   // interval is what stops a busy integration writing once per read.
   API_KEY_TOUCH_INTERVAL_SECONDS: '0',
   CATALOGUE_MAX_PRODUCTS: '5000',
+  IMPORT_MAX_ROWS: '5000',
+  IMPORT_MAX_FILE_BYTES: '5242880',
+  IMPORT_LOCKOUT_PADDING_MINUTES: '10',
+  // Short, so a spec can let a heartbeat go stale without sleeping for a real minute.
+  IMPORT_HEARTBEAT_TIMEOUT_SECONDS: '10',
+  IMPORT_SNAPSHOT_RETENTION_DAYS: '0',
+  IMPORT_FUZZY_MATCH_MAX_NEW_NAMES: '500',
   LOGIN_BURST_LIMIT: '10',
   LOGIN_BURST_TTL_SECONDS: '60',
   JSON_BODY_LIMIT: '100kb',
