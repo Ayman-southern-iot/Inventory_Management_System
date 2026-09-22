@@ -11,6 +11,7 @@ import {
 } from './stock-factories';
 import { StockService } from '../src/modules/stock/stock.service';
 import { IMPORT_COLUMNS, UTF8_BOM, stripBom } from '../src/modules/imports/import-format';
+import { parseImportCsv } from '../src/modules/imports/import-parser';
 
 /**
  * `GET /inventory/export` — the round-trip CSV (`importing_data.md` part B).
@@ -246,6 +247,52 @@ describe('product export', () => {
 
       const response = await im.get('/inventory/export?includeInactive=false');
       expect(rowFor(response.text, fixture.productId)).toHaveLength(0);
+    });
+  });
+
+  /**
+   * The test that proves the writer and the reader agree.
+   *
+   * Everything else in part B asserts what the export *says*; this asserts that the parser built
+   * in part C can read it back. Without it the two halves could drift on quoting, line endings or
+   * the fingerprint and nothing would notice until an import of a real file failed.
+   */
+  describe('the round trip', () => {
+    it('is read back cleanly by the parser', async () => {
+      const stock = ctx.app.get(StockService);
+      await stock.receive(
+        { productId: fixture.productId, compartmentId: fixture.compartmentA, quantity: 7 },
+        { performedBy: actorId, note: 'round trip' },
+      );
+
+      const csv = (await im.get('/inventory/export')).text;
+      const origin = /origin (S+)/.exec(csv)?.[1] ?? null;
+
+      const parsed = parseImportCsv(csv, { maxRows: 5000, expectedDeploymentId: origin });
+
+      expect(parsed.issues).toEqual([]);
+      expect(parsed.rows.length).toBeGreaterThan(0);
+
+      const row = parsed.rows.find((r) => r.cells.product_id === fixture.productId);
+      expect(row).toBeDefined();
+      expect(row!.cells.on_hand).toBe('7');
+      expect(row!.cells.compartment).toBe('A1');
+    });
+
+    /** A value with a comma survives being written and read — the case split(',') gets wrong. */
+    it('survives a product name containing a comma and a quote', async () => {
+      const productId = await createProduct(ctx.db, {
+        name: 'Cable, 2m "premium"',
+        categoryId: null,
+      });
+
+      const csv = (await im.get('/inventory/export')).text;
+      const origin = /origin (S+)/.exec(csv)?.[1] ?? null;
+      const parsed = parseImportCsv(csv, { maxRows: 5000, expectedDeploymentId: origin });
+
+      expect(parsed.issues).toEqual([]);
+      const row = parsed.rows.find((r) => r.cells.product_id === productId);
+      expect(row!.cells.product_name).toBe('Cable, 2m "premium"');
     });
   });
 

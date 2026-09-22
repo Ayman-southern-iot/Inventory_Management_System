@@ -49,7 +49,12 @@ export const importJobKindSchema = z.literal('products');
  * at the first error is a validator people give up on.
  */
 export const importIssueSchema = z.object({
-  /** 1-based, counting the header as row 1, so it matches what the spreadsheet shows. */
+  /**
+   * The physical line in the file, 1-based — so it is the row number the person sees in their
+   * spreadsheet and can click straight to. Line 1 is the fingerprint, line 2 the headings, and
+   * data begins at line 3. A record containing a quoted newline spans several lines and reports
+   * the first.
+   */
   row: z.number().int().positive(),
   /** Absent for a whole-file problem such as a bad fingerprint. */
   column: z.string().nullable(),
