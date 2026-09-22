@@ -1,4 +1,11 @@
-import type { CategoryNode, Product, Room } from '@ims/shared';
+import {
+  ImportIssueCode,
+  isImportWarning,
+  type CategoryNode,
+  type ImportIssue,
+  type Product,
+  type Room,
+} from '@ims/shared';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { ImportColumn } from './import-format';
 import { buildImportLookups, type ImportLookups, type LookupPlacement } from './import-lookups';
@@ -253,7 +260,15 @@ function newRow(overrides: Partial<Record<ImportColumn, string>> = {}): ParsedRo
   });
 }
 
-const messages = (issues: { message: string }[]) => issues.map((i) => i.message).join('\n');
+const messages = (issues: ImportIssue[]) => issues.map((i) => i.message).join('\n');
+
+/**
+ * What these tests assert on. The code is the contract; the sentence beside it is not, and a
+ * spec that pins the wording turns every rewording into a red suite. A message assertion
+ * survives below only where what it says *is* the behaviour — that it names every row involved,
+ * or which level of a location is retired.
+ */
+const codes = (issues: ImportIssue[]) => issues.map((i) => i.code);
 
 /** Every fixture row together, so a case can add one row without retiring the rest. */
 const everything = () => [row(), gpuRow()];
@@ -272,7 +287,7 @@ describe('validateImport', () => {
       expect(result.errors).toHaveLength(1);
       expect(result.errors[0]!.column).toBe('product_name');
       expect(result.errors[0]!.row).toBe(3);
-      expect(result.errors[0]!.message).toMatch(/"product_name" is empty/);
+      expect(codes(result.errors)).toContain(ImportIssueCode.VALUE_REQUIRED);
     });
 
     it('collects every empty value rather than stopping at the first', () => {
@@ -286,7 +301,7 @@ describe('validateImport', () => {
         [row({ storage_id: '', room: '', zone: '', compartment: '', on_hand: '4' })],
         world(),
       );
-      expect(result.errors[0]!.message).toMatch(/4 units but no location/);
+      expect(codes(result.errors)).toContain(ImportIssueCode.LOCATION_REQUIRED_FOR_QUANTITY);
     });
 
     it('allows a blank location when the quantity is zero', () => {
@@ -307,6 +322,7 @@ describe('validateImport', () => {
 
     it('refuses half a location', () => {
       const result = validateImport([row({ zone: '' })], world());
+      expect(codes(result.errors)).toContain(ImportIssueCode.LOCATION_INCOMPLETE);
       expect(result.errors[0]!.message).toMatch(/needs all three of room, zone and compartment/);
     });
 
@@ -329,29 +345,29 @@ describe('validateImport', () => {
 
     it('refuses a negative quantity', () => {
       const result = validateImport([row({ on_hand: '-2' })], world());
-      expect(result.errors[0]!.message).toMatch(/cannot be negative/);
+      expect(codes(result.errors)).toContain(ImportIssueCode.QUANTITY_NEGATIVE);
     });
 
     it('refuses a fractional quantity', () => {
       const result = validateImport([row({ on_hand: '2.5' })], world());
-      expect(result.errors[0]!.message).toMatch(/not a whole number/);
+      expect(codes(result.errors)).toContain(ImportIssueCode.QUANTITY_NOT_WHOLE);
     });
 
     it('refuses a quantity that is obviously a typo', () => {
       const result = validateImport([row({ on_hand: '99999999' })], world());
-      expect(result.errors[0]!.message).toMatch(/is not a quantity, it is a typo/);
+      expect(codes(result.errors)).toContain(ImportIssueCode.QUANTITY_TOO_LARGE);
     });
 
     /** It is ignored on import either way, so refusing the file over it would be pedantry. */
     it('warns rather than fails on an unreadable read-only column', () => {
       const result = validateImport([row({ reserved: 'seven' }), gpuRow()], world());
       expect(result.errors).toEqual([]);
-      expect(messages(result.warnings)).toMatch(/"reserved" is not a whole number/);
+      expect(codes(result.warnings)).toContain(ImportIssueCode.READ_ONLY_UNREADABLE);
     });
 
     it('refuses a value that is neither yes nor no', () => {
       const result = validateImport([row({ default_returnable: 'maybe' })], world());
-      expect(result.errors[0]!.message).toMatch(/Write yes or no/);
+      expect(codes(result.errors)).toContain(ImportIssueCode.VALUE_NOT_A_FLAG);
     });
 
     it('accepts yes and no in any case', () => {
@@ -365,7 +381,7 @@ describe('validateImport', () => {
 
     it('refuses a product id that is not an id', () => {
       const result = validateImport([row({ product_id: 'LAP-0001' })], world());
-      expect(result.errors[0]!.message).toMatch(/not an id this system could have written/);
+      expect(codes(result.errors)).toContain(ImportIssueCode.ID_MALFORMED);
     });
 
     it('refuses a category four levels deep', () => {
@@ -373,30 +389,30 @@ describe('validateImport', () => {
         [row({ category_id: '', category_path: 'A / B / C / D' })],
         world(),
       );
-      expect(result.errors[0]!.message).toMatch(/3 levels deep at most/);
+      expect(codes(result.errors)).toContain(ImportIssueCode.CATEGORY_PATH_TOO_DEEP);
     });
 
     it('refuses a category path with a gap in it', () => {
       const result = validateImport([row({ category_id: '', category_path: 'A //  C' })], world());
-      expect(result.errors[0]!.message).toMatch(/empty step/);
+      expect(codes(result.errors)).toContain(ImportIssueCode.CATEGORY_PATH_MALFORMED);
     });
 
     it('refuses a name longer than the column allows', () => {
       const result = validateImport([row({ product_name: 'x'.repeat(200) })], world());
-      expect(result.errors[0]!.message).toMatch(/longer than 160 characters/);
+      expect(codes(result.errors)).toContain(ImportIssueCode.VALUE_INVALID);
     });
 
     /** Excel rewrites these on open, before anybody has typed anything. */
     it('warns about a product code that looks like a date', () => {
       const result = validateImport([row({ product_code: '2-Jan' }), gpuRow()], world());
-      expect(messages(result.warnings)).toMatch(/looks like a date/);
+      expect(codes(result.warnings)).toContain(ImportIssueCode.CODE_LOOKS_LIKE_A_DATE);
     });
   });
 
   describe('what the file says about itself', () => {
     it('refuses two products sharing a code', () => {
       const result = validateImport([row(), gpuRow({ product_code: 'LAP-0001' })], world());
-      expect(messages(result.errors)).toMatch(/share the product code "LAP-0001"/);
+      expect(codes(result.errors)).toContain(ImportIssueCode.CODE_DUPLICATED_IN_FILE);
       expect(result.errors).toHaveLength(2);
     });
 
@@ -413,7 +429,7 @@ describe('validateImport', () => {
         ],
         world(),
       );
-      expect(messages(result.errors)).toMatch(/disagree about "product_name"/);
+      expect(codes(result.errors)).toContain(ImportIssueCode.PRODUCT_ROWS_DISAGREE);
     });
 
     it('is not fooled into a disagreement by a difference of case', () => {
@@ -442,6 +458,7 @@ describe('validateImport', () => {
         [newRow(), newRow({ storage_id: 'MAI-MET-1B-0002', compartment: '1B' }), ...everything()],
         world(),
       );
+      expect(codes(result.errors)).toContain(ImportIssueCode.NEW_PRODUCT_NEEDS_CODE);
       expect(messages(result.errors)).toMatch(
         /with no product code to say they are the same product/,
       );
@@ -489,6 +506,7 @@ describe('validateImport', () => {
       );
 
       expect(result.plan).toBeNull();
+      expect(codes(result.errors)).toContain(ImportIssueCode.NEW_PRODUCT_CODE_INCONSISTENT);
       expect(messages(result.errors)).toMatch(/only some of them carry a product_code/);
     });
 
@@ -512,25 +530,26 @@ describe('validateImport', () => {
     it('refuses a product id this system has never issued', () => {
       const stale = '99999999-9999-4999-8999-999999999999';
       const result = validateImport([row({ product_id: stale })], world());
-      expect(result.errors[0]!.message).toMatch(/No product in this system has this id/);
+      expect(codes(result.errors)).toContain(ImportIssueCode.PRODUCT_NOT_FOUND);
     });
 
     it('refuses a code that already belongs to another product', () => {
       // The GPU's own row is left out on purpose: this is the collision with what is *in the
       // database*, not the collision between two rows, which stage 4 catches earlier.
       const result = validateImport([row({ product_code: 'GPU-0001' })], world());
+      expect(codes(result.errors)).toContain(ImportIssueCode.CODE_BELONGS_TO_ANOTHER_PRODUCT);
       expect(messages(result.errors)).toMatch(/already belongs to "Nvidia RTX 4000"/);
     });
 
     /** Creating would hit the unique index mid-apply; updating would overwrite silently. */
     it('refuses a new product whose code is already taken', () => {
       const result = validateImport([newRow({ product_code: 'LAP-0001' })], world());
-      expect(messages(result.errors)).toMatch(/asks to create a second product with it/);
+      expect(codes(result.errors)).toContain(ImportIssueCode.NEW_PRODUCT_CODE_TAKEN);
     });
 
     it('refuses a row whose category id and path are different categories', () => {
       const result = validateImport([row({ category_path: 'Electronics' }), gpuRow()], world());
-      expect(messages(result.errors)).toMatch(/is a different category/);
+      expect(codes(result.errors)).toContain(ImportIssueCode.CATEGORY_AMBIGUOUS);
     });
 
     /** §4.1: the id wins, because the id is what cannot be renamed. */
@@ -540,6 +559,7 @@ describe('validateImport', () => {
         world(),
       );
       expect(result.errors).toEqual([]);
+      expect(codes(result.warnings)).toContain(ImportIssueCode.CATEGORY_RENAMED);
       expect(messages(result.warnings)).toMatch(
         /has been renamed to "Electronics \/ Computers \/ Laptops"/,
       );
@@ -593,7 +613,7 @@ describe('validateImport', () => {
       );
       expect(result.plan!.categoriesToCreate).toEqual([]);
       expect(result.plan!.products[0]!.categoryId).toBe(ELECTRONICS);
-      expect(messages(result.warnings)).toMatch(/Matched the existing category "Electronics"/);
+      expect(codes(result.warnings)).toContain(ImportIssueCode.CATEGORY_MATCHED_LOOSELY);
     });
 
     it('refuses to file a product into a retired category', () => {
@@ -601,7 +621,7 @@ describe('validateImport', () => {
         [row({ category_id: RETIRED, category_path: 'Retired' })],
         world(),
       );
-      expect(result.errors[0]!.message).toMatch(/is retired/);
+      expect(codes(result.errors)).toContain(ImportIssueCode.CATEGORY_RETIRED);
     });
 
     it('refuses a shelf that does not exist', () => {
@@ -609,7 +629,7 @@ describe('validateImport', () => {
         [row({ storage_id: '', room: 'Main Store', zone: 'Meta', compartment: '4Q' })],
         world(),
       );
-      expect(result.errors[0]!.message).toMatch(/There is no shelf at Main Store \/ Meta \/ 4Q/);
+      expect(codes(result.errors)).toContain(ImportIssueCode.SHELF_NOT_FOUND);
     });
 
     it('refuses a retired shelf', () => {
@@ -617,6 +637,7 @@ describe('validateImport', () => {
         [row({ storage_id: 'MAI-MET-9Z-0003', compartment: '9Z' })],
         world(),
       );
+      expect(codes(result.errors)).toContain(ImportIssueCode.SHELF_RETIRED);
       expect(result.errors[0]!.message).toMatch(/retired \(its compartment is not active\)/);
     });
 
@@ -633,18 +654,20 @@ describe('validateImport', () => {
         ],
         world(),
       );
+      expect(codes(result.errors)).toContain(ImportIssueCode.SHELF_RETIRED);
       expect(result.errors[0]!.message).toMatch(/retired \(its room is not active\)/);
     });
 
     it('refuses a row whose shelf label and location are different shelves', () => {
       const result = validateImport([row({ compartment: '1B' }), gpuRow()], world());
-      expect(messages(result.errors)).toMatch(/name a different shelf/);
+      expect(codes(result.errors)).toContain(ImportIssueCode.SHELF_AMBIGUOUS);
     });
 
     /** The label is on the physical shelf; the name in the file is a memory of it. */
     it('matches by shelf label and warns when the location has been renamed', () => {
       const result = validateImport([row({ zone: 'Mezzanine' }), gpuRow()], world());
       expect(result.errors).toEqual([]);
+      expect(codes(result.warnings)).toContain(ImportIssueCode.SHELF_RENAMED);
       expect(messages(result.warnings)).toMatch(/renamed to Main Store \/ Meta \/ 1A/);
     });
 
@@ -653,7 +676,7 @@ describe('validateImport', () => {
         [row({ storage_id: 'XXX-YYY-1A-9999', room: '', zone: '', compartment: '', on_hand: '0' })],
         world(),
       );
-      expect(result.errors[0]!.message).toMatch(/No shelf in this system carries the label/);
+      expect(codes(result.errors)).toContain(ImportIssueCode.SHELF_LABEL_NOT_FOUND);
     });
 
     it('matches by room, zone and compartment when the label is blank', () => {
@@ -666,6 +689,7 @@ describe('validateImport', () => {
   describe('domain', () => {
     it('refuses a count below what is reserved and quarantined on that shelf', () => {
       const result = validateImport([row(), gpuRow({ on_hand: '1' })], world());
+      expect(codes(result.errors)).toContain(ImportIssueCode.BELOW_RESERVED);
       expect(messages(result.errors)).toMatch(/holds 2 units that are reserved or quarantined/);
     });
 
@@ -679,9 +703,7 @@ describe('validateImport', () => {
         [row({ category_id: SERVICES, category_path: 'Services' }), gpuRow()],
         world(),
       );
-      expect(messages(result.errors)).toMatch(
-        /untracked category, which holds catalogue entries but no stock/,
-      );
+      expect(codes(result.errors)).toContain(ImportIssueCode.CATEGORY_NOT_TRACKABLE);
     });
 
     it('allows a catalogue entry in an untracked category with no stock', () => {
@@ -705,7 +727,7 @@ describe('validateImport', () => {
 
     it('refuses the same product on the same shelf twice', () => {
       const result = validateImport([row(), row({ on_hand: '3' }), gpuRow()], world());
-      expect(messages(result.errors)).toMatch(/twice in this file/);
+      expect(codes(result.errors)).toContain(ImportIssueCode.SHELF_REPEATED);
     });
 
     /** Two spellings of one shelf are still one shelf, which is why this runs after resolution. */
@@ -714,7 +736,7 @@ describe('validateImport', () => {
         [row(), row({ storage_id: '', on_hand: '3' }), gpuRow()],
         world(),
       );
-      expect(messages(result.errors)).toMatch(/twice in this file/);
+      expect(codes(result.errors)).toContain(ImportIssueCode.SHELF_REPEATED);
     });
   });
 
@@ -777,6 +799,7 @@ describe('validateImport', () => {
         targetOnHand: 0,
         line: null,
       });
+      expect(codes(result.warnings)).toContain(ImportIssueCode.SHELF_CLEARED_BY_OMISSION);
       expect(messages(result.warnings)).toMatch(
         /7 units of "Lenovo ThinkPad T14" at Main Store \/ Meta \/ 1A will be removed/,
       );
@@ -787,6 +810,7 @@ describe('validateImport', () => {
         [row(), gpuRow({ storage_id: 'MAI-MET-1A-0001', compartment: '1A', on_hand: '0' })],
         world(),
       );
+      expect(codes(result.errors)).toContain(ImportIssueCode.SHELF_CLEARED_BUT_RESERVED);
       expect(messages(result.errors)).toMatch(
         /would empty that shelf — but 2 of its units are reserved/,
       );
@@ -794,7 +818,7 @@ describe('validateImport', () => {
 
     it('warns when a product ends up with no stock anywhere', () => {
       const result = validateImport([row({ on_hand: '0' }), gpuRow()], world());
-      expect(messages(result.warnings)).toMatch(/will have no stock anywhere after this import/);
+      expect(codes(result.warnings)).toContain(ImportIssueCode.PRODUCT_LEFT_WITH_NO_STOCK);
     });
 
     /** I1: the file is the desired state, so a product it never mentions is retired. */
@@ -805,7 +829,7 @@ describe('validateImport', () => {
       expect(result.plan!.deactivations).toEqual([
         { productId: GPU, name: 'Nvidia RTX 4000', onHand: 3, inUse: 0 },
       ]);
-      expect(messages(result.warnings)).toMatch(/not in this file and will be retired/);
+      expect(codes(result.warnings)).toContain(ImportIssueCode.PRODUCTS_RETIRED_BY_OMISSION);
     });
 
     it('does not retire a product that is already retired', () => {
@@ -859,19 +883,19 @@ describe('validateImport', () => {
       });
 
       const result = validateImport([row({ status: 'Inactive' })], lookups);
+      expect(codes(result.warnings)).toContain(ImportIssueCode.RETIRED_WITH_UNITS_ON_LOAN);
       expect(messages(result.warnings)).toMatch(/still has 4 units out on loan/);
     });
 
     it('warns when the unit changes under stock that is already counted', () => {
       const result = validateImport([row({ unit: 'box' }), gpuRow()], world());
+      expect(codes(result.warnings)).toContain(ImportIssueCode.UNIT_CHANGED_UNDER_STOCK);
       expect(messages(result.warnings)).toMatch(/changing from pcs to box while holding 7 units/);
     });
 
     it('warns that an edited read-only column did nothing', () => {
       const result = validateImport([row(), gpuRow({ reserved: '0' })], world());
-      expect(messages(result.warnings)).toMatch(
-        /"reserved" is 1 on this shelf and cannot be set from a file/,
-      );
+      expect(codes(result.warnings)).toContain(ImportIssueCode.READ_ONLY_IGNORED);
     });
 
     /** Derived from `on_hand`, which the person was invited to edit. Warning here is noise. */
@@ -898,6 +922,59 @@ describe('validateImport', () => {
     it('carries the offending value so the report can be read next to the file', () => {
       const result = validateImport([row({ on_hand: '-1' })], world());
       expect(result.errors[0]).toMatchObject({ column: 'on_hand', value: '-1' });
+    });
+
+    /**
+     * The check that `ImportIssueCode` actually generalises to warnings rather than having been
+     * shaped around the error cases it was extracted from.
+     *
+     * Severity is a property of the member, so a code may never appear on both sides. Every file
+     * below is one that produces issues; between them they exercise most of the enum, and the
+     * day somebody reuses an error code for a warning — or the reverse — this is what says so
+     * rather than a preview screen quietly rendering a blocking problem as advice.
+     */
+    it('never puts a warning code among the errors, or an error code among the warnings', () => {
+      const files: ParsedRow[][] = [
+        [row({ on_hand: '-1' })],
+        [row({ product_name: '' })],
+        [row({ compartment: '1B' }), gpuRow()],
+        [row({ category_path: 'Electronics' }), gpuRow()],
+        [row({ unit: 'box', on_hand: '0', reserved: '4' }), gpuRow()],
+        [row({ zone: 'Mezzanine', product_code: '2-Jan' }), gpuRow()],
+        [row({ category_id: '', category_path: 'ELECTRONICS' }), gpuRow()],
+        [row({ status: 'Inactive' })],
+        [newRow(), newRow({ storage_id: 'MAI-MET-1B-0002', compartment: '1B' }), ...everything()],
+        [row({ product_id: '99999999-9999-4999-8999-999999999999' })],
+        [newRow({ product_code: 'LAP-0001' })],
+        [row({ category_id: RETIRED, category_path: '' })],
+        [row({ storage_id: '', compartment: '4Q' })],
+        [row(), row({ on_hand: '3' }), gpuRow()],
+        [row(), gpuRow({ on_hand: '1' })],
+        [row({ category_id: SERVICES, category_path: 'Services' }), gpuRow()],
+        [row({ default_returnable: 'maybe', on_hand: '2.5' })],
+      ];
+
+      const seen = new Set<ImportIssueCode>();
+      for (const rows of files) {
+        const result = validateImport(rows, world());
+        for (const error of result.errors) {
+          seen.add(error.code);
+          expect({ code: error.code, isWarning: isImportWarning(error.code) }).toEqual({
+            code: error.code,
+            isWarning: false,
+          });
+        }
+        for (const warning of result.warnings) {
+          seen.add(warning.code);
+          expect({ code: warning.code, isWarning: isImportWarning(warning.code) }).toEqual({
+            code: warning.code,
+            isWarning: true,
+          });
+        }
+      }
+
+      // Guards the guard: a battery that stopped producing issues would pass vacuously.
+      expect(seen.size).toBeGreaterThanOrEqual(20);
     });
   });
 });

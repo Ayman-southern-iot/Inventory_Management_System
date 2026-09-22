@@ -1,4 +1,4 @@
-import type { ImportIssue } from '@ims/shared';
+import { ImportIssueCode, type ImportIssue } from '@ims/shared';
 import {
   IMPORT_COLUMNS,
   IMPORT_FORMAT_VERSION,
@@ -48,8 +48,13 @@ export interface ParseOptions {
   expectedDeploymentId: string | null;
 }
 
-function issue(line: number, message: string, column: string | null = null): ImportIssue {
-  return { row: line, column, value: null, message };
+function issue(
+  code: ImportIssueCode,
+  line: number,
+  message: string,
+  column: string | null = null,
+): ImportIssue {
+  return { code, row: line, column, value: null, message };
 }
 
 export function parseImportCsv(text: string, options: ParseOptions): ParseResult {
@@ -60,7 +65,7 @@ export function parseImportCsv(text: string, options: ParseOptions): ParseResult
     return {
       fingerprint: null,
       rows: [],
-      issues: [issue(1, 'The file is empty.')],
+      issues: [issue(ImportIssueCode.FILE_EMPTY, 1, 'The file is empty.')],
     };
   }
 
@@ -78,6 +83,7 @@ export function parseImportCsv(text: string, options: ParseOptions): ParseResult
   if (!fingerprint) {
     issues.push(
       issue(
+        ImportIssueCode.FILE_NOT_AN_EXPORT,
         1,
         'This does not look like a file exported from this system. Export the current products first, edit that file, and import it back.',
       ),
@@ -89,6 +95,7 @@ export function parseImportCsv(text: string, options: ParseOptions): ParseResult
   if (fingerprint.version !== IMPORT_FORMAT_VERSION) {
     issues.push(
       issue(
+        ImportIssueCode.FILE_WRONG_FORMAT_VERSION,
         1,
         `This file uses format ${fingerprint.version}; this system reads ${IMPORT_FORMAT_VERSION}. Export a fresh copy and redo the changes on it.`,
       ),
@@ -98,6 +105,7 @@ export function parseImportCsv(text: string, options: ParseOptions): ParseResult
   if (fingerprint.schemaVersion !== IMPORT_SCHEMA_VERSION) {
     issues.push(
       issue(
+        ImportIssueCode.FILE_WRONG_SCHEMA_VERSION,
         1,
         `This file was exported by a different version of the system (schema ${fingerprint.schemaVersion}, this one is ${IMPORT_SCHEMA_VERSION}). Export a fresh copy and redo the changes on it.`,
       ),
@@ -115,6 +123,7 @@ export function parseImportCsv(text: string, options: ParseOptions): ParseResult
      */
     issues.push(
       issue(
+        ImportIssueCode.FILE_FOREIGN_DEPLOYMENT,
         1,
         'This file was exported from a different installation of this system, so none of its products match. Export from this one instead.',
       ),
@@ -157,6 +166,7 @@ function readRows(
       if (rows.length >= options.maxRows) {
         issues.push(
           issue(
+            ImportIssueCode.FILE_TOO_MANY_ROWS,
             record.line,
             `This file has more than ${options.maxRows} rows, which is the most one import can take. Split it, or ask an administrator to raise the limit.`,
           ),
@@ -168,6 +178,7 @@ function readRows(
       if (record.cells.length !== header.length) {
         issues.push(
           issue(
+            ImportIssueCode.ROW_WRONG_WIDTH,
             record.line,
             `This row has ${record.cells.length} values but the file has ${header.length} columns. A comma inside a value needs the value wrapped in quotes.`,
           ),
@@ -187,7 +198,7 @@ function readRows(
   }
 
   if (header === null) {
-    issues.push(issue(1, 'The file has no column headings.'));
+    issues.push(issue(ImportIssueCode.COLUMNS_ABSENT, 1, 'The file has no column headings.'));
     return { fingerprint, rows: [], issues };
   }
 
@@ -199,6 +210,7 @@ function readRows(
      */
     issues.push(
       issue(
+        ImportIssueCode.FILE_NO_PRODUCTS,
         2,
         'The file has column headings but no products. Importing it would deactivate every product in the system, so it has been refused.',
       ),
@@ -214,7 +226,13 @@ function checkHeader(header: string[], line: number): ImportIssue[] {
 
   const missing = IMPORT_COLUMNS.filter((column) => !header.includes(column));
   if (missing.length > 0) {
-    issues.push(issue(line, `These columns are missing: ${missing.join(', ')}.`));
+    issues.push(
+      issue(
+        ImportIssueCode.COLUMNS_MISSING,
+        line,
+        `These columns are missing: ${missing.join(', ')}.`,
+      ),
+    );
   }
 
   const unknown = header.filter((column) => !known.has(column));
@@ -224,14 +242,22 @@ function checkHeader(header: string[], line: number): ImportIssue[] {
      * a helpful addition, and accepting it silently means importing whatever it happens to be.
      */
     issues.push(
-      issue(line, `These columns are not recognised: ${unknown.join(', ')}.`),
+      issue(
+        ImportIssueCode.COLUMNS_UNKNOWN,
+        line,
+        `These columns are not recognised: ${unknown.join(', ')}.`,
+      ),
     );
   }
 
   const duplicates = header.filter((column, index) => header.indexOf(column) !== index);
   if (duplicates.length > 0) {
     issues.push(
-      issue(line, `These columns appear more than once: ${[...new Set(duplicates)].join(', ')}.`),
+      issue(
+        ImportIssueCode.COLUMNS_DUPLICATED,
+        line,
+        `These columns appear more than once: ${[...new Set(duplicates)].join(', ')}.`,
+      ),
     );
   }
 
@@ -244,6 +270,7 @@ function firstLine(text: string): string {
 }
 
 function toParseIssue(error: unknown): ImportIssue {
-  if (error instanceof CsvParseError) return issue(error.line, error.message);
-  return issue(1, 'The file could not be read as a CSV.');
+  if (error instanceof CsvParseError)
+    return issue(ImportIssueCode.FILE_MALFORMED_CSV, error.line, error.message);
+  return issue(ImportIssueCode.FILE_MALFORMED_CSV, 1, 'The file could not be read as a CSV.');
 }

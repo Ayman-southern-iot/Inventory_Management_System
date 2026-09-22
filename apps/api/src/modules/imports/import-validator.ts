@@ -1,4 +1,5 @@
 import {
+  ImportIssueCode,
   createProductSchema,
   formatLocation,
   nameSchema,
@@ -141,7 +142,15 @@ function checkRequired(row: ParsedRow): ImportIssue[] {
 
   for (const column of REQUIRED_COLUMNS) {
     if (row.cells[column] === '') {
-      issues.push(issue(row.line, column, '', `"${column}" is empty and must have a value.`));
+      issues.push(
+        issue(
+          ImportIssueCode.VALUE_REQUIRED,
+          row.line,
+          column,
+          '',
+          `"${column}" is empty and must have a value.`,
+        ),
+      );
     }
   }
 
@@ -152,6 +161,7 @@ function checkRequired(row: ParsedRow): ImportIssue[] {
   if (parts.length > 0 && parts.length < 3) {
     issues.push(
       issue(
+        ImportIssueCode.LOCATION_INCOMPLETE,
         row.line,
         'room',
         locationText(row),
@@ -168,6 +178,7 @@ function checkRequired(row: ParsedRow): ImportIssue[] {
   if (parts.length === 0 && row.cells.storage_id === '' && !isBlankOrZero(row.cells.on_hand)) {
     issues.push(
       issue(
+        ImportIssueCode.LOCATION_REQUIRED_FOR_QUANTITY,
         row.line,
         'room',
         row.cells.on_hand,
@@ -213,8 +224,8 @@ const uuid = z.string().uuid();
 
 function readRow(row: ParsedRow, errors: ImportIssue[], warnings: ImportIssue[]): TypedRow {
   const cell = (column: ImportColumn): string => row.cells[column];
-  const fail = (column: ImportColumn, message: string): void => {
-    errors.push(issue(row.line, column, cell(column), message));
+  const fail = (code: ImportIssueCode, column: ImportColumn, message: string): void => {
+    errors.push(issue(code, row.line, column, cell(column), message));
   };
 
   const text = (column: ImportColumn, schema: z.ZodTypeAny): string | null => {
@@ -222,7 +233,7 @@ function readRow(row: ParsedRow, errors: ImportIssue[], warnings: ImportIssue[])
     if (value === '') return null;
     const result = schema.safeParse(value);
     if (!result.success) {
-      fail(column, `"${column}" ${describe(result.error)}.`);
+      fail(ImportIssueCode.VALUE_INVALID, column, `"${column}" ${describe(result.error)}.`);
       return null;
     }
     return typeof result.data === 'string' ? result.data : value;
@@ -233,6 +244,7 @@ function readRow(row: ParsedRow, errors: ImportIssue[], warnings: ImportIssue[])
     if (value === '') return null;
     if (!uuid.safeParse(value).success) {
       fail(
+        ImportIssueCode.ID_MALFORMED,
         column,
         `"${value}" is not an id this system could have written. Leave it blank for a new product, or paste the value from a fresh export.`,
       );
@@ -251,6 +263,7 @@ function readRow(row: ParsedRow, errors: ImportIssue[], warnings: ImportIssue[])
         // It is ignored on import either way, so refusing the file over it would be pedantry.
         warnings.push(
           issue(
+            ImportIssueCode.READ_ONLY_UNREADABLE,
             row.line,
             column,
             value,
@@ -259,18 +272,23 @@ function readRow(row: ParsedRow, errors: ImportIssue[], warnings: ImportIssue[])
         );
         return null;
       }
-      fail(column, `"${value}" is not a whole number of units.`);
+      fail(
+        ImportIssueCode.QUANTITY_NOT_WHOLE,
+        column,
+        `"${value}" is not a whole number of units.`,
+      );
       return null;
     }
 
     if (parsed < 0) {
       if (readOnly) return null;
-      fail(column, 'A quantity cannot be negative.');
+      fail(ImportIssueCode.QUANTITY_NEGATIVE, column, 'A quantity cannot be negative.');
       return null;
     }
 
     if (!readOnly && parsed > 0 && !positiveQuantitySchema.safeParse(parsed).success) {
       fail(
+        ImportIssueCode.QUANTITY_TOO_LARGE,
         column,
         `A quantity above ${positiveQuantitySchema.maxValue} is not a quantity, it is a typo.`,
       );
@@ -284,7 +302,11 @@ function readRow(row: ParsedRow, errors: ImportIssue[], warnings: ImportIssue[])
     const value = cell(column).toLowerCase();
     if (value === yes.toLowerCase()) return true;
     if (value === no.toLowerCase()) return false;
-    fail(column, `"${cell(column)}" is not a value for "${column}". Write ${yes} or ${no}.`);
+    fail(
+      ImportIssueCode.VALUE_NOT_A_FLAG,
+      column,
+      `"${cell(column)}" is not a value for "${column}". Write ${yes} or ${no}.`,
+    );
     return false;
   };
 
@@ -295,6 +317,7 @@ function readRow(row: ParsedRow, errors: ImportIssue[], warnings: ImportIssue[])
     // Excel does this on open, before anybody has typed anything (C23).
     warnings.push(
       issue(
+        ImportIssueCode.CODE_LOOKS_LIKE_A_DATE,
         row.line,
         'product_code',
         code,
@@ -336,6 +359,7 @@ function readCategoryPath(row: ParsedRow, errors: ImportIssue[]): string[] {
   if (segments.some((segment) => segment === '')) {
     errors.push(
       issue(
+        ImportIssueCode.CATEGORY_PATH_MALFORMED,
         row.line,
         'category_path',
         raw,
@@ -350,6 +374,7 @@ function readCategoryPath(row: ParsedRow, errors: ImportIssue[]): string[] {
     // answer with the row number attached.
     errors.push(
       issue(
+        ImportIssueCode.CATEGORY_PATH_TOO_DEEP,
         row.line,
         'category_path',
         raw,
@@ -364,6 +389,7 @@ function readCategoryPath(row: ParsedRow, errors: ImportIssue[]): string[] {
     if (!result.success) {
       errors.push(
         issue(
+          ImportIssueCode.VALUE_INVALID,
           row.line,
           'category_path',
           segment,
@@ -424,6 +450,7 @@ function groupRows(rows: TypedRow[]): Grouped {
       for (const row of rowsForName) {
         errors.push(
           issue(
+            ImportIssueCode.NEW_PRODUCT_NEEDS_CODE,
             row.line,
             'product_code',
             row.name,
@@ -466,6 +493,7 @@ function checkGroupAgrees(group: RowGroup): ImportIssue[] {
     for (const row of group.rows) {
       issues.push(
         issue(
+          ImportIssueCode.PRODUCT_ROWS_DISAGREE,
           row.line,
           field.column,
           field.read(row),
@@ -494,6 +522,7 @@ function checkCodesAreUnique(groups: RowGroup[]): ImportIssue[] {
       for (const row of group.rows) {
         issues.push(
           issue(
+            ImportIssueCode.CODE_DUPLICATED_IN_FILE,
             row.line,
             'product_code',
             row.productCode,
@@ -541,6 +570,7 @@ function checkNewProductsAreDistinct(groups: RowGroup[]): ImportIssue[] {
       for (const row of group.rows) {
         issues.push(
           issue(
+            ImportIssueCode.NEW_PRODUCT_CODE_INCONSISTENT,
             row.line,
             'product_code',
             row.productCode,
@@ -629,6 +659,7 @@ function resolveProduct(
       for (const row of group.rows) {
         errors.push(
           issue(
+            ImportIssueCode.PRODUCT_NOT_FOUND,
             row.line,
             'product_id',
             group.productId,
@@ -644,6 +675,7 @@ function resolveProduct(
       for (const row of group.rows) {
         errors.push(
           issue(
+            ImportIssueCode.CODE_BELONGS_TO_ANOTHER_PRODUCT,
             row.line,
             'product_code',
             group.productCode,
@@ -666,6 +698,7 @@ function resolveProduct(
     for (const row of group.rows) {
       errors.push(
         issue(
+          ImportIssueCode.NEW_PRODUCT_CODE_TAKEN,
           row.line,
           'product_code',
           group.productCode,
@@ -743,6 +776,7 @@ function resolveCategory(
   if (row.categoryId !== null && !byId) {
     errors.push(
       issue(
+        ImportIssueCode.CATEGORY_NOT_FOUND,
         row.line,
         'category_id',
         row.categoryId,
@@ -756,6 +790,7 @@ function resolveCategory(
     // §4.1, C11. The file says two different things; picking one would be a coin toss.
     errors.push(
       issue(
+        ImportIssueCode.CATEGORY_AMBIGUOUS,
         row.line,
         'category_path',
         row.categoryPath.join(CATEGORY_PATH_SEPARATOR),
@@ -769,6 +804,7 @@ function resolveCategory(
     // §4.1, C12: the id wins, because the id is what cannot be renamed.
     warnings.push(
       issue(
+        ImportIssueCode.CATEGORY_RENAMED,
         row.line,
         'category_path',
         row.categoryPath.join(CATEGORY_PATH_SEPARATOR),
@@ -783,6 +819,7 @@ function resolveCategory(
       // C8. Reactivating a retired category is a decision somebody makes on purpose.
       errors.push(
         issue(
+          ImportIssueCode.CATEGORY_RETIRED,
           row.line,
           'category_path',
           existing.path.join(CATEGORY_PATH_SEPARATOR),
@@ -795,6 +832,7 @@ function resolveCategory(
       // C10: matched by the rule the unique index uses, which is not case-sensitive.
       warnings.push(
         issue(
+          ImportIssueCode.CATEGORY_MATCHED_LOOSELY,
           row.line,
           'category_path',
           row.categoryPath.join(CATEGORY_PATH_SEPARATOR),
@@ -829,6 +867,7 @@ function resolveLocation(
   if (row.storageId !== null && !byStorageId && !byPath) {
     errors.push(
       issue(
+        ImportIssueCode.SHELF_LABEL_NOT_FOUND,
         row.line,
         'storage_id',
         row.storageId,
@@ -842,6 +881,7 @@ function resolveLocation(
     // §4.1, C34.
     errors.push(
       issue(
+        ImportIssueCode.SHELF_AMBIGUOUS,
         row.line,
         'storage_id',
         row.storageId,
@@ -855,6 +895,7 @@ function resolveLocation(
     // §4.1, C35. The label is on the physical shelf; the name in the file is a memory of it.
     warnings.push(
       issue(
+        ImportIssueCode.SHELF_RENAMED,
         row.line,
         'room',
         locationTextOf(row),
@@ -870,6 +911,7 @@ function resolveLocation(
     // C13. Locations are never created by an import — the shelf has to exist in the building.
     errors.push(
       issue(
+        ImportIssueCode.SHELF_NOT_FOUND,
         row.line,
         'room',
         locationTextOf(row),
@@ -883,6 +925,7 @@ function resolveLocation(
     // C14. `StockService.adjust` does not check this, so nothing downstream would catch it.
     errors.push(
       issue(
+        ImportIssueCode.SHELF_RETIRED,
         row.line,
         'room',
         locationTextOf(row),
@@ -955,6 +998,7 @@ function buildPlan(
   if (deactivations.length > 0) {
     warnings.push(
       issue(
+        ImportIssueCode.PRODUCTS_RETIRED_BY_OMISSION,
         2,
         null,
         null,
@@ -968,6 +1012,7 @@ function buildPlan(
       // C31.
       warnings.push(
         issue(
+          ImportIssueCode.RETIRED_WITH_UNITS_ON_LOAN,
           2,
           null,
           deactivation.name,
@@ -999,6 +1044,7 @@ function planShelves(
       // the same shelf are still the same shelf, which is why this is checked after resolution.
       errors.push(
         issue(
+          ImportIssueCode.SHELF_REPEATED,
           shelf.line,
           'storage_id',
           shelf.compartment.storageId,
@@ -1019,6 +1065,7 @@ function planShelves(
       // not a count, and `adjust` would leave available negative.
       errors.push(
         issue(
+          ImportIssueCode.BELOW_RESERVED,
           shelf.line,
           'on_hand',
           String(shelf.onHand),
@@ -1056,6 +1103,7 @@ function planShelves(
     if (held > 0) {
       errors.push(
         issue(
+          ImportIssueCode.SHELF_CLEARED_BUT_RESERVED,
           resolved.group.rows[0]!.line,
           null,
           null,
@@ -1068,6 +1116,7 @@ function planShelves(
     if (placement.quantity > 0) {
       warnings.push(
         issue(
+          ImportIssueCode.SHELF_CLEARED_BY_OMISSION,
           resolved.group.rows[0]!.line,
           null,
           null,
@@ -1109,6 +1158,7 @@ function checkTrackable(
     if (row.onHand === 0) continue;
     errors.push(
       issue(
+        ImportIssueCode.CATEGORY_NOT_TRACKABLE,
         row.line,
         'on_hand',
         String(row.onHand),
@@ -1132,6 +1182,7 @@ function warnAboutProduct(
     // now means something else, and nobody recounted.
     warnings.push(
       issue(
+        ImportIssueCode.UNIT_CHANGED_UNDER_STOCK,
         first.line,
         'unit',
         first.unit,
@@ -1144,6 +1195,7 @@ function warnAboutProduct(
     // C31.
     warnings.push(
       issue(
+        ImportIssueCode.RETIRED_WITH_UNITS_ON_LOAN,
         first.line,
         'status',
         'Inactive',
@@ -1158,6 +1210,7 @@ function warnAboutProduct(
     // §4.5 again, at product level: the prominent one for the preview.
     warnings.push(
       issue(
+        ImportIssueCode.PRODUCT_LEFT_WITH_NO_STOCK,
         first.line,
         'on_hand',
         '0',
@@ -1194,6 +1247,7 @@ function warnAboutReadOnly(
     if (field.stated === null || field.stated === field.actual) continue;
     warnings.push(
       issue(
+        ImportIssueCode.READ_ONLY_IGNORED,
         shelf.line,
         field.column,
         String(field.stated),
@@ -1206,12 +1260,13 @@ function warnAboutReadOnly(
 /* --------------------------------------------------------------------------- helpers */
 
 function issue(
+  code: ImportIssueCode,
   row: number,
   column: string | null,
   value: string | null,
   message: string,
 ): ImportIssue {
-  return { row, column, value, message };
+  return { code, row, column, value, message };
 }
 
 function push<K, V>(map: Map<K, V[]>, key: K, value: V): void {

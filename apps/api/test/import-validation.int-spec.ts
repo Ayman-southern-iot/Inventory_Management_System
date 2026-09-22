@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { Role } from '@ims/shared';
+import { ImportIssueCode, Role } from '@ims/shared';
 import { createTestApp, httpClient, type TestApp } from './app';
 import { createUserAndLogin, resetData } from './factories';
 import {
@@ -197,7 +197,7 @@ describe('import validation', () => {
       );
 
       expect(outcome.plan).toBeNull();
-      expect(outcome.errors[0]!.message).toMatch(/reserved or quarantined/);
+      expect(outcome.errors[0]!.code).toBe(ImportIssueCode.BELOW_RESERVED);
     });
   });
 
@@ -217,7 +217,7 @@ describe('import validation', () => {
         file(edit(lines, fixture.productId, 'category_path', '')),
       );
 
-      expect(outcome.errors.some((i) => /is retired/.test(i.message))).toBe(true);
+      expect(outcome.errors.map((i) => i.code)).toContain(ImportIssueCode.CATEGORY_RETIRED);
     });
 
     it('refuses a retired shelf', async () => {
@@ -243,7 +243,10 @@ describe('import validation', () => {
         file(edit(lines, fixture.productId, 'compartment', shelf.code)),
       );
 
-      expect(outcome.errors[0]!.message).toMatch(/is retired \(its compartment is not active\)/);
+      expect(outcome.errors[0]!.code).toBe(ImportIssueCode.SHELF_RETIRED);
+      // The wording is the behaviour here: which of the three levels is retired decides where
+      // the person has to go to fix it.
+      expect(outcome.errors[0]!.message).toMatch(/its compartment is not active/);
     });
   });
 
@@ -253,7 +256,7 @@ describe('import validation', () => {
       lines[0] = lines[0]!.replace(/origin \S+/, `origin ${randomUUID()}`);
 
       const outcome = await validator.validate(file(lines));
-      expect(outcome.errors[0]!.message).toMatch(/different installation/);
+      expect(outcome.errors[0]!.code).toBe(ImportIssueCode.FILE_FOREIGN_DEPLOYMENT);
     });
 
     /** A snapshot is this deployment's own file by construction, even after a machine move. */
