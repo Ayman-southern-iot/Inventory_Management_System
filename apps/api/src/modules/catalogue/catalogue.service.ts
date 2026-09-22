@@ -1,6 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
-  PAGINATION_MAX_LIMIT,
   formatLocation,
   type Catalogue,
   type CatalogueCategory,
@@ -11,7 +10,6 @@ import {
   type CategoryNode,
 } from '@ims/shared';
 import { CONFIG, type AppConfig } from '../../config';
-import { ConflictError } from '../../common/errors';
 import { CategoriesService } from '../categories/categories.service';
 import { LocationsService } from '../locations/locations.service';
 import { ProductsService } from '../products/products.service';
@@ -46,7 +44,12 @@ export class CatalogueService {
       this.stock.allPlacements(),
     ]);
 
-    const products = await this.allProducts(query.includeInactive);
+    // One definition of "every product", shared with the round-trip export — see
+    // ProductsService.listAll. It refuses past the ceiling rather than truncating.
+    const products = await this.products.listAll({
+      includeInactive: query.includeInactive,
+      max: this.config.catalogue.maxProducts,
+    });
 
     // id → the category with its ancestry already resolved, so neither the products below nor
     // the consumer has to walk `parentId` upwards.
@@ -114,44 +117,6 @@ export class CatalogueService {
         locations: locations.length,
       },
     };
-  }
-
-  /**
-   * Every product, by walking the paginated list the rest of the system uses.
-   *
-   * Reusing `ProductsService.list` rather than adding an unpaginated query keeps one definition
-   * of what a product row contains and what "active" means. The page size is the same ceiling
-   * every other caller gets, so this is a handful of round trips, not one enormous one.
-   *
-   * It refuses past `CATALOGUE_MAX_PRODUCTS` instead of stopping quietly. A consumer that
-   * silently receives 5,000 of 5,200 products has no way to know its search is incomplete, and
-   * would go on telling people the missing ones do not exist.
-   */
-  private async allProducts(includeInactive: boolean) {
-    const limit = PAGINATION_MAX_LIMIT;
-    const max = this.config.catalogue.maxProducts;
-    const collected = [];
-
-    for (let page = 1; ; page += 1) {
-      const result = await this.products.list({
-        page,
-        limit,
-        includeInactive,
-        uncategorized: false,
-        inStockOnly: false,
-      });
-
-      if (result.total > max) {
-        throw new ConflictError(
-          `The catalogue holds ${result.total} products, above the ${max} this endpoint will serve in one response. Raise CATALOGUE_MAX_PRODUCTS or read /products page by page instead.`,
-        );
-      }
-
-      collected.push(...result.items);
-      if (collected.length >= result.total || result.items.length === 0) break;
-    }
-
-    return collected;
   }
 }
 

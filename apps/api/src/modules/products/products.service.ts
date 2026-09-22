@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { PAGINATION_MAX_LIMIT } from '@ims/shared';
 import type {
   CreateProductInput,
   ListProductsQuery,
@@ -35,6 +36,44 @@ export class ProductsService {
   async list(query: ListProductsQuery): Promise<Paginated<Product>> {
     const { items, total } = await this.repo.list(query);
     return { items, page: query.page, limit: query.limit, total };
+  }
+
+  /**
+   * Every product, for the callers that genuinely need all of them at once — the catalogue
+   * endpoint and the round-trip export.
+   *
+   * It walks the same paginated query everything else uses rather than adding an unbounded one,
+   * so there is one definition of what a product row contains and what "active" means. The page
+   * size is the ordinary ceiling, making this a handful of round trips rather than one enormous
+   * query.
+   *
+   * `max` is a hard stop, not a truncation: a caller that silently received 5,000 of 5,200
+   * products has no way to know its answer is incomplete, and would go on telling people the
+   * missing ones do not exist. Past the ceiling it throws and the caller reports why.
+   */
+  async listAll(options: { includeInactive: boolean; max: number }): Promise<Product[]> {
+    const collected: Product[] = [];
+
+    for (let page = 1; ; page += 1) {
+      const result = await this.repo.list({
+        page,
+        limit: PAGINATION_MAX_LIMIT,
+        includeInactive: options.includeInactive,
+        uncategorized: false,
+        inStockOnly: false,
+      });
+
+      if (result.total > options.max) {
+        throw new ConflictError(
+          `The catalogue holds ${result.total} products, above the ${options.max} this endpoint will serve in one response.`,
+        );
+      }
+
+      collected.push(...result.items);
+      if (collected.length >= result.total || result.items.length === 0) break;
+    }
+
+    return collected;
   }
 
   async findById(id: string): Promise<ProductDetail> {

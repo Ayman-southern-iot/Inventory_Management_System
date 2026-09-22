@@ -66,6 +66,17 @@ export const InternalSettingKey = {
    * would have to guess — which meant undoing the admin's choice on every restart.
    */
   AUDIT_KNOWN_ACTIONS: 'AUDIT_KNOWN_ACTIONS',
+  /**
+   * A UUID minted on this installation's first export and never changed. It is stamped into the
+   * header of every round-trip CSV so an import can refuse a file that came from somewhere else
+   * — the demo stack's export carries product ids that are strangers in production, and applying
+   * it would create several hundred duplicates rather than updating anything.
+   *
+   * Stored rather than derived from the cluster, deliberately: Postgres' own `system_identifier`
+   * changes when a backup is restored onto a new machine, which is exactly the moment you least
+   * want yesterday's export to start being rejected.
+   */
+  DEPLOYMENT_ID: 'DEPLOYMENT_ID',
 } as const;
 
 export type InternalSettingKey = (typeof InternalSettingKey)[keyof typeof InternalSettingKey];

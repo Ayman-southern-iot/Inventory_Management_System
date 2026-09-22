@@ -27,6 +27,7 @@ import { ReportsModule } from './modules/reports/reports.module';
 import { HealthController } from './modules/health/health.controller';
 import { ApiKeysModule } from './modules/api-keys/api-keys.module';
 import { CatalogueModule } from './modules/catalogue/catalogue.module';
+import { ImportsModule } from './modules/imports/imports.module';
 import { isApiKeyRequest } from './common/throttling';
 
 const toMs = (seconds: number): number => seconds * 1000;
@@ -92,6 +93,7 @@ const throttlerOptions = [
     ScheduleModule.forRoot(),
     ApiKeysModule,
     CatalogueModule,
+    ImportsModule,
     AuthModule,
     UsersModule,
     DepartmentsModule,

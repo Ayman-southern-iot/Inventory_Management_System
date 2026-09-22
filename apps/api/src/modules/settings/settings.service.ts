@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import {
   AUDIT_ACTIONS,
   AUDIT_ALWAYS_ON_ACTIONS,
@@ -103,6 +104,32 @@ export class SettingsService implements OnModuleInit {
    * an admin disabled before the upgrade still cannot be told apart from one that did not exist
    * yet, so it comes back. From the next boot onwards the distinction is on record.
    */
+  /**
+   * This installation's identity, minted once on first use and kept forever.
+   *
+   * Stamped into the header of every round-trip CSV so an import can refuse a file that came from
+   * somewhere else — the demo stack's export names product ids that are strangers in production,
+   * and applying it would create several hundred duplicates rather than updating anything.
+   *
+   * Stored rather than configured, deliberately: a config key travels with a copied `.env`, which
+   * is precisely the mistake this exists to catch. Stored rather than derived from the cluster
+   * too — Postgres' `system_identifier` changes when a backup is restored onto a new machine,
+   * which is the moment you least want yesterday's export to start being rejected.
+   *
+   * Not cached: it is read once per export, and a stale id here would be a wrong fingerprint.
+   */
+  async deploymentId(): Promise<string> {
+    const rows = await this.repo.findAll();
+    const existing = rows.find((row) => row.key === InternalSettingKey.DEPLOYMENT_ID)?.value;
+    if (typeof existing === 'string' && existing.length > 0) return existing;
+
+    // A race on first use mints two and the upsert lets the second win. Both are equally valid:
+    // nothing has been exported under either yet.
+    const minted = randomUUID();
+    await this.repo.upsert(InternalSettingKey.DEPLOYMENT_ID, minted, null);
+    return minted;
+  }
+
   private async unionNewAuditActions(): Promise<void> {
     const enabledKey = SettingKey.AUDIT_ENABLED_ACTIONS;
     const rows = await this.repo.findAll();
