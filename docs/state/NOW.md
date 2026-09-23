@@ -63,6 +63,13 @@ product page (spec §6), inventory search by shelf label (OQ-B), category move/m
 - **`pg` cannot parse a custom enum array** and hands back the literal `"{a,b}"`. A string that
   passes `.includes('a')` by substring — every single-value test still green. Read such a column
   as `::text[]` (see `api_keys.scopes`).
+- **An import's snapshot is not yet the guarantee `importing_data.md` §5.5 claims.** Step 1 of
+  that list is "Engage the lockout (§8). Before anything else", and step 2 says the snapshot is
+  "a faithful pre-image of exactly what is about to be overwritten" **because the lockout is
+  already up**. The lockout is part I and is not built, so that sentence is currently false: a
+  write landing between the snapshot and the transaction leaves the rollback file quietly wrong
+  about that one change (§16.5). Small window, rare imports, not zero. The call site in
+  `import-apply.service.ts` carries the same note; **part I landing is what makes §5.5 true.**
 
 ## Open debt
 

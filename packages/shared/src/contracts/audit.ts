@@ -187,6 +187,14 @@ export const AUDIT_ACTIONS = [
    * purged away by its own cutoff — deleting audit history without leaving a trace of the
    * deletion would defeat the point of having an audit log.
    */
+  /**
+   * One row for one CSV import, carrying the diff summary the human approved.
+   *
+   * Deliberately the *only* audit row an import writes (I10). Five thousand `stock.adjust`
+   * entries for one decision would bury the log and cost a third of the runtime; the ledger
+   * already records every movement, tagged with this job's id.
+   */
+  'import.apply',
   'audit.purge',
 ] as const;
 
@@ -220,6 +228,8 @@ export const AUDIT_ENTITY_TYPES = [
    * row uses `entity_type = 'requisition'` because by then the file has a parent.
    */
   'stored_file',
+  /** A row in `import_jobs`. The entity an `import.apply` row points at. */
+  'import_job',
 ] as const;
 
 /**

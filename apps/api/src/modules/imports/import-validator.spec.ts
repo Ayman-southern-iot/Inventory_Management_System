@@ -1018,10 +1018,7 @@ describe('validateImport', () => {
           rows: [row(), gpuRow({ storage_id: 'MAI-MET-1A-0001', compartment: '1A', on_hand: '0' })],
         },
         {
-          rows: [
-            row({ storage_id: 'MAI-MET-1B-0002', compartment: '1B', on_hand: '7' }),
-            gpuRow(),
-          ],
+          rows: [row({ storage_id: 'MAI-MET-1B-0002', compartment: '1B', on_hand: '7' }), gpuRow()],
         },
         {
           rows: [
@@ -1104,4 +1101,8 @@ const NOT_EXERCISED_HERE: ImportIssueCode[] = [
   // Also ImportValidationService's: the changed-shelf ceiling is measured on the diff, which
   // the pure validator does not build. Asserted in `import-validation.int-spec.ts`.
   ImportIssueCode.TOO_MANY_CHANGED_SHELVES,
+  // Part G's, raised by the apply path rather than by validation: a backup that could not be
+  // written, and a transaction that rolled back. Asserted in `import-apply.int-spec.ts`.
+  ImportIssueCode.SNAPSHOT_FAILED,
+  ImportIssueCode.APPLY_FAILED,
 ].sort();

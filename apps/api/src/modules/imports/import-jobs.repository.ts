@@ -47,32 +47,34 @@ export class ImportJobsRepository {
   constructor(@Inject(DB) private readonly db: Db) {}
 
   private baseSelect() {
-    return this.db
-      .selectFrom('import_jobs')
-      .innerJoin('users', 'users.id', 'import_jobs.created_by')
-      // LEFT: a job survives its file being swept, and the history screen still has to show it.
-      .leftJoin('stored_files', 'stored_files.id', 'import_jobs.file_id')
-      .select([
-        'import_jobs.id',
-        'import_jobs.kind',
-        'import_jobs.status',
-        'import_jobs.file_id',
-        'import_jobs.file_sha256',
-        'import_jobs.snapshot_file_id',
-        'import_jobs.snapshot_deleted_at',
-        'import_jobs.restored_from_job_id',
-        'import_jobs.total_rows',
-        'import_jobs.processed_rows',
-        'import_jobs.started_at',
-        'import_jobs.heartbeat_at',
-        'import_jobs.finished_at',
-        'import_jobs.estimated_finish_at',
-        'import_jobs.report',
-        'import_jobs.created_by',
-        'import_jobs.created_at',
-        'users.full_name as created_by_name',
-        'stored_files.original_name as file_name',
-      ]);
+    return (
+      this.db
+        .selectFrom('import_jobs')
+        .innerJoin('users', 'users.id', 'import_jobs.created_by')
+        // LEFT: a job survives its file being swept, and the history screen still has to show it.
+        .leftJoin('stored_files', 'stored_files.id', 'import_jobs.file_id')
+        .select([
+          'import_jobs.id',
+          'import_jobs.kind',
+          'import_jobs.status',
+          'import_jobs.file_id',
+          'import_jobs.file_sha256',
+          'import_jobs.snapshot_file_id',
+          'import_jobs.snapshot_deleted_at',
+          'import_jobs.restored_from_job_id',
+          'import_jobs.total_rows',
+          'import_jobs.processed_rows',
+          'import_jobs.started_at',
+          'import_jobs.heartbeat_at',
+          'import_jobs.finished_at',
+          'import_jobs.estimated_finish_at',
+          'import_jobs.report',
+          'import_jobs.created_by',
+          'import_jobs.created_at',
+          'users.full_name as created_by_name',
+          'stored_files.original_name as file_name',
+        ])
+    );
   }
 
   async insert(values: {
@@ -122,13 +124,21 @@ export class ImportJobsRepository {
     patch: {
       status?: ImportJobStatus;
       totalRows?: number | null;
+      processedRows?: number;
       report?: ImportJobReport;
+      startedAt?: Date | null;
+      heartbeatAt?: Date | null;
       finishedAt?: Date | null;
+      snapshotFileId?: string | null;
     },
   ): Promise<void> {
     const values = {
       ...(patch.status === undefined ? {} : { status: patch.status }),
       ...(patch.totalRows === undefined ? {} : { total_rows: patch.totalRows }),
+      ...(patch.processedRows === undefined ? {} : { processed_rows: patch.processedRows }),
+      ...(patch.startedAt === undefined ? {} : { started_at: patch.startedAt }),
+      ...(patch.heartbeatAt === undefined ? {} : { heartbeat_at: patch.heartbeatAt }),
+      ...(patch.snapshotFileId === undefined ? {} : { snapshot_file_id: patch.snapshotFileId }),
       ...(patch.report === undefined ? {} : { report: JSON.stringify(patch.report) }),
       ...(patch.finishedAt === undefined ? {} : { finished_at: patch.finishedAt }),
     };

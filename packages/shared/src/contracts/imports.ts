@@ -114,6 +114,10 @@ export const ImportIssueCode = {
    * refusing it on size would refuse the file that changes nothing (§11.6, OQ-IMP-1).
    */
   TOO_MANY_CHANGED_SHELVES: 'TOO_MANY_CHANGED_SHELVES',
+  /** The pre-import backup could not be written, so nothing was applied (C38). */
+  SNAPSHOT_FAILED: 'SNAPSHOT_FAILED',
+  /** The apply transaction rolled back. Nothing was changed. */
+  APPLY_FAILED: 'APPLY_FAILED',
 
   /* ------------------------------------------------------ warnings — never block (§5.3.7) */
   CODE_LOOKS_LIKE_A_DATE: 'CODE_LOOKS_LIKE_A_DATE',

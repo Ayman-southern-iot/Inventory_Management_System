@@ -151,5 +151,4 @@ export class ProductExportService {
         : csvField(cells[column]),
     ).join(',');
   }
-
 }

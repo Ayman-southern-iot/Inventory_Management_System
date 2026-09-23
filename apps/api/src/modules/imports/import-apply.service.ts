@@ -1,0 +1,388 @@
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { createHash } from 'node:crypto';
+import { sql } from 'kysely';
+import { ImportIssueCode, ImportJobStatus, type ImportIssue, type ImportJob } from '@ims/shared';
+import { CONFIG, type AppConfig } from '../../config';
+import { DB } from '../../database/database.module';
+import type { Db } from '../../database/create-db';
+import type { Transaction } from 'kysely';
+import type { Database } from '../../database/schema';
+import {
+  ConflictError,
+  ImportFileChangedError,
+  ImportValidationFailedError,
+  NotFoundError,
+} from '../../common/errors';
+import { AuditService } from '../audit/audit.service';
+import type { AuditContext } from '../audit/audit-context';
+import { CategoriesService } from '../categories/categories.service';
+import { FilesService } from '../files/files.service';
+import { ProductsService } from '../products/products.service';
+import { StockService } from '../stock/stock.service';
+import { ImportJobsRepository, type ImportJobRow } from './import-jobs.repository';
+import { toContract } from './import-jobs.service';
+import { ImportValidationService } from './import-validation.service';
+import { ProductExportService } from './product-export.service';
+import { deltaFromLocked, staleAgainstLocked } from './import-apply-checks';
+import { stripBom } from './import-format';
+import type { ImportPlan } from './import-validator';
+
+type Tx = Transaction<Database>;
+
+/**
+ * Applying an approved import (`importing_data.md` §5.5).
+ *
+ * **The order is the design, and it is not the order it was first drafted in.** Snapshot before
+ * the transaction, because a snapshot is file I/O and §3.5 forbids that inside one. Lock every
+ * affected placement in one deadlock-free order. Re-check the domain against the *locked* rows,
+ * not against what the preview said minutes ago. Then write, in one transaction, so a
+ * half-applied file is not a state this system can reach (I7).
+ *
+ * **Steps 3–10 do no non-database work.** No file read, no parse, no network. Everything the
+ * writes need was resolved into a plan before the transaction opened, because
+ * `idle_in_transaction_session_timeout` is 30 s and a transaction that stops to read a file is
+ * an idle one.
+ */
+
+/**
+ * How long a statement waits for a lock before giving up.
+ *
+ * Not business policy, so it is a constant rather than a setting: it exists so an import that
+ * collides with a long-running write fails in seconds with a clear error, instead of sitting on
+ * the pool until `statement_timeout` kills it at sixty.
+ */
+const LOCK_TIMEOUT = '5s';
+
+@Injectable()
+export class ImportApplyService {
+  private readonly logger = new Logger(ImportApplyService.name);
+
+  constructor(
+    private readonly repo: ImportJobsRepository,
+    private readonly validation: ImportValidationService,
+    private readonly files: FilesService,
+    private readonly exporter: ProductExportService,
+    private readonly products: ProductsService,
+    private readonly categories: CategoriesService,
+    private readonly stock: StockService,
+    private readonly audit: AuditService,
+    @Inject(DB) private readonly db: Db,
+    @Inject(CONFIG) private readonly config: AppConfig,
+  ) {}
+
+  /**
+   * The human gate closing. Returns as soon as the job is safely `APPLYING`; the work continues.
+   *
+   * Fire-and-forget by §11.4: the request that starts an apply cannot wait three minutes for a
+   * response, so the endpoint answers 202 with the job id and the progress endpoint (part J)
+   * carries the rest. `completed` is that work, exposed so a test can await the actual condition
+   * rather than sleep — the controller ignores it deliberately.
+   */
+  async confirm(
+    jobId: string,
+    actor: { id: string },
+    auditContext: AuditContext,
+  ): Promise<{ job: ImportJob; completed: Promise<void> }> {
+    const row = await this.repo.findById(jobId);
+    if (!row) throw new NotFoundError('Import');
+    if (row.status !== ImportJobStatus.AWAITING_CONFIRMATION) {
+      throw new ConflictError(
+        `This import is ${row.status.toLowerCase().replace(/_/g, ' ')}, so there is nothing to confirm.`,
+      );
+    }
+    if (!row.file_id) throw new ConflictError('This import no longer has its file.');
+
+    const { contents } = await this.files.readContents(row.file_id);
+
+    /*
+     * §5.4's last line. The bytes on disk are rehashed and compared to what the upload recorded,
+     * so a job cannot be applied against a file that changed underneath it — the diff a human
+     * approved has to be the diff that gets written.
+     */
+    const sha256 = createHash('sha256').update(contents).digest('hex');
+    if (sha256 !== row.file_sha256) throw new ImportFileChangedError();
+
+    /*
+     * Re-validated here rather than replayed from the upload, and deliberately **outside** the
+     * transaction. Minutes have passed: a borrow may have landed, a category may have been
+     * retired. Re-resolving now is both the plan the writes need in memory (§5.5's no-I/O rule)
+     * and the cheap synchronous re-check §5.5 names as the next lever — it turns a stale job
+     * into an instant rejection instead of a three-minute transaction that fails at the end.
+     */
+    const outcome = await this.validation.validate(stripBom(contents.toString('utf8')));
+
+    if (outcome.errors.length > 0 || !outcome.plan) {
+      await this.repo.update(jobId, {
+        status: ImportJobStatus.FAILED,
+        report: { errors: outcome.errors, warnings: outcome.warnings, diff: outcome.diff },
+        finishedAt: new Date(),
+      });
+      throw new ImportValidationFailedError(outcome.errors);
+    }
+
+    /*
+     * The status flip is its own committed write, before the apply transaction opens — and
+     * small on purpose.
+     *
+     * It has to be visible to other requests, which rules out doing it inside the transaction.
+     * Doing it there would also be worse on a crash: the rollback would take the flip with it,
+     * so the job would silently return to `AWAITING_CONFIRMATION` with no record an attempt was
+     * ever made. This way a crash leaves a job stuck in `APPLYING` with a stale heartbeat, which
+     * is exactly the case the heartbeat guard exists to find and fail cleanly (part I).
+     */
+    await this.repo.update(jobId, {
+      status: ImportJobStatus.APPLYING,
+      startedAt: new Date(),
+      heartbeatAt: new Date(),
+      totalRows: outcome.rowCount,
+    });
+
+    const completed = this.run(jobId, outcome.plan, actor, auditContext).catch((error: unknown) => {
+      // Nothing is awaiting this in production, so a throw here would be an unhandled rejection.
+      this.logger.error(`Import ${jobId} failed: ${String(error)}`);
+    });
+
+    return { job: await this.require(jobId), completed };
+  }
+
+  private async run(
+    jobId: string,
+    plan: ImportPlan,
+    actor: { id: string },
+    auditContext: AuditContext,
+  ): Promise<void> {
+    /*
+     * **Step 1 of §5.5 — engage the lockout — is not here, because part I is not built.**
+     *
+     * Its absence does not change this order; the lockout slots in above the snapshot when it
+     * lands. What it does change is what the snapshot *guarantees*: with no lockout, a write can
+     * land between the snapshot and the transaction, and the rollback file would be quietly
+     * wrong about that one change (§16.5). At twelve users with rare imports the window is
+     * small; it is not zero. Recorded in NOW.md rather than left implicit here.
+     */
+
+    const snapshotId = await this.takeSnapshot(jobId);
+    if (!snapshotId) return; // C38: a backup you cannot take is a reason to stop, not continue.
+
+    try {
+      await this.db.transaction().execute(async (tx) => {
+        await sql`SET LOCAL lock_timeout = ${sql.lit(LOCK_TIMEOUT)}`.execute(tx);
+        await this.applyWithin(tx, plan, actor, auditContext, jobId);
+      });
+    } catch (error) {
+      await this.fail(jobId, toIssue(error));
+      return;
+    }
+
+    await this.repo.update(jobId, {
+      status: ImportJobStatus.COMPLETED,
+      finishedAt: new Date(),
+      processedRows: countShelves(plan),
+    });
+  }
+
+  /** Steps 4–10, and nothing in here touches anything but the database. */
+  private async applyWithin(
+    tx: Tx,
+    plan: ImportPlan,
+    actor: { id: string },
+    auditContext: AuditContext,
+    jobId: string,
+  ): Promise<void> {
+    const shelves = plan.products.flatMap((product) =>
+      product.productId === null
+        ? []
+        : product.shelves
+            .filter((shelf) => shelf.targetOnHand !== shelf.currentOnHand)
+            .map((shelf) => ({
+              productId: product.productId!,
+              compartmentId: shelf.compartmentId,
+              creating: shelf.targetOnHand > shelf.currentOnHand,
+            })),
+    );
+
+    // 4 — every lock, one order (see StockService.lockPlacementsForImport for why not one query).
+    const locked = await this.stock.lockPlacementsForImport(tx, shelves);
+
+    // 5 — the domain, against the locked rows rather than against what the preview said.
+    const stale = staleAgainstLocked(plan, locked);
+    if (stale.length > 0) throw new StaleImportError(stale);
+
+    // 6 — categories, parents first, so a child's parent id exists when it is inserted.
+    const createdCategoryIds: string[] = [];
+    for (const planned of plan.categoriesToCreate) {
+      const parentId =
+        planned.parentIndex === null ? planned.parentId : createdCategoryIds[planned.parentIndex]!;
+      createdCategoryIds.push(
+        await this.categories.createForImport(tx, {
+          name: planned.path[planned.path.length - 1]!,
+          parentId,
+        }),
+      );
+    }
+
+    // 7 and 8 — the products, and the shelves under each.
+    for (const product of plan.products) {
+      const categoryId =
+        product.newCategoryIndex === null
+          ? product.categoryId
+          : createdCategoryIds[product.newCategoryIndex]!;
+
+      const productId =
+        product.productId ??
+        (await this.products.createForImport(tx, {
+          productCode: product.productCode ?? undefined,
+          name: product.name,
+          categoryId,
+          unit: product.unit,
+          defaultReturnable: product.defaultReturnable,
+          description: product.description,
+        }));
+
+      if (product.productId !== null) {
+        await this.products.updateForImport(tx, productId, {
+          name: product.name,
+          categoryId,
+          unit: product.unit,
+          defaultReturnable: product.defaultReturnable,
+          description: product.description,
+          isActive: product.isActive,
+          ...(product.productCode === null ? {} : { productCode: product.productCode }),
+        });
+      }
+
+      for (const shelf of product.shelves) {
+        /*
+         * The delta comes from the **locked** quantity, never from the plan's `currentOnHand`.
+         * That number is what the preview showed a human minutes ago; applying a delta computed
+         * from it would move the shelf by the wrong amount the moment anything else touched it,
+         * which is the exact bug rules/40-database.md exists to prevent.
+         */
+        const delta = deltaFromLocked(productId, shelf, locked);
+        if (delta === 0) continue; // C28: `adjust` throws on a zero delta, and rightly.
+
+        await this.stock.adjust(
+          {
+            productId,
+            compartmentId: shelf.compartmentId,
+            delta,
+            reason: `CSV import ${jobId}`,
+          },
+          { performedBy: actor.id },
+          // No per-adjustment audit row (I10) — the ledger has the movement, and one
+          // `import.apply` row below has the decision.
+          undefined,
+          tx,
+        );
+      }
+    }
+
+    // 9 — what the file never mentioned (I1).
+    for (const deactivation of plan.deactivations) {
+      await this.products.updateForImport(tx, deactivation.productId, { isActive: false });
+    }
+
+    // 10 — one row for the human action, not one per thing it touched.
+    await this.audit.record(
+      {
+        action: 'import.apply',
+        entityType: 'import_job',
+        entityId: jobId,
+        summary: `Applied CSV import ${jobId}`,
+        metadata: {
+          jobId,
+          productsCreated: plan.products.filter((p) => p.productId === null).length,
+          productsDeactivated: plan.deactivations.length,
+          categoriesCreated: plan.categoriesToCreate.length,
+          shelvesChanged: countShelves(plan),
+        },
+      },
+      auditContext,
+      tx,
+    );
+  }
+
+  /**
+   * §5.5 step 2 and C38. Outside the transaction, because it is file I/O.
+   *
+   * A failure here stops the import rather than continuing without a backup: this is the only
+   * thing standing between "overwrite everything" and an unrecoverable mistake, and an import
+   * that quietly proceeded without one would be worst exactly when it mattered.
+   */
+  private async takeSnapshot(jobId: string): Promise<string | null> {
+    try {
+      const csv = await this.exporter.toCsv();
+      const stored = await this.files.upload({
+        kind: 'PRODUCT_SNAPSHOT',
+        contents: Buffer.from(csv, 'utf8'),
+        originalName: `snapshot-${jobId}.csv`,
+        uploadedBy: (await this.require(jobId)).createdById,
+      });
+      await this.repo.update(jobId, { snapshotFileId: stored.id });
+      return stored.id;
+    } catch (error) {
+      this.logger.error(`Import ${jobId}: snapshot failed, not applying: ${String(error)}`);
+      await this.fail(jobId, {
+        code: ImportIssueCode.SNAPSHOT_FAILED,
+        row: 1,
+        column: null,
+        value: null,
+        message:
+          'The backup of the current inventory could not be written, so nothing was imported. A backup that cannot be taken is a reason to stop, not to continue.',
+      });
+      return null;
+    }
+  }
+
+  private async fail(jobId: string, issue: ImportIssue): Promise<void> {
+    const row = await this.repo.findById(jobId);
+    const report = row?.report ?? { errors: [], warnings: [], diff: null };
+    await this.repo.update(jobId, {
+      status: ImportJobStatus.FAILED,
+      report: { ...report, errors: [issue] },
+      finishedAt: new Date(),
+    });
+  }
+
+  private async require(jobId: string): Promise<ImportJob> {
+    const job = await this.jobFrom(jobId);
+    if (!job) throw new NotFoundError('Import');
+    return job;
+  }
+
+  private async jobFrom(jobId: string): Promise<ImportJob | null> {
+    const row = await this.repo.findById(jobId);
+    return row ? toContract(row, this.config) : null;
+  }
+}
+
+/** A domain check that passed at preview and fails under lock. Rare, and cheap to hit. */
+export class StaleImportError extends Error {
+  constructor(readonly issues: ImportIssue[]) {
+    super(issues[0]?.message ?? 'The catalogue changed while this import was waiting.');
+  }
+}
+
+function countShelves(plan: ImportPlan): number {
+  return plan.products.reduce(
+    (total, product) =>
+      total + product.shelves.filter((s) => s.targetOnHand !== s.currentOnHand).length,
+    0,
+  );
+}
+
+function toIssue(error: unknown): ImportIssue {
+  if (error instanceof StaleImportError) return error.issues[0]!;
+  return {
+    code: ImportIssueCode.APPLY_FAILED,
+    row: 1,
+    column: null,
+    value: null,
+    message: `The import could not be applied and nothing was changed: ${
+      error instanceof Error ? error.message : String(error)
+    }`,
+  };
+}
+
+/** Kept for the row shape, since the repository owns the mapping. */
+export type { ImportJobRow };

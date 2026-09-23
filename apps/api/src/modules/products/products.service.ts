@@ -139,6 +139,42 @@ export class ProductsService {
     }
   }
 
+  /**
+   * The import's write path: the same repository call, **without a per-product audit row**.
+   *
+   * I10. One human action produces one `import.apply` audit row naming the job, and the job
+   * names who confirmed it; the ledger carries every stock movement. A row per created product
+   * on top of that would swamp the log for the same information, and at five thousand rows it
+   * is a third of the runtime.
+   */
+  async createForImport(tx: Tx, input: CreateProductInput): Promise<string> {
+    try {
+      const productCode = input.productCode ?? (await generateProductCode(tx, input.name));
+      return await this.repo.insert(
+        {
+          productCode,
+          name: input.name,
+          categoryId: input.categoryId,
+          unit: input.unit,
+          defaultReturnable: input.defaultReturnable,
+          description: input.description,
+        },
+        tx,
+      );
+    } catch (error) {
+      throw translate(error);
+    }
+  }
+
+  /** As `createForImport`, for a product that already exists. No audit row, same reason. */
+  async updateForImport(tx: Tx, id: string, input: UpdateProductInput): Promise<void> {
+    try {
+      await this.repo.update(id, input, tx);
+    } catch (error) {
+      throw translate(error);
+    }
+  }
+
   async create(input: CreateProductInput, context: AuditContext): Promise<ProductDetail> {
     try {
       const id = await this.db

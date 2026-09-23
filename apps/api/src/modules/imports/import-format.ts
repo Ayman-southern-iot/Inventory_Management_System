@@ -152,7 +152,10 @@ export function parseFingerprint(line: string): Fingerprint | null {
 
   const parts = line.slice(2).split(' · ');
   const read = (prefix: string): string | undefined =>
-    parts.find((part) => part.startsWith(`${prefix} `))?.slice(prefix.length + 1).trim();
+    parts
+      .find((part) => part.startsWith(`${prefix} `))
+      ?.slice(prefix.length + 1)
+      .trim();
 
   const version = parts[0]?.replace('ims-product-import ', '').trim();
   const exportedAt = read('exported');

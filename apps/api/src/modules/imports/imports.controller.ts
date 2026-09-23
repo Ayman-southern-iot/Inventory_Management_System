@@ -22,9 +22,12 @@ import { ValidationFailedError } from '../../common/errors';
 import { zodPipe } from '../../common/zod-validation.pipe';
 import { AuthenticatedThrottle } from '../../common/throttling';
 import { CurrentUser, Roles } from '../auth/auth.decorators';
+import { CurrentAuditContext } from '../audit/audit.decorators';
+import type { AuditContext } from '../audit/audit-context';
 import type { RequestUser } from '../auth/request-user';
 import { FilesService } from '../files/files.service';
 import { UTF8_BOM, stripBom } from './import-format';
+import { ImportApplyService } from './import-apply.service';
 import { ImportJobsService } from './import-jobs.service';
 import { ProductExportService } from './product-export.service';
 
@@ -59,6 +62,7 @@ export class ImportsController {
     private readonly exporter: ProductExportService,
     private readonly files: FilesService,
     private readonly jobs: ImportJobsService,
+    private readonly apply: ImportApplyService,
   ) {}
 
   /**
@@ -124,6 +128,27 @@ export class ImportsController {
   @Get('imports')
   async listJobs(): Promise<ImportJob[]> {
     return this.jobs.listRecent();
+  }
+
+  /**
+   * The human gate closing: apply what the diff said (§5.5).
+   *
+   * **202, not 200.** §11.4: the request that starts an apply cannot wait three minutes for a
+   * response, so this answers with the job as soon as it is safely `APPLYING` and the work
+   * continues server-side. Part J's progress endpoint is the read side of that; until it lands,
+   * `GET /inventory/imports/:id` already shows where the run got to.
+   */
+  @Post('imports/:id/confirm')
+  @HttpCode(HttpStatus.ACCEPTED)
+  async confirmJob(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() actor: RequestUser,
+    @CurrentAuditContext() auditContext: AuditContext,
+  ): Promise<ImportJob> {
+    // `completed` is deliberately dropped: the point of 202 is not waiting for it. The service
+    // attaches its own catch, so nothing here can become an unhandled rejection.
+    const { job } = await this.apply.confirm(id, actor, auditContext);
+    return job;
   }
 
   /** Give up an import that is waiting, releasing the one-live slot for somebody else. */

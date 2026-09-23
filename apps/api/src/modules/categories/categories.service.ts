@@ -7,7 +7,7 @@ import { checkViolationMessage, isUniqueViolation } from '../../common/pg-errors
 import { AuditService } from '../audit/audit.service';
 import type { AuditContext } from '../audit/audit-context';
 import { diffSafeFields } from '../audit/audit-sanitizer';
-import { CategoriesRepository } from './categories.repository';
+import { CategoriesRepository, type Tx } from './categories.repository';
 
 @Injectable()
 export class CategoriesService {
@@ -34,6 +34,20 @@ export class CategoriesService {
     threshold: number,
   ): Promise<{ candidate: string; id: string; name: string; score: number }[]> {
     return this.repo.findSimilarNames(candidates, threshold);
+  }
+
+  /**
+   * The import's write path (I8: a file may create categories, never locations).
+   *
+   * No audit row per category, for the reason `ProductsService.createForImport` gives — the
+   * single `import.apply` row names the job, and the diff the human approved lists every
+   * category it was going to create.
+   */
+  async createForImport(
+    tx: Tx,
+    input: { name: string; parentId: string | null },
+  ): Promise<string> {
+    return this.repo.insert({ name: input.name, parentId: input.parentId, isTrackable: true }, tx);
   }
 
   async create(input: CreateCategoryInput, context: AuditContext): Promise<Category> {

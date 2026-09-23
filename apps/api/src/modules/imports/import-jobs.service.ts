@@ -1,11 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { ImportJobStatus, type ImportJob } from '@ims/shared';
 import { CONFIG, type AppConfig } from '../../config';
-import {
-  ConflictError,
-  ImportAlreadyRunningError,
-  NotFoundError,
-} from '../../common/errors';
+import { ConflictError, ImportAlreadyRunningError, NotFoundError } from '../../common/errors';
 import { isUniqueViolation } from '../../common/pg-errors';
 import { ImportValidationService } from './import-validation.service';
 import {
@@ -155,12 +151,11 @@ export class ImportJobsService {
 }
 
 function isExpired(row: ImportJobRow, config: AppConfig): boolean {
-  const deadline =
-    row.created_at.getTime() + config.imports.confirmationTtlMinutes * 60 * 1000;
+  const deadline = row.created_at.getTime() + config.imports.confirmationTtlMinutes * 60 * 1000;
   return Date.now() > deadline;
 }
 
-function toContract(row: ImportJobRow, config: AppConfig): ImportJob {
+export function toContract(row: ImportJobRow, config: AppConfig): ImportJob {
   const report = row.report ?? { errors: [], warnings: [], diff: null };
 
   return {

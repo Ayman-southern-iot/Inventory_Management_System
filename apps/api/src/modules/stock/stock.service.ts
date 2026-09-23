@@ -897,6 +897,77 @@ export class StockService {
   }
 
   /**
+   * Locks every placement a CSV import is about to touch, across many products, in the one
+   * order that cannot deadlock (`importing_data.md` §5.5 step 4).
+   *
+   * **The plan asked for a single `ORDER BY id ... FOR UPDATE`; that is not sufficient**, for
+   * the reason `lockPlacementsInOrder` above already documents — the planner may lock in scan
+   * order before the sort is applied. So this follows the established pattern instead: create
+   * the rows that need creating, read their ids, then take one lock per id in ascending order.
+   * It costs a round trip per changed shelf that §11.2 did not budget for, and the benchmark
+   * will now measure that honestly rather than hide it.
+   *
+   * Only shelves gaining stock are pre-created. A shelf being emptied must already exist, and
+   * inventing a zero row for one that does not would leave an empty placement behind in the
+   * export — changing what the next round trip reads for no reason.
+   */
+  async lockPlacementsForImport(
+    tx: Tx,
+    shelves: readonly { productId: string; compartmentId: string; creating: boolean }[],
+  ): Promise<Map<string, PlacementRow>> {
+    // One global order for both phases, so a concurrent move holding one of these and wanting
+    // another cannot form a cycle with us.
+    const sorted = [...shelves].sort((a, b) =>
+      `${a.productId}:${a.compartmentId}`.localeCompare(`${b.productId}:${b.compartmentId}`),
+    );
+
+    const creating = sorted.filter((shelf) => shelf.creating);
+    if (creating.length > 0) {
+      // One statement rather than one per row: Postgres processes VALUES in the order given, so
+      // a conflict waits in that same sorted order, which is what the ordering buys us.
+      await tx
+        .insertInto('stock_placements')
+        .values(
+          creating.map((shelf) => ({
+            product_id: shelf.productId,
+            compartment_id: shelf.compartmentId,
+            quantity: 0,
+          })),
+        )
+        .onConflict((oc) => oc.columns(['product_id', 'compartment_id']).doNothing())
+        .execute();
+    }
+
+    const ids = await tx
+      .selectFrom('stock_placements')
+      .select(['id'])
+      .where((eb) =>
+        eb.or(
+          sorted.map((shelf) =>
+            eb.and([
+              eb('product_id', '=', shelf.productId),
+              eb('compartment_id', '=', shelf.compartmentId),
+            ]),
+          ),
+        ),
+      )
+      .orderBy('id')
+      .execute();
+
+    const locked = new Map<string, PlacementRow>();
+    for (const { id } of ids) {
+      const row = await tx
+        .selectFrom('stock_placements')
+        .selectAll()
+        .where('id', '=', id)
+        .forUpdate()
+        .executeTakeFirst();
+      if (row) locked.set(`${row.product_id}:${row.compartment_id}`, row);
+    }
+    return locked;
+  }
+
+  /**
    * Locks the placement, creating it at zero if absent.
    *
    * Two concurrent receives into a brand-new compartment both find nothing and both insert;
