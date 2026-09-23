@@ -91,8 +91,7 @@ export const queryKeys = {
     detail: (id: string) => ['projects', 'detail', id] as const,
     /** Prefix for one project's item pages, whatever the usage filter. */
     itemsFor: (id: string) => ['projects', 'items', id] as const,
-    items: (id: string, query: ListProjectItemsQuery) =>
-      ['projects', 'items', id, query] as const,
+    items: (id: string, query: ListProjectItemsQuery) => ['projects', 'items', id, query] as const,
   },
   requisitions: {
     all: () => ['requisitions'] as const,
@@ -146,6 +145,12 @@ export const queryKeys = {
     /** No query: the window is always the last twelve months, decided by the server. */
     spendTrend: () => ['reports', 'expenses', 'trend'] as const,
     topItems: (query: ExpenseReportQuery) => ['reports', 'expenses', 'top-items', query] as const,
+  },
+  imports: {
+    all: () => ['imports'] as const,
+    list: () => ['imports', 'list'] as const,
+    /** One run. Polled while it is live, which is why it is keyed apart from the list. */
+    detail: (jobId: string) => ['imports', 'detail', jobId] as const,
   },
   notifications: {
     all: () => ['notifications'] as const,

@@ -11,6 +11,12 @@ import { Button } from '@/components/ui/Button';
  * one screen: every request is refused, so any page left visible underneath would be showing
  * numbers that are being rewritten as they are read.
  *
+ * **It never sees a job id, and must not start.** A blocked user's own request did not create
+ * the import and carries no reference to it — all they were handed is the 503 body. The
+ * progress endpoint needs an id, so the ring the *importing* manager watches is a different
+ * component on a different data source (`useImportJob`); coupling this to it would mean the
+ * block could only render for the one person who does not need it.
+ *
  * **It says when, not just that.** `estimatedFinishAt` comes from the 503's own body — the server
  * puts it there precisely because, while the lockout is up, every route that could have answered
  * "when will this end" is itself refused. The estimate already carries
@@ -32,10 +38,18 @@ export function SystemImportBlock({
    * until somebody thinks to retry is a screen people close. Any successful request means the
    * lockout is gone — the client's own handler is what put this up, so nothing here needs to
    * know which request proved it.
+   *
+   * **Not `{ type: 'active' }`.** There is no endpoint a blocked user can ask "is it over yet":
+   * of the four allow-listed routes, progress needs an id they do not have, refresh and health
+   * answer regardless of the lock, and abandon is not a question. So the probe has to be some
+   * other request failing or succeeding — and filtering to *active* queries means a user sitting
+   * on a screen with none would never poll at all, leaving the block up until they pressed the
+   * button. Refetching everything in the cache costs a request every five seconds and removes
+   * that dead end.
    */
   useEffect(() => {
     const timer = setInterval(() => {
-      void queryClient.refetchQueries({ type: 'active' });
+      void queryClient.refetchQueries();
     }, POLL_INTERVAL_MS);
     return () => clearInterval(timer);
   }, [queryClient]);
@@ -43,7 +57,7 @@ export function SystemImportBlock({
   const retry = async (): Promise<void> => {
     setChecking(true);
     try {
-      await queryClient.refetchQueries({ type: 'active' });
+      await queryClient.refetchQueries();
       onCleared();
     } finally {
       setChecking(false);
