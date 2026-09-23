@@ -30,6 +30,13 @@ with stock 1 and asserts exactly one succeeds and the ledger has exactly one ISS
 
 ## Rules
 
+- **Every fixture value a spec later matches on must be run-unique.** `resetData` cannot delete
+  products or categories — every foreign key to them is `ON DELETE RESTRICT` — so they accumulate
+  across the whole integration run, and a spec that assumes it has the database to itself is
+  wrong by the second file. Suffix with `randomUUID().slice(0, 8)`, and **filter by id, never by
+  a name substring**: `line.includes('Doomed')` also catches the `Doomed …` another spec left
+  behind. This has now bitten twice — once as a `categories_root_name_key` collision, once as a
+  phantom second deactivation — and both passed in isolation and failed in the suite.
 - Integration tests run against a throwaway Postgres (testcontainers or a compose service),
   migrated from scratch each run. Never against the dev database.
 - Each test creates its own data via factories and cleans up in a transaction rollback.

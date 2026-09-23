@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { CategoriesModule } from '../categories/categories.module';
+import { FilesModule } from '../files/files.module';
 import { LocationsModule } from '../locations/locations.module';
 import { ProductsModule } from '../products/products.module';
 import { SettingsModule } from '../settings/settings.module';
@@ -22,7 +23,14 @@ import { ProductExportService } from './product-export.service';
  * exactly the drift this feature would otherwise introduce.
  */
 @Module({
-  imports: [ProductsModule, CategoriesModule, LocationsModule, StockModule, SettingsModule],
+  imports: [
+    ProductsModule,
+    CategoriesModule,
+    LocationsModule,
+    StockModule,
+    SettingsModule,
+    FilesModule,
+  ],
   controllers: [ImportsController],
   providers: [
     ProductExportService,

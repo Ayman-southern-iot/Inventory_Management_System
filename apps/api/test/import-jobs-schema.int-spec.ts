@@ -189,9 +189,14 @@ describe('import_jobs (migration 0038)', () => {
     ).rejects.toThrow();
   });
 
-  it('is reachable by nobody over HTTP yet', async () => {
-    // Part A is schema only. Asserted so that a route appearing without its guards is noticed.
+  /**
+   * Part E gave these rows a route. What this asserted in part A — that no route existed — is
+   * no longer true, and the reason it existed still is: a route must not appear without its
+   * guards. So it now asserts the guard rather than the absence, and `import-upload.int-spec`
+   * covers the roles behind it.
+   */
+  it('is reachable over HTTP only with a session', async () => {
     const response = await httpClient(ctx.app).get('/inventory/imports');
-    expect(response.status).toBe(404);
+    expect(response.status).toBe(401);
   });
 });
