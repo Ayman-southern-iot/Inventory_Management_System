@@ -28,6 +28,8 @@ import type { RequestUser } from '../auth/request-user';
 import { FilesService } from '../files/files.service';
 import { UTF8_BOM, stripBom } from './import-format';
 import { ImportApplyService } from './import-apply.service';
+import { AllowDuringImport } from './import-lock.guard';
+import { ImportLockService } from './import-lock.service';
 import { ImportJobsService } from './import-jobs.service';
 import { ProductExportService } from './product-export.service';
 
@@ -63,6 +65,7 @@ export class ImportsController {
     private readonly files: FilesService,
     private readonly jobs: ImportJobsService,
     private readonly apply: ImportApplyService,
+    private readonly lock: ImportLockService,
   ) {}
 
   /**
@@ -118,7 +121,14 @@ export class ImportsController {
     });
   }
 
-  /** The job as it stands, for the confirm screen and for rejoining after a closed browser. */
+  /**
+   * The job as it stands, for the confirm screen and for rejoining after a closed browser.
+   *
+   * Allow-listed through the lockout (§8): this is how anyone sees progress at all, including
+   * the admin who started the import. Refusing it would leave the whole company staring at a
+   * screen that cannot tell them when it ends.
+   */
+  @AllowDuringImport()
   @Get('imports/:id')
   async getJob(@Param('id', ParseUUIDPipe) id: string): Promise<ImportJob> {
     return this.jobs.get(id);
@@ -149,6 +159,20 @@ export class ImportsController {
     // attaches its own catch, so nothing here can become an unhandled rejection.
     const { job } = await this.apply.confirm(id, actor, auditContext);
     return job;
+  }
+
+  /**
+   * The manual release (§8). Frees a lockout whose import is stuck.
+   *
+   * Allow-listed, necessarily: a lockout with no way out is a lockout that ends in a container
+   * restart. It goes through the same `release` the heartbeat guard uses, so the two cannot
+   * clear different halves of the state.
+   */
+  @AllowDuringImport()
+  @Post('imports/:id/abandon')
+  @HttpCode(HttpStatus.OK)
+  async abandonJob(@Param('id', ParseUUIDPipe) id: string): Promise<ImportJob> {
+    return this.jobs.abandon(id, this.lock);
   }
 
   /** Give up an import that is waiting, releasing the one-live slot for somebody else. */

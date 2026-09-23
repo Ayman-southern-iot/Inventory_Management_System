@@ -374,12 +374,32 @@ a file that changed underneath it.
    which a write lands between snapshot and lock, making the rollback file quietly wrong
    (§16.5). If the snapshot fails, the import stops (§12 C38).
 3. **Open the transaction.** `SET LOCAL lock_timeout`.
-4. **Lock every affected placement**, `SELECT … FOR UPDATE`, **ordered by id ascending** — the
-   deadlock rule from `rules/40-database.md`. One statement, not one per row.
+4. **Lock every affected placement**, **ordered by id ascending** — the deadlock rule from
+   `rules/40-database.md`. ~~One statement, not one per row.~~ **Corrected 2026-09-23: one
+   statement is not sufficient, and this codebase already knew.** `StockService` documents it
+   against `lockPlacementsInOrder`: *"A single `ORDER BY id ... FOR UPDATE` is not sufficient —
+   the planner is free to lock in scan order before the sort is applied."* So the import follows
+   the established pattern instead — pre-create the rows that need creating, read their ids, then
+   take one lock per id in ascending order — in `StockService.lockPlacementsForImport`. It costs
+   one round trip per changed shelf more than §11.2 budgeted, which the benchmark will measure.
 5. **Re-check the domain constraints against the locked rows**, in memory, before any write. This
    costs microseconds and turns the one plausible late failure — a borrow raising `reserved_qty`
    while somebody read the diff — from a three-minute wasted transaction into an instant, precise
    rejection (§16.2).
+
+   **What part G changed about this, and what part I will finish changing.** Building the plan at
+   confirm — outside the transaction, as step 3's no-I/O rule requires — re-runs validation there,
+   so the late borrow is now rejected *before* the transaction opens. That is the synchronous
+   confirm-time check this section listed as "the next lever", arrived at for free. This step is
+   therefore already a backstop rather than the primary guard, and its window is confirm-to-lock
+   rather than preview-to-apply.
+
+   **Once §8's lockout exists, expect that window to close almost entirely** — every other write
+   is refused 503 from before the re-validation until after the commit, so the only request that
+   can still slip through is one already past the entry check at the instant the flag flipped.
+   **Do not spend part I or later trying to engineer an integration test for that race: the
+   feature being built is what closes it.** The mechanism is covered directly instead, by
+   `import-apply-checks.spec.ts`, which calls it with a fabricated locked row.
 6. Create categories (parents first, deduplicated across rows).
 7. Create and update products.
 8. Per shelf: `delta = target − lockedQuantity`; skip zero; `StockService.adjust(…, tx)` with

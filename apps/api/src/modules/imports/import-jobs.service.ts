@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { ImportJobStatus, type ImportJob } from '@ims/shared';
+import { ImportJobStatus, LIVE_IMPORT_STATUSES, type ImportJob } from '@ims/shared';
 import { CONFIG, type AppConfig } from '../../config';
 import { ConflictError, ImportAlreadyRunningError, NotFoundError } from '../../common/errors';
 import { isUniqueViolation } from '../../common/pg-errors';
@@ -24,6 +24,17 @@ import {
  * 200", which is the absence of an invariant dressed up as a test.
  */
 export const IMPORT_JOB_KIND = 'products';
+
+/**
+ * Just enough of `ImportLockService` for `abandon` to call the one unlock.
+ *
+ * Passed in rather than injected because the lock service depends on this module's repository
+ * and injecting it here would close the circle. The narrow type is the point: this path may
+ * release the lock and may do nothing else to it.
+ */
+export interface ImportLockRelease {
+  release(jobId: string, status: ImportJobStatus | null): Promise<void>;
+}
 
 @Injectable()
 export class ImportJobsService {
@@ -118,6 +129,32 @@ export class ImportJobsService {
       status: ImportJobStatus.CANCELLED,
       finishedAt: new Date(),
     });
+    return this.require(id);
+  }
+
+  /**
+   * Free a stuck import by hand (§8).
+   *
+   * Unlike `cancel`, this is for a job that is *applying* — one whose task has died without
+   * taking the process with it, leaving everybody locked out. It does not undo anything: the
+   * apply transaction either committed or rolled back on its own, and this only clears the
+   * state that is still claiming otherwise.
+   *
+   * **The unlock itself is `ImportLockService.release`, not a second copy of it here.** Two
+   * implementations of "clear the lockout" is how the two stores drift apart, which is the
+   * failure §8.1 is written about.
+   */
+  async abandon(id: string, lock: ImportLockRelease): Promise<ImportJob> {
+    const row = await this.repo.findById(id);
+    if (!row) throw new NotFoundError('Import');
+
+    if (!LIVE_IMPORT_STATUSES.includes(row.status)) {
+      throw new ConflictError(
+        `This import is already ${row.status.toLowerCase().replace(/_/g, ' ')}.`,
+      );
+    }
+
+    await lock.release(id, ImportJobStatus.FAILED);
     return this.require(id);
   }
 

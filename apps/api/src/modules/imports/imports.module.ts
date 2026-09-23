@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { AuditModule } from '../audit/audit.module';
 import { CategoriesModule } from '../categories/categories.module';
 import { FilesModule } from '../files/files.module';
@@ -8,6 +9,8 @@ import { SettingsModule } from '../settings/settings.module';
 import { StockModule } from '../stock/stock.module';
 import { ImportApplyService } from './import-apply.service';
 import { ImportJobsRepository } from './import-jobs.repository';
+import { ImportLockGuard } from './import-lock.guard';
+import { ImportLockService } from './import-lock.service';
 import { ImportJobsService } from './import-jobs.service';
 import { ImportValidationService } from './import-validation.service';
 import { ImportsController } from './imports.controller';
@@ -41,7 +44,24 @@ import { ProductExportService } from './product-export.service';
     ImportJobsRepository,
     ImportJobsService,
     ImportApplyService,
+    ImportLockService,
+    /*
+     * Global, because a lockout that only covered this module's routes would let every other
+     * screen keep writing while the catalogue is rewritten underneath them (§8, deny by default).
+     *
+     * It is a *global* guard, so it runs before any route-level one — including the `RolesGuard`
+     * that `@Roles` attaches. A user who lacks the role for a route therefore sees 503 during an
+     * import rather than 403, and the ordering spec asserts exactly that rather than inferring
+     * it from the allow-listed routes alone.
+     */
+    { provide: APP_GUARD, useClass: ImportLockGuard },
   ],
-  exports: [ProductExportService, ImportValidationService, ImportJobsService, ImportApplyService],
+  exports: [
+    ProductExportService,
+    ImportValidationService,
+    ImportJobsService,
+    ImportApplyService,
+    ImportLockService,
+  ],
 })
 export class ImportsModule {}

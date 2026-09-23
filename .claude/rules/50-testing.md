@@ -37,6 +37,13 @@ with stock 1 and asserts exactly one succeeds and the ledger has exactly one ISS
   a name substring**: `line.includes('Doomed')` also catches the `Doomed …` another spec left
   behind. This has now bitten twice — once as a `categories_root_name_key` collision, once as a
   phantom second deactivation — and both passed in isolation and failed in the suite.
+- **Teardown and release helpers get the same scrutiny as fixtures, and are harder to debug.** A
+  broken one produces the identical symptom — a spec failing because of what another spec left
+  behind — but intermittently, depending on which files ran after it, and with nothing red in the
+  spec that actually caused it. Anything a test leaves in **process** state rather than database
+  state is worst of all: `resetData` cannot reach it. Caught once already, in the import lockout's
+  `afterEach`, where an argument-order slip released the wrong id and would have left the
+  system-wide 503 engaged for every later spec in the run.
 - Integration tests run against a throwaway Postgres (testcontainers or a compose service),
   migrated from scratch each run. Never against the dev database.
 - Each test creates its own data via factories and cleans up in a transaction rollback.

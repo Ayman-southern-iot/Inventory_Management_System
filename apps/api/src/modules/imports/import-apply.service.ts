@@ -24,6 +24,7 @@ import { toContract } from './import-jobs.service';
 import { ImportValidationService } from './import-validation.service';
 import { ProductExportService } from './product-export.service';
 import { deltaFromLocked, staleAgainstLocked } from './import-apply-checks';
+import { ImportLockService } from './import-lock.service';
 import { stripBom } from './import-format';
 import type { ImportPlan } from './import-validator';
 
@@ -66,6 +67,7 @@ export class ImportApplyService {
     private readonly categories: CategoriesService,
     private readonly stock: StockService,
     private readonly audit: AuditService,
+    private readonly lock: ImportLockService,
     @Inject(DB) private readonly db: Db,
     @Inject(CONFIG) private readonly config: AppConfig,
   ) {}
@@ -152,25 +154,33 @@ export class ImportApplyService {
     auditContext: AuditContext,
   ): Promise<void> {
     /*
-     * **Step 1 of §5.5 — engage the lockout — is not here, because part I is not built.**
+     * 1 — the lockout, and it is first for a reason that only holds if it *is* first.
      *
-     * Its absence does not change this order; the lockout slots in above the snapshot when it
-     * lands. What it does change is what the snapshot *guarantees*: with no lockout, a write can
-     * land between the snapshot and the transaction, and the rollback file would be quietly
-     * wrong about that one change (§16.5). At twelve users with rare imports the window is
-     * small; it is not zero. Recorded in NOW.md rather than left implicit here.
+     * Everything below assumes nothing else is writing. In particular the snapshot: it is a
+     * faithful pre-image of what is about to be overwritten precisely because no write can land
+     * between it and the transaction (§16.5). Take it before the lock and the rollback file is
+     * quietly wrong about anything that slipped in.
      */
+    this.lock.engage(jobId, this.estimatedFinish());
+    await this.lock.beat(jobId);
 
     const snapshotId = await this.takeSnapshot(jobId);
-    if (!snapshotId) return; // C38: a backup you cannot take is a reason to stop, not continue.
+    // C38: a backup you cannot take is a reason to stop, not continue. `takeSnapshot` has
+    // already failed the job; the lock still has to come off, or nobody can do anything.
+    if (!snapshotId) {
+      await this.lock.release(jobId, null);
+      return;
+    }
 
     try {
+      await this.lock.beat(jobId);
       await this.db.transaction().execute(async (tx) => {
         await sql`SET LOCAL lock_timeout = ${sql.lit(LOCK_TIMEOUT)}`.execute(tx);
         await this.applyWithin(tx, plan, actor, auditContext, jobId);
       });
     } catch (error) {
       await this.fail(jobId, toIssue(error));
+      await this.lock.release(jobId, null);
       return;
     }
 
@@ -179,6 +189,8 @@ export class ImportApplyService {
       finishedAt: new Date(),
       processedRows: countShelves(plan),
     });
+    // Last, and unconditionally: every path out of this function goes through `release`.
+    await this.lock.release(jobId, null);
   }
 
   /** Steps 4–10, and nothing in here touches anything but the database. */
@@ -344,6 +356,11 @@ export class ImportApplyService {
     });
   }
 
+  /** The padded estimate the 503 carries. Padding only, until the benchmark gives a rate. */
+  private estimatedFinish(): Date {
+    return new Date(Date.now() + this.config.imports.lockoutPaddingMinutes * 60 * 1000);
+  }
+
   private async require(jobId: string): Promise<ImportJob> {
     const job = await this.jobFrom(jobId);
     if (!job) throw new NotFoundError('Import');
@@ -363,6 +380,10 @@ export class StaleImportError extends Error {
   }
 }
 
+/**
+ * What everybody else is told the import will finish by — the honest guess plus the padding
+ * from `IMPORT_LOCKOUT_PADDING_MINUTES`. Better to say ten minutes and take five (the brief).
+ */
 function countShelves(plan: ImportPlan): number {
   return plan.products.reduce(
     (total, product) =>

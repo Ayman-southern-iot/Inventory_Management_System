@@ -9,6 +9,7 @@ import {
   SystemHealthService,
   type SystemHealth,
 } from '../maintenance/system-health.service';
+import { AllowDuringImport } from '../imports/import-lock.guard';
 
 /**
  * The compose healthcheck hits this. It touches the database on purpose: an API that is
@@ -16,6 +17,7 @@ import {
  * a rolling deploy send traffic at it.
  */
 @Controller()
+@AllowDuringImport()
 export class HealthController {
   constructor(
     @Inject(DB) private readonly db: Db,

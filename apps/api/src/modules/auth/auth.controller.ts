@@ -19,6 +19,7 @@ import { UsersService } from '../users/users.service';
 import { AuthService, type LoginContext } from './auth.service';
 import { AllowPendingPasswordChange, CurrentUser, Public } from './auth.decorators';
 import type { RequestUser } from './request-user';
+import { AllowDuringImport } from '../imports/import-lock.guard';
 
 function contextOf(request: Request): LoginContext {
   return {
@@ -81,6 +82,9 @@ export class AuthController {
 
   @Public()
   @authThrottle
+  // Access tokens last fifteen minutes; a twenty-minute import would log the watching admin
+  // out mid-run and leave nobody able to abandon it (§8).
+  @AllowDuringImport()
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   async refresh(

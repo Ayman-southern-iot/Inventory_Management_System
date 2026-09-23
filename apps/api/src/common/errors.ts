@@ -18,7 +18,12 @@ export class DomainError extends HttpException {
 
 export class ValidationFailedError extends DomainError {
   constructor(details: unknown) {
-    super(ErrorCode.VALIDATION_FAILED, 'Request validation failed', HttpStatus.BAD_REQUEST, details);
+    super(
+      ErrorCode.VALIDATION_FAILED,
+      'Request validation failed',
+      HttpStatus.BAD_REQUEST,
+      details,
+    );
   }
 }
 
@@ -38,11 +43,7 @@ export class InvalidCredentialsError extends DomainError {
 
 export class AccountDeactivatedError extends DomainError {
   constructor() {
-    super(
-      ErrorCode.ACCOUNT_DEACTIVATED,
-      'This account has been deactivated',
-      HttpStatus.FORBIDDEN,
-    );
+    super(ErrorCode.ACCOUNT_DEACTIVATED, 'This account has been deactivated', HttpStatus.FORBIDDEN);
   }
 }
 
@@ -149,11 +150,18 @@ export class ImportSnapshotDeletedError extends DomainError {
  * intermediary reading this should understand it is worth retrying.
  */
 export class SystemImportInProgressError extends DomainError {
-  constructor() {
+  /**
+   * `estimatedFinishAt` rides in `details` because there is nowhere else for it to come from:
+   * while the lockout is up, every route that could have answered "when will this end" is itself
+   * refused. The padding is already applied (`IMPORT_LOCKOUT_PADDING_MINUTES`) — the screen says
+   * ten minutes and the import takes five, which is the right way round.
+   */
+  constructor(estimatedFinishAt: string | null = null) {
     super(
       ErrorCode.SYSTEM_IMPORT_IN_PROGRESS,
       'The inventory is being updated. Please wait.',
       HttpStatus.SERVICE_UNAVAILABLE,
+      { estimatedFinishAt },
     );
   }
 }
