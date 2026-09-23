@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>BOM-000004 — Southern IoT</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#EDEAE2;
+    --sheet:#FFFFFF;
+    --ink:#1B1A17;
+    --ink-muted:#6B6862;
+    --ink-faint:#A39D91;
+    --line:#E4DFD3;
+    --line-strong:#D3CCBC;
+    --brand:#1F3A52;
+    --brand-ink:#16293A;
+    --brand-soft:#E7EDF1;
+    --green:#2E6A4C;
+    --green-soft:#E7F0EA;
+    --amber:#A6671F;
+    --amber-soft:#F8EEDF;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:'IBM Plex Sans', sans-serif;
+    background:var(--paper);
+    color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+    font-size:13.5px;
+    line-height:1.5;
+    padding:36px 16px 80px;
+  }
+  .mono{font-family:'IBM Plex Mono', monospace;}
+
+  .toolbar{
+    max-width:210mm;margin:0 auto 16px;display:flex;justify-content:flex-end;gap:8px;
+  }
+  .toolbar button{
+    font-family:inherit;cursor:pointer;border-radius:8px;padding:8px 15px;font-size:12.5px;font-weight:600;
+    border:1px solid var(--line-strong);background:var(--sheet);color:var(--ink);display:inline-flex;align-items:center;gap:7px;
+  }
+  .toolbar button.primary{background:var(--brand);border-color:var(--brand);color:#fff;}
+  .toolbar svg{width:14px;height:14px;}
+
+  /* A4 page: fixed to real paper width so the on-screen preview matches what
+     prints. Content taller than one page simply continues below — the print
+     rules further down are what actually split it across physical A4 pages,
+     each repeating the table header. */
+  .sheet{
+    width:210mm;min-height:297mm;margin:0 auto;background:var(--sheet);
+    box-shadow:0 1px 3px rgba(27,26,23,0.06), 0 12px 32px rgba(27,26,23,0.08);
+    padding:18mm 20mm;
+  }
+
+  /* ---------- Letterhead ---------- */
+  .letterhead{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:22px;border-bottom:2px solid var(--ink);}
+  .lh-left{display:flex;gap:12px;align-items:flex-start;}
+  .logo-mark{
+    width:38px;height:38px;border-radius:8px;background:var(--brand);flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:15px;font-family:'IBM Plex Mono',monospace;
+  }
+  .lh-name{font-size:19px;font-weight:700;letter-spacing:-0.01em;}
+  .lh-addr{font-size:11.5px;color:var(--ink-muted);margin-top:4px;line-height:1.55;}
+  .lh-right{text-align:right;}
+  .doc-tag{
+    font-size:10.5px;font-weight:700;letter-spacing:0.1em;color:var(--ink-faint);text-transform:uppercase;
+  }
+  .doc-number{font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:600;margin-top:3px;}
+
+  /* ---------- Title row ---------- */
+  .title-row{display:flex;justify-content:space-between;align-items:center;margin:26px 0 22px;}
+  .doc-title{font-size:20px;font-weight:700;letter-spacing:-0.01em;}
+  .status-pill{
+    display:inline-flex;align-items:center;gap:6px;padding:5px 12px 5px 10px;border-radius:20px;
+    font-size:11.5px;font-weight:700;letter-spacing:0.02em;background:var(--green-soft);color:var(--green);
+  }
+  .status-pill .dot{width:6px;height:6px;border-radius:50%;background:var(--green);}
+
+  /* ---------- Meta grid ---------- */
+  .meta-grid{
+    display:grid;grid-template-columns:1fr 1fr;gap:0 32px;
+    padding:18px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin-bottom:22px;
+  }
+  .meta-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dotted var(--line);}
+  .meta-row:last-child{border-bottom:none;}
+  .meta-k{font-size:11.5px;color:var(--ink-muted);font-weight:500;}
+  .meta-v{font-size:12.5px;font-weight:600;text-align:right;}
+  .meta-v.mono{font-family:'IBM Plex Mono',monospace;}
+
+  /* ---------- Description (variable length) ---------- */
+  .desc-block{margin-bottom:24px;}
+  .desc-body{
+    font-size:12.5px;color:var(--ink);line-height:1.65;
+    background:var(--paper);border:1px solid var(--line);border-left:3px solid var(--brand);
+    border-radius:0 8px 8px 0;padding:12px 16px;
+    white-space:pre-wrap;word-break:break-word;
+  }
+
+  /* ---------- Financial summary ---------- */
+  .approved-summary{
+    background:var(--brand-soft);border-radius:9px;padding:16px 20px;margin-bottom:26px;
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .fin-label{font-size:10.5px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--brand-ink);}
+  .fin-value{font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:700;color:var(--brand-ink);}
+
+  /* ---------- Items table ---------- */
+  .section-label{
+    font-size:10.5px;font-weight:700;letter-spacing:0.09em;text-transform:uppercase;color:var(--ink-faint);
+    margin-bottom:10px;
+  }
+  table{width:100%;border-collapse:collapse;margin-bottom:0;}
+  thead th{
+    text-align:left;font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;
+    color:var(--ink-faint);padding:0 0 9px;border-bottom:1.5px solid var(--ink);
+  }
+  thead th.num{text-align:right;}
+  tbody td{padding:11px 0;border-bottom:1px solid var(--line);font-size:13px;}
+  td.idx{color:var(--ink-faint);font-family:'IBM Plex Mono',monospace;width:26px;}
+  td.item-name{font-weight:600;}
+  td.num{text-align:right;font-family:'IBM Plex Mono',monospace;}
+  .subtotal-row td{border-bottom:none;padding-top:12px;font-weight:600;}
+  .subtotal-row .num{font-size:13.5px;}
+
+  .transport-block{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:13px 0;border-top:1px solid var(--line);margin-top:4px;
+  }
+  .transport-block .k{font-size:12.5px;color:var(--ink-muted);}
+  .transport-block .k .desc{color:var(--ink-faint);font-style:italic;}
+  .transport-block .v{font-family:'IBM Plex Mono',monospace;font-weight:600;}
+
+  .grand-total{
+    display:flex;justify-content:space-between;align-items:center;
+    background:var(--brand);color:#fff;border-radius:9px;padding:16px 20px;margin-top:14px;
+  }
+  .grand-total .k{font-size:13px;font-weight:600;letter-spacing:0.01em;}
+  .grand-total .v{font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:700;}
+
+  /* ---------- Signatures ---------- */
+  .signatures{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:44px;}
+  .sig-block{padding-top:14px;border-top:1.5px solid var(--ink);}
+  .sig-name{font-size:13.5px;font-weight:700;}
+  .sig-role{font-size:11.5px;color:var(--ink-muted);margin-top:1px;}
+  .sig-status{
+    display:inline-flex;align-items:center;gap:5px;margin-top:9px;font-size:11.5px;font-weight:700;color:var(--green);
+  }
+  .sig-status svg{width:12px;height:12px;stroke:var(--green);}
+  .sig-proxy{font-size:11px;color:var(--ink-faint);font-style:italic;margin-top:3px;}
+  .sig-date{font-size:11px;color:var(--ink-faint);margin-top:2px;}
+
+  /* ---------- Footer ---------- */
+  .doc-footer{
+    display:flex;justify-content:space-between;align-items:center;
+    margin-top:48px;padding-top:14px;border-top:1px solid var(--line);
+    font-size:10.5px;color:var(--ink-faint);
+  }
+
+  @media print{
+    body{background:#fff;padding:0;}
+    .toolbar{display:none;}
+    .sheet{box-shadow:none;width:auto;min-height:0;margin:0;padding:0;}
+
+    /* Pagination rules: let the table span multiple pages, but never split
+       a single row across a page break, and repeat the header row on every
+       page the table continues onto. Keep the summary blocks and signature
+       blocks intact as single units instead of letting them get orphaned. */
+    thead{display:table-header-group;}
+    tfoot{display:table-footer-group;}
+    tr{page-break-inside:avoid;break-inside:avoid;}
+    table{page-break-inside:auto;}
+    .letterhead,.title-row,.meta-grid,.desc-block,.approved-summary,
+    .transport-block,.grand-total,.signatures,.doc-footer{
+      page-break-inside:avoid;break-inside:avoid;
+    }
+    .subtotal-row,.subtotal-row td{page-break-before:avoid;}
+    @page{margin:14mm 12mm;}
+  }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <button onclick="window.print()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z"/></svg>
+    Print
+  </button>
+  <button class="primary">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v13M7 11l5 5 5-5M5 21h14"/></svg>
+    Download PDF
+  </button>
+</div>
+
+<div class="sheet">
+  <div class="letterhead">
+    <div class="lh-left">
+      <div class="logo-mark">SI</div>
+      <div>
+        <div class="lh-name">Southern IoT</div>
+        <div class="lh-addr">
+          House 26, Road 13, Sector 14<br>
+          Uttara, Dhaka - 1230<br>
+          Bangladesh
+        </div>
+      </div>
+    </div>
+    <div class="lh-right">
+      <div class="doc-tag">Bill of Materials</div>
+      <div class="doc-number mono">BOM-000004</div>
+    </div>
+  </div>
+
+  <div class="title-row">
+    <div class="doc-title">Bill of Materials</div>
+    <span class="status-pill"><span class="dot"></span>Approved</span>
+  </div>
+
+  <div class="meta-grid">
+    <div>
+      <div class="meta-row"><span class="meta-k">Requisition from</span><span class="meta-v">Gina General</span></div>
+      <div class="meta-row"><span class="meta-k">Department</span><span class="meta-v">Engineering</span></div>
+      <div class="meta-row"><span class="meta-k">Project</span><span class="meta-v">Home Automation</span></div>
+    </div>
+    <div>
+      <div class="meta-row"><span class="meta-k">Date issued</span><span class="meta-v mono">26 Aug 2026, 3:27 PM</span></div>
+      <div class="meta-row"><span class="meta-k">Reference</span><span class="meta-v mono">REQ-000014</span></div>
+    </div>
+  </div>
+
+  <div class="desc-block">
+    <div class="section-label" style="margin-bottom:8px;">Description</div>
+    <div class="desc-body">i need it because i want to use in my project..so that i need it...project must be use this...i may learn a lot from it so please i neeed it...so please give me this...hello hello hi hi..ohhhoo please give me...please please..so we need it..me alif saad need it please</div>
+  </div>
+
+  <div class="approved-summary">
+    <div class="fin-label">Approved amount</div>
+    <div class="fin-value">BDT 45,320.62</div>
+  </div>
+
+  <div class="section-label">Line items</div>
+  <table>
+    <thead>
+      <tr><th style="width:26px;">#</th><th>Item</th><th class="num">Qty</th><th class="num">Unit cost</th><th class="num">Amount</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="idx">1</td><td class="item-name">hy</td><td class="num">401</td><td class="num">BDT 39.62</td><td class="num" style="font-weight:600;">BDT 15,887.62</td></tr>
+      <tr><td class="idx">2</td><td class="item-name">Screws (M4)</td><td class="num">100</td><td class="num">BDT 5.00</td><td class="num" style="font-weight:600;">BDT 500.00</td></tr>
+      <tr><td class="idx">3</td><td class="item-name">Bolts (M6)</td><td class="num">50</td><td class="num">BDT 12.50</td><td class="num" style="font-weight:600;">BDT 625.00</td></tr>
+      <tr><td class="idx">4</td><td class="item-name">Hex nuts</td><td class="num">50</td><td class="num">BDT 6.00</td><td class="num" style="font-weight:600;">BDT 300.00</td></tr>
+      <tr><td class="idx">5</td><td class="item-name">Washers</td><td class="num">200</td><td class="num">BDT 1.25</td><td class="num" style="font-weight:600;">BDT 250.00</td></tr>
+      <tr><td class="idx">6</td><td class="item-name">Cable ties</td><td class="num">300</td><td class="num">BDT 0.75</td><td class="num" style="font-weight:600;">BDT 225.00</td></tr>
+      <tr><td class="idx">7</td><td class="item-name">Wire spool, 2mm</td><td class="num">10</td><td class="num">BDT 450.00</td><td class="num" style="font-weight:600;">BDT 4,500.00</td></tr>
+      <tr><td class="idx">8</td><td class="item-name">Connector block</td><td class="num">40</td><td class="num">BDT 15.00</td><td class="num" style="font-weight:600;">BDT 600.00</td></tr>
+      <tr><td class="idx">9</td><td class="item-name">Relay module</td><td class="num">20</td><td class="num">BDT 220.00</td><td class="num" style="font-weight:600;">BDT 4,400.00</td></tr>
+      <tr><td class="idx">10</td><td class="item-name">Proximity sensor</td><td class="num">15</td><td class="num">BDT 850.00</td><td class="num" style="font-weight:600;">BDT 12,750.00</td></tr>
+      <tr><td class="idx">11</td><td class="item-name">Enclosure box</td><td class="num">10</td><td class="num">BDT 300.00</td><td class="num" style="font-weight:600;">BDT 3,000.00</td></tr>
+      <tr><td class="idx">12</td><td class="item-name">Fuse, 5A</td><td class="num">50</td><td class="num">BDT 8.00</td><td class="num" style="font-weight:600;">BDT 400.00</td></tr>
+      <tr><td class="idx">13</td><td class="item-name">Terminal block</td><td class="num">60</td><td class="num">BDT 20.00</td><td class="num" style="font-weight:600;">BDT 1,200.00</td></tr>
+      <tr><td class="idx">14</td><td class="item-name">Heat shrink tubing</td><td class="num">100</td><td class="num">BDT 3.50</td><td class="num" style="font-weight:600;">BDT 350.00</td></tr>
+      <tr><td class="idx">15</td><td class="item-name">Label roll</td><td class="num">5</td><td class="num">BDT 60.00</td><td class="num" style="font-weight:600;">BDT 300.00</td></tr>
+      <tr class="subtotal-row">
+        <td></td><td></td><td></td>
+        <td class="num" style="color:var(--ink-muted);font-weight:500;">Items subtotal</td>
+        <td class="num">BDT 45,287.62</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="transport-block">
+    <div class="k">Transportation <span class="desc">— ee</span></div>
+    <div class="v">BDT 33.00</div>
+  </div>
+
+  <div class="grand-total">
+    <div class="k">Grand total</div>
+    <div class="v">BDT 45,320.62</div>
+  </div>
+
+  <div class="signatures">
+    <div class="sig-block">
+      <div class="sig-name">Imran Manager</div>
+      <div class="sig-role">Inventory Manager</div>
+      <div class="sig-status">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg>
+        Approved
+      </div>
+      <div class="sig-date">26 Aug 2026</div>
+    </div>
+    <div class="sig-block">
+      <div class="sig-name">Ayesha Approver</div>
+      <div class="sig-role">Head of Operations</div>
+      <div class="sig-status">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg>
+        Approved
+      </div>
+      <div class="sig-date">26 Aug 2026</div>
+    </div>
+  </div>
+
+  <div class="doc-footer">
+    <span>Southern IoT · Bill of Materials</span>
+    <span class="mono">BOM-000004</span>
+  </div>
+</div>
+
+</body>
+</html>

@@ -220,4 +220,7 @@ decided, the warning says plainly which of the two the button does.
   restore exemption and part D's uncapped lookup load are two symptoms of the same cause. Apply
   cost is driven by *changed shelves*, which part D now computes before the human gate, so the
   gate can move there. Full statement and the proposed resolution: `importing_data.md` §11.6.
-  **Decision needed before part G.** Touches a config default (STOP) and §5.5/§11.3.
+  **ANSWERED 2026-09-23.** The two existing caps keep the parse phase honest; a new
+  `IMPORT_MAX_CHANGED_SHELVES`, measured on the diff before the human gate, bounds the apply.
+  Restore is exempt from the first two and not from the third. Implemented; the default is
+  provisional until the benchmark in §15. Full statement: `importing_data.md` §11.6.

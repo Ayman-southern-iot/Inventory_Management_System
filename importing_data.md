@@ -737,9 +737,22 @@ plan's changed-shelf count at the preview step. If that ceiling is ever genuinel
 (the batch-aware `StockService` entry point) stops being optional and the apply chunks — which is
 a change to §5.5 and §11.3, not a config edit.
 
-**Not implemented.** Changing a config default and adding a settings key are both STOP items under
-`rules/70`, and this is an architectural decision, not a slice. Flagged here so it is decided
-deliberately rather than discovered as a support ticket the day the catalogue crosses the cap.
+**Decided, 2026-09-23, and implemented.** `IMPORT_MAX_ROWS` and `IMPORT_MAX_FILE_BYTES` are
+demoted to what they can honestly be — coarse ceilings bounding the *parse* phase and the memory
+the four maps of §11.1 need. The gate that decides whether an apply is affordable is a new
+`IMPORT_MAX_CHANGED_SHELVES`, checked against the **diff**, before a job is allowed to wait for
+confirmation. A file that changes nothing passes a ceiling of zero; a file that would rewrite
+forty thousand shelves is refused with a message naming the count rather than the row total,
+which measures the wrong thing.
+
+**A restore is not exempt from the new one.** It stays exempt from the two parse-phase caps,
+because a snapshot is this system's own file rather than arbitrary input — but forty thousand
+shelves cost the same to write whichever direction they came from, and I7's one-transaction
+design exists to make that cost visible before it is paid.
+
+The default, 10,000, is **arithmetic from §11.2, not a measurement**, and is provisional in the
+same sense `IMPORT_FUZZY_MATCH_THRESHOLD`'s 0.45 is: shippable, not yet trusted. §15 carries the
+benchmark that replaces it.
 
 **And it fixes only one of the two axes.** A changed-shelf ceiling bounds *apply*. It does nothing
 to the four bulk-loaded maps of §11.1, which are deliberately uncapped — the deactivation sweep
@@ -882,12 +895,20 @@ the preview and apply are both built from). Next: E.
 - Gate at baseline: typecheck 0, lint 20, integration green.
 - A red test before every green one, per `rules/70`.
 - A test for **every** row in §12 — including C46, idempotence (I11).
-- **Benchmarks published** for 500 / 5,000 / 20,000 rows, and `IMPORT_MAX_ROWS` set from them.
-- **`IMPORT_FUZZY_MATCH_THRESHOLD` set from one pass over real product names.** It ships at 0.45,
-  which separated the fixtures sensibly and has never met a real catalogue. Too high and the
-  check says nothing on the day somebody re-adds a product that already exists; too low and it
-  cries duplicate on every `Cable HDMI 2m` beside its 3m sibling. It is config, so revising it is
-  cheap — but a number nobody has ever checked should not be presented as a working safeguard.
+**Two numbers ship trusted in shape and untrusted in value. They are separate items on separate
+schedules, and finishing one resolves nothing about the other.**
+
+- **`IMPORT_MAX_CHANGED_SHELVES` — blocked on part G, then benchmarked.** Published timings for
+  500 / 5,000 / 20,000 **changed shelves** through the real apply path, and the ceiling set from
+  them rather than from §11.2's arithmetic. Rows are the wrong axis and the row cap is no longer
+  the gate (§11.6). This cannot be done before G exists, because there is nothing to time.
+- **`IMPORT_FUZZY_MATCH_THRESHOLD` — doable today, and independent of G.** One pass over real
+  product names. It ships at 0.45, which separated the fixtures sensibly and has never met a real
+  catalogue. Too high and the check says nothing on the day somebody re-adds a product that
+  already exists; too low and it cries duplicate on every `Cable HDMI 2m` beside its 3m sibling.
+  It is config, so revising it is cheap — but a number nobody has ever checked should not be
+  presented as a working safeguard. **Nothing in G touches this**, so G landing must not be read
+  as having settled it.
 - End-to-end on the demo stack: export → edit → import → verify; one deliberately broken file; one
   crash during apply *and* one killed-task-live-process (C41 and C42 are different paths); one
   restore from a snapshot; one restore after renaming a category and a room (C12, C35).

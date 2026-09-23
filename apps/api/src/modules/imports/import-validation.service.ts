@@ -84,13 +84,39 @@ export class ImportValidationService {
       result.warnings.push(...(await this.findNearDuplicates(result.plan)));
     }
 
-    return {
-      ...result,
-      // Built last, so the warnings it carries are all of them — including the near-duplicate
-      // pass, which runs after the validator has finished.
-      diff: result.plan ? buildImportDiff(result.plan, lookups, result.warnings) : null,
-      rowCount: parsed.rows.length,
-    };
+    // Built last, so the warnings it carries are all of them — including the near-duplicate
+    // pass, which runs after the validator has finished.
+    const diff = result.plan ? buildImportDiff(result.plan, lookups, result.warnings) : null;
+
+    if (diff && diff.shelvesChanged > this.config.imports.maxChangedShelves) {
+      /*
+       * OQ-IMP-1, §11.6. The cost of an apply is the number of shelves it writes, so that is
+       * what is capped — here, where the number exists, before the job is allowed to sit waiting
+       * for somebody to approve it. Capping the row count instead refuses the file that changes
+       * nothing and waves through the one that rewrites everything.
+       *
+       * A restore reaches this too. It skips the parse-phase caps because a snapshot is this
+       * system's own file rather than arbitrary input, but forty thousand shelves cost the same
+       * to write whichever direction they came from.
+       */
+      return {
+        plan: null,
+        diff: null,
+        errors: [
+          {
+            code: ImportIssueCode.TOO_MANY_CHANGED_SHELVES,
+            row: 2,
+            column: null,
+            value: String(diff.shelvesChanged),
+            message: `This file would change the count on ${diff.shelvesChanged} shelves, and one import may change ${this.config.imports.maxChangedShelves}. Split it into smaller files, or ask an administrator to raise the limit.`,
+          },
+        ],
+        warnings: result.warnings,
+        rowCount: parsed.rows.length,
+      };
+    }
+
+    return { ...result, diff, rowCount: parsed.rows.length };
   }
 
   /**

@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Southern IoT — Review requisition</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F6F4EF;
+    --surface:#FFFFFF;
+    --ink:#1B1A17;
+    --ink-muted:#726D63;
+    --ink-faint:#A39D91;
+    --line:#E6E1D6;
+    --line-strong:#D3CCBC;
+    --brand:#1F3A52;
+    --brand-ink:#16293A;
+    --brand-soft:#E7EDF1;
+    --amber:#A6671F;
+    --amber-soft:#F8EEDF;
+    --green:#2E6A4C;
+    --green-soft:#E7F0EA;
+    --red:#AE3A34;
+    --red-soft:#FAEAE7;
+    --radius:10px;
+    --shadow:0 1px 2px rgba(27,26,23,0.04), 0 1px 12px rgba(27,26,23,0.03);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{font-family:'IBM Plex Sans', sans-serif;background:var(--paper);color:var(--ink);-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.5;}
+  .mono{font-family:'IBM Plex Mono', monospace;}
+  a{color:inherit;text-decoration:none;}
+  button{font-family:inherit;cursor:pointer;}
+  .app{display:flex;min-height:100vh;}
+
+  .sidebar{width:222px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--line);padding:20px 14px;display:flex;flex-direction:column;}
+  .brand{display:flex;align-items:center;gap:9px;padding:4px 8px 22px 8px;}
+  .brand-mark{width:26px;height:26px;border-radius:6px;background:var(--brand);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600;font-size:12px;font-family:'IBM Plex Mono',monospace;}
+  .brand-name{font-weight:600;font-size:13.5px;letter-spacing:0.01em;}
+  .nav-group{margin-bottom:18px;}
+  .nav-label{font-size:10.5px;font-weight:600;letter-spacing:0.08em;color:var(--ink-faint);text-transform:uppercase;padding:0 10px;margin-bottom:6px;}
+  .nav-item{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border-radius:7px;font-size:13px;color:var(--ink-muted);margin-bottom:1px;font-weight:500;}
+  .nav-item.active{background:var(--brand-soft);color:var(--brand-ink);font-weight:600;}
+  .nav-badge{background:var(--brand);color:#fff;font-size:10.5px;font-weight:600;border-radius:20px;padding:1px 6px;font-family:'IBM Plex Mono',monospace;}
+
+  .main{flex:1;min-width:0;padding:28px 40px 60px;}
+  .crumb{display:flex;align-items:center;gap:6px;color:var(--ink-muted);font-size:12.5px;font-weight:500;margin-bottom:14px;}
+  .crumb svg{width:13px;height:13px;}
+
+  .page-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:22px;gap:20px;}
+  .req-id{font-family:'IBM Plex Mono',monospace;font-size:23px;font-weight:600;letter-spacing:-0.01em;}
+  .req-meta{color:var(--ink-muted);font-size:13px;margin-top:5px;}
+  .req-meta b{color:var(--ink);font-weight:600;}
+
+  .pill{display:inline-flex;align-items:center;gap:5px;padding:4px 10px 4px 8px;border-radius:20px;font-size:11.5px;font-weight:600;letter-spacing:0.01em;}
+  .pill .dot{width:6px;height:6px;border-radius:50%;}
+  .pill.pending{background:var(--amber-soft);color:var(--amber);}
+  .pill.pending .dot{background:var(--amber);}
+  .pill.high{background:var(--red-soft);color:var(--red);}
+  .pill.high .dot{background:var(--red);}
+
+  .grid{display:grid;grid-template-columns:1fr 300px;gap:20px;align-items:start;}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);}
+  .card + .card{margin-top:20px;}
+  .card-pad{padding:22px 24px;}
+  .card-title{font-size:13px;font-weight:600;margin:0 0 3px;}
+  .card-sub{font-size:12px;color:var(--ink-muted);margin:0 0 16px;}
+  .divider{border:none;border-top:1px solid var(--line);margin:0;}
+
+  /* ---------- Summary block (Name / Dept / Project / Description / Deadline / Document) ---------- */
+  .summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 32px;}
+  .sf{padding:12px 0;border-bottom:1px solid var(--line);}
+  .sf:nth-last-child(-n+2){border-bottom:none;}
+  .sf-label{font-size:10.5px;font-weight:600;letter-spacing:0.07em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:5px;}
+  .sf-value{font-size:13.5px;font-weight:500;}
+  .sf-value.mono{font-family:'IBM Plex Mono',monospace;}
+  .sf.full{grid-column:1 / -1;}
+  .sf.full .sf-value{line-height:1.55;color:var(--ink);}
+
+  .doc-chip{
+    display:inline-flex;align-items:center;gap:10px;background:var(--paper);border:1px solid var(--line);
+    border-radius:8px;padding:9px 12px;margin-top:2px;max-width:100%;
+  }
+  .doc-icon{
+    width:30px;height:30px;border-radius:6px;background:var(--brand-soft);flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .doc-icon svg{width:15px;height:15px;stroke:var(--brand);}
+  .doc-info{min-width:0;}
+  .doc-name{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px;}
+  .doc-size{font-size:11px;color:var(--ink-faint);margin-top:1px;}
+  .doc-open{margin-left:auto;flex-shrink:0;color:var(--ink-faint);}
+  .doc-open svg{width:14px;height:14px;}
+
+  /* ---------- Items table ---------- */
+  table{width:100%;border-collapse:collapse;}
+  thead th{text-align:left;font-size:10.5px;font-weight:600;color:var(--ink-faint);letter-spacing:0.07em;text-transform:uppercase;padding:0 0 10px;border-bottom:1px solid var(--line);}
+  thead th.num{text-align:right;}
+  tbody td{padding:13px 0;border-bottom:1px solid var(--line);font-size:13.5px;}
+  tbody tr:last-child td{border-bottom:none;}
+  td.num{text-align:right;font-family:'IBM Plex Mono',monospace;}
+  td.item-name{font-weight:500;}
+  .table-foot{display:flex;justify-content:space-between;align-items:center;padding-top:14px;}
+  .table-foot .label{font-size:12.5px;color:var(--ink-muted);font-weight:500;}
+  .table-foot .val{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:15px;}
+  .table-foot.total-row{
+    margin-top:6px;padding-top:14px;border-top:1.5px solid var(--ink);
+  }
+  .table-foot.total-row .label{font-size:13.5px;font-weight:700;color:var(--ink);}
+  .table-foot.total-row .val{font-size:19px;font-weight:700;color:var(--brand-ink);}
+
+  /* ---------- Decision card ---------- */
+  .decision-card{border-color:#DCC79A;}
+  .decision-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:16px;}
+  .decision-note{margin-bottom:0;}
+  .decision-note label{display:block;font-size:12px;font-weight:600;margin-bottom:6px;}
+  textarea{
+    width:100%;border:1px solid var(--line-strong);border-radius:8px;padding:9px 12px;
+    font-size:13.5px;font-family:inherit;color:var(--ink);background:var(--surface);resize:vertical;min-height:60px;
+  }
+  textarea:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px rgba(31,58,82,0.10);}
+  .decision-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:16px;padding-top:16px;border-top:1px solid var(--line);}
+  .btn{border-radius:8px;padding:9px 17px;font-size:13px;font-weight:600;border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);display:inline-flex;align-items:center;gap:7px;}
+  .btn:hover{filter:brightness(0.97);}
+  .btn.primary{background:var(--brand);border-color:var(--brand);color:#fff;}
+  .btn.danger-line{color:var(--red);border-color:#E3C6C2;}
+  .btn svg{width:14px;height:14px;}
+
+  /* ---------- Right rail: progress ---------- */
+  .rail-title{font-size:12px;font-weight:600;letter-spacing:0.02em;color:var(--ink-muted);text-transform:uppercase;padding:20px 24px 0;}
+  .rail-hint{font-size:11px;color:var(--ink-faint);padding:5px 24px 4px;}
+  .steps{padding:8px 24px 22px;}
+  .step{display:flex;gap:12px;position:relative;padding-bottom:24px;}
+  .step:last-child{padding-bottom:0;}
+  .step-line{position:absolute;left:11px;top:26px;bottom:0;width:1.5px;background:var(--line-strong);}
+  .step:last-child .step-line{display:none;}
+  .step-icon{width:23px;height:23px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;border:1.5px solid var(--line-strong);background:var(--surface);z-index:1;}
+  .step.done .step-icon{background:var(--green);border-color:var(--green);}
+  .step.done .step-icon svg{stroke:#fff;}
+  .step.current .step-icon{border-color:var(--amber);}
+  .step.current .step-icon .pulse{width:8px;height:8px;border-radius:50%;background:var(--amber);}
+  .step-icon svg{width:12px;height:12px;stroke:var(--ink-faint);fill:none;stroke-width:2.4;}
+  .step-name{font-size:13px;font-weight:600;margin-bottom:1px;}
+  .step-who{font-size:12px;color:var(--ink-muted);}
+  .step-role{font-size:11px;color:var(--ink-faint);}
+  .step-status{font-size:11px;color:var(--ink-faint);margin-top:3px;font-weight:500;}
+  .step.current .step-status{color:var(--amber);}
+  .step.done .step-status{color:var(--green);}
+
+  /* ---------- Lifecycle bottom stepper ---------- */
+  .lifecycle{padding:24px 24px 22px;}
+  .lifecycle-track{display:flex;align-items:flex-start;position:relative;}
+  .lc-node{flex:1;display:flex;flex-direction:column;align-items:center;position:relative;}
+  .lc-line{position:absolute;top:11px;left:-50%;width:100%;height:2px;background:var(--line-strong);z-index:0;}
+  .lc-node:first-child .lc-line{display:none;}
+  .lc-node.done .lc-line{background:var(--green);}
+  .lc-dot{width:23px;height:23px;border-radius:50%;border:1.5px solid var(--line-strong);background:var(--surface);z-index:1;display:flex;align-items:center;justify-content:center;}
+  .lc-node.done .lc-dot{background:var(--green);border-color:var(--green);}
+  .lc-node.done .lc-dot svg{width:11px;height:11px;stroke:#fff;fill:none;stroke-width:3;}
+  .lc-node.current .lc-dot{border-color:var(--amber);}
+  .lc-node.current .lc-dot .pulse{width:7px;height:7px;border-radius:50%;background:var(--amber);}
+  .lc-label{font-size:11px;color:var(--ink-faint);margin-top:8px;font-weight:500;text-align:center;}
+  .lc-node.done .lc-label,.lc-node.current .lc-label{color:var(--ink);font-weight:600;}
+  .history-link{display:inline-flex;align-items:center;gap:5px;margin-top:22px;font-size:12.5px;font-weight:600;color:var(--ink-muted);}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="sidebar">
+    <div class="brand"><div class="brand-mark">SI</div><div class="brand-name">Southern&nbsp;IoT</div></div>
+    <div class="nav-group">
+      <div class="nav-item">Dashboard</div>
+      <div class="nav-item">Products</div>
+      <div class="nav-item">My borrowings</div>
+      <div class="nav-item active">My requisitions</div>
+      <div class="nav-item">Projects</div>
+    </div>
+    <div class="nav-group">
+      <div class="nav-label">Approvals</div>
+      <div class="nav-item">Approvals <span class="nav-badge">4</span></div>
+      <div class="nav-item">Expenses</div>
+    </div>
+    <div class="nav-group">
+      <div class="nav-label">Inventory</div>
+      <div class="nav-item">Borrowing</div>
+      <div class="nav-item">All requisitions</div>
+      <div class="nav-item">Categories</div>
+      <div class="nav-item">Locations</div>
+      <div class="nav-item">Bills of materials</div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="crumb">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      Requisitions
+    </div>
+
+    <div class="page-head">
+      <div>
+        <div class="req-id">REQ-000015</div>
+        <div class="req-meta"><b>Accounts</b> &nbsp;·&nbsp; Home Automation</div>
+        <div style="margin-top:10px;display:flex;gap:8px;">
+          <span class="pill pending"><span class="dot"></span>Awaiting approval</span>
+          <span class="pill high"><span class="dot"></span>High priority</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div>
+        <!-- Clean top summary: exactly the fields that matter, nothing else -->
+        <div class="card card-pad">
+          <div class="summary-grid">
+            <div class="sf">
+              <div class="sf-label">Requested by</div>
+              <div class="sf-value">Gina General</div>
+            </div>
+            <div class="sf">
+              <div class="sf-label">Department</div>
+              <div class="sf-value">Accounts</div>
+            </div>
+            <div class="sf">
+              <div class="sf-label">Project</div>
+              <div class="sf-value">Home Automation</div>
+            </div>
+            <div class="sf">
+              <div class="sf-label">Needed by</div>
+              <div class="sf-value mono">30 Aug 2026, 6:00 PM</div>
+            </div>
+            <div class="sf full">
+              <div class="sf-label">Description</div>
+              <div class="sf-value">i need it</div>
+            </div>
+            <div class="sf full">
+              <div class="sf-label">Document attached</div>
+              <div class="doc-chip">
+                <div class="doc-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+                </div>
+                <div class="doc-info">
+                  <div class="doc-name">L298N 4WD Motor Driver DC Motor Driver Compatible.pdf</div>
+                  <div class="doc-size">993.5 KB</div>
+                </div>
+                <a class="doc-open" href="#" title="Open">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><path d="M15 3h6v6M10 14L21 3"/></svg>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-pad" style="padding-bottom:0;">
+            <div class="card-title">Line items</div>
+          </div>
+          <div class="card-pad" style="padding-top:16px;">
+            <table>
+              <thead><tr><th>Item</th><th class="num">Quantity</th><th class="num">Unit cost</th><th class="num">Total</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td class="item-name">esp</td>
+                  <td class="num mono">50</td>
+                  <td class="num mono">৳400.00</td>
+                  <td class="num mono" style="font-weight:600;">৳20,000.00</td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="table-foot">
+              <div class="label">Transportation</div>
+              <div class="val">৳500.00</div>
+            </div>
+            <div class="table-foot total-row">
+              <div class="label">Total</div>
+              <div class="val">৳20,500.00</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card card-pad decision-card">
+          <div class="decision-head">
+            <div>
+              <div class="card-title">Your decision</div>
+              <div class="card-sub" style="margin-bottom:0;">Approving moves this requisition to the next approver in the chain.</div>
+            </div>
+          </div>
+          <div class="decision-note">
+            <label>Note <span style="color:var(--ink-faint);font-weight:500;">(optional)</span></label>
+            <textarea placeholder="Add a note for the requester or next approver."></textarea>
+          </div>
+          <div class="decision-actions">
+            <button class="btn danger-line">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+              Reject
+            </button>
+            <button class="btn primary">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg>
+              Approve
+            </button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="lifecycle">
+            <div class="card-title" style="margin-bottom:18px;">Lifecycle</div>
+            <div class="lifecycle-track">
+              <div class="lc-node done"><div class="lc-line"></div><div class="lc-dot"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></div><div class="lc-label">Submitted</div></div>
+              <div class="lc-node done"><div class="lc-line"></div><div class="lc-dot"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></div><div class="lc-label">IM review</div></div>
+              <div class="lc-node current"><div class="lc-line"></div><div class="lc-dot"><div class="pulse"></div></div><div class="lc-label">Approved</div></div>
+              <div class="lc-node"><div class="lc-line"></div><div class="lc-dot"></div><div class="lc-label">BOM</div></div>
+              <div class="lc-node"><div class="lc-line"></div><div class="lc-dot"></div><div class="lc-label">Accounts</div></div>
+              <div class="lc-node"><div class="lc-line"></div><div class="lc-dot"></div><div class="lc-label">Funded</div></div>
+              <div class="lc-node"><div class="lc-line"></div><div class="lc-dot"></div><div class="lc-label">Purchased</div></div>
+              <div class="lc-node"><div class="lc-line"></div><div class="lc-dot"></div><div class="lc-label">Verified</div></div>
+              <div class="lc-node"><div class="lc-line"></div><div class="lc-dot"></div><div class="lc-label">In stock</div></div>
+            </div>
+            <a class="history-link" href="#">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 9l6 6 6-6"/></svg>
+              View history
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="rail-title">Progress</div>
+        <div class="rail-hint">2 approvers required — over ৳20,000</div>
+        <div class="steps">
+          <div class="step done">
+            <div class="step-line"></div>
+            <div class="step-icon"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></div>
+            <div>
+              <div class="step-name">Inventory Manager</div>
+              <div class="step-who">Imran Manager</div>
+              <div class="step-role">Inventory Manager</div>
+              <div class="step-status">Approved · 29 Aug 2026, 11:51 AM</div>
+            </div>
+          </div>
+          <div class="step current">
+            <div class="step-line"></div>
+            <div class="step-icon"><div class="pulse"></div></div>
+            <div>
+              <div class="step-name">Approver 1</div>
+              <div class="step-who">Ayesha Approver</div>
+              <div class="step-role">Head of Operations</div>
+              <div class="step-status">Waiting on decision</div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-icon"></div>
+            <div>
+              <div class="step-name">Approver 2</div>
+              <div class="step-who">Farhan Finance</div>
+              <div class="step-role">Chief Financial Officer</div>
+              <div class="step-status">Not reached yet</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

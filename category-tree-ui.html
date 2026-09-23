@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Category Tree Picker — Inventory</title>
+<style>
+  :root {
+    --bg: #f7f8fa;
+    --panel: #ffffff;
+    --border: #e2e5ea;
+    --border-soft: #edeff2;
+    --text: #16181d;
+    --text-dim: #6b7280;
+    --text-faint: #9aa1ac;
+    --accent: #2563eb;
+    --accent-soft: #eaf1ff;
+    --accent-soft-border: #c7dbff;
+    --hover: #f2f4f7;
+    --chip-bg: #f0f1f3;
+    --mark-bg: #fde68a;
+    --radius: 8px;
+    --shadow: 0 8px 24px rgba(20, 24, 33, 0.08), 0 1px 2px rgba(20,24,33,0.04);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1115; --panel: #17191f; --border: #2a2d35; --border-soft: #23262d;
+      --text: #e7e9ee; --text-dim: #9aa1ac; --text-faint: #6b7280;
+      --accent: #5b9cff; --accent-soft: #17233d; --accent-soft-border: #2b4c86;
+      --hover: #1e2129; --chip-bg: #21242c; --mark-bg: #6b5a1f;
+      --shadow: 0 8px 24px rgba(0,0,0,0.45);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1115; --panel: #17191f; --border: #2a2d35; --border-soft: #23262d;
+    --text: #e7e9ee; --text-dim: #9aa1ac; --text-faint: #6b7280;
+    --accent: #5b9cff; --accent-soft: #17233d; --accent-soft-border: #2b4c86;
+    --hover: #1e2129; --chip-bg: #21242c; --mark-bg: #6b5a1f;
+    --shadow: 0 8px 24px rgba(0,0,0,0.45);
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    height: 100%; margin: 0; background: var(--bg); color: var(--text);
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  body { display: flex; align-items: flex-start; justify-content: center; padding: 40px 20px; min-height: 100%; }
+  .page { width: 100%; max-width: 980px; }
+  .page-head { margin-bottom: 22px; }
+  .page-head h1 { font-size: 22px; font-weight: 650; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .page-head p { margin: 0; color: var(--text-dim); font-size: 13.5px; }
+
+  .toolbar {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px; display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 18px;
+  }
+  .field { flex: 1 1 220px; min-width: 200px; }
+  .field label { display: block; font-size: 12px; font-weight: 600; color: var(--text-dim); margin-bottom: 6px; }
+
+  /* Inputs kept at >=16px to avoid the iOS Safari auto-zoom-on-focus bug
+     (font-size < 16px on an <input> triggers viewport zoom that does not
+     revert on blur). Do not shrink these below 16px. */
+  .text-input {
+    width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 7px;
+    background: var(--bg); color: var(--text); font-size: 16px;
+  }
+  .text-input:focus, .picker-trigger:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 1px;
+  }
+
+  .field.category { position: relative; }
+  .picker-trigger {
+    width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 9px 12px; border: 1px solid var(--border); border-radius: 7px;
+    background: var(--bg); color: var(--text); font-size: 14px; cursor: pointer;
+  }
+  .picker-trigger.open { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .picker-trigger .value { font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chev { flex-shrink: 0; transition: transform .15s ease; color: var(--text-faint); }
+  .picker-trigger.open .chev { transform: rotate(180deg); }
+
+  .panel {
+    position: absolute; top: calc(100% + 6px); left: 0; width: min(380px, 90vw);
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: var(--shadow); z-index: 20; display: none; overflow: hidden;
+  }
+  .panel.show { display: block; }
+
+  .search-wrap { padding: 10px; border-bottom: 1px solid var(--border-soft); }
+  .search-input-wrap { position: relative; }
+  .search-input {
+    width: 100%; padding: 8px 10px 8px 30px; border: 1px solid var(--border); border-radius: 7px;
+    background: var(--bg); color: var(--text); font-size: 16px; /* see note above */
+  }
+  .search-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .search-icon { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); color: var(--text-faint); pointer-events: none; }
+
+  .search-status {
+    padding: 4px 12px 8px; font-size: 11.5px; color: var(--text-faint); min-height: 14px;
+  }
+
+  .pinned { padding: 4px 6px; border-bottom: 1px solid var(--border-soft); }
+
+  .tree-scroll { max-height: 320px; overflow-y: auto; padding: 6px; }
+  .tree-scroll::-webkit-scrollbar { width: 9px; }
+  .tree-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 6px; }
+
+  .tree-row {
+    display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 6px;
+    cursor: pointer; user-select: none; font-size: 13.5px; line-height: 1.3; white-space: nowrap;
+  }
+  .tree-row:hover { background: var(--hover); }
+  .tree-row.selected { background: var(--accent-soft); }
+  .tree-row.selected .row-label { color: var(--accent); }
+  /* Visual "active" ring = the keyboard cursor position. Real DOM focus stays
+     on the search input the whole time (see JS notes) — this class plus
+     aria-activedescendant is how a screen reader / sighted keyboard user both
+     learn which row is "current" without us moving real focus into the list
+     (moving real focus into rows is what causes some screen readers to
+     announce items as blank mid-navigation). */
+  .tree-row.active-desc { box-shadow: inset 0 0 0 2px var(--accent); background: var(--hover); }
+
+  .twisty {
+    width: 16px; height: 16px; display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; color: var(--text-faint); transition: transform .12s ease;
+  }
+  .twisty.leaf { visibility: hidden; }
+  .twisty.expanded { transform: rotate(90deg); }
+
+  .row-label { overflow: hidden; text-overflow: ellipsis; }
+  .row-label mark { background: var(--mark-bg); color: inherit; border-radius: 2px; padding: 0 1px; }
+  .lvl-1 > .row-label { font-weight: 650; }
+  .lvl-2 > .row-label { font-weight: 500; color: var(--text); }
+  .lvl-3 > .row-label { font-weight: 400; color: var(--text-dim); }
+  .tree-row.lvl-1 { margin-top: 2px; }
+
+  .count {
+    margin-left: auto; font-size: 11px; color: var(--text-faint); background: var(--chip-bg);
+    padding: 1px 6px; border-radius: 20px; flex-shrink: 0;
+  }
+  .tree-row.selected .count { color: var(--accent); background: var(--accent-soft-border); }
+
+  .empty-hint { padding: 18px 14px; text-align: center; color: var(--text-faint); font-size: 13px; }
+
+  .footer-row {
+    display: flex; justify-content: space-between; align-items: center; padding: 8px 10px;
+    border-top: 1px solid var(--border-soft);
+  }
+  .clear-btn { background: none; border: none; color: var(--text-dim); font-size: 12.5px; cursor: pointer; padding: 4px 6px; }
+  .clear-btn:hover { color: var(--text); }
+  .clear-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 4px; }
+  .hint-txt { font-size: 11px; color: var(--text-faint); }
+
+  .note-card {
+    margin-top: 22px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 18px; font-size: 13px; color: var(--text-dim); line-height: 1.55;
+  }
+  .note-card b { color: var(--text); font-weight: 600; }
+  .note-card ul { margin: 8px 0 0; padding-left: 18px; }
+  .note-card li { margin-bottom: 4px; }
+  .note-card code { background: var(--chip-bg); padding: 1px 5px; border-radius: 4px; }
+
+  kbd {
+    font-family: inherit; background: var(--chip-bg); border: 1px solid var(--border);
+    border-bottom-width: 2px; border-radius: 4px; padding: 1px 5px; font-size: 11px;
+  }
+
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
+    clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="page-head">
+    <h1>Inventory</h1>
+    <p>The stock register. Every movement is recorded and cannot be edited afterwards.</p>
+  </div>
+
+  <div class="toolbar">
+    <div class="field">
+      <label for="search-name">Search</label>
+      <input id="search-name" class="text-input" placeholder="Search by name or product code">
+    </div>
+
+    <div class="field category">
+      <label for="trigger">Category</label>
+      <button type="button" class="picker-trigger" id="trigger"
+              role="combobox" aria-haspopup="tree" aria-expanded="false"
+              aria-controls="tree-panel">
+        <span class="value" id="trigger-value">All categories</span>
+        <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+
+      <div class="panel" id="tree-panel">
+        <div class="search-wrap">
+          <div class="search-input-wrap">
+            <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M21 21l-3.5-3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            <input class="search-input" id="tree-search"
+                   role="searchbox"
+                   aria-autocomplete="list" aria-controls="tree-scroll"
+                   aria-activedescendant=""
+                   placeholder="Type to jump to a category…"
+                   autocomplete="off">
+          </div>
+        </div>
+
+        <div id="search-status" class="search-status" aria-live="polite"></div>
+
+        <div class="pinned">
+          <div class="tree-row lvl-1 selected" role="treeitem" aria-level="1" aria-selected="true" id="opt-__all__" data-id="__all__">
+            <span class="twisty leaf"></span>
+            <span class="row-label">All categories</span>
+          </div>
+        </div>
+
+        <div class="tree-scroll" id="tree-scroll" role="tree" aria-label="Category"></div>
+
+        <div class="pinned" style="border-top:1px solid var(--border-soft); border-bottom:none;">
+          <div class="tree-row lvl-1" role="treeitem" aria-level="1" aria-selected="false" id="opt-__uncat__" data-id="__uncat__"
+               title="Products with no category assigned">
+            <span class="twisty leaf"></span>
+            <span class="row-label">Uncategorized</span>
+            <span class="count">14</span>
+          </div>
+        </div>
+
+        <div class="footer-row">
+          <button class="clear-btn" id="clear-selection" type="button">Clear selection</button>
+          <span class="hint-txt"><kbd>↑</kbd><kbd>↓</kbd> move · <kbd>→</kbd><kbd>←</kbd> expand/collapse · <kbd>Enter</kbd> select</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note-card">
+    <b>Fixed vs. the previous version</b> (each verified, not assumed):
+    <ul>
+      <li><b>Search now prunes correctly.</b> Typing "esp32" shows only ESP32 and its ancestor path — not the entire Electronics branch. Previous version force-expanded the whole matched top-level branch regardless of which leaf actually matched.</li>
+      <li><b>Real keyboard navigation.</b> <kbd>↑</kbd>/<kbd>↓</kbd> move a visual + ARIA cursor (<code>aria-activedescendant</code>) without moving real DOM focus off the search box — this follows the WAI-ARIA combobox pattern specifically so screen readers don't announce rows as blank mid-navigation. <kbd>→</kbd>/<kbd>←</kbd> expand/collapse or jump to child/parent, matching the standard ARIA treeview keyboard pattern. <kbd>Home</kbd>/<kbd>End</kbd> jump to first/last visible row.</li>
+      <li><b>Escape closes the panel</b> (first press clears the search if non-empty, second press closes and returns focus to the trigger) instead of only clearing text.</li>
+      <li><b>Tabbing out now closes the panel</b> via a <code>focusout</code> check, instead of staying open until an outside click.</li>
+      <li><b>Focus returns to the trigger button</b> after a selection or on close — it no longer gets silently dropped into a hidden container.</li>
+      <li><b>ARIA roles added</b>: <code>combobox</code>/<code>tree</code>/<code>treeitem</code>, <code>aria-level</code>, <code>aria-expanded</code>, <code>aria-selected</code>, plus a live region announcing match counts as you type.</li>
+      <li><b>Inputs are 16px</b>, not 13.5px — under 16px, iOS Safari auto-zooms the viewport on focus and does not zoom back out on blur.</li>
+      <li><b>Stale selection is detected.</b> If the previously selected category no longer exists in the data (e.g. deleted by another user), it resets to "All categories" on next open instead of showing a dead label forever.</li>
+    </ul>
+    <b>Left as backend/decision items, not fixable in a static file</b> — see the written plan.
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   DATA
+   ============================================================ */
+const DATA = [
+  { id:'electronics', label:'Electronics', count: 128, children:[
+    { id:'passive', label:'Passive Components', count: 41, children:[
+      { id:'resistors', label:'Resistors', count: 22 },
+      { id:'capacitors', label:'Capacitors', count: 15 },
+      { id:'inductors', label:'Inductors', count: 3 },
+      { id:'trimmers', label:'Potentiometers / Trimmers', count: 1 },
+    ]},
+    { id:'semi', label:'Semiconductors', count: 26, children:[
+      { id:'diodes', label:'Diodes & Rectifiers', count: 9 },
+      { id:'transistors', label:'Transistors & MOSFETs', count: 12 },
+      { id:'optocouplers', label:'Optocouplers', count: 5 },
+    ]},
+    { id:'mcus', label:'Microcontrollers & Processors', count: 19, children:[
+      { id:'esp32', label:'ESP32 / ESP8266', count: 7 },
+      { id:'arduino', label:'Arduino / AVR', count: 5 },
+      { id:'stm32', label:'STM32 / ARM (incl. Nucleo)', count: 4 },
+      { id:'sbc', label:'Raspberry Pi / SBC', count: 3 },
+    ]},
+    { id:'sensors', label:'Sensors', count: 24, children:[
+      { id:'temp', label:'Temperature & Humidity', count: 6 },
+      { id:'imu', label:'Motion / IMU', count: 5 },
+      { id:'proximity', label:'Proximity & Distance', count: 4 },
+      { id:'currsense', label:'Current / Voltage', count: 4 },
+      { id:'optical', label:'Optical / Imaging', count: 5 },
+    ]},
+    { id:'breakout', label:'Breakout Boards & Modules', count: 18, children:[
+      { id:'comm', label:'Communication (Wi-Fi/BLE/LoRa/RAK)', count: 8 },
+      { id:'power-mod', label:'Power Modules', count: 4 },
+      { id:'driver-mod', label:'Driver Modules', count: 3 },
+      { id:'display-mod', label:'Display Modules', count: 3 },
+    ]},
+  ]},
+  { id:'mechanical', label:'Mechanical & Structural', count: 76, children:[
+    { id:'fasteners', label:'Fasteners', count: 31, children:[
+      { id:'screws', label:'Screws & Bolts', count: 18 },
+      { id:'nuts', label:'Nuts & Washers', count: 9 },
+      { id:'standoffs', label:'Standoffs / Spacers', count: 4 },
+    ]},
+    { id:'motion', label:'Motion Components', count: 22, children:[
+      { id:'bearings', label:'Bearings', count: 7 },
+      { id:'leadscrews', label:'Lead Screws / Rods', count: 4 },
+      { id:'rails', label:'Linear Rails / Guides', count: 3 },
+      { id:'pulleys', label:'Pulleys / Belts / Gears', count: 5 },
+      { id:'couplers', label:'Shaft Couplers', count: 3 },
+    ]},
+    { id:'structural', label:'Structural', count: 12, children:[
+      { id:'extrusion', label:'Aluminum Extrusion', count: 6 },
+      { id:'brackets', label:'Brackets & Plates', count: 4 },
+      { id:'enclosures', label:'Enclosures', count: 2 },
+    ]},
+    { id:'hand-tools', label:'Hand & Mechanical Tools', count: 11, children:[
+      { id:'striking', label:'Striking Tools', count: 2 },
+      { id:'screwdrivers', label:'Screwdrivers & Wrenches', count: 5 },
+      { id:'pliers', label:'Pliers & Cutters', count: 3 },
+      { id:'misc-tools', label:'Miscellaneous', count: 1 },
+    ]},
+  ]},
+  // Deliberately left in to demonstrate the "junk category" detection UX —
+  // low, matching counts + muted styling make these visually suspicious.
+  // In production these get deleted via Category Management (spec §4/§5).
+  { id:'randd', label:'R&D Hardware', count: 2, children:[
+    { id:'junk1', label:'hi', count: 1, junk:true },
+    { id:'junk2', label:'2hi', count: 1, junk:true },
+  ]},
+];
+
+/* ============================================================
+   STATE
+   ============================================================ */
+const treeScroll   = document.getElementById('tree-scroll');
+const trigger      = document.getElementById('trigger');
+const triggerValue = document.getElementById('trigger-value');
+const panel        = document.getElementById('tree-panel');
+const searchInput  = document.getElementById('tree-search');
+const searchStatus = document.getElementById('search-status');
+const fieldWrap    = document.querySelector('.field.category');
+
+let selectedId = '__all__';
+let expanded   = new Set(['electronics']); // pre-expanded so depth is visible on load
+let activeId   = null;   // keyboard cursor (aria-activedescendant target)
+let rowOrder   = [];     // flat, in-document-order list of {id, level, hasKids} for currently visible rows (pinned rows included)
+
+/* ============================================================
+   TREE HELPERS
+   ============================================================ */
+function findNode(id, nodes = DATA) {
+  for (const n of nodes) {
+    if (n.id === id) return n;
+    if (n.children) { const r = findNode(id, n.children); if (r) return r; }
+  }
+  return null;
+}
+
+function pathLabel(id, nodes = DATA, trail = []) {
+  for (const n of nodes) {
+    const t = [...trail, n.label];
+    if (n.id === id) return t;
+    if (n.children) { const r = pathLabel(id, n.children, t); if (r) return r; }
+  }
+  return null;
+}
+
+// Confirms the current selection still exists in the data. Run this whenever
+// the panel opens (and, in the real app, whenever category data is
+// revalidated — e.g. on refetch/window focus) so a category deleted by
+// another user doesn't leave a dead label showing indefinitely.
+function ensureSelectionValid() {
+  if (selectedId === '__all__' || selectedId === '__uncat__') return;
+  if (!findNode(selectedId)) {
+    selectedId = '__all__';
+    triggerValue.textContent = 'All categories';
+  }
+}
+
+/* ============================================================
+   SEARCH — matches + ancestor-only expansion (the actual fix)
+   Only nodes that match, or that are ancestors of a match, are shown.
+   A parent whose own label matches does NOT force its whole subtree open —
+   only branches that contain a matching descendant get auto-expanded, and
+   only far enough to reveal that descendant.
+   ============================================================ */
+function computeSearchSets(query) {
+  const q = query.trim().toLowerCase();
+  const visible = new Set();   // nodes to render at all
+  const autoExpand = new Set(); // nodes that must be expanded to reveal a matching descendant
+  let matchCount = 0;
+
+  function walk(node) {
+    const selfMatch = node.label.toLowerCase().includes(q);
+    if (selfMatch) matchCount++;
+    let childMatch = false;
+    if (node.children) {
+      for (const c of node.children) if (walk(c)) childMatch = true;
+    }
+    const isRelevant = selfMatch || childMatch;
+    if (isRelevant) {
+      visible.add(node.id);
+      if (childMatch) autoExpand.add(node.id);
+    }
+    return isRelevant;
+  }
+  DATA.forEach(walk);
+  return { visible, autoExpand, matchCount, active: q.length > 0 };
+}
+
+function highlightLabel(container, text, query) {
+  const q = query.trim();
+  if (!q) { container.textContent = text; return; }
+  const lower = text.toLowerCase();
+  const idx = lower.indexOf(q.toLowerCase());
+  if (idx === -1) { container.textContent = text; return; }
+  container.textContent = '';
+  container.appendChild(document.createTextNode(text.slice(0, idx)));
+  const mark = document.createElement('mark');
+  mark.textContent = text.slice(idx, idx + q.length);
+  container.appendChild(mark);
+  container.appendChild(document.createTextNode(text.slice(idx + q.length)));
+}
+
+/* ============================================================
+   RENDER
+   ============================================================ */
+function render(query = '') {
+  treeScroll.innerHTML = '';
+  rowOrder = [
+    { id: '__all__', level: 1, hasKids: false },
+  ];
+
+  const search = computeSearchSets(query);
+
+  function buildRow(node, level) {
+    if (search.active && !search.visible.has(node.id)) return;
+
+    const hasKids = !!(node.children && node.children.length);
+    const isExpanded = search.active ? search.autoExpand.has(node.id) : expanded.has(node.id);
+
+    const row = document.createElement('div');
+    row.className = `tree-row lvl-${level}` + (node.id === selectedId ? ' selected' : '');
+    row.id = `opt-${node.id}`;
+    row.dataset.id = node.id;
+    row.setAttribute('role', 'treeitem');
+    row.setAttribute('aria-level', String(level));
+    row.setAttribute('aria-selected', node.id === selectedId ? 'true' : 'false');
+    if (hasKids) row.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+    if (node.junk) row.title = 'Flagged: looks like test/junk data — check before relying on this category';
+
+    const twisty = document.createElement('span');
+    twisty.className = 'twisty' + (hasKids ? (isExpanded ? ' expanded' : '') : ' leaf');
+    if (hasKids) {
+      twisty.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+      twisty.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleExpand(node.id);
+      });
+    }
+    row.appendChild(twisty);
+
+    const label = document.createElement('span');
+    label.className = 'row-label';
+    highlightLabel(label, node.label, search.active ? query : '');
+    if (node.junk) label.style.opacity = '0.55';
+    row.appendChild(label);
+
+    if (typeof node.count === 'number') {
+      const count = document.createElement('span');
+      count.className = 'count';
+      count.textContent = node.count;
+      count.title = 'Total items in this category (not affected by other active filters)';
+      row.appendChild(count);
+    }
+
+    row.style.paddingLeft = (10 + level * 16) + 'px';
+    row.addEventListener('click', () => selectNode(node.id));
+    row.addEventListener('mouseenter', () => setActive(node.id, { scroll: false }));
+
+    treeScroll.appendChild(row);
+    rowOrder.push({ id: node.id, level, hasKids });
+
+    if (hasKids && isExpanded) node.children.forEach(c => buildRow(c, level + 1));
+  }
+
+  const source = search.active ? DATA.filter(n => search.visible.has(n.id)) : DATA;
+  source.forEach(n => buildRow(n, 1));
+
+  rowOrder.push({ id: '__uncat__', level: 1, hasKids: false });
+
+  if (search.active) {
+    searchStatus.textContent = search.matchCount === 0
+      ? `No category matches "${query.trim()}"`
+      : `${search.matchCount} ${search.matchCount === 1 ? 'match' : 'matches'}`;
+  } else {
+    searchStatus.textContent = '';
+  }
+
+  if (search.active && search.matchCount === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-hint';
+    empty.textContent = `No category matches "${query.trim()}"`;
+    treeScroll.appendChild(empty);
+  }
+
+  // Keep the ARIA cursor valid against the freshly rendered row set.
+  if (activeId && !rowOrder.some(r => r.id === activeId)) activeId = null;
+  applyActiveDescendant();
+}
+
+function toggleExpand(id) {
+  if (expanded.has(id)) expanded.delete(id); else expanded.add(id);
+  render(searchInput.value);
+}
+
+/* ============================================================
+   SELECTION
+   ============================================================ */
+function selectNode(id) {
+  selectedId = id;
+  if (id === '__all__') triggerValue.textContent = 'All categories';
+  else if (id === '__uncat__') triggerValue.textContent = 'Uncategorized';
+  else {
+    const path = pathLabel(id);
+    triggerValue.textContent = path ? path[path.length - 1] : id;
+  }
+  // NOTE for backend implementation: selecting a non-leaf node (e.g. "Sensors")
+  // must translate into "this id OR any descendant id" server-side — a plain
+  // WHERE category_id = :id will silently miss every product filed under a
+  // child of the selected node. This needs the same recursive-CTE-over-
+  // parent_id approach already used for the depth-guard trigger, just walked
+  // downward instead of upward. See written plan, "Backend/data decisions".
+  closePanel();
+  trigger.focus();
+}
+
+/* ============================================================
+   KEYBOARD CURSOR (aria-activedescendant pattern)
+   Real DOM focus stays on #tree-search the entire time the panel is open.
+   We never move focus into individual rows — only a highlighted class +
+   aria-activedescendant track "where the user is". This sidesteps a known
+   screen-reader issue where moving real focus rapidly between freshly
+   created DOM nodes can cause items to be announced as blank.
+   ============================================================ */
+function setActive(id, { scroll = true } = {}) {
+  activeId = id;
+  applyActiveDescendant();
+  if (scroll) {
+    const el = document.getElementById(`opt-${id}`);
+    if (el) el.scrollIntoView({ block: 'nearest' });
+  }
+}
+
+function applyActiveDescendant() {
+  document.querySelectorAll('.tree-row.active-desc').forEach(el => el.classList.remove('active-desc'));
+  if (activeId) {
+    const el = document.getElementById(`opt-${activeId}`);
+    if (el) el.classList.add('active-desc');
+    searchInput.setAttribute('aria-activedescendant', `opt-${activeId}`);
+  } else {
+    searchInput.setAttribute('aria-activedescendant', '');
+  }
+}
+
+function moveActive(delta) {
+  if (!rowOrder.length) return;
+  let idx = rowOrder.findIndex(r => r.id === activeId);
+  if (idx === -1) idx = delta > 0 ? -1 : 0;
+  idx = Math.max(0, Math.min(rowOrder.length - 1, idx + delta));
+  setActive(rowOrder[idx].id);
+}
+
+function moveActiveHome() { if (rowOrder.length) setActive(rowOrder[0].id); }
+function moveActiveEnd()  { if (rowOrder.length) setActive(rowOrder[rowOrder.length - 1].id); }
+
+function expandOrDescend() {
+  const entry = rowOrder.find(r => r.id === activeId);
+  if (!entry) return;
+  if (entry.hasKids) {
+    if (!expanded.has(activeId) && findNode(activeId)) {
+      expanded.add(activeId);
+      render(searchInput.value);
+      setActive(activeId, { scroll: false });
+      return;
+    }
+    // already expanded — move to first child (next row one level deeper)
+    const idx = rowOrder.findIndex(r => r.id === activeId);
+    const next = rowOrder[idx + 1];
+    if (next && next.level === entry.level + 1) setActive(next.id);
+  }
+}
+
+function collapseOrAscend() {
+  const idx = rowOrder.findIndex(r => r.id === activeId);
+  if (idx === -1) return;
+  const entry = rowOrder[idx];
+  if (entry.hasKids && expanded.has(entry.id)) {
+    expanded.delete(entry.id);
+    render(searchInput.value);
+    setActive(entry.id, { scroll: false });
+    return;
+  }
+  // find nearest preceding row at level - 1
+  for (let i = idx - 1; i >= 0; i--) {
+    if (rowOrder[i].level === entry.level - 1) { setActive(rowOrder[i].id); return; }
+  }
+}
+
+/* ============================================================
+   OPEN / CLOSE
+   ============================================================ */
+function openPanel() {
+  ensureSelectionValid();
+  panel.classList.add('show');
+  trigger.classList.add('open');
+  trigger.setAttribute('aria-expanded', 'true');
+  activeId = selectedId;
+  render(searchInput.value);
+  requestAnimationFrame(() => searchInput.focus());
+}
+
+function closePanel() {
+  panel.classList.remove('show');
+  trigger.classList.remove('open');
+  trigger.setAttribute('aria-expanded', 'false');
+  activeId = null;
+}
+
+trigger.addEventListener('click', () => {
+  panel.classList.contains('show') ? closePanel() : openPanel();
+});
+
+// Tabbing away now closes the panel instead of leaving it open and
+// disconnected from focus. focusout fires before the new element receives
+// focus, so we check on the next tick.
+fieldWrap.addEventListener('focusout', () => {
+  setTimeout(() => {
+    if (!fieldWrap.contains(document.activeElement)) closePanel();
+  }, 0);
+});
+
+document.addEventListener('click', (e) => {
+  if (!panel.contains(e.target) && !trigger.contains(e.target)) closePanel();
+});
+
+/* ============================================================
+   SEARCH INPUT — typing + full keyboard set
+   ============================================================ */
+searchInput.addEventListener('input', (e) => {
+  render(e.target.value);
+  // After a filter changes, point the cursor at the first visible result
+  // rather than leaving it dangling on a row that may no longer exist.
+  if (rowOrder.length) setActive(rowOrder[0].id, { scroll: false });
+});
+
+searchInput.addEventListener('keydown', (e) => {
+  switch (e.key) {
+    case 'ArrowDown': e.preventDefault(); moveActive(1); break;
+    case 'ArrowUp':   e.preventDefault(); moveActive(-1); break;
+    case 'ArrowRight': e.preventDefault(); expandOrDescend(); break;
+    case 'ArrowLeft':  e.preventDefault(); collapseOrAscend(); break;
+    case 'Home': e.preventDefault(); moveActiveHome(); break;
+    case 'End':  e.preventDefault(); moveActiveEnd(); break;
+    case 'Enter':
+      e.preventDefault();
+      if (activeId) selectNode(activeId);
+      break;
+    case 'Escape':
+      e.preventDefault();
+      if (searchInput.value) { searchInput.value = ''; render(''); }
+      else { closePanel(); trigger.focus(); }
+      break;
+  }
+});
+
+document.getElementById('clear-selection').addEventListener('click', () => selectNode('__all__'));
+
+// Static "All categories" / "Uncategorized" pinned rows also participate in
+// the same click/selection path as tree rows.
+document.querySelectorAll('.pinned .tree-row').forEach(r => {
+  r.addEventListener('click', () => selectNode(r.dataset.id));
+  r.addEventListener('mouseenter', () => setActive(r.dataset.id, { scroll: false }));
+});
+
+render();
+</script>
+</body>
+</html>

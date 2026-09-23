@@ -1205,3 +1205,15 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   `available`, `in_use_total` and `owned_total` are all derived from `on_hand`, which the person
   was invited to edit, so a mismatch there is the expected consequence of a legitimate edit —
   warning about it would fire on every changed row and teach people to ignore the warnings.
+- 2026-09-23 — CSV import, OQ-IMP-1. `IMPORT_MAX_ROWS` contradicted I1: the file is the whole
+  catalogue, so once the catalogue passed the cap the only supported bulk-edit workflow was
+  refused — and the export refused first, since it passed the same ceiling to `listAll` while a
+  file carries one row *per product per shelf*. Resolved by separating two costs that were
+  conflated: the row and byte caps bound **parsing** (how much arbitrary input is read into
+  memory), and a new `IMPORT_MAX_CHANGED_SHELVES` bounds **applying**, measured on the diff
+  before the human gate. Apply cost tracks changed shelves, not rows — an unedited 20,000-row
+  reimport changes nothing and costs nothing — so the old cap refused the harmless file and
+  waved through the expensive one. A restore stays exempt from the parse caps (a snapshot is not
+  arbitrary input) and is **not** exempt from the changed-shelf ceiling, because those writes
+  cost the same in either direction. The 10,000 default is arithmetic from §11.2 and provisional
+  until benchmarked.

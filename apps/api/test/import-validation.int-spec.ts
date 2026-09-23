@@ -11,6 +11,11 @@ import {
 } from './stock-factories';
 import { StockService } from '../src/modules/stock/stock.service';
 import { ImportValidationService } from '../src/modules/imports/import-validation.service';
+import { CONFIG, type AppConfig } from '../src/config';
+import { ProductsService } from '../src/modules/products/products.service';
+import { CategoriesService } from '../src/modules/categories/categories.service';
+import { LocationsService } from '../src/modules/locations/locations.service';
+import { SettingsService } from '../src/modules/settings/settings.service';
 import { ProductExportService } from '../src/modules/imports/product-export.service';
 import { IMPORT_COLUMNS, stripBom } from '../src/modules/imports/import-format';
 import { lookupKey } from '../src/modules/imports/import-lookups';
@@ -344,6 +349,65 @@ describe('import validation', () => {
 
       expect(outcome.errors).not.toEqual([]);
       expect(outcome.diff).toBeNull();
+    });
+  });
+
+  describe('the changed-shelf ceiling (OQ-IMP-1)', () => {
+    /**
+     * A tiny ceiling, so the test does not have to build ten thousand shelves. What is being
+     * tested is which quantity the cap measures, not the number it is set to.
+     */
+    function withCeiling(maxChangedShelves: number) {
+      const real = ctx.app.get<AppConfig>(CONFIG);
+      return new ImportValidationService(
+        ctx.app.get(ProductsService),
+        ctx.app.get(CategoriesService),
+        ctx.app.get(LocationsService),
+        ctx.app.get(StockService),
+        ctx.app.get(SettingsService),
+        { ...real, imports: { ...real.imports, maxChangedShelves } } as AppConfig,
+      );
+    }
+
+    it('refuses a file that would change more shelves than one apply may', async () => {
+      const tight = withCeiling(0);
+      const outcome = await tight.validate(
+        file(edit(await exported(), fixture.productId, 'on_hand', '4')),
+      );
+
+      expect(outcome.plan).toBeNull();
+      expect(outcome.diff).toBeNull();
+      expect(outcome.errors[0]!.code).toBe(ImportIssueCode.TOO_MANY_CHANGED_SHELVES);
+      expect(outcome.errors[0]!.message).toMatch(/would change the count on 1 shelves/);
+    });
+
+    /**
+     * The whole point of measuring the diff rather than the rows: re-importing an unedited
+     * export changes nothing, so no ceiling can refuse it however low it is set.
+     */
+    it('lets a file that changes nothing through a ceiling of zero', async () => {
+      const outcome = await withCeiling(0).validate(file(await exported()));
+
+      expect(outcome.errors).toEqual([]);
+      expect(outcome.diff!.shelvesChanged).toBe(0);
+    });
+
+    /**
+     * A restore skips the parse-phase caps, because a snapshot is this system's own file rather
+     * than arbitrary input. It does not skip this one: forty thousand shelves cost the same to
+     * write whichever direction they came from.
+     */
+    it('applies to a restore as well, unlike the parse-phase caps', async () => {
+      const outcome = await withCeiling(0).validate(
+        file(edit(await exported(), fixture.productId, 'on_hand', '4')),
+        { isRestore: true },
+      );
+
+      expect(outcome.errors[0]!.code).toBe(ImportIssueCode.TOO_MANY_CHANGED_SHELVES);
+    });
+
+    it('is an error, never advice', () => {
+      expect(isImportWarning(ImportIssueCode.TOO_MANY_CHANGED_SHELVES)).toBe(false);
     });
   });
 

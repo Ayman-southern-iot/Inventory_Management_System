@@ -106,6 +106,14 @@ export const ImportIssueCode = {
   BELOW_RESERVED: 'BELOW_RESERVED',
   SHELF_CLEARED_BUT_RESERVED: 'SHELF_CLEARED_BUT_RESERVED',
   CATEGORY_NOT_TRACKABLE: 'CATEGORY_NOT_TRACKABLE',
+  /**
+   * The file would change more shelves than one apply transaction is allowed to touch.
+   *
+   * An error, not a warning, and measured on the **diff** rather than the row count: a
+   * 20,000-row reimport that changes twelve shelves costs what a twelve-row one costs, and
+   * refusing it on size would refuse the file that changes nothing (§11.6, OQ-IMP-1).
+   */
+  TOO_MANY_CHANGED_SHELVES: 'TOO_MANY_CHANGED_SHELVES',
 
   /* ------------------------------------------------------ warnings — never block (§5.3.7) */
   CODE_LOOKS_LIKE_A_DATE: 'CODE_LOOKS_LIKE_A_DATE',

@@ -149,6 +149,25 @@ const rawSchema = z.object({
   IMPORT_CONFIRMATION_TTL_MINUTES: z.coerce.number().int().min(1).max(1440).default(60),
   /** Rows on the import history screen. */
   IMPORT_HISTORY_LIMIT: z.coerce.number().int().min(1).max(500).default(50),
+  /**
+   * The real ceiling on what one apply may do, and the resolution of OQ-IMP-1 (§11.6).
+   *
+   * `IMPORT_MAX_ROWS` and `IMPORT_MAX_FILE_BYTES` bound the *parse* phase — how much arbitrary
+   * input is read into memory. They cannot bound apply, because apply cost tracks **changed
+   * shelves**, not rows: re-importing an unedited 20,000-row export changes nothing and costs
+   * nothing, while a 200-row file that moves every one of them is real work. Conflating the two
+   * is what made the row cap contradict "the file is the whole catalogue".
+   *
+   * Checked against the diff, before a job is allowed to wait for confirmation, so the cost is
+   * visible before it is paid rather than discovered inside a transaction that has to finish.
+   * **A restore is not exempt from this one** — 40,000 shelves cost the same to write whichever
+   * direction they came from — though it stays exempt from the two parse-phase caps.
+   *
+   * **Provisional.** 10,000 sits under the 60 s `statement_timeout` by §11.2's arithmetic and
+   * above anything this catalogue can currently produce, but it is arithmetic, not a
+   * measurement; §15 carries the benchmark that replaces it.
+   */
+  IMPORT_MAX_CHANGED_SHELVES: z.coerce.number().int().min(1).max(200_000).default(10_000),
   /** Replaces the previously hardcoded 10/60s login burst limit on `POST /auth/login`. */
   LOGIN_BURST_LIMIT: z.coerce.number().int().min(1).max(10_000).default(10),
   LOGIN_BURST_TTL_SECONDS: durationSecondsSchema.default(60),
@@ -482,6 +501,7 @@ export interface AppConfig {
     readonly fuzzyMatchThreshold: number;
     readonly confirmationTtlMinutes: number;
     readonly historyLimit: number;
+    readonly maxChangedShelves: number;
   };
   readonly body: {
     readonly jsonLimit: string;
@@ -638,6 +658,7 @@ export function buildConfig(source: Record<string, string | undefined>): AppConf
       fuzzyMatchThreshold: env.IMPORT_FUZZY_MATCH_THRESHOLD,
       confirmationTtlMinutes: env.IMPORT_CONFIRMATION_TTL_MINUTES,
       historyLimit: env.IMPORT_HISTORY_LIMIT,
+      maxChangedShelves: env.IMPORT_MAX_CHANGED_SHELVES,
     }),
     body: Object.freeze({
       jsonLimit: env.JSON_BODY_LIMIT,

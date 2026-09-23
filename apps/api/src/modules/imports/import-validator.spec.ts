@@ -1101,4 +1101,7 @@ const NOT_EXERCISED_HERE: ImportIssueCode[] = [
   ImportIssueCode.NAME_NEAR_DUPLICATE,
   ImportIssueCode.CATEGORY_NEAR_DUPLICATE,
   ImportIssueCode.NEAR_DUPLICATE_CHECK_SKIPPED,
+  // Also ImportValidationService's: the changed-shelf ceiling is measured on the diff, which
+  // the pure validator does not build. Asserted in `import-validation.int-spec.ts`.
+  ImportIssueCode.TOO_MANY_CHANGED_SHELVES,
 ].sort();
