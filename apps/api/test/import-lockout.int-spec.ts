@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { sql } from 'kysely';
 import request from 'supertest';
@@ -58,7 +58,26 @@ describe('the import lockout', () => {
     return job.id;
   }
 
-  /** Ages the heartbeat past the timeout, as a task that died without crashing would. */
+  /**
+   * Both clocks stopped — what a task that died without crashing actually looks like.
+   *
+   * There are two, and staleness means staleness in both: the persisted `heartbeat_at`, which
+   * another process would judge it by, and this process's own in-memory progress touch. Ageing
+   * only the row leaves the in-memory clock fresh, and the guard correctly calls that alive.
+   * The system clock is moved rather than exposing a setter on the service for a test's benefit.
+   */
+  async function taskDies(jobId: string): Promise<void> {
+    await stopTheHeart(jobId);
+    /*
+     * Just past `IMPORT_HEARTBEAT_TIMEOUT_SECONDS` (10 s under TEST_ENV), not hours. Moving the
+     * clock far enough to matter also expires the access token this spec is holding, and a 401
+     * would mask the thing being tested — the 503 lifting.
+     */
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date(Date.now() + 60 * 1000));
+  }
+
+  /** Ages the persisted heartbeat only. */
   async function stopTheHeart(jobId: string): Promise<void> {
     await sql`
       update import_jobs
@@ -95,6 +114,7 @@ describe('the import lockout', () => {
   });
 
   afterEach(async () => {
+    vi.useRealTimers();
     // The boolean is process state, not database state, so `resetData` cannot clear it. A test
     // that left it engaged would lock out every spec that ran after it in the same process.
     const held = lock.heldJobId();
@@ -208,7 +228,7 @@ describe('the import lockout', () => {
       const jobId = await lockedJob();
       expect((await im.get('/products')).status).toBe(503);
 
-      await stopTheHeart(jobId);
+      await taskDies(jobId);
 
       // The request that notices is the one that was about to be refused. It is let through
       // rather than made to retry.
@@ -219,7 +239,7 @@ describe('the import lockout', () => {
 
     it('marks the dead job failed as well, so the one-live slot is free', async () => {
       const jobId = await lockedJob();
-      await stopTheHeart(jobId);
+      await taskDies(jobId);
 
       await im.get('/products');
 
@@ -245,11 +265,68 @@ describe('the import lockout', () => {
     it('clears a row left applying by a process that is no longer here', async () => {
       const jobId = await lockedJob();
       await stopTheHeart(jobId);
-      await lock.release(jobId, null); // what a restart does: boolean only
+      // A restart clears the boolean, so there is no in-memory clock left to consult and the
+      // persisted heartbeat is rightly the only evidence — no need to move time here.
+      await lock.release(jobId, null);
 
       expect((await im.get('/products')).status).toBe(200);
       expect(await lock.releaseIfDead()).toBe(true);
 
+      const row = await ctx.db
+        .selectFrom('import_jobs')
+        .select('status')
+        .where('id', '=', jobId)
+        .executeTakeFirstOrThrow();
+      expect(row.status).toBe(ImportJobStatus.FAILED);
+    });
+  });
+
+  /**
+   * The collision between two independently-chosen 60-second numbers, and the fix for it.
+   *
+   * `IMPORT_HEARTBEAT_TIMEOUT_SECONDS` judges the *persisted* heartbeat, which an apply writes
+   * only every quarter-timeout. A long transaction can therefore outlive its last write while
+   * being perfectly healthy — and a false release does not merely lift the 503: it sets the row
+   * `FAILED` while the transaction still holds row locks, and because `import_jobs_one_live`
+   * keys on the live statuses, the index stops blocking and a second import can start writing
+   * against those same rows.
+   */
+  describe('a long apply that is still alive', () => {
+    it('is not declared dead while this process is still making progress', async () => {
+      const jobId = await lockedJob();
+      await stopTheHeart(jobId); // persisted heartbeat an hour old
+
+      // ...but the task is working: the in-memory touch is what the apply calls between shelves.
+      lock.touch();
+
+      expect(await lock.releaseIfDead()).toBe(false);
+      expect(lock.isLocked()).toBe(true);
+      expect((await im.get('/products')).status).toBe(503);
+
+      const row = await ctx.db
+        .selectFrom('import_jobs')
+        .select('status')
+        .where('id', '=', jobId)
+        .executeTakeFirstOrThrow();
+      expect(row.status).toBe(ImportJobStatus.APPLYING);
+    });
+
+    /** And the case it must not swallow: touching stopped, so the task really is gone. */
+    it('is still declared dead once the touches stop too', async () => {
+      const jobId = await lockedJob();
+      await taskDies(jobId);
+
+      expect(await lock.releaseIfDead()).toBe(true);
+      expect(lock.isLocked()).toBe(false);
+    });
+
+    /** A restart leaves nothing in memory to trust, so the persisted heartbeat rules again. */
+    it('trusts only the persisted heartbeat when this process holds nothing', async () => {
+      const jobId = await lockedJob();
+      await stopTheHeart(jobId);
+      await lock.release(jobId, null); // boolean only, as a restart would leave it
+
+      expect(await lock.releaseIfDead()).toBe(true);
       const row = await ctx.db
         .selectFrom('import_jobs')
         .select('status')

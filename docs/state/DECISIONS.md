@@ -1217,3 +1217,17 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   arbitrary input) and is **not** exempt from the changed-shelf ceiling, because those writes
   cost the same in either direction. The 10,000 default is arithmetic from §11.2 and provisional
   until benchmarked.
+- 2026-09-23 — `IMPORT_MAX_CHANGED_SHELVES` lowered 10,000 → 5,000, temporarily, because part I
+  showed the ceiling had been set against the wrong constraint. It was chosen to keep an apply
+  under `statement_timeout` (60 s). `IMPORT_HEARTBEAT_TIMEOUT_SECONDS` is also 60 s, and the
+  apply writes a heartbeat only twice — before the snapshot and before the transaction — so an
+  apply lasting longer has no beat in flight. The lockout guard would then declare a healthy
+  import dead and set its row `FAILED` while the transaction still held row locks; because
+  `import_jobs_one_live` keys on the live statuses, that also stops the index blocking, so a
+  **second import could start and write against rows the first was mid-way through changing**.
+  Two independently-chosen numbers bounding the same underlying duration, the same shape of
+  mistake as OQ-IMP-1. 5,000 is ~10–15 s by §11.2's table, 3–4× clear. **Tied to part J**: once
+  progress ticks keep the heartbeat alive, the ceiling goes back up — set from the benchmark,
+  not from arithmetic. The better structural fix, noted but not built here, is for the apply to
+  touch an in-memory progress timestamp between shelves, which costs nothing and makes the
+  heartbeat meaningful for a live task without a database write per shelf.

@@ -770,9 +770,27 @@ because a snapshot is this system's own file rather than arbitrary input — but
 shelves cost the same to write whichever direction they came from, and I7's one-transaction
 design exists to make that cost visible before it is paid.
 
-The default, 10,000, is **arithmetic from §11.2, not a measurement**, and is provisional in the
-same sense `IMPORT_FUZZY_MATCH_THRESHOLD`'s 0.45 is: shippable, not yet trusted. §15 carries the
-benchmark that replaces it.
+The default is **arithmetic from §11.2, not a measurement**, and provisional in the same sense
+`IMPORT_FUZZY_MATCH_THRESHOLD`'s 0.45 is: shippable, not yet trusted. §15 carries the benchmark
+that replaces it.
+
+**Lowered 10,000 → 5,000 on 2026-09-23, because part I revealed the binding constraint is not the
+one it was set against.** The ceiling was chosen against `statement_timeout` (60 s).
+`IMPORT_HEARTBEAT_TIMEOUT_SECONDS` is *also* 60 s, and part I's apply writes a heartbeat only
+twice — before the snapshot and before the transaction — so an apply running longer than that has
+no beat in flight. §8's guard would declare a healthy import dead, set its row `FAILED` **while
+the transaction still holds row locks**, and, with the row no longer `APPLYING`,
+`import_jobs_one_live` would stop blocking: **a second import could start and write against rows
+the first is mid-way through changing.** The lockout lifting is the visible half; the one-live
+guarantee dissolving is the half that corrupts stock.
+
+10,000 was inside the range where that is possible. 5,000 is ~10–15 s by §11.2's table, 3–4×
+clear of the timeout even allowing for the extra lock round trip §5.5 step 4's correction added
+and that table does not include.
+
+**This is temporary and tied to part J.** Progress ticks written on the separate connection are
+what keep the heartbeat alive during a long apply; once they exist the ceiling can go back up,
+and at that point it should be set from the benchmark rather than from either arithmetic.
 
 **And it fixes only one of the two axes.** A changed-shelf ceiling bounds *apply*. It does nothing
 to the four bulk-loaded maps of §11.1, which are deliberately uncapped — the deactivation sweep

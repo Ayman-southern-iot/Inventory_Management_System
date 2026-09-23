@@ -25,7 +25,7 @@ export class ImportLockService {
   private readonly logger = new Logger(ImportLockService.name);
 
   /** Null when nothing is applying. Holding the job id makes every log line answer "which one". */
-  private live: { jobId: string; estimatedFinishAt: Date } | null = null;
+  private live: { jobId: string; estimatedFinishAt: Date; lastProgressAt: number } | null = null;
 
   constructor(
     private readonly repo: ImportJobsRepository,
@@ -34,7 +34,7 @@ export class ImportLockService {
 
   /** Step 1 of §5.5, and it must be first: nothing may write from here until release. */
   engage(jobId: string, estimatedFinishAt: Date): void {
-    this.live = { jobId, estimatedFinishAt };
+    this.live = { jobId, estimatedFinishAt, lastProgressAt: Date.now() };
     this.logger.log(
       `Import ${jobId} has the system lock until ~${estimatedFinishAt.toISOString()}`,
     );
@@ -81,6 +81,24 @@ export class ImportLockService {
       return true;
     }
 
+    /*
+     * **A job this process is actively running is alive, whatever the persisted heartbeat says.**
+     *
+     * Without this the two 60-second numbers collide: an apply whose transaction outlasts
+     * `IMPORT_HEARTBEAT_TIMEOUT_SECONDS` has no beat in flight, so a healthy import gets declared
+     * dead — its row set `FAILED` while it still holds row locks, and with the row no longer
+     * `APPLYING` the `import_jobs_one_live` index stops blocking, letting a second import start
+     * against rows the first is mid-way through writing. That is why
+     * `IMPORT_MAX_CHANGED_SHELVES` was cut to 5,000, and this is what lets it go back up.
+     *
+     * Scoped to `this.live`: if the process restarted, there is nothing in memory to trust and
+     * the persisted heartbeat is rightly the only evidence.
+     */
+    if (this.live?.jobId === live.id) {
+      const sinceProgress = Date.now() - this.live.lastProgressAt;
+      if (sinceProgress <= this.config.imports.heartbeatTimeoutSeconds * 1000) return false;
+    }
+
     const last = live.heartbeat_at ?? live.started_at ?? live.created_at;
     const deadline = last.getTime() + this.config.imports.heartbeatTimeoutSeconds * 1000;
     if (Date.now() <= deadline) return false;
@@ -94,7 +112,23 @@ export class ImportLockService {
 
   /** Written while an apply runs, so a dead task is distinguishable from a slow one. */
   async beat(jobId: string): Promise<void> {
+    this.touch();
     await this.repo.update(jobId, { heartbeatAt: new Date() });
+  }
+
+  /**
+   * "Still working", recorded **in memory only** — the apply calls this between shelves.
+   *
+   * It costs nothing, which is the point: a database heartbeat per shelf would reintroduce the
+   * per-row write that I10 removed, and it is not needed. This process already knows whether its
+   * own task is progressing; the persisted heartbeat exists for the *other* process, the one
+   * that restarted and found a row still `APPLYING`.
+   *
+   * It still detects what the heartbeat is for. A task that hangs inside an await stops touching
+   * exactly as it stops beating.
+   */
+  touch(): void {
+    if (this.live) this.live.lastProgressAt = Date.now();
   }
 
   isLocked(): boolean {

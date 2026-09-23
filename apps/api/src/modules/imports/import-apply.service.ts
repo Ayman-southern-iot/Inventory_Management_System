@@ -54,9 +54,19 @@ type Tx = Transaction<Database>;
  */
 const LOCK_TIMEOUT = '5s';
 
+/**
+ * How often the persisted heartbeat and progress row are written during an apply, as a fraction
+ * of the timeout that judges them. A quarter leaves three missed writes of slack before anything
+ * concludes the import is dead.
+ */
+const BEATS_PER_TIMEOUT = 4;
+
 @Injectable()
 export class ImportApplyService {
   private readonly logger = new Logger(ImportApplyService.name);
+
+  /** Throttles the persisted progress write. Per-process, and only one apply runs at a time. */
+  private lastReportAt = 0;
 
   constructor(
     private readonly repo: ImportJobsRepository,
@@ -220,6 +230,8 @@ export class ImportApplyService {
     const stale = staleAgainstLocked(plan, locked);
     if (stale.length > 0) throw new StaleImportError(stale);
 
+    let changed = 0;
+
     // 6 — categories, parents first, so a child's parent id exists when it is inserted.
     const createdCategoryIds: string[] = [];
     for (const planned of plan.categoriesToCreate) {
@@ -286,6 +298,16 @@ export class ImportApplyService {
           undefined,
           tx,
         );
+
+        /*
+         * Progress, on two clocks. The in-memory touch is free and is what stops the lockout
+         * guard mistaking a long apply for a dead one. The persisted write is throttled and goes
+         * out on a **different connection** to `tx` — a row written inside the transaction is
+         * invisible until commit, which is exactly when progress stops mattering (§5.5).
+         */
+        this.lock.touch();
+        changed += 1;
+        await this.reportProgress(jobId, changed);
       }
     }
 
@@ -354,6 +376,20 @@ export class ImportApplyService {
       report: { ...report, errors: [issue] },
       finishedAt: new Date(),
     });
+  }
+
+  /**
+   * Writes `processed_rows` and the heartbeat, at most once per heartbeat-quarter.
+   *
+   * Throttled rather than per-shelf because a write per changed shelf is precisely the cost I10
+   * removed from this loop, and progress does not need that resolution — the ring in front of a
+   * human updates a few times a second at best.
+   */
+  private async reportProgress(jobId: string, processedRows: number): Promise<void> {
+    const interval = (this.config.imports.heartbeatTimeoutSeconds * 1000) / BEATS_PER_TIMEOUT;
+    if (Date.now() - this.lastReportAt < interval) return;
+    this.lastReportAt = Date.now();
+    await this.repo.update(jobId, { processedRows, heartbeatAt: new Date() });
   }
 
   /** The padded estimate the 503 carries. Padding only, until the benchmark gives a rate. */

@@ -163,11 +163,25 @@ const rawSchema = z.object({
    * **A restore is not exempt from this one** — 40,000 shelves cost the same to write whichever
    * direction they came from — though it stays exempt from the two parse-phase caps.
    *
-   * **Provisional.** 10,000 sits under the 60 s `statement_timeout` by §11.2's arithmetic and
-   * above anything this catalogue can currently produce, but it is arithmetic, not a
-   * measurement; §15 carries the benchmark that replaces it.
+   * **Provisional, and currently set by the heartbeat rather than by the transaction.**
+   *
+   * The first draft was 10,000, chosen against the 60 s `statement_timeout`. That was the wrong
+   * constraint. `IMPORT_HEARTBEAT_TIMEOUT_SECONDS` is also 60 s, and part I's apply writes a
+   * heartbeat only twice — before the snapshot and before the transaction — so an apply whose
+   * transaction runs longer than that has no beat in flight. The guard would then declare a
+   * perfectly healthy import dead, set its row `FAILED` **while it still holds row locks**, and
+   * with the row no longer `APPLYING` the `import_jobs_one_live` index stops blocking: a second
+   * import could start and write against rows the first is mid-way through changing.
+   *
+   * 5,000 is ~10–15 s by §11.2's table, roughly 3–4× clear of the timeout even allowing for the
+   * extra lock round trip per shelf that §5.5 step 4's correction added and that table does not
+   * include. 20,000 is 40–60 s, which is *at* the limit — which is what 10,000 was quietly
+   * betting against.
+   *
+   * **Raise it when part J's progress ticks keep the heartbeat alive during a long apply**, not
+   * before. Both numbers are still arithmetic; §15 carries the benchmark that replaces them.
    */
-  IMPORT_MAX_CHANGED_SHELVES: z.coerce.number().int().min(1).max(200_000).default(10_000),
+  IMPORT_MAX_CHANGED_SHELVES: z.coerce.number().int().min(1).max(200_000).default(5_000),
   /** Replaces the previously hardcoded 10/60s login burst limit on `POST /auth/login`. */
   LOGIN_BURST_LIMIT: z.coerce.number().int().min(1).max(10_000).default(10),
   LOGIN_BURST_TTL_SECONDS: durationSecondsSchema.default(60),
