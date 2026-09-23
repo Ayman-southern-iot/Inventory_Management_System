@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ErrorCode } from '@ims/shared';
+import { ErrorCode, ImportJobStatus, type ImportJob } from '@ims/shared';
 import { ApiError } from '@/api/client';
 import { t } from '@/i18n/en';
 import { ImportLockProvider, useSuppressImportBlock } from './ImportLockProvider';
@@ -55,10 +55,34 @@ function readEstimate(details: unknown): string | null {
   return typeof value === 'string' ? value : null;
 }
 
-function Watching({ live }: { live: boolean }): JSX.Element {
-  useSuppressImportBlock(live);
+/**
+ * Stands in for the progress view. It takes a *job*, because that is all the hook accepts —
+ * there is no way for a caller to say "suppress while my page is open".
+ */
+function Watching({ status }: { status: ImportJobStatus }): JSX.Element {
+  useSuppressImportBlock({ ...jobFixture, status });
   return <p>watching the import</p>;
 }
+
+const jobFixture: ImportJob = {
+  id: '11111111-1111-4111-8111-000000000001',
+  status: ImportJobStatus.APPLYING,
+  fileName: 'products.csv',
+  totalRows: 10,
+  processedRows: 3,
+  percent: 30,
+  startedAt: '2026-09-23T10:00:00.000Z',
+  finishedAt: null,
+  estimatedFinishAt: null,
+  expiresAt: null,
+  errors: [],
+  diff: null,
+  canRestore: false,
+  restoredFromJobId: null,
+  createdById: '22222222-2222-4222-8222-000000000001',
+  createdByName: 'Import Manager',
+  createdAt: '2026-09-23T10:00:00.000Z',
+};
 
 function renderApp(children: React.ReactNode) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -92,7 +116,7 @@ describe('ImportLockProvider', () => {
    * block must not cover the screen the allow-list was written to keep available.
    */
   it('does not cover a screen that is displaying a live import', () => {
-    renderApp(<Watching live />);
+    renderApp(<Watching status={ImportJobStatus.APPLYING} />);
 
     lockTheSystem();
 
@@ -102,7 +126,7 @@ describe('ImportLockProvider', () => {
 
   /** Everyone else still gets it, which is the half that must not regress. */
   it('still covers a screen that is not displaying one', () => {
-    renderApp(<Watching live={false} />);
+    renderApp(<Watching status={ImportJobStatus.COMPLETED} />);
 
     lockTheSystem();
 
@@ -110,12 +134,12 @@ describe('ImportLockProvider', () => {
   });
 
   /**
-   * Scoped to the job being live, not to the page being open. A manager whose import has
-   * finished — or who left the view mounted in a background tab while working elsewhere — is
-   * blocked like everybody else.
+   * Scoped to the job being live, not to the page being open — and the hook's signature is what
+   * makes that true: it accepts a job and decides, so the same mounted component stops
+   * suppressing the moment its job reaches a terminal status.
    */
   it('covers the screen again once the job it was watching is no longer live', () => {
-    const { rerender } = renderApp(<Watching live />);
+    const { rerender } = renderApp(<Watching status={ImportJobStatus.APPLYING} />);
     lockTheSystem();
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
 
@@ -123,7 +147,7 @@ describe('ImportLockProvider', () => {
     rerender(
       <QueryClientProvider client={client}>
         <ImportLockProvider>
-          <Watching live={false} />
+          <Watching status={ImportJobStatus.COMPLETED} />
         </ImportLockProvider>
       </QueryClientProvider>,
     );
@@ -136,8 +160,8 @@ describe('ImportLockProvider', () => {
   it('keeps the block away while any live view is still on screen', () => {
     const { rerender } = renderApp(
       <>
-        <Watching live />
-        <Watching live />
+        <Watching status={ImportJobStatus.APPLYING} />
+        <Watching status={ImportJobStatus.APPLYING} />
       </>,
     );
     lockTheSystem();
@@ -147,7 +171,7 @@ describe('ImportLockProvider', () => {
     rerender(
       <QueryClientProvider client={client}>
         <ImportLockProvider>
-          <Watching live />
+          <Watching status={ImportJobStatus.APPLYING} />
         </ImportLockProvider>
       </QueryClientProvider>,
     );

@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { LIVE_IMPORT_STATUSES, type ImportJob } from '@ims/shared';
 import { setSystemLockedHandler } from '@/api/client';
 import { SystemImportBlock } from './SystemImportBlock';
 
@@ -41,23 +42,26 @@ const ImportLockContext = createContext<ImportLockContextValue | null>(null);
  * manager opens; the exception is the one view whose whole purpose is watching the thing that is
  * blocking everyone.
  *
- * **It is scoped to a live job being displayed, not to a page being open.** A manager who leaves
- * the import view mounted in a background tab and works elsewhere must still be blocked
- * elsewhere, so the suppression lives and dies with the component actually rendering progress,
- * and lifts the moment the job reaches a terminal state.
+ * **It takes the job, not a boolean, and that is the point.** "Suppress while a live job is on
+ * screen" and "suppress while this page is open" are one careless argument apart, and the second
+ * is a bug: a manager who leaves the import view mounted in a background tab while working
+ * elsewhere would stop being blocked elsewhere. A caller cannot express that here — it hands over
+ * the job and this decides, so the suppression lifts by itself the moment the job reaches a
+ * terminal state, with nothing for the page to remember to do.
  *
  * **It grants nothing.** The lockout is enforced by a guard on the server; this only decides
  * whether a courtesy overlay is drawn. A session that suppressed it without cause would see its
  * own screens fail one by one instead of seeing one clear explanation — worse for them, and no
  * more permitted than before. There is no data behind the block to reach.
  */
-export function useSuppressImportBlock(active: boolean): void {
+export function useSuppressImportBlock(job: ImportJob | null | undefined): void {
   const context = useContext(ImportLockContext);
+  const live = job != null && LIVE_IMPORT_STATUSES.includes(job.status);
 
   useEffect(() => {
-    if (!active || !context) return undefined;
+    if (!live || !context) return undefined;
     return context.suppress();
-  }, [active, context]);
+  }, [live, context]);
 }
 
 export function ImportLockProvider({ children }: { children: ReactNode }): JSX.Element {
