@@ -44,6 +44,29 @@ export function setSessionLostHandler(handler: (() => void) | null): void {
   onSessionLost = handler;
 }
 
+/**
+ * Set by `ImportLockProvider` so any 503 anywhere raises the full-screen block.
+ *
+ * It is wired here rather than in a query error handler because the lockout is not a property of
+ * one screen: while an import applies, **every** request fails, so the first one to come back is
+ * whichever happened to be in flight. Catching it centrally means the block appears once, from
+ * wherever the news arrived, instead of each screen rendering its own error state.
+ */
+let onSystemLocked: ((estimatedFinishAt: string | null) => void) | null = null;
+
+export function setSystemLockedHandler(
+  handler: ((estimatedFinishAt: string | null) => void) | null,
+): void {
+  onSystemLocked = handler;
+}
+
+/** The server puts it in `details` because during a lockout nothing else can answer "when". */
+function lockoutEstimate(details: unknown): string | null {
+  if (typeof details !== 'object' || details === null) return null;
+  const value = (details as { estimatedFinishAt?: unknown }).estimatedFinishAt;
+  return typeof value === 'string' ? value : null;
+}
+
 function url(path: string): string {
   return `${webConfig.apiBaseUrl}${path.startsWith('/') ? path : `/${path}`}`;
 }
@@ -92,7 +115,18 @@ async function rawRequest<T>(path: string, options: RequestOptions, accessToken:
   }
 
   if (response.status === 204) return undefined as T;
-  if (!response.ok) throw await toApiError(response);
+  if (!response.ok) {
+    const error = await toApiError(response);
+    /*
+     * The lockout, surfaced from wherever it was noticed. The error still throws — the calling
+     * screen is not lied to — but the block goes up regardless of which query happened to be
+     * the one that found out.
+     */
+    if (error.code === ErrorCode.SYSTEM_IMPORT_IN_PROGRESS) {
+      onSystemLocked?.(lockoutEstimate(error.details));
+    }
+    throw error;
+  }
   // Binary responses (the signature preview) come back as a Blob; everything else is JSON.
   if (options.responseType === 'blob') return (await response.blob()) as T;
   return (await response.json()) as T;

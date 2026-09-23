@@ -1,12 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
-import { Role } from '@ims/shared';
+import { ErrorCode, Role } from '@ims/shared';
 import { ApiError } from '@/api/client';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { AppShell } from '@/components/layout/AppShell';
 import { EmptyState } from '@/components/ui/states';
 import { ToastProvider } from '@/components/ui/Toast';
 import { AuthProvider } from '@/features/auth/auth-context';
+import { ImportLockProvider } from '@/features/imports/components/ImportLockProvider';
 import { ChangePasswordPage } from '@/features/auth/pages/ChangePasswordPage';
 import { ProfilePage } from '@/features/profile/pages/ProfilePage';
 import { LoginPage } from '@/features/auth/pages/LoginPage';
@@ -45,6 +46,15 @@ const queryClient = new QueryClient({
       retry: (failureCount, error) => {
         // Retrying a 401/403/404 just delays the error the user needs to see.
         if (error instanceof ApiError && error.status >= 400 && error.status < 500) return false;
+        /*
+         * Nor a lockout. A 503 is retryable in general, but this one means an import is
+         * rewriting the catalogue — it will not clear within two attempts, and every open
+         * screen retrying twice is load on the one API that is already busy. The block that
+         * goes up polls once, centrally, which is the retry.
+         */
+        if (error instanceof ApiError && error.code === ErrorCode.SYSTEM_IMPORT_IN_PROGRESS) {
+          return false;
+        }
         return failureCount < RETRYABLE_ATTEMPTS;
       },
     },
@@ -58,106 +68,112 @@ export function App() {
       <QueryClientProvider client={queryClient}>
         {/* Opt into the v7 behaviours now, while the router surface is small enough that a
             difference in transition timing is cheap to notice. */}
-        <BrowserRouter
-          future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
-        >
+        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           {/* AuthProvider needs the query client (it clears the cache on sign-out) and the
               router (routes read the user), so it sits inside both. */}
           <ToastProvider>
             <AuthProvider>
+              {/* Above the routes, so one 503 anywhere raises one block over whatever is open
+                  rather than every screen rendering its own error state (§8). */}
               {/* Sets the tab title from the route (D-012). Inside the router, above the
                   routes, so it covers the login page as well as the shell. */}
               <DocumentTitle />
-              <Routes>
-                <Route path={ROUTES.login} element={<LoginPage />} />
+              <ImportLockProvider>
+                <Routes>
+                  <Route path={ROUTES.login} element={<LoginPage />} />
 
-                <Route element={<ProtectedRoute />}>
-                  <Route element={<AppShell />}>
-                    <Route path={ROUTES.dashboard} element={<DashboardPage />} />
-                    <Route path={ROUTES.changePassword} element={<ChangePasswordPage />} />
-                    <Route path={ROUTES.account.profile} element={<ProfilePage />} />
-                    {/* Anyone may borrow, so My borrowings is not role-gated. */}
-                    <Route path={ROUTES.borrowing.mine} element={<BorrowingPage mine />} />
+                  <Route element={<ProtectedRoute />}>
+                    <Route element={<AppShell />}>
+                      <Route path={ROUTES.dashboard} element={<DashboardPage />} />
+                      <Route path={ROUTES.changePassword} element={<ChangePasswordPage />} />
+                      <Route path={ROUTES.account.profile} element={<ProfilePage />} />
+                      {/* Anyone may borrow, so My borrowings is not role-gated. */}
+                      <Route path={ROUTES.borrowing.mine} element={<BorrowingPage mine />} />
 
-                    {/* The project hub is shared context — every role sees it, so no guard. */}
-                    <Route path={ROUTES.projects.all} element={<ProjectsPage />} />
-                    <Route path={ROUTES.projects.detailPattern} element={<ProjectDetailPage />} />
+                      {/* The project hub is shared context — every role sees it, so no guard. */}
+                      <Route path={ROUTES.projects.all} element={<ProjectsPage />} />
+                      <Route path={ROUTES.projects.detailPattern} element={<ProjectDetailPage />} />
 
-                    {/* Anyone may raise a requisition and follow their own. The API decides
+                      {/* Anyone may raise a requisition and follow their own. The API decides
                         what each caller sees, so these are not role-gated. New before the
                         :id pattern is unnecessary — React Router ranks static segments above
                         dynamic ones — but the edit route must sit alongside the detail one. */}
-                    <Route path={ROUTES.requisitions.mine} element={<RequisitionsPage mode="mine" />} />
-                    <Route path={ROUTES.requisitions.new} element={<RequisitionFormPage />} />
-                    <Route path={ROUTES.requisitions.editPattern} element={<RequisitionFormPage />} />
-                    <Route path={ROUTES.requisitions.detailPattern} element={<RequisitionDetailPage />} />
-
-                    {/* The approver's queue. IM and admin hold approval duties too. */}
-                    <Route
-                      element={
-                        <ProtectedRoute
-                          roles={[Role.APPROVER, Role.INVENTORY_MANAGER, Role.ADMIN]}
-                        />
-                      }
-                    >
                       <Route
-                        path={ROUTES.requisitions.approvals}
-                        element={<RequisitionsPage mode="approvals" />}
+                        path={ROUTES.requisitions.mine}
+                        element={<RequisitionsPage mode="mine" />}
                       />
-                      {/* Same guard as the approver queue: an approver needs the shape of the
-                          spend they are sanctioning, a requester has no business with it. */}
-                      <Route path={ROUTES.reports.expenses} element={<ExpensesPage />} />
-                    </Route>
+                      <Route path={ROUTES.requisitions.new} element={<RequisitionFormPage />} />
+                      <Route
+                        path={ROUTES.requisitions.editPattern}
+                        element={<RequisitionFormPage />}
+                      />
+                      <Route
+                        path={ROUTES.requisitions.detailPattern}
+                        element={<RequisitionDetailPage />}
+                      />
 
-                    {/* Browsing the catalogue is everyone's — a general user has to find a
+                      {/* The approver's queue. IM and admin hold approval duties too. */}
+                      <Route
+                        element={
+                          <ProtectedRoute
+                            roles={[Role.APPROVER, Role.INVENTORY_MANAGER, Role.ADMIN]}
+                          />
+                        }
+                      >
+                        <Route
+                          path={ROUTES.requisitions.approvals}
+                          element={<RequisitionsPage mode="approvals" />}
+                        />
+                        {/* Same guard as the approver queue: an approver needs the shape of the
+                          spend they are sanctioning, a requester has no business with it. */}
+                        <Route path={ROUTES.reports.expenses} element={<ExpensesPage />} />
+                      </Route>
+
+                      {/* Browsing the catalogue is everyone's — a general user has to find a
                         product before they can borrow it (task 2.7). The stock actions on
                         these pages are gated by role, and by the API regardless. */}
-                    <Route path={ROUTES.inventory.products} element={<InventoryPage />} />
-                    <Route
-                      path={ROUTES.inventory.productPattern}
-                      element={<ProductDetailPage />}
-                    />
-
-                    {/* Managing the register, and seeing everyone's borrows, is the IM's. */}
-                    <Route
-                      element={
-                        <ProtectedRoute roles={[Role.INVENTORY_MANAGER, Role.ADMIN]} />
-                      }
-                    >
-                      <Route path={ROUTES.inventory.categories} element={<CategoriesPage />} />
-                      <Route path={ROUTES.inventory.locations} element={<LocationsPage />} />
-                      <Route path={ROUTES.borrowing.all} element={<BorrowingPage />} />
+                      <Route path={ROUTES.inventory.products} element={<InventoryPage />} />
                       <Route
-                        path={ROUTES.requisitions.all}
-                        element={<RequisitionsPage mode="all" />}
+                        path={ROUTES.inventory.productPattern}
+                        element={<ProductDetailPage />}
                       />
-                      <Route path={ROUTES.boms.all} element={<BomsPage />} />
-                      <Route path={ROUTES.boms.new} element={<BomGeneratePage />} />
-                      <Route path={ROUTES.boms.detailPattern} element={<BomDetailPage />} />
-                    </Route>
 
-                    <Route element={<ProtectedRoute roles={[Role.ADMIN]} />}>
-                      <Route path={ROUTES.admin.users} element={<UsersPage />} />
-                      <Route path={ROUTES.admin.departments} element={<DepartmentsPage />} />
-                      <Route path={ROUTES.admin.settings} element={<SettingsPage />} />
-                      <Route path={ROUTES.admin.auditLog} element={<AuditLogPage />} />
-                      <Route path={ROUTES.admin.apiKeys} element={<ApiKeysPage />} />
-                    </Route>
-
-                    <Route
-                      path="*"
-                      element={
-                        <EmptyState
-                          title={t.states.notFoundTitle}
-                          body={t.states.notFoundBody}
+                      {/* Managing the register, and seeing everyone's borrows, is the IM's. */}
+                      <Route
+                        element={<ProtectedRoute roles={[Role.INVENTORY_MANAGER, Role.ADMIN]} />}
+                      >
+                        <Route path={ROUTES.inventory.categories} element={<CategoriesPage />} />
+                        <Route path={ROUTES.inventory.locations} element={<LocationsPage />} />
+                        <Route path={ROUTES.borrowing.all} element={<BorrowingPage />} />
+                        <Route
+                          path={ROUTES.requisitions.all}
+                          element={<RequisitionsPage mode="all" />}
                         />
-                      }
-                    />
-                  </Route>
-                </Route>
+                        <Route path={ROUTES.boms.all} element={<BomsPage />} />
+                        <Route path={ROUTES.boms.new} element={<BomGeneratePage />} />
+                        <Route path={ROUTES.boms.detailPattern} element={<BomDetailPage />} />
+                      </Route>
 
-                <Route path="*" element={<Navigate to={ROUTES.dashboard} replace />} />
-              </Routes>
+                      <Route element={<ProtectedRoute roles={[Role.ADMIN]} />}>
+                        <Route path={ROUTES.admin.users} element={<UsersPage />} />
+                        <Route path={ROUTES.admin.departments} element={<DepartmentsPage />} />
+                        <Route path={ROUTES.admin.settings} element={<SettingsPage />} />
+                        <Route path={ROUTES.admin.auditLog} element={<AuditLogPage />} />
+                        <Route path={ROUTES.admin.apiKeys} element={<ApiKeysPage />} />
+                      </Route>
+
+                      <Route
+                        path="*"
+                        element={
+                          <EmptyState title={t.states.notFoundTitle} body={t.states.notFoundBody} />
+                        }
+                      />
+                    </Route>
+                  </Route>
+
+                  <Route path="*" element={<Navigate to={ROUTES.dashboard} replace />} />
+                </Routes>
+              </ImportLockProvider>
             </AuthProvider>
           </ToastProvider>
         </BrowserRouter>

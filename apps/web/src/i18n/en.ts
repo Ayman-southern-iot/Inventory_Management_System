@@ -88,8 +88,7 @@ export const t = {
     // database, so users added or renamed in the admin panel appear here without a redeploy.
     demoAccountsTitle: 'Demo accounts',
     demoAccountsPasswordLabel: 'Password for every account below:',
-    demoAccountsCaveat:
-      'Demo Mode',
+    demoAccountsCaveat: 'Demo Mode',
     // Stamped at build time, so a browser serving a cached bundle shows the date of the
     // bundle it is actually running rather than of the deploy it missed.
     lastUpdated: 'Last update',
@@ -338,8 +337,7 @@ export const t = {
       'Approves every requisition below the threshold. Required before sub-threshold requisitions can be submitted.',
     slotHeldByInactive:
       'This slot points at a deactivated user. New requisitions will refuse until it is reassigned or the user is reactivated.',
-    slotHeldByInactiveWarning:
-      'Slot is held by an inactive user — submissions will be refused.',
+    slotHeldByInactiveWarning: 'Slot is held by an inactive user — submissions will be refused.',
     /**
      * Audit log configuration. The audit recording set is an explicit allow-list rather than a
      * blacklist so turning actions back on does not silently recover history that was disabled
@@ -557,11 +555,13 @@ export const t = {
     unitCostPositive: 'Enter a unit cost greater than zero.',
     // The ceiling is what has been funded, not what was approved: you cannot spend cash you
     // have not received (Ayman, 2026-08-31).
-    overspendBlocked: 'This would commit {committed} against {funded} funded. Lower a unit cost, or record a further fund receipt first.',
+    overspendBlocked:
+      'This would commit {committed} against {funded} funded. Lower a unit cost, or record a further fund receipt first.',
     plannedQuantity: 'Planned: {n}',
     lineTotal: 'Line total',
     transportationActual: 'Transportation for this delivery',
-    transportationActualHint: 'What the carriage actually cost. Adjust it up or down; it counts towards what has been funded.',
+    transportationActualHint:
+      'What the carriage actually cost. Adjust it up or down; it counts towards what has been funded.',
     purchaseTotal: 'This purchase',
     // Partial funding is off for this release. The dialog states the amount rather than
     // offering a field, so the rule is visible before the click, not reported after it.
@@ -569,10 +569,12 @@ export const t = {
     fullAmountOnlyHint: 'Instalments are not available in this version.',
     fundedLabel: 'Funded',
     leftToSpend: 'Left to spend',
-    overspendInline: 'This is more than has been funded. Lower a quantity, a unit cost or the transportation until it is not negative.',
+    overspendInline:
+      'This is more than has been funded. Lower a quantity, a unit cost or the transportation until it is not negative.',
     quantity: 'Quantity',
     returnedAmount: 'Amount going back to Accounts',
-    returnedAmountHint: 'Prefilled with the unspent balance. Set it to zero if nothing is going back.',
+    returnedAmountHint:
+      'Prefilled with the unspent balance. Set it to zero if nothing is going back.',
     returnNote: 'Why is it going back?',
     compartment: 'Compartment',
     borrower: 'Issue to',
@@ -664,7 +666,8 @@ export const t = {
     downloadPdf: 'Download PDF',
     emptyTitle: 'Nothing in this range',
     emptyBody: 'No submitted requisitions fall inside these dates.',
-    netHint: 'Funded minus what went back to Accounts — what the company is actually out of pocket.',
+    netHint:
+      'Funded minus what went back to Accounts — what the company is actually out of pocket.',
     attributionHint:
       'Requested and approved are counted by submission date; funded, spent and returned by the date the money moved.',
     /*
@@ -889,8 +892,7 @@ export const t = {
     activity: 'Activity',
     added: 'Added',
     lastChanged: 'Last changed',
-    activityNote:
-      'Who changed what is in the audit log; this panel shows when it last moved.',
+    activityNote: 'Who changed what is in the audit log; this panel shows when it last moved.',
 
     /* Validation, shown inline under the field that caused it. */
     duplicateAtRoot: '“{name}” already exists at the top level.',
@@ -925,7 +927,8 @@ export const t = {
     roomName: 'Room name',
     zones: 'Zones',
     storageId: 'Storage ID',
-    storageIdHint: 'Generated when the shelf is created. It never changes, so the printed label stays true.',
+    storageIdHint:
+      'Generated when the shelf is created. It never changes, so the printed label stays true.',
     roomCreated: 'Room created.',
     roomUpdated: 'Room updated.',
     noZones: 'No zones in this room yet.',
@@ -1287,17 +1290,20 @@ export const t = {
     // Was one sentence inside a window.prompt. Split into a title, an explanation and a field
     // label now that it is a real dialog.
     withdrawTitle: 'Take back your decision',
-    withdrawExplain: 'The requisition returns to waiting on you. You can approve or reject it again afterwards.',
+    withdrawExplain:
+      'The requisition returns to waiting on you. You can approve or reject it again afterwards.',
     withdrawReason: 'Why are you taking it back?',
     decisionNote: 'Note',
     reviseAmount: 'Revise the approved amount',
     reviseAmountHint: 'Leave blank to approve the full requested amount.',
     reviseAmountOptIn: 'Revise the approved amount',
-    reviseAmountOptInHint: 'Tick to enter a different figure; leave unticked to approve the full requested amount.',
+    reviseAmountOptInHint:
+      'Tick to enter a different figure; leave unticked to approve the full requested amount.',
     // QA-034: one line, one unit — there is no smaller quantity to buy, so a lower figure
     // would approve an amount that cannot purchase the thing being asked for. Reject or
     // approve in full are the only honest options, and the screen says why.
-    reviseAmountIndivisible: 'This is a single item, so the amount cannot be revised down — approve it in full or reject it.',
+    reviseAmountIndivisible:
+      'This is a single item, so the amount cannot be revised down — approve it in full or reject it.',
     // Was "...and it cannot be reopened", which stopped being true when withdraw shipped and
     // was telling people a rejection was final for months.
     rejectWarning:
@@ -1440,8 +1446,7 @@ export const t = {
     // transportation cost (request details + BOM footer)
     transportation: {
       heading: 'Transportation cost',
-      hint:
-        'Optional. Add the cost of getting to the market — fuel, vehicle hire, porter, etc. Rolls up into the requested amount.',
+      hint: 'Optional. Add the cost of getting to the market — fuel, vehicle hire, porter, etc. Rolls up into the requested amount.',
       amount: 'Amount (BDT)',
       description: 'Description',
       descriptionPlaceholder: 'e.g. Pickup truck to Gazipur (optional)',
@@ -1466,7 +1471,8 @@ export const t = {
     bomNo: 'BOM number',
     sources: 'Sources',
     openRequisition: 'Open the requisition',
-    openRequisitionBlocked: 'Render the PDF first — Accounts is sent the document, so it has to exist before the requisition goes to them.',
+    openRequisitionBlocked:
+      'Render the PDF first — Accounts is sent the document, so it has to exist before the requisition goes to them.',
     noSources: '—',
     generatedAt: 'Generated',
     generatedBy: 'By',
@@ -1489,7 +1495,8 @@ export const t = {
     bomCommitted: 'BOM total',
     overspentHeading: 'This BOM commits more than was approved',
     overspentLine: '{no}: {committed} committed against {approved} approved — {over} over.',
-    overspentHint: 'Lower a quantity or a unit cost until it fits. Transportation counts towards the approved amount.',
+    overspentHint:
+      'Lower a quantity or a unit cost until it fits. Transportation counts towards the approved amount.',
     voidBanner: 'Voided',
     voidedAt: 'Voided at',
     voidedBy: 'By',
@@ -1500,19 +1507,16 @@ export const t = {
     pickRequisitionsHint:
       'Tick the requisitions to batch. Their lines appear below; you only fill unit cost and vendor.',
     emptyCandidatesTitle: 'Nothing is ready to batch',
-    emptyCandidatesBody:
-      'Approved requisitions appear here as soon as approvers sign off.',
+    emptyCandidatesBody: 'Approved requisitions appear here as soon as approvers sign off.',
     lineEditorHeading: 'Lines',
-    lineEditorHint:
-      'The numbers you type here become the BOM total and the PDF Accounts files.',
+    lineEditorHint: 'The numbers you type here become the BOM total and the PDF Accounts files.',
     unitCost: 'Unit cost (BDT)',
     vendor: 'Vendor',
     lineTotal: 'Line total',
     lineQuantityLabel: 'Qty',
     lineSourceQuantityHint: 'Originally {qty} on the requisition',
     removeLineLabel: 'Drop from BOM',
-    bounceWarning:
-      'This BOM will bounce — its sources will return to the approver queue.',
+    bounceWarning: 'This BOM will bounce — its sources will return to the approver queue.',
     generate: 'Generate BOM',
     generatedToast: 'BOM created.',
     approved: 'Approved',
@@ -1523,8 +1527,7 @@ export const t = {
       'A single-line BOM cannot shrink to fit. Bounce this requisition back to the requester — they edit the budget, re-submit, and the approval chain replays.',
     sendBackDialog: {
       title: 'Send requisition back for revision',
-      body:
-        'The requisition will go back to the requester as a draft. They edit the budget and re-submit — you will get a fresh approval row to decide.',
+      body: 'The requisition will go back to the requester as a draft. They edit the budget and re-submit — you will get a fresh approval row to decide.',
       reasonLabel: 'Reason',
       reasonHint: 'Recorded on the audit log and shown to the requester.',
       confirm: 'Send back',
@@ -1558,6 +1561,30 @@ export const t = {
     // history / approvals
     historyHeading: 'History',
     approvalChainHeading: 'Approval chain (frozen at generation)',
+  },
+
+  imports: {
+    /** What everybody who is not running the import sees, for as long as it runs. */
+    locked: {
+      title: 'Updating inventory',
+      body: 'The product list is being imported. Nothing can be changed until it finishes.',
+      until: (time: string) => `Please wait — expected to finish around ${time}.`,
+      unknown: 'Please wait — this usually takes a few minutes.',
+      retry: 'Try again',
+      retrying: 'Checking…',
+    },
+    /** The importing manager's own view: the brief asked for time and percentage, both moving. */
+    progress: {
+      title: 'Importing products',
+      percent: (value: number) => `${value}%`,
+      shelves: (done: number, total: number) => `${done} of ${total} shelves`,
+      elapsed: (clock: string) => `${clock} elapsed`,
+      starting: 'Starting…',
+      snapshot: 'Backing up the current inventory…',
+      finishing: 'Finishing…',
+      doNotClose:
+        'You can close this page — the import keeps going, and this screen picks it back up.',
+    },
   },
 
   errors: {
@@ -1620,8 +1647,7 @@ export const t = {
       'This stock changed while the screen was open. The figures have been refreshed — check them and try again.',
     CATEGORY_NOT_TRACKABLE: 'That category does not track stock, so it cannot hold quantities.',
     STOCK_RESERVED: 'Those units are reserved for a pending borrow and cannot be moved or removed.',
-    BOM_OVER_BUDGET:
-      'This BOM was over budget and bounced. Adjust the unit costs and try again.',
+    BOM_OVER_BUDGET: 'This BOM was over budget and bounced. Adjust the unit costs and try again.',
     // The screen names the offending requisition and the shortfall from details.overspent;
     // this is the fallback wherever only the bare message is shown.
     BOM_SPANS_MULTIPLE_REQUESTERS:
@@ -1642,8 +1668,7 @@ export const t = {
       'One of the selected requisitions is no longer approved. Refresh and try again.',
     BOM_REQUISITION_ALREADY_ON_LIVE_BOM:
       'One of the selected requisitions is already on a live BOM.',
-    BOM_ALREADY_ON_LIVE_BOM:
-      'One of the selected requisitions is already on a live BOM.',
+    BOM_ALREADY_ON_LIVE_BOM: 'One of the selected requisitions is already on a live BOM.',
     BOM_ALREADY_VOID: 'This BOM has already been voided.',
     PDF_RENDER_FAILED: 'The PDF could not be rendered. Try again.',
     PDF_DOWNLOAD_TOKEN_INVALID: 'This download link has expired.',
