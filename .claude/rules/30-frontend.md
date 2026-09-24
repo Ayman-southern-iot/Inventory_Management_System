@@ -11,7 +11,10 @@ paths:
 - Query keys are built by a typed factory in `src/api/keys.ts`, never inline string arrays.
 - Mutations invalidate precisely. Invalidating everything on every write makes the app feel broken
   on a slow connection.
-- The websocket pushes *invalidation signals*, not data. The server stays the single source of truth.
+- **There is no websocket, and one is not planned at this scale** (`DECISIONS.md` rules it out for
+  twelve users). Anything that has to feel live polls on an interval through TanStack Query — the
+  notification badge, the import progress ring. Write the interval as a named constant, and stop
+  it when the thing being watched is finished rather than polling for ever.
 
 ## Components
 
