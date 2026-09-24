@@ -1231,3 +1231,33 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   not from arithmetic. The better structural fix, noted but not built here, is for the apply to
   touch an in-memory progress timestamp between shelves, which costs nothing and makes the
   heartbeat meaningful for a live task without a database write per shelf.
+- 2026-09-24 — **Part H built, and `IMPORT_MAX_CHANGED_SHELVES` stays at 5,000 as a policy
+  choice rather than a safety margin.** `StockService.adjustBatch` hoists
+  `assertProductIsTrackable` out of the per-shelf loop, asking it once per distinct product;
+  `adjust` and the batch now share one private `applyOneAdjustment`, so there is a single copy of
+  the write and the hoisted check is the only difference between them. Measured in SQL, not
+  argued: three shelves of one product issue one trackability query where three `adjust` calls
+  issue three.
+
+  The benchmark it was meant to justify found a crash instead. At 20,000 changed shelves the
+  apply died with `Maximum call stack size exceeded` **before Postgres saw a statement** — the
+  import lock built one `OR` term per shelf and the query builder compiles that tree by
+  recursion. The boundary was not fixed either: the same 5,000-term list compiled in one run and
+  overflowed in another depending on how deep the stack already was, which put the shipped
+  ceiling of 5,000 on the edge rather than below it. Chunked now, with the ids pooled and sorted
+  once so locking still follows one ascending sequence — a per-chunk `ORDER BY` would have
+  reintroduced the deadlock the function exists to prevent, and would have passed every other
+  assertion.
+
+  Timings through the real apply path: **500 → 2.4 s, 5,000 → 37.7 s, 20,000 → 126.8 s**; linear
+  at 6–7.5 ms per changed shelf, about **2.5× the arithmetic in §11.2**. Counting round trips was
+  the right instrument; what it could not know was what one costs here. Both constraints that
+  used to hold the ceiling down are now gone — the heartbeat collision went with part J's
+  in-memory progress clock, the crash went with the chunking — so what remains is that the apply
+  is a full outage for its whole duration. 5,000 is a 38-second outage; the brief's "+5–10
+  minutes" would allow something near 50,000. Left at 5,000 because changing a config default is
+  the lead's call, not an engineer's (`rules/70`).
+
+  Benchmarks live in `apps/api/test/bench/` behind their own `vitest.bench.config.ts`, deliberately
+  outside the integration suite: they take minutes and leave tens of thousands of rows that
+  nothing can delete.

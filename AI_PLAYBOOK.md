@@ -8,9 +8,10 @@
 >
 > **Maintenance rule:** see `.claude/rules/05-ai-playbook.md`. A `PostToolUse` hook
 > (`.claude/hooks/playbook-reminder.sh`) reminds Claude to update this file after every
-> meaningful edit. Last updated: 2026-09-21 (phase 10: API keys — §6 layout, §16 landmines,
-> §19 screen map. Earlier the same day, phase 09: Room above Zone, shelf-slot Storage IDs,
-> optional nested categories, borrow custody — §10 migrations, §16 landmines, §17, §18).
+> meaningful edit. Last updated: 2026-09-24 (CSV product import complete, parts A–L — §6 layout
+> gained the `imports` module and `test/bench/`, §16 gained the OR-compile landmine. Earlier,
+> 2026-09-21, phase 10: API keys — §6 layout, §16 landmines, §19 screen map; and phase 09: Room
+> above Zone, shelf-slot Storage IDs, optional nested categories, borrow custody).
 >
 > **⚠ This file has known drift as of 2026-08-17** — §5.1 (`available` omits `quarantined_qty`),
 > §5.3 and §20 (the over-budget BOM gate was retired in `5435fac`), §5.3 (lifecycle list omits
@@ -572,9 +573,11 @@ their own DRAFT. The rule is deliberately narrow — it is reference material fo
 │   │       ├── common/           shared filters, decorators, guards, pipes
 │   │       ├── security/         hashing, throttling, sanitisation
 │   │       └── modules/          api-keys, audit, auth, boms, borrowing, categories,
-│   │                             departments, files, funds, health, locations,
-│   │                             maintenance, notifications, pdf, products, projects,
-│   │                             reports, requisitions, settings, stock, users
+│   │                             departments, files, funds, health, imports,
+│   │                             locations, maintenance, notifications, pdf, products,
+│   │                             projects, reports, requisitions, settings, stock, users
+│   │       └── test/             int specs (*.int-spec.ts), and bench/ — benchmarks run
+│   │                             by hand via vitest.bench.config.ts, NOT in the suite
 │   └── web/                      React/Vite SPA
 │       └── src/
 │           ├── App.tsx, main.tsx
@@ -1027,6 +1030,14 @@ reason the locking exists).
 
 ## 16. Landmines (each has cost a session before)
 
+- **A long `OR` list cannot be compiled, and it fails non-deterministically.** Kysely builds
+  `eb.or([...])` into a nested binary tree and walks it by recursion, so a few thousand terms
+  overflow the V8 stack **while the SQL is still being built** — Postgres never sees a statement,
+  and the error is a bare `Maximum call stack size exceeded` with no hint of which query. The
+  boundary moves with how deep the stack already is: the same 5,000-term list compiled in one run
+  and overflowed in the next. Any `eb.or` built from a collection must be chunked — see
+  `IMPORT_LOCK_LOOKUP_CHUNK` in `modules/stock/constants.ts` and, for why the ids are pooled and
+  sorted once afterwards rather than per chunk, `lockPlacementsForImport`.
 - **`pg` has no parser for a custom Postgres enum array.** `scopes api_key_scope[]` comes back as
   the literal string `"{inventory:read}"`, typed as an array and behaving like one just enough to
   fool you: `.includes('inventory:read')` is `true` by *substring*, so a scope check keeps passing

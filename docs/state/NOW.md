@@ -7,74 +7,67 @@
 
 ## Where the build is
 
-**Phases 00–10 complete**, and the **CSV product import is built** — `importing_data.md`, parts
-A–G and I–L. Export → hand to Claude → edit → import, with a diff a human approves, a backup
-taken first, a system-wide lockout while it applies, and one-click restore.
+**Phases 00–10 complete, and the CSV product import is complete — `importing_data.md` parts A–L,
+all of them.** Export → hand to Claude → edit → import, with a diff a human approves, a backup
+taken first, a system-wide lockout while it applies, one-click restore, and history.
 
-What that means concretely: `GET /inventory/export` writes the round-trip file; uploading one
-back validates it against four bulk-loaded maps and parks a diff; confirming applies it in one
-transaction through `StockService` with a snapshot taken first; everyone else gets 503 with an
-estimate while it runs; Inventory → Bulk import lists every past run and restores any of them.
-The Claude skill that shapes loose data into the file is `.claude/skills/ims-product-import`.
-
-**Part H — a batch-aware `StockService` entry point — is deliberately unbuilt.** Optional by
-design, and now measurable rather than guessed.
+Both numbers that used to ship unmeasured are measured. `IMPORT_FUZZY_MATCH_THRESHOLD` is **0.7**
+(0.684 is both a real duplicate and a sibling SKU — the classes overlap, so it is a judgement call
+on a curve, and the question is closed rather than answered). `IMPORT_MAX_CHANGED_SHELVES` stays
+**5,000**, now a policy choice: measured 2.4 s / 37.7 s / 126.8 s for 500 / 5,000 / 20,000 changed
+shelves, linear, and the apply is a full outage for that whole time. Raising it is Ayman's call.
 
 ## Next action
 
-**Two measurements the import ships without**, both named in `importing_data.md` §15:
+Nothing assigned. The two candidates, both needing Ayman first:
 
-1. `IMPORT_FUZZY_MATCH_THRESHOLD` (0.45) has never met a real catalogue. Doable today.
-2. `IMPORT_MAX_CHANGED_SHELVES` (5,000) is arithmetic, not a timing. Benchmark 500 / 5,000 /
-   20,000 changed shelves through the real apply, then set it — it can probably go up, now that
-   the in-memory progress clock keeps the heartbeat alive during a long run.
-
-Then: nothing assigned. Ask Ayman.
+1. **§15's end-to-end on the demo stack** — export → edit → import → verify, one broken file, one
+   crash mid-apply, one killed task, one restore, one restore after renaming a category and a
+   room. **Blocked: no host address is recorded anywhere in this repo.** Every runbook line says
+   `<host>`. Ask before touching the VM, and confirm demo vs production first.
+2. Raise or keep `IMPORT_MAX_CHANGED_SHELVES` now that the timings exist.
 
 ## Green as of 2026-09-24 — measured serially, not remembered
 
 - `pnpm typecheck` clean · `pnpm test` → shared 25 · api 240 · web 450
 - `pnpm lint` → **20 pre-existing errors. Not green.** Compare against 20, not zero.
-- `pnpm --filter @ims/api test:int` → **914 pass / 0 fail (62 files)**
+- `pnpm --filter @ims/api test:int` → **926 pass / 0 fail (64 files)**
 - `guard-hardcoding.sh --scan-all` → **8**, against a documented baseline of 7.
 - Migrations 0001–**0038** applied.
+- Benchmarks live in `apps/api/test/bench/`, run by hand via `vitest.bench.config.ts`. **Not** in
+  the integration suite: they take minutes and leave tens of thousands of undeletable rows.
 
 ## Needs the operator
 
-1. **The VM is still on old code.** The rate-limit fix (`03426df`) is pushed but not deployed —
-   `infra/deploy.sh` has not been run. Until it is, every user there is refused on their 11th
-   request in a minute.
-2. **Demo mode is ON on the VM** — `GET /auth/demo-accounts` answers unauthenticated with every
-   email and the shared password. Before real data: redeploy via `infra/`, do not migrate the
-   testing database across.
+1. **The VM is still on old code** — the rate-limit fix (`03426df`) is pushed, not deployed.
+2. **Demo mode is ON on the VM.** `GET /auth/demo-accounts` answers unauthenticated.
 3. Offsite backups (**G-16**) and a restore drill (**G-17**).
 
 ## Landmines — full list in `ASSIST.md` §9
 
 - **Never run two test suites at once.** One shared `db-test`; two runs truncate each other and
   produce a *convincing fake regression* in a random innocent spec. Use `scripts/gate.sh`.
-- **Shell heredocs and `node -e` mangle prose.** Backticks and `${...}` in a comment get eaten by
-  bash. Write files with the Write/Edit tools, not shell string surgery.
-- **Built output goes stale and lies confidently.** A seed or config change needs `--build`; a
-  "fix" verified against `dist/` that was built before the edit proves nothing.
+- **Shell heredocs and `node -e` mangle prose**, and a `sed` substitution hits every matching line
+  in the file, not the one you meant. Write code with the Write/Edit tools.
+- **A long `OR` list cannot be compiled.** Kysely walks the tree by recursion, so a few thousand
+  terms overflow the stack *while building the SQL*, non-deterministically — it passed at 5,000
+  one run and failed the next. Chunk any `eb.or` built from a collection (`stock/constants.ts`).
+- **Built output goes stale and lies confidently.** A seed or config change needs `--build`.
 - **`pnpm typecheck` reads `packages/shared/dist`.** Change a contract, rebuild shared.
 - **Two compose files.** Root = demo, secrets hardcoded in the public repo. `infra/` = production.
 - **A Storage ID is immutable by trigger.** Renaming a room does not rewrite it. By design.
 - **`test-env.int-spec` refuses an unpinned config key.** A new `config.schema.ts` key must be
   pinned in `TEST_ENV` or the suite fails.
-- **`resetData` keeps requisitions**, so money accumulates across a spec file.
+- **`resetData` keeps requisitions and cannot delete products**, so both accumulate across a run.
+  Make every fixture value run-unique and filter by id, never by a name substring.
+- **`pg` cannot parse a custom enum array** and hands back the literal `"{a,b}"`, which passes
+  `.includes('a')` by substring. Read such a column as `::text[]`.
+- **An import locks the whole API out, and the lock lives in process memory** — `resetData` cannot
+  clear it, a spec that engages it must release it in `afterEach`, and it breaks the day the API
+  runs two instances. `release` is the only thing that clears it.
+- **A sentinel in a validated form field kills `handleSubmit` silently.** Keep `__new__`-style
+  values outside the form.
 - **`D-nnn` is the QA defect numbering** — cite decisions by `OQ-*` / `G-*`.
-- **A sentinel in a validated form field kills `handleSubmit` silently.** No error, no toast, the
-  button just does nothing. Keep `__new__`-style values in their own state, outside the form.
-- **`pg` cannot parse a custom enum array** and hands back the literal `"{a,b}"`. A string that
-  passes `.includes('a')` by substring — every single-value test still green. Read such a column
-  as `::text[]` (see `api_keys.scopes`).
-- **An import locks the whole API out, and the lock lives in process memory.** While a job is
-  `APPLYING` every request but four is refused 503. The flag is a field on `ImportLockService`,
-  not a row — so `resetData` cannot clear it, a spec that engages it must release it in
-  `afterEach`, and **it breaks the day the API runs two instances**. The heartbeat check in
-  `ImportLockGuard` is what lifts a lock whose import died; `release` is the only thing that
-  clears either store.
 
 ## Open debt
 

@@ -5,6 +5,27 @@
 
 ## Current position
 
+- **2026-09-24 — the CSV product import is complete, parts A–L, and both of its unmeasured
+  numbers are measured.** Part H landed as `StockService.adjustBatch` — one trackability check per
+  distinct product rather than one per changed shelf, proved by counting the SQL rather than by
+  argument.
+  - **The benchmark written to justify part H found a crash instead.** A 20,000-shelf apply died
+    with `Maximum call stack size exceeded` before Postgres saw a statement: the import lock built
+    one `OR` term per shelf and the query builder compiles that tree by recursion. The boundary
+    was not fixed either — the same 5,000-term list compiled in one run and overflowed in the next
+    — so the shipped ceiling of 5,000 was sitting on the edge, not below it. Chunked now.
+  - **Measured through the real apply path:** 500 shelves 2.4 s, 5,000 37.7 s, 20,000 126.8 s —
+    linear at 6–7.5 ms each, about 2.5× the arithmetic in `importing_data.md` §11.2.
+    `IMPORT_MAX_CHANGED_SHELVES` stays 5,000: nothing technical holds it there any more, so the
+    value is now a question about acceptable outage length, and it is Ayman's to answer.
+  - `IMPORT_FUZZY_MATCH_THRESHOLD` raised 0.45 → **0.7**. That measurement closed the question
+    rather than answering it: a genuine duplicate and a sibling SKU both score 0.684.
+  - **Verified green (serial run):** typecheck clean · unit shared 25 / api 240 / web 450 ·
+    integration **926 pass / 0 fail (64 files)** · `pnpm lint` **20 pre-existing errors**,
+    unchanged · `guard-hardcoding.sh --scan-all` **8**, unchanged.
+  - **Next task:** nothing assigned. §15's end-to-end on the demo stack is the obvious candidate
+    and is **blocked — no host address is recorded anywhere in this repo.**
+
 - **2026-09-20 — phase 09 opened; Parts G, F and E-a landed, plus a rate-limit defect.** Working
   tree clean apart from the long-standing untracked set (OQ-33). Branch `fix/lan-secure-context`,
   **ten commits local only — `origin` is ten behind, Ayman declined to push.** The local demo
@@ -365,6 +386,7 @@
 | — | QA rounds 3–4, expenses page, deferral flags, first deploy | ✅ done and verified | no plan file — driven by QA, see SESSION-LOG 2026-09-02 |
 | 09 | Taxonomy, rooms, Storage IDs, custody, project governance | ✅ done and verified | migrations 0032–0036, 744 int tests |
 | 10 | API keys — scoped read access for external systems | ✅ done and verified | migration 0037, 762 int tests |
+| — | CSV product import — export, validate, diff, apply, lockout, restore, skill | ✅ done and verified | `importing_data.md` parts A–L, migration 0038, 926 int tests |
 
 Legend: ⬜ not started · 🟡 in progress · ✅ done and verified
 
