@@ -195,6 +195,8 @@ export const AUDIT_ACTIONS = [
    * already records every movement, tagged with this job's id.
    */
   'import.apply',
+  /** A backup deliberately removed to reclaim disk (§10). The job row keeps the fact. */
+  'import.snapshot_delete',
   'audit.purge',
 ] as const;
 
