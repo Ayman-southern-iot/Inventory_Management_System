@@ -275,40 +275,42 @@ export class ImportApplyService {
         });
       }
 
-      for (const shelf of product.shelves) {
-        /*
-         * The delta comes from the **locked** quantity, never from the plan's `currentOnHand`.
-         * That number is what the preview showed a human minutes ago; applying a delta computed
-         * from it would move the shelf by the wrong amount the moment anything else touched it,
-         * which is the exact bug rules/40-database.md exists to prevent.
-         */
-        const delta = deltaFromLocked(productId, shelf, locked);
-        if (delta === 0) continue; // C28: `adjust` throws on a zero delta, and rightly.
+      /*
+       * The delta comes from the **locked** quantity, never from the plan's `currentOnHand`.
+       * That number is what the preview showed a human minutes ago; applying a delta computed
+       * from it would move the shelf by the wrong amount the moment anything else touched it,
+       * which is the exact bug rules/40-database.md exists to prevent.
+       */
+      const adjustments = product.shelves
+        .map((shelf) => ({
+          productId,
+          compartmentId: shelf.compartmentId,
+          delta: deltaFromLocked(productId, shelf, locked),
+          reason: `CSV import ${jobId}`,
+        }))
+        // C28: `adjust` throws on a zero delta, and rightly.
+        .filter((adjustment) => adjustment.delta !== 0);
 
-        await this.stock.adjust(
-          {
-            productId,
-            compartmentId: shelf.compartmentId,
-            delta,
-            reason: `CSV import ${jobId}`,
-          },
-          { performedBy: actor.id },
-          // No per-adjustment audit row (I10) — the ledger has the movement, and one
-          // `import.apply` row below has the decision.
-          undefined,
-          tx,
-        );
-
+      /*
+       * One call per product rather than one per shelf, so `assertProductIsTrackable` runs once
+       * for this product instead of once per shelf it touches (§11.2, part H). Same writes, same
+       * order, one ledger row each — `StockService` is still the only thing writing stock. No
+       * audit row per adjustment (I10); the single `import.apply` row below carries the decision.
+       */
+      await this.stock.adjustBatch(tx, adjustments, { performedBy: actor.id }, async () => {
         /*
          * Progress, on two clocks. The in-memory touch is free and is what stops the lockout
          * guard mistaking a long apply for a dead one. The persisted write is throttled and goes
          * out on a **different connection** to `tx` — a row written inside the transaction is
          * invisible until commit, which is exactly when progress stops mattering (§5.5).
+         *
+         * Per shelf, not per batch: a product spread over many shelves must not go quiet for the
+         * whole batch, or the heartbeat is back to being a race against the ceiling.
          */
         this.lock.touch();
         changed += 1;
         await this.reportProgress(jobId, changed);
-      }
+      });
     }
 
     // 9 — what the file never mentioned (I1).

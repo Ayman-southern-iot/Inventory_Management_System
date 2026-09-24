@@ -665,12 +665,17 @@ Counting the database round trips inside one `StockService.adjust` call: the tra
 lock-or-create, the ledger insert, the audit insert, the product-ref lookup for that audit row, and
 the delta update. **Roughly six per changed shelf.**
 
-| Changed shelves | Round trips | Estimated apply |
-|---|---|---|
-| 500 | ~3,000 | ~1–2 s |
-| 5,000 | ~30,000 | ~10–15 s |
-| 20,000 | ~120,000 | ~40–60 s |
-| 50,000 | ~300,000 | ~2–3 min |
+| Changed shelves | Round trips | Estimated apply | **Measured 2026-09-24** |
+|---|---|---|---|
+| 500 | ~3,000 | ~1–2 s | **2.4 s** |
+| 5,000 | ~30,000 | ~10–15 s | **37.7 s** |
+| 20,000 | ~120,000 | ~40–60 s | **126.8 s** |
+| 50,000 | ~300,000 | ~2–3 min | not run |
+
+**The estimates were about 2.5× optimistic**, and the shape was right: cost is linear in changed
+shelves, 6–7.5 ms each, measured through the real validate → confirm → apply path
+(`test/bench/import-apply.bench-spec.ts`). Counting round trips was the correct instrument; what
+the table had no way to know was what a round trip costs on this hardware.
 
 Two of those six are avoidable, and I10 removes them: dropping the per-adjustment audit row also
 drops the product-ref lookup that exists only to label it. The ledger already records every
@@ -681,6 +686,15 @@ A further reduction is available and **is a `StockService` change, not a bypass*
 entry point that hoists `assertProductIsTrackable` out of the loop, having checked each distinct
 product once. It stays the only writer, still one ledger row per change. Recommended, and it gets
 its own gate because it touches the stock module.
+
+**Built 2026-09-24 as `StockService.adjustBatch` (part H).** The apply loop was already grouped by
+product, so it calls the batch once per product with that product's changed shelves — which is the
+same thing as once per distinct product, without buffering the whole import. `adjust` is unchanged
+from the outside; both it and the batch now call one private `applyOneAdjustment`, so there is one
+copy of the write and the hoisted check is the only difference between them. Progress still
+advances per shelf, through a callback, because a product spread over many shelves must not go
+quiet for the length of its batch — that would put the heartbeat back in a race with the ceiling
+(§8.2).
 
 ### 11.3 Is one transaction still right at 50,000 rows?
 
@@ -921,24 +935,28 @@ number is fixed.
 | E | Preview/diff and the confirm gate, including the §5.4 rename warnings | |
 | F | Snapshot capture and the history screen | Depends on B; independent of apply |
 | G | Apply (§5.5) | **Touches `StockService` and the ledger — its own gate, `INVARIANT` non-empty** |
-| H | Batch-aware `StockService` entry point (§11.2) | Optional; measure first |
+| H | Batch-aware `StockService` entry point (§11.2) | **Touches the stock module — its own gate** |
 | I | Lockout guard + heartbeat + abandon | **Touches auth surface — STOP.** Do §8.2's cron check first |
 | J | Progress endpoint, the ring loader, the full-screen block | |
 | K | Restore (§10) | Thin: an import of an existing file, exempt from the caps |
 | L | The Claude skill | Independent of A–K; writable any time after B |
 
-**Landed: A–G and I–L.** Schema and vocabulary, the round-trip export, the parser, validation,
+**Landed: A–L, all of it.** Schema and vocabulary, the round-trip export, the parser, validation,
 the issue-code enum and its severity ratchet, the near-duplicate pass, the diff, the job
-lifecycle, the upload endpoint and its CSV branch in file storage, apply, the lockout and its
-crash guard, progress on two clocks, the full-screen block, the ring, the import page, snapshot
-history, restore, and the Claude skill.
+lifecycle, the upload endpoint and its CSV branch in file storage, apply, the batch entry point,
+the lockout and its crash guard, progress on two clocks, the full-screen block, the ring, the
+import page, snapshot history, restore, and the Claude skill.
 
-**Not built: H** — the batch-aware `StockService` entry point. Optional by design, and now
-measurable: apply exists, so the benchmark can say whether it is worth having before anybody
-writes it.
+**H, landed 2026-09-24.** `StockService.adjustBatch` — one `assertProductIsTrackable` per distinct
+product instead of one per changed shelf, measured in SQL rather than argued: three shelves of one
+product issue **one** trackability query where three `adjust` calls issue three
+(`stock-adjust-batch.int-spec.ts`). Still one ledger row per change, still the only writer, and
+the check moved rather than went — a batch containing one untrackable product is refused before it
+writes any of the rest.
 
-**Still untrusted, and tracked in "Done means" below:** `IMPORT_FUZZY_MATCH_THRESHOLD` (0.45) and
-`IMPORT_MAX_CHANGED_SHELVES` (5,000). Both ship working in shape and unmeasured in value.
+**Both numbers are now measured.** `IMPORT_FUZZY_MATCH_THRESHOLD` is 0.7 and the measurement
+closed the question rather than answering it; `IMPORT_MAX_CHANGED_SHELVES` stays at 5,000 and is
+now a policy choice with a timing behind it. See "Done means" below for both.
 
 ### Done means
 
@@ -948,17 +966,42 @@ writes it.
 **Two numbers ship trusted in shape and untrusted in value. They are separate items on separate
 schedules, and finishing one resolves nothing about the other.**
 
-- **`IMPORT_MAX_CHANGED_SHELVES` — blocked on part G, then benchmarked.** Published timings for
-  500 / 5,000 / 20,000 **changed shelves** through the real apply path, and the ceiling set from
-  them rather than from §11.2's arithmetic. Rows are the wrong axis and the row cap is no longer
-  the gate (§11.6). This cannot be done before G exists, because there is nothing to time.
-- **`IMPORT_FUZZY_MATCH_THRESHOLD` — doable today, and independent of G.** One pass over real
-  product names. It ships at 0.45, which separated the fixtures sensibly and has never met a real
-  catalogue. Too high and the check says nothing on the day somebody re-adds a product that
-  already exists; too low and it cries duplicate on every `Cable HDMI 2m` beside its 3m sibling.
-  It is config, so revising it is cheap — but a number nobody has ever checked should not be
-  presented as a working safeguard. **Nothing in G touches this**, so G landing must not be read
-  as having settled it.
+- **`IMPORT_MAX_CHANGED_SHELVES` — benchmarked 2026-09-24, and the value is now a question for
+  the lead rather than for the engineer.** 500 / 5,000 / 20,000 changed shelves took
+  **2.4 s / 37.7 s / 126.8 s** through the real apply path; linear, 6–7.5 ms each, about 2.5× the
+  arithmetic in §11.2. The table is in §11.2 and beside the value in `config.schema.ts`.
+
+  **The benchmark found a bug, which is the main thing it bought.** At 20,000 shelves the apply
+  did not run slowly — it died with `Maximum call stack size exceeded`, *before Postgres saw a
+  statement*, because the lock lookup built one `OR` term per shelf and the query builder
+  compiles that tree by recursion. Worse, the boundary was not fixed: the same 5,000-term list
+  compiled in one run and overflowed in another depending on how deep the stack already was, so
+  the shipped ceiling of 5,000 was sitting on the edge, not below it. The lookup is chunked now
+  (`stock/constants.ts`), and 20,000 completes.
+
+  **5,000 is kept, deliberately.** Nothing technical now stops it being higher — the heartbeat
+  collision went with part J's progress clock, and the crash went with the chunking. What is left
+  is that the apply is a full outage for its whole duration, so the number is a statement about
+  how long everyone else may be locked out. The brief allows "+5–10 minutes", which would put it
+  near 50,000. Changing a config default is not an engineer's call to make alone (`rules/70`).
+- **`IMPORT_FUZZY_MATCH_THRESHOLD` — measured 2026-09-24, and the measurement changed the
+  question.** It now ships at **0.7**, and **no further measurement will produce a clean answer**,
+  so this item is closed rather than pending.
+
+  Run against realistic name shapes with `similarity()`, a genuine duplicate and a legitimate
+  sibling SKU score **identically**: `Office chair` / `Office chair (black)` and
+  `NVIDIA RTX 4090` / `NVIDIA RTX 4080` are both 0.684. Trigram similarity cannot separate "same
+  product, one typo" from "different product, one digit" — they are the same edit over the same
+  stem. The two classes overlap, so the threshold is **a judgement call on a curve, not a cut
+  waiting to be found by better data**: pick the point that keeps the clearest cases and accept
+  noise on the ambiguous ones, which is survivable only because §2.4 made this warning-only.
+
+  0.7 keeps every must-warn (case-only 1.00, near-model 0.81, same-family 0.76, typo 0.727,
+  spacing 0.722) and drops three of four must-nots (0.684, 0.647, 0.625). **0.45 was not merely
+  unverified — it warned on everything sharing a stem**, which is the noise §2.4 exists to avoid.
+  The measured table lives in `config.schema.ts` beside the value. Re-checking against a real
+  catalogue is a refinement, not a blocker, and will move where the noise sits rather than
+  removing the overlap.
 - End-to-end on the demo stack: export → edit → import → verify; one deliberately broken file; one
   crash during apply *and* one killed-task-live-process (C41 and C42 are different paths); one
   restore from a snapshot; one restore after renaming a category and a room (C12, C35).

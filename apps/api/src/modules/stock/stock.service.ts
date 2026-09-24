@@ -12,6 +12,7 @@ import {
 } from '../../database/schema';
 import type { Selectable, Transaction } from 'kysely';
 import { ConflictError, NotFoundError } from '../../common/errors';
+import { IMPORT_LOCK_INSERT_CHUNK, IMPORT_LOCK_LOOKUP_CHUNK } from './constants';
 import { AuditService } from '../audit/audit.service';
 import type { AuditContext } from '../audit/audit-context';
 import {
@@ -572,67 +573,126 @@ export class StockService {
 
     const run = async (tx: Tx): Promise<PlacementRow | null> => {
       await this.assertProductIsTrackable(tx, input.productId);
-
-      const placement =
-        input.delta > 0
-          ? await this.lockOrCreatePlacement(tx, input.productId, input.compartmentId)
-          : await this.lockPlacement(tx, input.productId, input.compartmentId);
-
-      if (!placement) throw new NotFoundError('Stock in that compartment');
-
-      if (input.delta < 0) {
-        const available = placement.quantity - placement.reserved_qty - placement.quarantined_qty;
-        if (Math.abs(input.delta) > available) {
-          throw new InsufficientStockError(
-            available,
-            Math.abs(input.delta),
-            placement.quarantined_qty,
-          );
-        }
-      }
-
-      const ledgerId = await this.appendLedger(tx, {
-        product_id: input.productId,
-        from_compartment_id: input.delta < 0 ? input.compartmentId : null,
-        to_compartment_id: input.delta > 0 ? input.compartmentId : null,
-        quantity: Math.abs(input.delta),
-        movement_type: StockMovementType.ADJUST,
-        ...this.provenance({ ...context, note: input.reason }),
-      });
-
-      // The reason is the entire point of the audit row — without it, a "stock.adjust" entry
-      // is indistinguishable from the next one's. Join the same transaction so an adjust with
-      // no reason never makes it to disk.
-      if (auditContext) {
-        const productRef = await this.lookupProductRef(tx, input.productId);
-        await this.audit.record(
-          {
-            action: 'stock.adjust',
-            entityType: 'stock',
-            entityId: ledgerId,
-            entityRef: productRef,
-            summary: `Adjusted ${productRef} by ${input.delta}`,
-            metadata: {
-              product_id: input.productId,
-              compartment_id: input.compartmentId,
-              delta: input.delta,
-              reason: input.reason,
-            },
-          },
-          auditContext,
-          tx,
-        );
-      }
-
-      const remaining = placement.quantity + input.delta;
-      if (remaining === 0 && placement.reserved_qty === 0) {
-        await tx.deleteFrom('stock_placements').where('id', '=', placement.id).execute();
-        return null;
-      }
-
-      return this.applyDelta(tx, placement.id, input.delta, 0);
+      return this.applyOneAdjustment(tx, input, context, auditContext);
     };
     return existingTx ? run(existingTx) : this.db.transaction().execute(run);
+  }
+
+  /**
+   * Many adjustments in one transaction, for a CSV import (`importing_data.md` §11.2, part H).
+   *
+   * **An entry point, not a bypass.** Every change still goes through the same writes a single
+   * `adjust` does: one locked placement, one append-only ledger row, one delta. `StockService`
+   * remains the only thing that touches `stock_placements` or `stock_ledger`.
+   *
+   * What it removes is a repeated *question*, not a write. `assertProductIsTrackable` is a query
+   * per call, and the answer can only vary per product — so an import of five thousand shelves
+   * across six hundred products asks it 5,000 times to learn 600 things. Here it is asked once
+   * per distinct product in `changes`.
+   *
+   * Callers pass one product's shelves at a time, so the set is usually a single id; the saving
+   * is real anyway, because the alternative is one query per shelf. `onApplied` fires after each
+   * change so the caller can advance its progress clock per shelf rather than per batch.
+   *
+   * The given order is the order applied. That matters: the import has already locked every
+   * affected placement in id order via `lockPlacementsForImport`, and re-ordering here would put
+   * back the deadlock that function exists to prevent.
+   *
+   * No audit row per change, by design (`importing_data.md` I10) — hence no `auditContext`
+   * parameter. The ledger carries every movement with the job id in its note, and the caller
+   * writes one `import.apply` row for the human decision.
+   */
+  async adjustBatch(
+    tx: Tx,
+    changes: readonly AdjustInput[],
+    context: StockContext,
+    onApplied?: (change: AdjustInput) => Promise<void>,
+  ): Promise<void> {
+    for (const change of changes) {
+      if (change.delta === 0) throw new ConflictError('An adjustment of zero changes nothing');
+      if (!change.reason.trim()) throw new ConflictError('An adjustment requires a reason');
+    }
+
+    for (const productId of new Set(changes.map((change) => change.productId))) {
+      await this.assertProductIsTrackable(tx, productId);
+    }
+
+    for (const change of changes) {
+      await this.applyOneAdjustment(tx, change, context);
+      if (onApplied) await onApplied(change);
+    }
+  }
+
+  /**
+   * One adjustment, on a product already shown to be trackable.
+   *
+   * Split out of `adjust` so `adjustBatch` can hoist that check without a second copy of the
+   * write. Private on purpose: the check is not optional, it has only moved.
+   */
+  private async applyOneAdjustment(
+    tx: Tx,
+    input: AdjustInput,
+    context: StockContext,
+    auditContext?: AuditContext,
+  ): Promise<PlacementRow | null> {
+    const placement =
+      input.delta > 0
+        ? await this.lockOrCreatePlacement(tx, input.productId, input.compartmentId)
+        : await this.lockPlacement(tx, input.productId, input.compartmentId);
+
+    if (!placement) throw new NotFoundError('Stock in that compartment');
+
+    if (input.delta < 0) {
+      const available = placement.quantity - placement.reserved_qty - placement.quarantined_qty;
+      if (Math.abs(input.delta) > available) {
+        throw new InsufficientStockError(
+          available,
+          Math.abs(input.delta),
+          placement.quarantined_qty,
+        );
+      }
+    }
+
+    const ledgerId = await this.appendLedger(tx, {
+      product_id: input.productId,
+      from_compartment_id: input.delta < 0 ? input.compartmentId : null,
+      to_compartment_id: input.delta > 0 ? input.compartmentId : null,
+      quantity: Math.abs(input.delta),
+      movement_type: StockMovementType.ADJUST,
+      ...this.provenance({ ...context, note: input.reason }),
+    });
+
+    // The reason is the entire point of the audit row — without it, a "stock.adjust" entry
+    // is indistinguishable from the next one's. Join the same transaction so an adjust with
+    // no reason never makes it to disk.
+    if (auditContext) {
+      const productRef = await this.lookupProductRef(tx, input.productId);
+      await this.audit.record(
+        {
+          action: 'stock.adjust',
+          entityType: 'stock',
+          entityId: ledgerId,
+          entityRef: productRef,
+          summary: `Adjusted ${productRef} by ${input.delta}`,
+          metadata: {
+            product_id: input.productId,
+            compartment_id: input.compartmentId,
+            delta: input.delta,
+            reason: input.reason,
+          },
+        },
+        auditContext,
+        tx,
+      );
+    }
+
+    const remaining = placement.quantity + input.delta;
+    if (remaining === 0 && placement.reserved_qty === 0) {
+      await tx.deleteFrom('stock_placements').where('id', '=', placement.id).execute();
+      return null;
+    }
+
+    return this.applyDelta(tx, placement.id, input.delta, 0);
   }
 
   /* ------------------------------------------------------------------ reads */
@@ -910,13 +970,14 @@ export class StockService {
     );
 
     const creating = sorted.filter((shelf) => shelf.creating);
-    if (creating.length > 0) {
-      // One statement rather than one per row: Postgres processes VALUES in the order given, so
-      // a conflict waits in that same sorted order, which is what the ordering buys us.
+    // Batched rather than one per row: Postgres processes VALUES in the order given, so a
+    // conflict waits in that same sorted order, which is what the ordering buys us. The batches
+    // are taken in sorted order too, so splitting them does not weaken that.
+    for (let start = 0; start < creating.length; start += IMPORT_LOCK_INSERT_CHUNK) {
       await tx
         .insertInto('stock_placements')
         .values(
-          creating.map((shelf) => ({
+          creating.slice(start, start + IMPORT_LOCK_INSERT_CHUNK).map((shelf) => ({
             product_id: shelf.productId,
             compartment_id: shelf.compartmentId,
             quantity: 0,
@@ -926,24 +987,42 @@ export class StockService {
         .execute();
     }
 
-    const ids = await tx
-      .selectFrom('stock_placements')
-      .select(['id'])
-      .where((eb) =>
-        eb.or(
-          sorted.map((shelf) =>
-            eb.and([
-              eb('product_id', '=', shelf.productId),
-              eb('compartment_id', '=', shelf.compartmentId),
-            ]),
+    /*
+     * Chunked because the query builder cannot compile an arbitrarily long `OR` list — see
+     * `IMPORT_LOCK_LOOKUP_CHUNK`. Ordering is applied after every run has answered, not per run:
+     * locking must follow one ascending id sequence across the whole import, and a per-chunk
+     * `ORDER BY` would give as many sequences as there are chunks.
+     */
+    const ids: string[] = [];
+    for (let start = 0; start < sorted.length; start += IMPORT_LOCK_LOOKUP_CHUNK) {
+      const run = sorted.slice(start, start + IMPORT_LOCK_LOOKUP_CHUNK);
+      const rows = await tx
+        .selectFrom('stock_placements')
+        .select(['id'])
+        .where((eb) =>
+          eb.or(
+            run.map((shelf) =>
+              eb.and([
+                eb('product_id', '=', shelf.productId),
+                eb('compartment_id', '=', shelf.compartmentId),
+              ]),
+            ),
           ),
-        ),
-      )
-      .orderBy('id')
-      .execute();
+        )
+        .execute();
+      ids.push(...rows.map((row) => row.id));
+    }
+    /*
+     * The same order Postgres gave before. A uuid compares as its sixteen bytes, and the
+     * canonical lowercase text form sorts identically byte for byte — the hyphens sit at fixed
+     * positions in every value, so they cannot perturb it. Plain `<` rather than
+     * `localeCompare`, which is locale-sensitive and would make the lock order depend on where
+     * the server thinks it is.
+     */
+    ids.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 
     const locked = new Map<string, PlacementRow>();
-    for (const { id } of ids) {
+    for (const id of ids) {
       const row = await tx
         .selectFrom('stock_placements')
         .selectAll()

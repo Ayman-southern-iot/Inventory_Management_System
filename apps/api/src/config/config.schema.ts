@@ -185,23 +185,31 @@ const rawSchema = z.object({
    * **A restore is not exempt from this one** — 40,000 shelves cost the same to write whichever
    * direction they came from — though it stays exempt from the two parse-phase caps.
    *
-   * **Provisional, and currently set by the heartbeat rather than by the transaction.**
+   * **Measured 2026-09-24**, through the real validate → confirm → apply path against Postgres
+   * (`test/bench/import-apply.bench-spec.ts`), after part H:
    *
-   * The first draft was 10,000, chosen against the 60 s `statement_timeout`. That was the wrong
-   * constraint. `IMPORT_HEARTBEAT_TIMEOUT_SECONDS` is also 60 s, and part I's apply writes a
-   * heartbeat only twice — before the snapshot and before the transaction — so an apply whose
-   * transaction runs longer than that has no beat in flight. The guard would then declare a
-   * perfectly healthy import dead, set its row `FAILED` **while it still holds row locks**, and
-   * with the row no longer `APPLYING` the `import_jobs_one_live` index stops blocking: a second
-   * import could start and write against rows the first is mid-way through changing.
+   * ```
+   * changed shelves   apply      per shelf    §11.2 estimated
+   *            500     2.4 s     4.85 ms      1–2 s
+   *          5,000    37.7 s     7.54 ms      10–15 s
+   *         20,000   126.8 s     6.34 ms      40–60 s
+   * ```
    *
-   * 5,000 is ~10–15 s by §11.2's table, roughly 3–4× clear of the timeout even allowing for the
-   * extra lock round trip per shelf that §5.5 step 4's correction added and that table does not
-   * include. 20,000 is 40–60 s, which is *at* the limit — which is what 10,000 was quietly
-   * betting against.
+   * Cost is linear in changed shelves at roughly 6–7.5 ms each, and **about 2.5× the arithmetic
+   * in §11.2** — that table counted round trips and not what they cost. The apply is a
+   * system-wide outage for its whole duration, so this is the number that sets how long everyone
+   * else is locked out: 5,000 is a 38-second outage, 20,000 a two-minute one.
    *
-   * **Raise it when part J's progress ticks keep the heartbeat alive during a long apply**, not
-   * before. Both numbers are still arithmetic; §15 carries the benchmark that replaces them.
+   * **5,000 is kept, and it is now a policy choice rather than a safety margin.** Two things that
+   * used to constrain it no longer do. The heartbeat collision is gone — part J's in-memory
+   * progress clock ticks per shelf, so a long apply is never mistaken for a dead one. And the
+   * hard failure above ~5,000 is gone: the lock lookup used to build one `OR` per shelf and
+   * overflowed the stack while compiling, which is what made a 20,000-shelf apply crash rather
+   * than merely take two minutes. It is chunked now (`stock/constants.ts`).
+   *
+   * So the remaining question is only how long an outage is acceptable, which is the lead's to
+   * answer and not a thing to raise unilaterally. The brief allows "+5–10 minutes", which the
+   * measurement would put somewhere near 50,000.
    */
   IMPORT_MAX_CHANGED_SHELVES: z.coerce.number().int().min(1).max(200_000).default(5_000),
   /** Replaces the previously hardcoded 10/60s login burst limit on `POST /auth/login`. */
