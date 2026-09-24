@@ -1261,3 +1261,34 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   Benchmarks live in `apps/api/test/bench/` behind their own `vitest.bench.config.ts`, deliberately
   outside the integration suite: they take minutes and leave tens of thousands of rows that
   nothing can delete.
+- 2026-09-24 — **the §15 end-to-end was run against the demo stack for the first time, and it
+  found two defects that made the import unusable rather than awkward.** Both are recorded here
+  because both had tests that passed.
+
+  **The importer refused its own unedited export.** A category may be *named* with a slash, and
+  the seeded catalogue has ten — `Arduino / AVR`, `Motion / IMU`, `Servo Drivers / ESCs`.
+  `category_path` joins with ` / ` and the parser split on `/`, so those names read as two steps
+  and the path came back one level deeper than it is: `CATEGORY_PATH_TOO_DEEP` on the whole file.
+  The unit tests never caught it because every fixture category is a single word. Resolved by
+  asking the catalogue before splitting, scoped to the ambiguous names so an ordinary path is
+  untouched. The other half — creating a *new* category whose name contains a slash — is a format
+  limitation, recorded as `OQ-IMP-2` and left.
+
+  **A crash mid-apply bricked imports permanently.** `ImportLockService.releaseIfDead` is written
+  for precisely this and its docstring describes the case exactly, but its only caller is
+  `ImportLockGuard`, which returns early on `!isLocked()`. A restarted process holds no in-memory
+  lock, so the reclaim was unreachable: the row stayed `APPLYING` and `import_jobs_one_live`
+  refused every future import for ever. The existing integration test passed because it called
+  `releaseIfDead()` **by hand** — it proved the method worked, not that anything reached it, which
+  is the difference between a unit of code and a path. Now reclaimed from `expireStaleJob`, which
+  `start` and `get` already call.
+
+  **The general lesson, worth more than either fix:** every layer of this feature was tested and
+  green, and the first five minutes of running it end to end produced two blockers. One needed
+  real data shapes (a slash in a category name), the other needed a real process death. Neither is
+  reachable from a spec that builds its own world.
+
+  Re-verified after the fixes: 50 / 100 / 500 / 3,000 new rows all applied and verified, re-import
+  a no-op each time; a broken file refused with the catalogue byte-identical; restore, and restore
+  after renaming a category and a room, both correct; and a SIGKILL four seconds into a
+  3,657-shelf apply rolled back whole, did not strand the 503, and was reclaimed 60 seconds later.

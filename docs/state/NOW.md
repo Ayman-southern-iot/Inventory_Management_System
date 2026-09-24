@@ -17,21 +17,28 @@ on a curve, and the question is closed rather than answered). `IMPORT_MAX_CHANGE
 **5,000**, now a policy choice: measured 2.4 s / 37.7 s / 126.8 s for 500 / 5,000 / 20,000 changed
 shelves, linear, and the apply is a full outage for that whole time. Raising it is Ayman's call.
 
+**§15's end-to-end ran 2026-09-24 against the rebuilt local demo stack and found two blockers,
+both now fixed.** The importer refused its own unedited export (a category may be *named* with a
+slash, and the path separator is ` / ` — `OQ-IMP-2`), and a crash mid-apply left the row `APPLYING`
+for ever so every later import was refused 409. Re-verified after: 50 / 100 / 500 / 3,000 new rows
+all apply and verify, re-import a no-op each time; broken file refused with the catalogue
+unchanged; restore and restore-after-rename correct; SIGKILL four seconds into a 3,657-shelf apply
+rolls back whole and is reclaimed 60 s later. Table in `importing_data.md` §15.
+
 ## Next action
 
-Nothing assigned. The two candidates, both needing Ayman first:
+Nothing assigned. Two things waiting on Ayman:
 
-1. **§15's end-to-end on the demo stack** — export → edit → import → verify, one broken file, one
-   crash mid-apply, one killed task, one restore, one restore after renaming a category and a
-   room. **Blocked: no host address is recorded anywhere in this repo.** Every runbook line says
-   `<host>`. Ask before touching the VM, and confirm demo vs production first.
-2. Raise or keep `IMPORT_MAX_CHANGED_SHELVES` now that the timings exist.
+1. **Raise or keep `IMPORT_MAX_CHANGED_SHELVES`** now the timings exist.
+2. **The VM.** Nothing has been deployed there — all of the above is the *local* demo stack.
+   **No host address is recorded anywhere in this repo**; every runbook line says `<host>`. Ask,
+   and confirm demo vs production, before touching it.
 
 ## Green as of 2026-09-24 — measured serially, not remembered
 
 - `pnpm typecheck` clean · `pnpm test` → shared 25 · api 240 · web 450
 - `pnpm lint` → **20 pre-existing errors. Not green.** Compare against 20, not zero.
-- `pnpm --filter @ims/api test:int` → **926 pass / 0 fail (64 files)**
+- `pnpm --filter @ims/api test:int` → **927 pass / 0 fail (64 files)** (api unit is now 242)
 - `guard-hardcoding.sh --scan-all` → **8**, against a documented baseline of 7.
 - Migrations 0001–**0038** applied.
 - Benchmarks live in `apps/api/test/bench/`, run by hand via `vitest.bench.config.ts`. **Not** in
@@ -49,6 +56,10 @@ Nothing assigned. The two candidates, both needing Ayman first:
   produce a *convincing fake regression* in a random innocent spec. Use `scripts/gate.sh`.
 - **Shell heredocs and `node -e` mangle prose**, and a `sed` substitution hits every matching line
   in the file, not the one you meant. Write code with the Write/Edit tools.
+- **A green test suite said nothing about whether the import worked.** Two blockers in the first
+  five minutes of running it for real: one needed a real data shape (a `/` inside a category
+  name), one needed a real process death. A spec that builds its own world reaches neither. When
+  a test calls the recovery function *by hand*, it has tested the function, not the path.
 - **A long `OR` list cannot be compiled.** Kysely walks the tree by recursion, so a few thousand
   terms overflow the stack *while building the SQL*, non-deterministically — it passed at 5,000
   one run and failed the next. Chunk any `eb.or` built from a collection (`stock/constants.ts`).

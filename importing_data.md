@@ -1002,9 +1002,33 @@ schedules, and finishing one resolves nothing about the other.**
   The measured table lives in `config.schema.ts` beside the value. Re-checking against a real
   catalogue is a refinement, not a blocker, and will move where the noise sits rather than
   removing the overlap.
-- End-to-end on the demo stack: export → edit → import → verify; one deliberately broken file; one
-  crash during apply *and* one killed-task-live-process (C41 and C42 are different paths); one
-  restore from a snapshot; one restore after renaming a category and a room (C12, C35).
+- **End-to-end on the demo stack — run 2026-09-24, and it found two things that made the feature
+  unusable.** Rebuilt the stack, then exercised it through the real API as `im@ims.local`.
+
+  | What | Result |
+  |---|---|
+  | 50 new rows | validate 2.0 s · apply 5.0 s · 50/50 verified · re-import a no-op |
+  | 100 new rows | validate 3.4 s · apply 6.6 s · 100/100 verified · re-import a no-op |
+  | 500 new rows | validate 13.2 s · apply 16.7 s · 500/500 verified · re-import a no-op |
+  | 3,000 new rows | validate 0.2 s · apply 10.0 s · 3,000/3,000 verified |
+  | deliberately broken file | `FAILED`, no diff offered, catalogue byte-identical afterwards |
+  | restore | rename + emptied shelf undone; `restoredFromJobId` set |
+  | restore after renaming a category and a room | no duplicate category created (§4.1 holds); the rename survives, because a restore is not a rename undo |
+  | crash mid-apply (C41) | container SIGKILLed 4 s into a 3,657-shelf apply: rolled back whole, 503 not stuck, job reclaimed 60 s later |
+  | lockout | a 503 on an ordinary route observed during every apply |
+
+  **Found, and fixed:** the importer refused its own unedited export, because a category may be
+  *named* with a slash and the path separator is ` / ` (OQ-IMP-2). And a crash mid-apply left the
+  row `APPLYING` for ever, so `import_jobs_one_live` refused **every future import** — the reclaim
+  existed and nothing reached it.
+
+  **Observed, not a defect:** validate cost tracks *new names × catalogue size*, not changed
+  shelves — 500 new names against 3,810 products is 13 s, which is the near-duplicate pass doing
+  ~1.9M comparisons. `IMPORT_FUZZY_MATCH_MAX_NEW_NAMES` (500) is what bounds it, and it happens
+  outside the lockout, so it delays the person who uploaded and nobody else.
+
+  **Not run:** C42, a killed task inside a living process. C41 covers the harder half (the process
+  is gone and the row is stranded); C42's path is covered by `import-lockout.int-spec.ts`.
 - `DECISIONS.md` carries I1–I11; `OPEN-QUESTIONS.md` carries Q1–Q3.
 - `AI_PLAYBOOK.md` §6/§8/§11/§16 updated; **`rules/30-frontend.md`'s websocket claim corrected**
   (§3.6).
