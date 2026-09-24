@@ -92,10 +92,7 @@ export class RequisitionDocumentsController {
     await this.docs.assertCanRead(id, actor);
     const { contents, mimeType, fileName } = await this.docs.readForDownload(id);
     response.setHeader('Content-Type', mimeType);
-    response.setHeader(
-      'Content-Disposition',
-      `inline; filename="${encodeURIComponent(fileName)}"`,
-    );
+    response.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileName)}"`);
     response.setHeader('Cache-Control', 'private, no-store');
     return new StreamableFile(contents);
   }

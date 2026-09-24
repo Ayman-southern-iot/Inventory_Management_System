@@ -24,8 +24,7 @@ export function toPlacement(row: PlacementView): Placement {
      */
     quarantinedQty: row.quarantined_qty ?? 0,
     // Derived, never stored: a persisted `available` column can disagree with its own inputs.
-    availableQty:
-      row.quantity - row.reserved_qty - (row.quarantined_qty ?? 0),
+    availableQty: row.quantity - row.reserved_qty - (row.quarantined_qty ?? 0),
     version: row.version,
   };
 }

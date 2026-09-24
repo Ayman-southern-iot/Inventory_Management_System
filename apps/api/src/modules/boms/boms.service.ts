@@ -169,9 +169,7 @@ export class BomsService {
     if (live.length === 0) throw new AllBomLinesRemovedError();
 
     const subtotal = round2(live.reduce((sum, line) => sum + line.unitCost * line.quantity, 0));
-    const approvedTotal = round2(
-      sources.reduce((sum, source) => sum + source.approvedAmount, 0),
-    );
+    const approvedTotal = round2(sources.reduce((sum, source) => sum + source.approvedAmount, 0));
 
     /**
      * A BOM may not commit more than was approved. Ayman's ruling, 2026-08-29.
@@ -405,9 +403,9 @@ export class BomsService {
       );
 
       // Who cares about a BOM: the requesters whose source just landed on a payable document,
-// and Admin who take it to Accounts. The over-budget bounce path used to also notify the
-// pending approvers — that path no longer exists (see the docstring at the top of the
-// class).
+      // and Admin who take it to Accounts. The over-budget bounce path used to also notify the
+      // pending approvers — that path no longer exists (see the docstring at the top of the
+      // class).
       const requesterIds = await tx
         .selectFrom('requisitions')
         .where(
@@ -716,11 +714,13 @@ export class BomsService {
     if (existingPath && existingPath.pdfPath !== null) {
       // Best-effort: a failed unlink does not undo the void. The row no longer references
       // the file; an orphan on disk is a cleanup job, not a correctness problem.
-      await unlink(this.pdfRenderer.absolutePathFor(existingPath.pdfPath)).catch((error: unknown) => {
-        this.logger.warn(
-          `Failed to unlink PDF for voided BOM ${id} at ${existingPath.pdfPath}: ${String(error)}`,
-        );
-      });
+      await unlink(this.pdfRenderer.absolutePathFor(existingPath.pdfPath)).catch(
+        (error: unknown) => {
+          this.logger.warn(
+            `Failed to unlink PDF for voided BOM ${id} at ${existingPath.pdfPath}: ${String(error)}`,
+          );
+        },
+      );
     }
 
     const detail = await this.repo.findDetail(id);

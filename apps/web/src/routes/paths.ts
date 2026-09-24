@@ -7,6 +7,8 @@ export const ROUTES = {
     products: '/inventory',
     categories: '/inventory/categories',
     locations: '/inventory/locations',
+    /** Bulk import and its history (importing_data.md). IM and Admin only. */
+    imports: '/inventory/imports',
     /** The pattern the router matches; `product()` builds the link. */
     productPattern: '/inventory/:productId',
     product: (productId: string) => `/inventory/${productId}`,

@@ -194,10 +194,7 @@ export class StockController {
    * row disappeared (DISPOSE of the last unit, or an adjust to zero) the result is `[]` — the
    * caller treats absence as "this compartment no longer holds stock".
    */
-  private async placementOf(
-    productId: string,
-    compartmentId: string,
-  ): Promise<Placement[]> {
+  private async placementOf(productId: string, compartmentId: string): Promise<Placement[]> {
     const rows = await this.stock.placementsForProduct(productId);
     return rows.filter((r) => r.compartment_id === compartmentId).map(toPlacement);
   }

@@ -39,10 +39,7 @@ export const SYSTEM_AUDIT_CONTEXT: AuditContext = {
  * Build an `AuditContext` from a logged-in request. Use this for every mutation handler that
  * already has `req.user` populated by the global JWT guard.
  */
-export function auditContextFromRequest(
-  req: Request,
-  user: RequestUser | null,
-): AuditContext {
+export function auditContextFromRequest(req: Request, user: RequestUser | null): AuditContext {
   return {
     actorId: user?.id ?? null,
     // Not on RequestUser — the JWT carries sub/email/roles and no name. Left null on

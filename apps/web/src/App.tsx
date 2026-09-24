@@ -17,6 +17,7 @@ import { InventoryPage } from '@/features/inventory/pages/InventoryPage';
 import { ProductDetailPage } from '@/features/inventory/pages/ProductDetailPage';
 import { CategoriesPage } from '@/features/inventory/pages/CategoriesPage';
 import { LocationsPage } from '@/features/inventory/pages/LocationsPage';
+import { ImportPage } from '@/features/imports/pages/ImportPage';
 import { BorrowingPage } from '@/features/borrowing/pages/BorrowingPage';
 import { RequisitionsPage } from '@/features/requisitions/pages/RequisitionsPage';
 import { ExpensesPage } from '@/features/reports/pages/ExpensesPage';
@@ -144,6 +145,7 @@ export function App() {
                       >
                         <Route path={ROUTES.inventory.categories} element={<CategoriesPage />} />
                         <Route path={ROUTES.inventory.locations} element={<LocationsPage />} />
+                        <Route path={ROUTES.inventory.imports} element={<ImportPage />} />
                         <Route path={ROUTES.borrowing.all} element={<BorrowingPage />} />
                         <Route
                           path={ROUTES.requisitions.all}

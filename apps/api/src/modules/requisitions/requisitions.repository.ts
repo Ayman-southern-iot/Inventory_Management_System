@@ -127,10 +127,7 @@ export class RequisitionsRepository {
    * forbids approving your own requisition, and the Inventory Manager stage is an approval
    * stage like any other.
    */
-  async findAnyActiveUserWithRole(
-    role: Role,
-    excludeUserId?: string,
-  ): Promise<string | undefined> {
+  async findAnyActiveUserWithRole(role: Role, excludeUserId?: string): Promise<string | undefined> {
     const row = await this.db
       .selectFrom('users')
       .innerJoin('user_roles', 'user_roles.user_id', 'users.id')
@@ -446,10 +443,12 @@ export class RequisitionsRepository {
           .selectFrom('requisition_items')
           .whereRef('requisition_items.requisition_id', '=', 'requisitions.id')
           .select((inner) =>
-            inner.fn.coalesce(
-              inner.fn.sum<string>('requisition_items.estimated_line_total'),
-              sql<string>`0`,
-            ).as('total'),
+            inner.fn
+              .coalesce(
+                inner.fn.sum<string>('requisition_items.estimated_line_total'),
+                sql<string>`0`,
+              )
+              .as('total'),
           )
           .as('items_subtotal'),
       ]);
@@ -499,7 +498,8 @@ export class RequisitionsRepository {
     });
     const requiresRevisionTag =
       base.status === RequisitionStatus.DRAFT && latestSendBackIndex > latestSubmittedIndex;
-    const revisedAfterSendBack = latestSendBackIndex >= 0 && latestSubmittedIndex > latestSendBackIndex;
+    const revisedAfterSendBack =
+      latestSendBackIndex >= 0 && latestSubmittedIndex > latestSendBackIndex;
 
     return {
       ...base,
@@ -611,9 +611,7 @@ export class RequisitionsRepository {
         .$if(context.restrictToRequester || query.mine, (b) =>
           b.where('requisitions.requester_id', '=', context.actorId),
         )
-        .$if(query.status !== undefined, (b) =>
-          b.where('requisitions.status', '=', query.status!),
-        )
+        .$if(query.status !== undefined, (b) => b.where('requisitions.status', '=', query.status!))
         // Project Hub (task 4): requisitions charged to one project. Applied here, inside the
         // shared closure, so the row query and the count query never disagree on the total.
         .$if(query.projectId !== undefined, (b) =>
@@ -680,9 +678,17 @@ export class RequisitionsRepository {
         .$if(query.search !== undefined && query.search.length > 0, (b) =>
           b.where((eb) =>
             eb.or([
-              eb(sql`lower(requisitions.requisition_no)`, 'like', `%${query.search!.toLowerCase()}%`),
+              eb(
+                sql`lower(requisitions.requisition_no)`,
+                'like',
+                `%${query.search!.toLowerCase()}%`,
+              ),
               eb(sql`lower(requester.full_name)`, 'like', `%${query.search!.toLowerCase()}%`),
-              eb(sql`lower(coalesce(requisitions.reason, ''))`, 'like', `%${query.search!.toLowerCase()}%`),
+              eb(
+                sql`lower(coalesce(requisitions.reason, ''))`,
+                'like',
+                `%${query.search!.toLowerCase()}%`,
+              ),
             ]),
           ),
         );

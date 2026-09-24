@@ -14,11 +14,7 @@ import {
 } from '@ims/shared';
 import type { z } from 'zod';
 import { CONFIG, type AppConfig } from '../../config';
-import {
-  API_KEY_QUERY_KEY,
-  API_KEY_SCOPES_KEY,
-  API_KEY_SUMMARY_KEY,
-} from './api-key.decorators';
+import { API_KEY_QUERY_KEY, API_KEY_SCOPES_KEY, API_KEY_SUMMARY_KEY } from './api-key.decorators';
 
 /**
  * Builds the "how to use this key" document from the **live route table**.
@@ -93,7 +89,9 @@ export class ApiKeyDocsService {
       }
     }
 
-    return endpoints.sort((a, b) => a.path.localeCompare(b.path) || a.method.localeCompare(b.method));
+    return endpoints.sort(
+      (a, b) => a.path.localeCompare(b.path) || a.method.localeCompare(b.method),
+    );
   }
 }
 
@@ -124,7 +122,7 @@ function unwrap(field: z.ZodTypeAny): z.ZodTypeAny {
     typeName === 'ZodDefault' ||
     typeName === 'ZodEffects'
   ) {
-    const inner = (field._def as { innerType?: z.ZodTypeAny; schema?: z.ZodTypeAny });
+    const inner = field._def as { innerType?: z.ZodTypeAny; schema?: z.ZodTypeAny };
     const next = inner.innerType ?? inner.schema;
     return next ? unwrap(next) : field;
   }

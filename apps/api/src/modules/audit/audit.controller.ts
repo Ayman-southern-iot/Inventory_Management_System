@@ -1,4 +1,13 @@
-import { Controller, Get, HttpCode, HttpStatus, NotFoundException, Param, ParseUUIDPipe, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  NotFoundException,
+  Param,
+  ParseUUIDPipe,
+  Query,
+} from '@nestjs/common';
 import { Role, type AuditEntry, type ListAuditQuery, type Paginated } from '@ims/shared';
 import { zodPipe } from '../../common/zod-validation.pipe';
 import { AuthenticatedThrottle } from '../../common/throttling';
@@ -27,12 +36,13 @@ export class AuditController {
   /** Detail drawer payload. The list endpoint already shows the summary; this returns the full sanitised metadata. */
   @Get(':id')
   @HttpCode(HttpStatus.OK)
-  async findOne(
-    @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<AuditEntry> {
+  async findOne(@Param('id', ParseUUIDPipe) id: string): Promise<AuditEntry> {
     const entry = await this.audit.findById(id);
     if (!entry) {
-      throw new NotFoundException({ code: 'AUDIT_ENTRY_NOT_FOUND', message: 'Audit entry not found' });
+      throw new NotFoundException({
+        code: 'AUDIT_ENTRY_NOT_FOUND',
+        message: 'Audit entry not found',
+      });
     }
     return entry;
   }

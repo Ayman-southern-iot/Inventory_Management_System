@@ -191,11 +191,7 @@ export class FundsRepository {
     // blocker here (rules/40-database.md).
     const lineRows = await executor
       .selectFrom('purchase_lines')
-      .innerJoin(
-        'requisition_items',
-        'requisition_items.id',
-        'purchase_lines.requisition_item_id',
-      )
+      .innerJoin('requisition_items', 'requisition_items.id', 'purchase_lines.requisition_item_id')
       .where(
         'purchase_lines.purchase_id',
         'in',
@@ -514,10 +510,7 @@ export class FundsRepository {
    * Units of this purchase already booked onto a shelf. Non-zero means the purchase can no longer
    * be voided: stock exists that it is the justification for.
    */
-  async sumReceivedForPurchase(
-    purchaseId: string,
-    executor: Db | Tx = this.db,
-  ): Promise<number> {
+  async sumReceivedForPurchase(purchaseId: string, executor: Db | Tx = this.db): Promise<number> {
     const row = await executor
       .selectFrom('purchase_lines')
       .where('purchase_id', '=', purchaseId)
@@ -673,7 +666,8 @@ export class FundsRepository {
       .values({
         requisition_id: values.requisitionId,
         status: values.status,
-        requested_amount: values.requestedAmount === null ? null : values.requestedAmount.toFixed(2),
+        requested_amount:
+          values.requestedAmount === null ? null : values.requestedAmount.toFixed(2),
         approved_amount: values.approvedAmount === null ? null : values.approvedAmount.toFixed(2),
         transportation: values.transportation.toFixed(2),
         funded: values.funded.toFixed(2),
@@ -726,11 +720,16 @@ export class FundsRepository {
       this.sumReturns(requisitionId, tx),
       this.sumPurchaseTransportation(requisitionId, tx),
     ]);
-    const approved = requisition.approved_amount === null ? null : Number(requisition.approved_amount);
-    const requested = requisition.requested_amount === null ? null : Number(requisition.requested_amount);
+    const approved =
+      requisition.approved_amount === null ? null : Number(requisition.approved_amount);
+    const requested =
+      requisition.requested_amount === null ? null : Number(requisition.requested_amount);
     // Summed from the purchases themselves, so a voided last purchase leaves no carriage
     // behind it (OQ-32) without a separate gate saying so.
-    const unspent = Math.max(0, Math.round((funded - spent - transportation - returned) * 100) / 100);
+    const unspent = Math.max(
+      0,
+      Math.round((funded - spent - transportation - returned) * 100) / 100,
+    );
     return {
       requestedAmount: requested,
       approvedAmount: approved,
@@ -772,7 +771,7 @@ export class FundsRepository {
   > {
     const rows = await executor
       .selectFrom('funding_snapshots')
- .where('requisition_id', '=', requisitionId)
+      .where('requisition_id', '=', requisitionId)
       .distinctOn('status')
       .select([
         'status',

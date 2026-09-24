@@ -259,7 +259,10 @@ export class BorrowingRepository {
   }
 
   /** Read the single return row by id. Used by reverseReturn. */
-  async findReturnById(returnId: string, tx?: Tx): Promise<
+  async findReturnById(
+    returnId: string,
+    tx?: Tx,
+  ): Promise<
     | {
         id: string;
         borrow_request_id: string;
@@ -274,14 +277,7 @@ export class BorrowingRepository {
     return writer
       .selectFrom('borrow_returns')
       .where('id', '=', returnId)
-      .select([
-        'id',
-        'borrow_request_id',
-        'quantity',
-        'compartment_id',
-        'received_by',
-        'condition',
-      ])
+      .select(['id', 'borrow_request_id', 'quantity', 'compartment_id', 'received_by', 'condition'])
       .executeTakeFirst();
   }
 
@@ -289,9 +285,7 @@ export class BorrowingRepository {
    * The returns recorded against a borrow, oldest first. The detail page renders this list and
    * exposes a Reverse button per row — see `BorrowingService.reverseReturn` for the write path.
    */
-  async listReturnsByBorrow(
-    borrowRequestId: string,
-  ): Promise<
+  async listReturnsByBorrow(borrowRequestId: string): Promise<
     Array<{
       id: string;
       quantity: number;
@@ -346,10 +340,7 @@ export class BorrowingRepository {
     const newReturnedQty = expectedReturnedQty - quantity;
     // Two concurrent reversals are guarded by the WHERE on `returned_qty`; the new status is
     // derived from the would-be quantity, not from a re-read of the row.
-    const newStatus =
-      newReturnedQty === 0
-        ? BorrowStatus.ISSUED
-        : BorrowStatus.PARTIALLY_RETURNED;
+    const newStatus = newReturnedQty === 0 ? BorrowStatus.ISSUED : BorrowStatus.PARTIALLY_RETURNED;
     await writer
       .updateTable('borrow_requests')
       .set({
@@ -429,60 +420,60 @@ export class BorrowingRepository {
       throw new ConflictError('Placement has disappeared; cannot un-quarantine this return');
     }
     if (result.quarantined_qty < 0) {
-      throw new ConflictError(
-        'Cannot release more quarantined units than are held in quarantine',
-      );
+      throw new ConflictError('Cannot release more quarantined units than are held in quarantine');
     }
   }
 
   /** Everything a row needs, joined once. The log is the screen the IM lives on. */
   private viewSelect(writer: Writer = this.db) {
-    return writer
-      .selectFrom('borrow_requests')
-      .innerJoin('users as requester', 'requester.id', 'borrow_requests.requester_id')
-      // Both people, always. The requester is who asked and the holder is who has it; a screen
-      // that renders only one of them is guessing which question its reader is asking.
-      .innerJoin('users as holder', 'holder.id', 'borrow_requests.current_holder_id')
-      .innerJoin('products', 'products.id', 'borrow_requests.product_id')
-      .innerJoin(
-        'storage_compartments',
-        'storage_compartments.id',
-        'borrow_requests.compartment_id',
-      )
-      .innerJoin('storage_zones', 'storage_zones.id', 'storage_compartments.zone_id')
-      .innerJoin('storage_rooms', 'storage_rooms.id', 'storage_zones.room_id')
-      .leftJoin('projects', 'projects.id', 'borrow_requests.project_id')
-      .leftJoin('users as decider', 'decider.id', 'borrow_requests.decided_by')
-      .select([
-        'borrow_requests.id',
-        'borrow_requests.borrow_no',
-        'borrow_requests.requester_id',
-        'requester.full_name as requester_name',
-        'borrow_requests.current_holder_id',
-        'holder.full_name as current_holder_name',
-        'borrow_requests.product_id',
-        'products.name as product_name',
-        'products.product_code',
-        'products.unit',
-        'borrow_requests.compartment_id',
-        'storage_compartments.code as compartment_code',
-        'storage_zones.name as zone_name',
-        'storage_rooms.name as room_name',
-        'borrow_requests.quantity',
-        'borrow_requests.returned_qty',
-        'borrow_requests.project_id',
-        'projects.name as project_name',
-        'borrow_requests.is_returnable',
-        'borrow_requests.expected_return_date',
-        'borrow_requests.purpose',
-        'borrow_requests.status',
-        'decider.full_name as decided_by_name',
-        'borrow_requests.decision_note',
-        'borrow_requests.decided_at',
-        'borrow_requests.issued_at',
-        'borrow_requests.returned_at',
-        'borrow_requests.created_at',
-      ]);
+    return (
+      writer
+        .selectFrom('borrow_requests')
+        .innerJoin('users as requester', 'requester.id', 'borrow_requests.requester_id')
+        // Both people, always. The requester is who asked and the holder is who has it; a screen
+        // that renders only one of them is guessing which question its reader is asking.
+        .innerJoin('users as holder', 'holder.id', 'borrow_requests.current_holder_id')
+        .innerJoin('products', 'products.id', 'borrow_requests.product_id')
+        .innerJoin(
+          'storage_compartments',
+          'storage_compartments.id',
+          'borrow_requests.compartment_id',
+        )
+        .innerJoin('storage_zones', 'storage_zones.id', 'storage_compartments.zone_id')
+        .innerJoin('storage_rooms', 'storage_rooms.id', 'storage_zones.room_id')
+        .leftJoin('projects', 'projects.id', 'borrow_requests.project_id')
+        .leftJoin('users as decider', 'decider.id', 'borrow_requests.decided_by')
+        .select([
+          'borrow_requests.id',
+          'borrow_requests.borrow_no',
+          'borrow_requests.requester_id',
+          'requester.full_name as requester_name',
+          'borrow_requests.current_holder_id',
+          'holder.full_name as current_holder_name',
+          'borrow_requests.product_id',
+          'products.name as product_name',
+          'products.product_code',
+          'products.unit',
+          'borrow_requests.compartment_id',
+          'storage_compartments.code as compartment_code',
+          'storage_zones.name as zone_name',
+          'storage_rooms.name as room_name',
+          'borrow_requests.quantity',
+          'borrow_requests.returned_qty',
+          'borrow_requests.project_id',
+          'projects.name as project_name',
+          'borrow_requests.is_returnable',
+          'borrow_requests.expected_return_date',
+          'borrow_requests.purpose',
+          'borrow_requests.status',
+          'decider.full_name as decided_by_name',
+          'borrow_requests.decision_note',
+          'borrow_requests.decided_at',
+          'borrow_requests.issued_at',
+          'borrow_requests.returned_at',
+          'borrow_requests.created_at',
+        ])
+    );
   }
 
   async findViewById(id: string, tx?: Tx): Promise<BorrowRequest | undefined> {

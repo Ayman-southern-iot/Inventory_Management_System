@@ -57,7 +57,10 @@ export class LocationsRepository {
     return this.listZonesIn(undefined, includeInactive);
   }
 
-  private async listZonesIn(roomIds: string[] | undefined, includeInactive: boolean): Promise<Zone[]> {
+  private async listZonesIn(
+    roomIds: string[] | undefined,
+    includeInactive: boolean,
+  ): Promise<Zone[]> {
     if (roomIds !== undefined && roomIds.length === 0) return [];
 
     const zones = await this.db
@@ -166,7 +169,9 @@ export class LocationsRepository {
     return Number(result.numUpdatedRows ?? 0n);
   }
 
-  async findRoom(id: string): Promise<{ id: string; name: string; is_active: boolean } | undefined> {
+  async findRoom(
+    id: string,
+  ): Promise<{ id: string; name: string; is_active: boolean } | undefined> {
     return this.db
       .selectFrom('storage_rooms')
       .select(['id', 'name', 'is_active'])

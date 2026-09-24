@@ -103,7 +103,12 @@ export class FundsService {
       const requisition = await this.lock(tx, requisitionId);
       this.assertStatus(requisition.status, 'sent to Accounts', [RequisitionStatus.BOM_GENERATED]);
 
-      await this.requisitions.setStatus(tx, requisitionId, RequisitionStatus.SENT_TO_ACCOUNTS, false);
+      await this.requisitions.setStatus(
+        tx,
+        requisitionId,
+        RequisitionStatus.SENT_TO_ACCOUNTS,
+        false,
+      );
       await this.requisitions.appendEvent(
         tx,
         requisitionId,
@@ -698,12 +703,7 @@ export class FundsService {
         throw new CannotUnverifyWithReturnsError(alreadyReturned);
       }
 
-      await this.requisitions.setStatus(
-        tx,
-        requisitionId,
-        RequisitionStatus.PURCHASED,
-        false,
-      );
+      await this.requisitions.setStatus(tx, requisitionId, RequisitionStatus.PURCHASED, false);
       await this.requisitions.appendEvent(
         tx,
         requisitionId,
@@ -723,7 +723,6 @@ export class FundsService {
         context,
         tx,
       );
-
     });
 
     // Read after the commit, never from inside it. `funding()` runs on its own connection, so
@@ -789,7 +788,6 @@ export class FundsService {
         context,
         tx,
       );
-
     });
 
     // Read after the commit, never from inside it. `funding()` runs on its own connection, so
@@ -872,7 +870,6 @@ export class FundsService {
         context,
         tx,
       );
-
     });
 
     // Read after the commit, never from inside it. `funding()` runs on its own connection, so
@@ -951,7 +948,6 @@ export class FundsService {
         context,
         tx,
       );
-
     });
 
     // Read after the commit, never from inside it. `funding()` runs on its own connection, so
@@ -1005,11 +1001,7 @@ export class FundsService {
 
         const outstanding = locked.quantity - locked.receivedQuantity;
         if (line.quantity > outstanding) {
-          throw new ReceiveExceedsPurchasedError(
-            locked.itemName,
-            outstanding,
-            line.quantity,
-          );
+          throw new ReceiveExceedsPurchasedError(locked.itemName, outstanding, line.quantity);
         }
 
         /**
@@ -1275,7 +1267,8 @@ export class FundsService {
         this.repo.sumPurchaseTransportation(requisitionId),
       ]);
 
-    const approved = requisition.approved_amount === null ? null : Number(requisition.approved_amount);
+    const approved =
+      requisition.approved_amount === null ? null : Number(requisition.approved_amount);
     const requested =
       requisition.requested_amount === null ? null : Number(requisition.requested_amount);
     // The carriage actually paid, summed over live purchases (migration 0029). No purchases,

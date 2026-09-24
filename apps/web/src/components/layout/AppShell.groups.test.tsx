@@ -105,6 +105,7 @@ describe('AppShell groups', () => {
       t.nav.inventoryProducts,
       t.nav.inventoryCategories,
       t.nav.inventoryLocations,
+      t.nav.inventoryImports,
       t.nav.boms,
       t.nav.borrowing,
       t.nav.allRequisitions,

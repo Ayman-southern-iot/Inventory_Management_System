@@ -1,6 +1,7 @@
 # Plan — CSV product import
 
-**Opened:** 2026-09-22 · **Source:** Ayman, 2026-09-22 · **Status:** plan only, nothing built.
+**Opened:** 2026-09-22 · **Source:** Ayman, 2026-09-22 · **Status:** built, parts A–G and I–L.
+H is optional and deliberately unbuilt. Two config values ship unmeasured — see §15.
 
 An Import button on the inventory screen takes a CSV. The file is the desired state of the
 catalogue: products, their categories, which shelf they sit on and how many are on each shelf.
@@ -8,9 +9,10 @@ Its columns are identical to an export, so the working loop is **export → hand
 amend → import**. Every import first snapshots what it is about to replace, so any of them can be
 rolled back. A companion Claude skill turns loose product data into that exact shape.
 
-Nothing here is written yet. **§13 and §16 are two review passes that between them changed eleven
-things.** Their conclusions are folded into the sections they affect — read §5, §8 and §4.1 as
-written, not as originally drafted.
+**§13 and §16 are two review passes that between them changed eleven things**, and the build
+changed more: §4.1 gained the blast-radius carve-out, §5.5 step 4 was corrected against what
+`StockService` already knew, §11.6 resolved OQ-IMP-1, and the confirm-time re-validation turned
+§5.5 step 5 into a backstop. Read every section as written, not as originally drafted.
 
 ---
 
@@ -925,8 +927,18 @@ number is fixed.
 | K | Restore (§10) | Thin: an import of an existing file, exempt from the caps |
 | L | The Claude skill | Independent of A–K; writable any time after B |
 
-**Landed:** A `4672b7e` · B `1687b78` · C `7f3ed96` · D (validator, bulk-loaded lookups, the plan
-the preview and apply are both built from). Next: E.
+**Landed: A–G and I–L.** Schema and vocabulary, the round-trip export, the parser, validation,
+the issue-code enum and its severity ratchet, the near-duplicate pass, the diff, the job
+lifecycle, the upload endpoint and its CSV branch in file storage, apply, the lockout and its
+crash guard, progress on two clocks, the full-screen block, the ring, the import page, snapshot
+history, restore, and the Claude skill.
+
+**Not built: H** — the batch-aware `StockService` entry point. Optional by design, and now
+measurable: apply exists, so the benchmark can say whether it is worth having before anybody
+writes it.
+
+**Still untrusted, and tracked in "Done means" below:** `IMPORT_FUZZY_MATCH_THRESHOLD` (0.45) and
+`IMPORT_MAX_CHANGED_SHELVES` (5,000). Both ship working in shape and unmeasured in value.
 
 ### Done means
 

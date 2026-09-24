@@ -51,10 +51,7 @@ export class DashboardRepository {
       .where('requester_id', '=', userId)
       .select((eb) => [
         // "Raised" excludes drafts: a draft has not been put to anybody.
-        eb.fn
-          .count<string>('id')
-          .filterWhere('status', '!=', RequisitionStatus.DRAFT)
-          .as('raised'),
+        eb.fn.count<string>('id').filterWhere('status', '!=', RequisitionStatus.DRAFT).as('raised'),
         eb.fn.count<string>('id').filterWhere('status', 'in', standing).as('approved'),
         eb.fn
           .count<string>('id')
@@ -95,11 +92,7 @@ export class DashboardRepository {
    * the overdue sweep — a loan reassigned away from someone must stop counting against them.
    */
   async borrowingFor(userId: string): Promise<BorrowingRecord> {
-    const issued = [
-      BorrowStatus.ISSUED,
-      BorrowStatus.PARTIALLY_RETURNED,
-      BorrowStatus.RETURNED,
-    ];
+    const issued = [BorrowStatus.ISSUED, BorrowStatus.PARTIALLY_RETURNED, BorrowStatus.RETURNED];
 
     const requests = await this.db
       .selectFrom('borrow_requests')
@@ -107,10 +100,7 @@ export class DashboardRepository {
       .select((eb) => [
         // A pending or rejected request never put anything in anyone's hands.
         eb.fn.count<string>('id').filterWhere('status', 'in', issued).as('borrowed'),
-        eb.fn
-          .count<string>('id')
-          .filterWhere('status', '=', BorrowStatus.RETURNED)
-          .as('returned'),
+        eb.fn.count<string>('id').filterWhere('status', '=', BorrowStatus.RETURNED).as('returned'),
         eb.fn
           .count<string>('id')
           .filterWhere('status', 'in', [...OUTSTANDING_STATUSES])
@@ -199,9 +189,7 @@ export class DashboardRepository {
         .innerJoin('requisitions', 'requisitions.id', 'purchases.requisition_id')
         .where('requisitions.requester_id', '=', userId)
         .where('purchases.voided_at', 'is', null)
-        .select((eb) =>
-          eb.fn.sum<string>('purchases.transportation_cost').as('transportation'),
-        )
+        .select((eb) => eb.fn.sum<string>('purchases.transportation_cost').as('transportation'))
         .executeTakeFirst(),
     ]);
 

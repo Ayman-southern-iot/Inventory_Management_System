@@ -148,11 +148,7 @@ export class LocationsService {
     }
   }
 
-  async updateZone(
-    id: string,
-    input: UpdateZoneInput,
-    context: AuditContext,
-  ): Promise<Zone> {
+  async updateZone(id: string, input: UpdateZoneInput, context: AuditContext): Promise<Zone> {
     const existing = await this.repo.findZone(id);
     if (!existing) throw new NotFoundError('Zone');
 
@@ -269,11 +265,7 @@ export class LocationsService {
 
     try {
       await this.db.transaction().execute(async (tx) => {
-        await this.repo.updateCompartment(
-          id,
-          { code: input.code, isActive: input.isActive },
-          tx,
-        );
+        await this.repo.updateCompartment(id, { code: input.code, isActive: input.isActive }, tx);
         const changes = diffSafeFields(
           { code: existing.code, isActive: existing.is_active },
           {

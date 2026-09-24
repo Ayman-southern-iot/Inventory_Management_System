@@ -124,19 +124,32 @@ export class DelegationsService {
         .returning('id')
         .executeTakeFirstOrThrow();
 
-      await this.audit.record({
-        action: 'delegation.create',
-        entityType: 'delegation',
-        entityId: inserted.id,
-        entityRef: `${approverUserId} → ${input.delegateUserId}`,
-        summary: `Created delegation from ${approverUserId} to ${input.delegateUserId}`,
-        metadata: {
-          approverUserId,
-          delegateUserId: input.delegateUserId,
-          startsAt: input.startsAt,
-          endsAt: input.endsAt,
+      await this.audit.record(
+        {
+          action: 'delegation.create',
+          entityType: 'delegation',
+          entityId: inserted.id,
+          entityRef: `${approverUserId} → ${input.delegateUserId}`,
+          summary: `Created delegation from ${approverUserId} to ${input.delegateUserId}`,
+          metadata: {
+            approverUserId,
+            delegateUserId: input.delegateUserId,
+            startsAt: input.startsAt,
+            endsAt: input.endsAt,
+          },
         },
-      }, { actorId: approverUserId, actorName: null, actorEmail: null, actorRoles: [], requestMethod: null, requestPath: null, requestIp: null, userAgent: null }, tx);
+        {
+          actorId: approverUserId,
+          actorName: null,
+          actorEmail: null,
+          actorRoles: [],
+          requestMethod: null,
+          requestPath: null,
+          requestIp: null,
+          userAgent: null,
+        },
+        tx,
+      );
 
       // The delegate is about to start receiving other people's approvals. Being told is the
       // difference between a working delegation and a queue nobody knows they own.
@@ -181,14 +194,27 @@ export class DelegationsService {
 
       if (Number(result.numUpdatedRows ?? 0n) === 0) throw new NotFoundError('Delegation');
 
-      await this.audit.record({
-        action: 'delegation.revoke',
-        entityType: 'delegation',
-        entityId: id,
-        entityRef: id,
-        summary: `Revoked delegation ${id}`,
-        metadata: {},
-      }, { actorId: approverUserId, actorName: null, actorEmail: null, actorRoles: [], requestMethod: null, requestPath: null, requestIp: null, userAgent: null }, tx);
+      await this.audit.record(
+        {
+          action: 'delegation.revoke',
+          entityType: 'delegation',
+          entityId: id,
+          entityRef: id,
+          summary: `Revoked delegation ${id}`,
+          metadata: {},
+        },
+        {
+          actorId: approverUserId,
+          actorName: null,
+          actorEmail: null,
+          actorRoles: [],
+          requestMethod: null,
+          requestPath: null,
+          requestIp: null,
+          userAgent: null,
+        },
+        tx,
+      );
 
       // The delegate stops receiving approvals from this moment; silence would leave them
       // believing they still cover for someone.

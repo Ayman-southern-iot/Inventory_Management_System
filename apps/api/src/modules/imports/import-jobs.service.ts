@@ -1,8 +1,17 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 import { ImportJobStatus, LIVE_IMPORT_STATUSES, type ImportJob } from '@ims/shared';
 import { CONFIG, type AppConfig } from '../../config';
-import { ConflictError, ImportAlreadyRunningError, NotFoundError } from '../../common/errors';
+import {
+  ConflictError,
+  ImportAlreadyRunningError,
+  ImportSnapshotDeletedError,
+  NotFoundError,
+} from '../../common/errors';
 import { isUniqueViolation } from '../../common/pg-errors';
+import { AuditService } from '../audit/audit.service';
+import type { AuditContext } from '../audit/audit-context';
+import { stripBom } from './import-format';
 import { ImportValidationService } from './import-validation.service';
 import {
   ImportJobsRepository,
@@ -32,6 +41,28 @@ export const IMPORT_JOB_KIND = 'products';
  * and injecting it here would close the circle. The narrow type is the point: this path may
  * release the lock and may do nothing else to it.
  */
+/**
+ * Just the file operations a restore needs.
+ *
+ * Passed in rather than injected for the same reason `ImportLockRelease` is: this module is
+ * below `FilesModule` in the graph the other direction, and the narrow type says exactly what
+ * this path may do with files — read one, write one, nothing else.
+ */
+export interface ImportFileStore {
+  readContents(id: string): Promise<{ contents: Buffer }>;
+  upload(input: {
+    kind: 'PRODUCT_IMPORT';
+    contents: Buffer;
+    originalName: string;
+    uploadedBy: string;
+  }): Promise<{ id: string }>;
+}
+
+/** `ImportFileStore` plus the one destructive operation, kept separate for the same reason. */
+export interface ImportSnapshotStore {
+  remove(id: string): Promise<void>;
+}
+
 export interface ImportLockRelease {
   release(jobId: string, status: ImportJobStatus | null): Promise<void>;
 }
@@ -41,6 +72,7 @@ export class ImportJobsService {
   constructor(
     private readonly repo: ImportJobsRepository,
     private readonly validation: ImportValidationService,
+    private readonly audit: AuditService,
     @Inject(CONFIG) private readonly config: AppConfig,
   ) {}
 
@@ -57,6 +89,7 @@ export class ImportJobsService {
     contents: string;
     actorId: string;
     isRestore?: boolean;
+    restoredFromJobId?: string | null;
   }): Promise<ImportJob> {
     // Before competing for the one-live slot, release it if the holder has gone stale. A job
     // nobody ever confirmed would otherwise block every future import for ever.
@@ -70,6 +103,7 @@ export class ImportJobsService {
         fileId: input.fileId,
         fileSha256: input.fileSha256,
         createdBy: input.actorId,
+        restoredFromJobId: input.restoredFromJobId ?? null,
       });
     } catch (error) {
       /*
@@ -130,6 +164,105 @@ export class ImportJobsService {
       finishedAt: new Date(),
     });
     return this.require(id);
+  }
+
+  /**
+   * Put the catalogue back to the state a snapshot holds (§10, part K).
+   *
+   * **It is an import, not a special path.** The snapshot is a round-trip export file, so
+   * restoring runs the same validation, the same diff, the same confirm gate, the same lockout
+   * and the same apply as any other file. There is no second format and no second code path that
+   * could drift from the first — which is the whole reason the snapshot was written in that
+   * format rather than as a dump.
+   *
+   * The bytes are copied into a new `PRODUCT_IMPORT` file rather than the job pointing at the
+   * snapshot itself. `import_jobs.file_id` is `ON DELETE RESTRICT`, so sharing the row would
+   * make the snapshot undeletable for as long as the restore existed — and deleting a backup to
+   * reclaim the bytes is a thing §10 explicitly allows.
+   */
+  async restore(sourceJobId: string, actorId: string, files: ImportFileStore): Promise<ImportJob> {
+    const source = await this.repo.findById(sourceJobId);
+    if (!source) throw new NotFoundError('Import');
+    if (!source.snapshot_file_id || source.snapshot_deleted_at !== null) {
+      throw new ImportSnapshotDeletedError();
+    }
+
+    const { contents } = await files.readContents(source.snapshot_file_id);
+    const copy = await files.upload({
+      kind: 'PRODUCT_IMPORT',
+      contents,
+      originalName: `restore-of-${sourceJobId}.csv`,
+      uploadedBy: actorId,
+    });
+
+    return this.start({
+      fileId: copy.id,
+      fileSha256: createHash('sha256').update(contents).digest('hex'),
+      contents: stripBom(contents.toString('utf8')),
+      actorId,
+      // §10: a snapshot is this system's own file, so the caps written for arbitrary user input
+      // do not apply. The schema check still does; the origin check does not.
+      isRestore: true,
+      restoredFromJobId: sourceJobId,
+    });
+  }
+
+  /** The snapshot's bytes, for an IM who wants to read it rather than apply it. */
+  async readSnapshot(
+    jobId: string,
+    files: ImportFileStore,
+  ): Promise<{ contents: Buffer; fileName: string }> {
+    const row = await this.repo.findById(jobId);
+    if (!row) throw new NotFoundError('Import');
+    if (!row.snapshot_file_id || row.snapshot_deleted_at !== null) {
+      throw new ImportSnapshotDeletedError();
+    }
+
+    const { contents } = await files.readContents(row.snapshot_file_id);
+    const stamp = row.created_at.toISOString().slice(0, 10);
+    return { contents, fileName: `ims-snapshot-${stamp}.csv` };
+  }
+
+  /**
+   * Delete a backup to reclaim the bytes (§10).
+   *
+   * **A hard delete of the file, a soft one of the fact.** The point of deleting a backup is the
+   * disk space, so the file and its `stored_files` row go; but the job keeps its diff, its
+   * history and a `snapshot_deleted_at` stamp, because "this import happened and its backup was
+   * deliberately removed" is exactly what somebody will want to know later. Trying to restore it
+   * afterwards gets `IMPORT_SNAPSHOT_DELETED` rather than a confusing empty file.
+   */
+  async deleteSnapshot(
+    jobId: string,
+    files: ImportSnapshotStore,
+    auditContext: AuditContext,
+  ): Promise<ImportJob> {
+    const row = await this.repo.findById(jobId);
+    if (!row) throw new NotFoundError('Import');
+    if (!row.snapshot_file_id || row.snapshot_deleted_at !== null) {
+      throw new ImportSnapshotDeletedError();
+    }
+
+    /*
+     * The pointer is cleared before the file goes. `snapshot_file_id` is ON DELETE SET NULL, so
+     * the order is not strictly required — but doing it this way means a failure halfway leaves a
+     * job with no snapshot rather than a job pointing at a file that is gone.
+     */
+    await this.repo.update(jobId, { snapshotFileId: null, snapshotDeletedAt: new Date() });
+    await files.remove(row.snapshot_file_id);
+
+    await this.audit.record(
+      {
+        action: 'import.snapshot_delete',
+        entityType: 'import_job',
+        entityId: jobId,
+        summary: `Deleted the backup taken before import ${jobId}`,
+        metadata: { jobId, snapshotFileId: row.snapshot_file_id },
+      },
+      auditContext,
+    );
+
+    return this.require(jobId);
   }
 
   /**

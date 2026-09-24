@@ -57,7 +57,9 @@ export class PendingUploadSweepJob {
       // Best-effort: a missing file is fine (the row is gone; nothing left to read).
       await this.storage.remove(o.relative_path);
     }
-    this.logger.log(`Pending upload sweep: removed ${orphans.length} orphan SUPPORTING_DOCUMENT row(s) older than ${cutoff.toISOString()}`);
+    this.logger.log(
+      `Pending upload sweep: removed ${orphans.length} orphan SUPPORTING_DOCUMENT row(s) older than ${cutoff.toISOString()}`,
+    );
     return orphans.length;
   }
 }

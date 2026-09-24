@@ -43,12 +43,9 @@ export class BomRequisitionAlreadyOnLiveBomError extends DomainError {
 /** Voiding twice is a no-op that should never happen; if it does, it is wrong. */
 export class BomAlreadyVoidError extends DomainError {
   constructor(bomNo: string) {
-    super(
-      ErrorCode.BOM_ALREADY_VOID,
-      `BOM ${bomNo} is already void`,
-      HttpStatus.CONFLICT,
-      { bomNo },
-    );
+    super(ErrorCode.BOM_ALREADY_VOID, `BOM ${bomNo} is already void`, HttpStatus.CONFLICT, {
+      bomNo,
+    });
   }
 }
 

@@ -100,8 +100,7 @@ function renderHeaderBlock(detail: BomDetail, source: RequisitionFootprints): st
     '<section class="source-block">',
     '<table class="header-block">',
     ...facts.map(
-      ([label, value]) =>
-        `  <tr><th>${escape(label)}</th><td>${escape(value)}</td></tr>`,
+      ([label, value]) => `  <tr><th>${escape(label)}</th><td>${escape(value)}</td></tr>`,
     ),
     '</table>',
 

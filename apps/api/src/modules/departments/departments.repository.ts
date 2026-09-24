@@ -76,11 +76,7 @@ export class DepartmentsRepository {
     return row.id;
   }
 
-  async update(
-    id: string,
-    values: { name?: string; isActive?: boolean },
-    tx: Tx,
-  ): Promise<number> {
+  async update(id: string, values: { name?: string; isActive?: boolean }, tx: Tx): Promise<number> {
     const patch = {
       ...(values.name === undefined ? {} : { name: values.name }),
       ...(values.isActive === undefined ? {} : { is_active: values.isActive }),

@@ -5,10 +5,7 @@ import type { Db } from '../../database/create-db';
 import { Role } from '@ims/shared';
 import { Public, Roles } from '../auth/auth.decorators';
 import { AuthenticatedThrottle, publicThrottle } from '../../common/throttling';
-import {
-  SystemHealthService,
-  type SystemHealth,
-} from '../maintenance/system-health.service';
+import { SystemHealthService, type SystemHealth } from '../maintenance/system-health.service';
 import { AllowDuringImport } from '../imports/import-lock.guard';
 
 /**

@@ -133,7 +133,10 @@ export class UsersRepository {
    */
   async listSelectable(
     query: SelectableUsersQuery,
-  ): Promise<{ items: Array<{ id: string; full_name: string; designation: string }>; total: number }> {
+  ): Promise<{
+    items: Array<{ id: string; full_name: string; designation: string }>;
+    total: number;
+  }> {
     const offset = (query.page - 1) * query.limit;
 
     let base = this.db

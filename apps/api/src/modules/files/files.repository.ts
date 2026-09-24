@@ -25,10 +25,7 @@ export interface StoredFileInsert {
   pending_claim_by: string | null;
 }
 
-export function toStoredFile(
-  row: StoredFileRow,
-  uploadedByName: string | null = null,
-): StoredFile {
+export function toStoredFile(row: StoredFileRow, uploadedByName: string | null = null): StoredFile {
   return {
     id: row.id,
     kind: row.kind,
@@ -66,6 +63,11 @@ export class FilesRepository {
    * draft has already claimed belongs to a requisition and is no longer the uploader's to
    * account for.
    */
+  /** Deleting a stored file is rare and deliberate — see `FilesService.remove`. */
+  async deleteById(id: string): Promise<void> {
+    await this.db.deleteFrom('stored_files').where('id', '=', id).execute();
+  }
+
   async countPendingFor(userId: string, kind: StoredFileKind): Promise<number> {
     const row = await this.db
       .selectFrom('stored_files')
@@ -77,7 +79,9 @@ export class FilesRepository {
   }
 
   /** Joined form for display, where the uploader's name is wanted alongside the metadata. */
-  async findWithUploader(id: string): Promise<(StoredFileRow & { uploader_name: string | null }) | undefined> {
+  async findWithUploader(
+    id: string,
+  ): Promise<(StoredFileRow & { uploader_name: string | null }) | undefined> {
     return this.db
       .selectFrom('stored_files')
       .leftJoin('users', 'users.id', 'stored_files.uploaded_by')

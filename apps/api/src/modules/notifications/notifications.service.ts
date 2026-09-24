@@ -88,7 +88,10 @@ export class NotificationsService {
   }
 
   /** Null for system-generated events, which legitimately have no actor. */
-  private async resolveActorName(actorId: string | null | undefined, tx?: Tx): Promise<string | null> {
+  private async resolveActorName(
+    actorId: string | null | undefined,
+    tx?: Tx,
+  ): Promise<string | null> {
     if (!actorId) return null;
     const row = await (tx ?? this.db)
       .selectFrom('users')

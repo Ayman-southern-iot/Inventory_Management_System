@@ -32,27 +32,30 @@ const TOP_ITEMS_LIMIT = 5;
  * first six hours of every month it would still be reporting the previous one.
  */
 function calendarMonthIn(timeZone: string, now: Date): { year: number; month: number } {
-  const parts = new Intl.DateTimeFormat("en-CA", {
+  const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
   }).formatToParts(now);
   const get = (type: string) => Number(parts.find((part) => part.type === type)?.value ?? 0);
-  return { year: get("year"), month: get("month") };
+  return { year: get('year'), month: get('month') };
 }
 
 /** `2026-09`, the key the report buckets months by. */
 function monthKey(year: number, month: number): string {
-  return `${year}-${String(month).padStart(2, "0")}`;
+  return `${year}-${String(month).padStart(2, '0')}`;
 }
 
 /** `Sep 2026`. Built from a fixed day-1 date so no zone can shift it into a neighbouring month. */
 function monthLabel(year: number, month: number): string {
   // en-US, not en-GB: en-GB abbreviates September as "Sept", four characters where every other
   // month is three, which leaves the chart axis visibly ragged.
-  return new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric", timeZone: "UTC" })
-    .format(new Date(Date.UTC(year, month - 1, 1)));
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(Date.UTC(year, month - 1, 1)));
 }
 
 @Injectable()
@@ -251,9 +254,9 @@ export class ReportsService {
     const endOfLast = new Date(Date.UTC(last.year, last.month, 0)).getUTCDate();
 
     const report = await this.expenses({
-      groupBy: "month",
+      groupBy: 'month',
       from: `${monthKey(first.year, first.month)}-01`,
-      to: `${monthKey(last.year, last.month)}-${String(endOfLast).padStart(2, "0")}`,
+      to: `${monthKey(last.year, last.month)}-${String(endOfLast).padStart(2, '0')}`,
     });
 
     const bySlot = new Map(report.buckets.map((bucket) => [bucket.key, bucket]));

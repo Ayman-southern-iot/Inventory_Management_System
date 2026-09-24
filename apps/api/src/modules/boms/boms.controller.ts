@@ -71,8 +71,11 @@ export class BomsController {
     @CurrentAuditContext() ctx: AuditContext,
     @Headers(IDEMPOTENCY_HEADER) idempotencyKey?: string,
   ): Promise<BomDetail> {
-    return this.runOnce(idempotencyKey, actor.id, `bom:generate:${this.idempotencyScope(body)}`, () =>
-      this.boms.generate(body, actor.id, ctx),
+    return this.runOnce(
+      idempotencyKey,
+      actor.id,
+      `bom:generate:${this.idempotencyScope(body)}`,
+      () => this.boms.generate(body, actor.id, ctx),
     );
   }
 
@@ -82,9 +85,7 @@ export class BomsController {
   // user could read every BOM and pull its PDF.
   @Get()
   @Roles(Role.INVENTORY_MANAGER, Role.ADMIN)
-  async list(
-    @Query(zodPipe(listBomsQuerySchema)) query: ListBomsQuery,
-  ): Promise<Paginated<Bom>> {
+  async list(@Query(zodPipe(listBomsQuerySchema)) query: ListBomsQuery): Promise<Paginated<Bom>> {
     return this.boms.list(query);
   }
 
@@ -134,12 +135,9 @@ export class BomsController {
     @CurrentAuditContext() ctx: AuditContext,
     @Headers(IDEMPOTENCY_HEADER) idempotencyKey?: string,
   ): Promise<{ bom: BomDetail }> {
-    return this.runOnce(
-      idempotencyKey,
-      actor.id,
-      `bom:render:${id}`,
-      async () => ({ bom: await this.boms.ensurePdf(id, actor.id, ctx) }),
-    );
+    return this.runOnce(idempotencyKey, actor.id, `bom:render:${id}`, async () => ({
+      bom: await this.boms.ensurePdf(id, actor.id, ctx),
+    }));
   }
 
   /** Issue a short-lived signed download URL. The URL is the credential, so minting one is
@@ -193,7 +191,9 @@ export class BomsController {
   ): Promise<T> {
     const outcome = await this.idempotency.run({ key, userId, scope }, operation);
     if ('inFlight' in outcome) {
-      throw new ConflictError('That BOM generation is already being processed. Try again in a moment.');
+      throw new ConflictError(
+        'That BOM generation is already being processed. Try again in a moment.',
+      );
     }
     return outcome.result;
   }

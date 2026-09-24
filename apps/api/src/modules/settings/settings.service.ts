@@ -273,23 +273,27 @@ export class SettingsService implements OnModuleInit {
     // it and from what — this is the table that moves the expense threshold.
     await this.repo.connection.transaction().execute(async (tx) => {
       await this.repo.upsert(key, parsed.data, context.actorId ?? null, tx);
-      await this.audit.record({
-        action: 'settings.update',
-        entityType: 'settings',
-        entityId: key,
-        entityRef: key,
-        /**
-         * D-031. The before/after pair has always been in `metadata` (and the detail drawer
-         * renders it), but the summary said only "Updated setting EXPENSE_THRESHOLD_BDT" — and
-         * the summary is the line an auditor scans down. Reconstructing what a financial control
-         * was set to on a given date meant opening every row one at a time.
-         *
-         * The values go in the sentence. `metadata` keeps the structured pair, because the
-         * summary is prose and prose is not something to parse.
-         */
-        summary: `Changed setting ${key} from ${describeSettingValue(previousValue)} to ${describeSettingValue(parsed.data)}`,
-        metadata: { before: previousValue, after: parsed.data },
-      }, context, tx);
+      await this.audit.record(
+        {
+          action: 'settings.update',
+          entityType: 'settings',
+          entityId: key,
+          entityRef: key,
+          /**
+           * D-031. The before/after pair has always been in `metadata` (and the detail drawer
+           * renders it), but the summary said only "Updated setting EXPENSE_THRESHOLD_BDT" — and
+           * the summary is the line an auditor scans down. Reconstructing what a financial control
+           * was set to on a given date meant opening every row one at a time.
+           *
+           * The values go in the sentence. `metadata` keeps the structured pair, because the
+           * summary is prose and prose is not something to parse.
+           */
+          summary: `Changed setting ${key} from ${describeSettingValue(previousValue)} to ${describeSettingValue(parsed.data)}`,
+          metadata: { before: previousValue, after: parsed.data },
+        },
+        context,
+        tx,
+      );
     });
 
     // Invalidate after the commit, not before: dropping the cache entry while the transaction

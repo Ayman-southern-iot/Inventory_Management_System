@@ -182,11 +182,7 @@ export class RequisitionDocumentsService {
 
     const row = await this.db
       .selectFrom('requisitions')
-      .leftJoin(
-        'requisition_approvals',
-        'requisition_approvals.requisition_id',
-        'requisitions.id',
-      )
+      .leftJoin('requisition_approvals', 'requisition_approvals.requisition_id', 'requisitions.id')
       .select(['requisitions.requester_id'])
       .where('requisitions.id', '=', requisitionId)
       .where((eb) =>

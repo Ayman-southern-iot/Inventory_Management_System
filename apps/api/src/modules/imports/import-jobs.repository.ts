@@ -83,6 +83,8 @@ export class ImportJobsRepository {
     fileId: string;
     fileSha256: string;
     createdBy: string;
+    /** Set when this run is a rollback of an earlier one (§10). */
+    restoredFromJobId?: string | null;
   }): Promise<string> {
     const row = await this.db
       .insertInto('import_jobs')
@@ -92,6 +94,7 @@ export class ImportJobsRepository {
         file_id: values.fileId,
         file_sha256: values.fileSha256,
         created_by: values.createdBy,
+        restored_from_job_id: values.restoredFromJobId ?? null,
       })
       .returning('id')
       .executeTakeFirstOrThrow();
@@ -130,6 +133,7 @@ export class ImportJobsRepository {
       heartbeatAt?: Date | null;
       finishedAt?: Date | null;
       snapshotFileId?: string | null;
+      snapshotDeletedAt?: Date | null;
     },
   ): Promise<void> {
     const values = {
@@ -139,6 +143,9 @@ export class ImportJobsRepository {
       ...(patch.startedAt === undefined ? {} : { started_at: patch.startedAt }),
       ...(patch.heartbeatAt === undefined ? {} : { heartbeat_at: patch.heartbeatAt }),
       ...(patch.snapshotFileId === undefined ? {} : { snapshot_file_id: patch.snapshotFileId }),
+      ...(patch.snapshotDeletedAt === undefined
+        ? {}
+        : { snapshot_deleted_at: patch.snapshotDeletedAt }),
       ...(patch.report === undefined ? {} : { report: JSON.stringify(patch.report) }),
       ...(patch.finishedAt === undefined ? {} : { finished_at: patch.finishedAt }),
     };

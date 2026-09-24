@@ -3,35 +3,41 @@
 > Auto-injected every session by the `SessionStart` hook. **Keep under ~60 lines.** Deeper, on
 > demand: `ASSIST.md` · `SESSION-LOG.md` · `DECISIONS.md` · `OPEN-QUESTIONS.md` · `docs/RUNBOOK.md`.
 
-**Updated:** 2026-09-21
+**Updated:** 2026-09-24
 
 ## Where the build is
 
-**Phases 00–10 complete.** All nine of Ayman's Phase 09 asks are built and on the demo stack, and
-**Phase 10 (API keys) landed this session** — `plan/PHASE-10-api-keys.md`.
+**Phases 00–10 complete**, and the **CSV product import is built** — `importing_data.md`, parts
+A–G and I–L. Export → hand to Claude → edit → import, with a diff a human approves, a backup
+taken first, a system-wide lockout while it applies, and one-click restore.
 
-Phase 09 landed rooms above zones, shelf-slot Storage IDs, nested categories, borrow custody and
-three rounds of Ayman's design feedback. It also turned up a shipped defect — inline project
-creation on the Borrow form had never worked (`55d123a`, see the sentinel landmine).
+What that means concretely: `GET /inventory/export` writes the round-trip file; uploading one
+back validates it against four bulk-loaded maps and parks a diff; confirming applies it in one
+transaction through `StockService` with a snapshot taken first; everyone else gets 503 with an
+estimate while it runs; Inventory → Bulk import lists every past run and restores any of them.
+The Claude skill that shapes loose data into the file is `.claude/skills/ims-product-import`.
 
-**Phase 10 — API keys.** An external system can read products, categories and locations with a
-credential of its own. Admin panel issues, disables and revokes; sha256 at rest, shown once.
-Scope `inventory:read`, read-only, **default-deny by route**: a key reaches a route only if it
-carries `@ApiKeyScopes`, and `request.user` stays undefined so `@Roles` and the audit actor are
-closed by construction. Integration docs generate from the live route table.
+**Part H — a batch-aware `StockService` entry point — is deliberately unbuilt.** Optional by
+design, and now measurable rather than guessed.
 
 ## Next action
 
-No assigned task. Ask Ayman. Unrequested candidates: clickable category breadcrumb on the
-product page (spec §6), inventory search by shelf label (OQ-B), category move/merge.
+**Two measurements the import ships without**, both named in `importing_data.md` §15:
 
-## Green as of 2026-09-21 — measured serially, not remembered
+1. `IMPORT_FUZZY_MATCH_THRESHOLD` (0.45) has never met a real catalogue. Doable today.
+2. `IMPORT_MAX_CHANGED_SHELVES` (5,000) is arithmetic, not a timing. Benchmark 500 / 5,000 /
+   20,000 changed shelves through the real apply, then set it — it can probably go up, now that
+   the in-memory progress clock keeps the heartbeat alive during a long run.
 
-- `pnpm typecheck` clean · `pnpm test` → shared 25 · api 90 · web 404
+Then: nothing assigned. Ask Ayman.
+
+## Green as of 2026-09-24 — measured serially, not remembered
+
+- `pnpm typecheck` clean · `pnpm test` → shared 25 · api 240 · web 450
 - `pnpm lint` → **20 pre-existing errors. Not green.** Compare against 20, not zero.
-- `pnpm --filter @ims/api test:int` → **762 pass / 0 fail / 0 skipped (53 files)**
+- `pnpm --filter @ims/api test:int` → **914 pass / 0 fail (62 files)**
 - `guard-hardcoding.sh --scan-all` → **8**, against a documented baseline of 7.
-- Migrations 0001–**0037** applied.
+- Migrations 0001–**0038** applied.
 
 ## Needs the operator
 

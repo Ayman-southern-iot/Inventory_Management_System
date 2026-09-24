@@ -1,5 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { formatLocation, type LedgerEntry, type ListLedgerQuery, type Paginated } from '@ims/shared';
+import {
+  formatLocation,
+  type LedgerEntry,
+  type ListLedgerQuery,
+  type Paginated,
+} from '@ims/shared';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
 

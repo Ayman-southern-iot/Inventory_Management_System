@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Delete,
   Header,
   HttpCode,
   Param,
@@ -132,6 +133,53 @@ export class ImportsController {
   @Get('imports/:id')
   async getJob(@Param('id', ParseUUIDPipe) id: string): Promise<ImportJob> {
     return this.jobs.get(id);
+  }
+
+  /**
+   * Put the catalogue back to the state this job's snapshot holds (§10, part K).
+   *
+   * A new job, not a special path: it runs the whole pipeline, confirm step included, because
+   * the snapshot is a round-trip file. 200 rather than 202 — this only reaches
+   * `AWAITING_CONFIRMATION`; a human still has to approve what the restore would do, and the
+   * screen that asks them is the same diff.
+   */
+  @Post('imports/:id/restore')
+  @HttpCode(HttpStatus.OK)
+  async restoreJob(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() actor: RequestUser,
+  ): Promise<ImportJob> {
+    return this.jobs.restore(id, actor.id, this.files);
+  }
+
+  /**
+   * The snapshot itself, as the CSV it is.
+   *
+   * Worth having separately from restore: an IM who wants to see what changed can diff this
+   * against a fresh export in a spreadsheet, without putting the catalogue back to find out.
+   */
+  @Get('imports/:id/snapshot')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  async downloadSnapshot(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Res() response: Response,
+  ): Promise<void> {
+    const { contents, fileName } = await this.jobs.readSnapshot(id, this.files);
+    response.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    response.send(contents);
+  }
+
+  /**
+   * Reclaim the bytes (§10). The job, its diff and its history survive — only the restore point
+   * goes, and `snapshot_deleted_at` records that it once existed.
+   */
+  @Delete('imports/:id/snapshot')
+  @HttpCode(HttpStatus.OK)
+  async deleteSnapshot(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentAuditContext() auditContext: AuditContext,
+  ): Promise<ImportJob> {
+    return this.jobs.deleteSnapshot(id, this.files, auditContext);
   }
 
   /** Every run, newest first — the history screen (§10). */

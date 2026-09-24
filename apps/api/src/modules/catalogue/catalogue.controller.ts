@@ -33,9 +33,7 @@ export class CatalogueController {
     query: catalogueQuerySchema,
   })
   @Get()
-  async get(
-    @Query(zodPipe(catalogueQuerySchema)) query: CatalogueQuery,
-  ): Promise<Catalogue> {
+  async get(@Query(zodPipe(catalogueQuerySchema)) query: CatalogueQuery): Promise<Catalogue> {
     return this.catalogue.build(query);
   }
 }

@@ -20,6 +20,7 @@ import {
   Repeat,
   Settings2,
   Stamp,
+  Upload,
   UserRound,
   Users,
   X,
@@ -113,8 +114,14 @@ const NAV: NavGroup[] = [
     items: [
       // No roles: browsing stock is everyone's, and it is where a borrow starts.
       { label: t.nav.inventoryProducts, to: ROUTES.inventory.products, icon: Box },
-      { label: t.nav.inventoryCategories, to: ROUTES.inventory.categories, icon: LayoutGrid, roles: IM },
+      {
+        label: t.nav.inventoryCategories,
+        to: ROUTES.inventory.categories,
+        icon: LayoutGrid,
+        roles: IM,
+      },
       { label: t.nav.inventoryLocations, to: ROUTES.inventory.locations, icon: MapPin, roles: IM },
+      { label: t.nav.inventoryImports, to: ROUTES.inventory.imports, icon: Upload, roles: IM },
       { label: t.nav.boms, to: ROUTES.boms.all, icon: ListTree, roles: IM },
       {
         label: t.nav.borrowing,
@@ -168,7 +175,11 @@ export function AppShell() {
 
   const { pathname } = useLocation();
   const activePath = useMemo(
-    () => activePathFor(pathname, groups.flatMap((group) => group.items.map((item) => item.to))),
+    () =>
+      activePathFor(
+        pathname,
+        groups.flatMap((group) => group.items.map((item) => item.to)),
+      ),
     [pathname, groups],
   );
 
@@ -185,15 +196,15 @@ export function AppShell() {
             aria-expanded={mobileNavOpen}
             onClick={() => setMobileNavOpen((open) => !open)}
           >
-            {mobileNavOpen ? <X aria-hidden className="size-5" /> : <Menu aria-hidden className="size-5" />}
+            {mobileNavOpen ? (
+              <X aria-hidden className="size-5" />
+            ) : (
+              <Menu aria-hidden className="size-5" />
+            )}
           </button>
 
           <span className="flex items-center gap-2 font-semibold tracking-tight text-ink">
-            <img
-              src="/southern-iot-logo.png"
-              alt={t.app.name}
-              className="h-6 w-auto"
-            />
+            <img src="/southern-iot-logo.png" alt={t.app.name} className="h-6 w-auto" />
             {t.app.shortName}
           </span>
 
@@ -252,10 +263,7 @@ export function AppShell() {
       <div className="mx-auto flex max-w-7xl gap-6 px-4 py-6">
         <nav
           aria-label={t.app.shortName}
-          className={cn(
-            'w-56 shrink-0 flex-col gap-5',
-            mobileNavOpen ? 'flex' : 'hidden md:flex',
-          )}
+          className={cn('w-56 shrink-0 flex-col gap-5', mobileNavOpen ? 'flex' : 'hidden md:flex')}
         >
           {groups.map((group) => (
             <div key={group.label ?? 'root'} className="flex flex-col gap-1">

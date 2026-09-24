@@ -114,11 +114,7 @@ export class StockService {
       await this.assertProductIsTrackable(tx, input.productId);
       await this.assertCompartmentUsable(tx, input.compartmentId);
 
-      const placement = await this.lockOrCreatePlacement(
-        tx,
-        input.productId,
-        input.compartmentId,
-      );
+      const placement = await this.lockOrCreatePlacement(tx, input.productId, input.compartmentId);
       const updated = await this.applyDelta(tx, placement.id, input.quantity, 0);
 
       const ledgerId = await this.appendLedger(tx, {
@@ -202,11 +198,7 @@ export class StockService {
         if (source.reserved_qty > 0 && input.quantity <= source.quantity) {
           throw new ReservedStockError(source.reserved_qty, input.quantity);
         }
-        throw new InsufficientStockError(
-          available,
-          input.quantity,
-          source.quarantined_qty,
-        );
+        throw new InsufficientStockError(available, input.quantity, source.quarantined_qty);
       }
 
       const destination = locked.get(input.toCompartmentId);
@@ -249,7 +241,9 @@ export class StockService {
               from_compartment_id: input.fromCompartmentId,
               to_compartment_id: input.toCompartmentId,
               quantity: input.quantity,
-              ...(input.expectedVersion !== undefined ? { expectedVersion: input.expectedVersion } : {}),
+              ...(input.expectedVersion !== undefined
+                ? { expectedVersion: input.expectedVersion }
+                : {}),
               ...(context.note ? { note: context.note } : {}),
             },
           },
@@ -330,14 +324,9 @@ export class StockService {
       const placement = await this.lockPlacement(tx, input.productId, input.compartmentId);
       if (!placement) throw new NotFoundError('Stock in that compartment');
 
-      const available =
-        placement.quantity - placement.reserved_qty - placement.quarantined_qty;
+      const available = placement.quantity - placement.reserved_qty - placement.quarantined_qty;
       if (input.quantity > available) {
-        throw new InsufficientStockError(
-          available,
-          input.quantity,
-          placement.quarantined_qty,
-        );
+        throw new InsufficientStockError(available, input.quantity, placement.quarantined_qty);
       }
 
       return this.applyDelta(tx, placement.id, 0, input.quantity);
@@ -427,11 +416,7 @@ export class StockService {
     const run = async (tx: Tx): Promise<PlacementRow> => {
       await this.assertCompartmentUsable(tx, input.compartmentId);
 
-      const placement = await this.lockOrCreatePlacement(
-        tx,
-        input.productId,
-        input.compartmentId,
-      );
+      const placement = await this.lockOrCreatePlacement(tx, input.productId, input.compartmentId);
       const updated = await this.applyDelta(tx, placement.id, input.quantity, 0);
 
       await this.appendLedger(tx, {
@@ -596,8 +581,7 @@ export class StockService {
       if (!placement) throw new NotFoundError('Stock in that compartment');
 
       if (input.delta < 0) {
-        const available =
-          placement.quantity - placement.reserved_qty - placement.quarantined_qty;
+        const available = placement.quantity - placement.reserved_qty - placement.quarantined_qty;
         if (Math.abs(input.delta) > available) {
           throw new InsufficientStockError(
             available,
@@ -654,34 +638,36 @@ export class StockService {
   /* ------------------------------------------------------------------ reads */
 
   async placementsForProduct(productId: string) {
-    return this.db
-      .selectFrom('stock_placements')
-      .innerJoin(
-        'storage_compartments',
-        'storage_compartments.id',
-        'stock_placements.compartment_id',
-      )
-      .innerJoin('storage_zones', 'storage_zones.id', 'storage_compartments.zone_id')
-      .innerJoin('storage_rooms', 'storage_rooms.id', 'storage_zones.room_id')
-      .where('stock_placements.product_id', '=', productId)
-      .select([
-        'stock_placements.id',
-        'stock_placements.compartment_id',
-        'stock_placements.quantity',
-        'stock_placements.reserved_qty',
-        'stock_placements.quarantined_qty',
-        'stock_placements.version',
-        'storage_compartments.code as compartment_code',
-        'storage_zones.id as zone_id',
-        'storage_zones.name as zone_name',
-        'storage_rooms.id as room_id',
-        'storage_rooms.name as room_name',
-      ])
-      // Room first: "where is this product" is answered building by building.
-      .orderBy('storage_rooms.name')
-      .orderBy('storage_zones.name')
-      .orderBy('storage_compartments.code')
-      .execute();
+    return (
+      this.db
+        .selectFrom('stock_placements')
+        .innerJoin(
+          'storage_compartments',
+          'storage_compartments.id',
+          'stock_placements.compartment_id',
+        )
+        .innerJoin('storage_zones', 'storage_zones.id', 'storage_compartments.zone_id')
+        .innerJoin('storage_rooms', 'storage_rooms.id', 'storage_zones.room_id')
+        .where('stock_placements.product_id', '=', productId)
+        .select([
+          'stock_placements.id',
+          'stock_placements.compartment_id',
+          'stock_placements.quantity',
+          'stock_placements.reserved_qty',
+          'stock_placements.quarantined_qty',
+          'stock_placements.version',
+          'storage_compartments.code as compartment_code',
+          'storage_zones.id as zone_id',
+          'storage_zones.name as zone_name',
+          'storage_rooms.id as room_id',
+          'storage_rooms.name as room_name',
+        ])
+        // Room first: "where is this product" is answered building by building.
+        .orderBy('storage_rooms.name')
+        .orderBy('storage_zones.name')
+        .orderBy('storage_compartments.code')
+        .execute()
+    );
   }
 
   /**
@@ -831,15 +817,17 @@ export class StockService {
     productId: string,
     compartmentId: string,
   ): Promise<PlacementRow | undefined> {
-    return tx
-      .selectFrom('stock_placements')
-      .selectAll()
-      .where('product_id', '=', productId)
-      .where('compartment_id', '=', compartmentId)
-      // Consistent order for multi-row locks elsewhere; harmless for a single row.
-      .orderBy('id')
-      .forUpdate()
-      .executeTakeFirst();
+    return (
+      tx
+        .selectFrom('stock_placements')
+        .selectAll()
+        .where('product_id', '=', productId)
+        .where('compartment_id', '=', compartmentId)
+        // Consistent order for multi-row locks elsewhere; harmless for a single row.
+        .orderBy('id')
+        .forUpdate()
+        .executeTakeFirst()
+    );
   }
 
   /**

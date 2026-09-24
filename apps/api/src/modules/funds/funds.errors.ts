@@ -200,11 +200,7 @@ export class PurchaseExceedsFundedError extends DomainError {
   }) {
     super(
       ErrorCode.PURCHASE_EXCEEDS_FUNDED,
-      'This purchase would commit ' +
-        values.committed +
-        ' against ' +
-        values.funded +
-        ' funded.',
+      'This purchase would commit ' + values.committed + ' against ' + values.funded + ' funded.',
       HttpStatus.CONFLICT,
       values,
     );

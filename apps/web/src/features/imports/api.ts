@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { LIVE_IMPORT_STATUSES, type ImportJob } from '@ims/shared';
 import { api } from '@/api/client';
 import { queryKeys } from '@/api/keys';
@@ -38,3 +38,76 @@ export function useImportJob(jobId: string | null) {
  * poll would buy nothing visible while costing requests against an API that is mid-import.
  */
 const POLL_INTERVAL_MS = 1_000;
+
+/** Uploads the file and gets back a validated job — or a job that says why it cannot be used. */
+export function useUploadImport() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) => {
+      const form = new FormData();
+      form.append('file', file);
+      return api.upload<ImportJob>('/inventory/imports', form);
+    },
+    onSuccess: (job) => {
+      queryClient.setQueryData(queryKeys.imports.detail(job.id), job);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.imports.list() });
+    },
+  });
+}
+
+/**
+ * The human gate closing. Answers 202 with the job already `APPLYING`; the work continues
+ * server-side, and the ring picks it up from the poll rather than from this response.
+ */
+export function useConfirmImport() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (jobId: string) => api.post<ImportJob>(`/inventory/imports/${jobId}/confirm`),
+    onSuccess: (job) => queryClient.setQueryData(queryKeys.imports.detail(job.id), job),
+  });
+}
+
+export function useCancelImport() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (jobId: string) => api.post<ImportJob>(`/inventory/imports/${jobId}/cancel`),
+    onSuccess: (job) => {
+      queryClient.setQueryData(queryKeys.imports.detail(job.id), job);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.imports.list() });
+    },
+  });
+}
+
+/** Every run, newest first — the history screen (§10). */
+export function useImportHistory() {
+  return useQuery({
+    queryKey: queryKeys.imports.list(),
+    queryFn: () => api.get<ImportJob[]>('/inventory/imports'),
+  });
+}
+
+/**
+ * Put the catalogue back to a snapshot.
+ *
+ * Returns a job `AWAITING_CONFIRMATION`, not a finished restore: it runs the whole pipeline,
+ * so the same diff and the same confirm step stand between the click and the write.
+ */
+export function useRestoreImport() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (jobId: string) => api.post<ImportJob>(`/inventory/imports/${jobId}/restore`),
+    onSuccess: (job) => {
+      queryClient.setQueryData(queryKeys.imports.detail(job.id), job);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.imports.list() });
+    },
+  });
+}
+
+/** Reclaims the bytes. The job and its diff survive; only the restore point goes. */
+export function useDeleteSnapshot() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (jobId: string) => api.del<ImportJob>(`/inventory/imports/${jobId}/snapshot`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.imports.list() }),
+  });
+}

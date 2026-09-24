@@ -158,7 +158,7 @@ export class AuditRepository {
    * audit-write failure inside a transaction rolls the mutation back; that's how an
    * "everything is audited" promise stays honest.
    */
-async insert(tx: Tx | undefined, row: AuditInsert): Promise<void> {
+  async insert(tx: Tx | undefined, row: AuditInsert): Promise<void> {
     const writer = tx ?? this.db;
     // `metadata` and `actor_roles` are jsonb columns. Kysely's parameter binder does not add an
     // automatic `::jsonb` cast, so a plain string parameter lands in pg as text and is rejected
@@ -212,17 +212,13 @@ async insert(tx: Tx | undefined, row: AuditInsert): Promise<void> {
       .$if(query.from !== undefined, (qb) =>
         qb.where('audit_log.created_at', '>=', query.from as Date),
       )
-      .$if(query.to !== undefined, (qb) =>
-        qb.where('audit_log.created_at', '<=', query.to as Date),
-      )
+      .$if(query.to !== undefined, (qb) => qb.where('audit_log.created_at', '<=', query.to as Date))
       // One `action IN (...)` against audit_log_action_idx, rather than reaching into the
       // metadata blob for a decision field no index can serve.
       .$if(query.decision !== undefined, (qb) =>
-        qb.where(
-          'audit_log.action',
-          'in',
-          [...AUDIT_DECISION_ACTIONS[query.decision as AuditDecision]],
-        ),
+        qb.where('audit_log.action', 'in', [
+          ...AUDIT_DECISION_ACTIONS[query.decision as AuditDecision],
+        ]),
       );
 
     const [rows, counted] = await Promise.all([
@@ -233,9 +229,7 @@ async insert(tx: Tx | undefined, row: AuditInsert): Promise<void> {
         .limit(query.limit)
         .offset(offset)
         .execute(),
-      base
-        .select((eb) => eb.fn.countAll<number>().as('count'))
-        .executeTakeFirst(),
+      base.select((eb) => eb.fn.countAll<number>().as('count')).executeTakeFirst(),
     ]);
 
     return {

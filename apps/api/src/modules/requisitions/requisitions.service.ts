@@ -158,7 +158,16 @@ export class RequisitionsService {
             ...(claimedFileId ? { claimedSupportingDocumentId: claimedFileId } : {}),
           },
         },
-        { actorId: requesterId, actorName: null, actorEmail: null, actorRoles: [], requestMethod: null, requestPath: null, requestIp: null, userAgent: null },
+        {
+          actorId: requesterId,
+          actorName: null,
+          actorEmail: null,
+          actorRoles: [],
+          requestMethod: null,
+          requestPath: null,
+          requestIp: null,
+          userAgent: null,
+        },
         tx,
       );
       if (claimedFileId) {
@@ -171,7 +180,16 @@ export class RequisitionsService {
             summary: `Claimed a pre-draft supporting document on ${requisitionNo}`,
             metadata: { fileId: claimedFileId, via: 'claim-on-create' },
           },
-          { actorId: requesterId, actorName: null, actorEmail: null, actorRoles: [], requestMethod: null, requestPath: null, requestIp: null, userAgent: null },
+          {
+            actorId: requesterId,
+            actorName: null,
+            actorEmail: null,
+            actorRoles: [],
+            requestMethod: null,
+            requestPath: null,
+            requestIp: null,
+            userAgent: null,
+          },
           tx,
         );
       }
@@ -204,7 +222,16 @@ export class RequisitionsService {
           summary: `Updated draft requisition ${existing.requisition_no}`,
           metadata: { urgency: input.urgency, itemCount: input.items.length },
         },
-        { actorId: actorId, actorName: null, actorEmail: null, actorRoles: [], requestMethod: null, requestPath: null, requestIp: null, userAgent: null },
+        {
+          actorId: actorId,
+          actorName: null,
+          actorEmail: null,
+          actorRoles: [],
+          requestMethod: null,
+          requestPath: null,
+          requestIp: null,
+          userAgent: null,
+        },
         tx,
       );
     });
@@ -231,7 +258,10 @@ export class RequisitionsService {
       throw new ForbiddenError('You can only submit your own requisition');
     }
     if (existing.status !== RequisitionStatus.DRAFT) {
-      throw new InvalidRequisitionTransitionError(existing.status as RequisitionStatus, 'submitted');
+      throw new InvalidRequisitionTransitionError(
+        existing.status as RequisitionStatus,
+        'submitted',
+      );
     }
 
     const items = await this.repo.findItems(id);
@@ -429,7 +459,16 @@ export class RequisitionsService {
             requiredApproverCount: approverCount,
           },
         },
-        { actorId: actorId, actorName: null, actorEmail: null, actorRoles: [], requestMethod: null, requestPath: null, requestIp: null, userAgent: null },
+        {
+          actorId: actorId,
+          actorName: null,
+          actorEmail: null,
+          actorRoles: [],
+          requestMethod: null,
+          requestPath: null,
+          requestIp: null,
+          userAgent: null,
+        },
         tx,
       );
 
@@ -444,22 +483,22 @@ export class RequisitionsService {
        */
       const awaiting = inventoryManagerId ? [inventoryManagerId] : approverIds;
       if (awaiting.length > 0) {
-      await this.notifications.notify(
-        {
-          type: 'requisition.awaiting_your_approval',
-          userIds: awaiting,
-          ref: existing.requisition_no,
-          link: NOTIFICATION_LINKS.requisition(id),
-          entityType: 'requisition',
-          entityId: id,
-          actorId,
-          actorName: null,
-          context: {
-            amount: String(requestedAmount),
+        await this.notifications.notify(
+          {
+            type: 'requisition.awaiting_your_approval',
+            userIds: awaiting,
+            ref: existing.requisition_no,
+            link: NOTIFICATION_LINKS.requisition(id),
+            entityType: 'requisition',
+            entityId: id,
+            actorId,
+            actorName: null,
+            context: {
+              amount: String(requestedAmount),
+            },
           },
-        },
-        tx,
-      );
+          tx,
+        );
       }
     });
 
@@ -557,7 +596,16 @@ export class RequisitionsService {
               approvedAmount: input.approvedAmount ?? null,
             },
           },
-          { actorId: actorId, actorName: null, actorEmail: null, actorRoles: [], requestMethod: null, requestPath: null, requestIp: null, userAgent: null },
+          {
+            actorId: actorId,
+            actorName: null,
+            actorEmail: null,
+            actorRoles: [],
+            requestMethod: null,
+            requestPath: null,
+            requestIp: null,
+            userAgent: null,
+          },
           tx,
         );
 
@@ -614,10 +662,7 @@ export class RequisitionsService {
         // Snapshot at IM-approve. `approved_amount` is still the default (= requested)
         // because the IM stage does not revise the sanctioned amount; that's the
         // approvers' job. So the snapshot's approvedAmount mirrors requestedAmount here.
-        const imFigures = await this.fundsRepo.computeCurrentFunding(
-          tx,
-          approval.requisition_id,
-        );
+        const imFigures = await this.fundsRepo.computeCurrentFunding(tx, approval.requisition_id);
         await this.fundsRepo.insertSnapshot(tx, {
           requisitionId: approval.requisition_id,
           status: RequisitionStatus.AWAITING_APPROVAL,
@@ -807,7 +852,16 @@ export class RequisitionsService {
           summary: `Withdrew approval on ${requisition.requisition_no}`,
           metadata: { stage: approval.stage, slot: approval.slot, reason: input.reason },
         },
-        { actorId: actorId, actorName: null, actorEmail: null, actorRoles: [], requestMethod: null, requestPath: null, requestIp: null, userAgent: null },
+        {
+          actorId: actorId,
+          actorName: null,
+          actorEmail: null,
+          actorRoles: [],
+          requestMethod: null,
+          requestPath: null,
+          requestIp: null,
+          userAgent: null,
+        },
         tx,
       );
 
@@ -866,11 +920,7 @@ export class RequisitionsService {
    * IM later reconsidered. The `requiresRevisionTag` view-layer flag is what the UI
    * uses to surface the "for revise" pill.
    */
-  async sendBackForRevision(
-    id: string,
-    input: SendBackForRevisionInput,
-    actorId: string,
-  ) {
+  async sendBackForRevision(id: string, input: SendBackForRevisionInput, actorId: string) {
     const existing = await this.repo.findById(id);
     if (!existing) throw new NotFoundError('Requisition');
 
@@ -902,10 +952,7 @@ export class RequisitionsService {
       // which is what the audit feed renders anyway. Also clear the approved_amount so
       // the requester sees a blank field again — the IM's previous figure was a one-shot
       // sanction, not a permanent cap.
-      await tx
-        .deleteFrom('requisition_approvals')
-        .where('requisition_id', '=', id)
-        .execute();
+      await tx.deleteFrom('requisition_approvals').where('requisition_id', '=', id).execute();
       await sql`
         UPDATE requisitions
         SET status = ${RequisitionStatus.DRAFT}::requisition_status,
@@ -917,13 +964,10 @@ export class RequisitionsService {
         WHERE id = ${id}::uuid
       `.execute(tx);
 
-      await this.repo.appendEvent(
-        tx,
-        id,
-        RequisitionEventType.SEND_BACK_FOR_REVISION,
-        actorId,
-        { reason: input.reason, itemCount: items.length },
-      );
+      await this.repo.appendEvent(tx, id, RequisitionEventType.SEND_BACK_FOR_REVISION, actorId, {
+        reason: input.reason,
+        itemCount: items.length,
+      });
       await this.audit.record(
         {
           action: 'requisition.send_back_for_revision',
@@ -933,7 +977,16 @@ export class RequisitionsService {
           summary: `Sent back ${existing.requisition_no} for budget revision`,
           metadata: { reason: input.reason, itemCount: items.length },
         },
-        { actorId, actorName: actor?.full_name ?? null, actorEmail: null, actorRoles: [], requestMethod: null, requestPath: null, requestIp: null, userAgent: null },
+        {
+          actorId,
+          actorName: actor?.full_name ?? null,
+          actorEmail: null,
+          actorRoles: [],
+          requestMethod: null,
+          requestPath: null,
+          requestIp: null,
+          userAgent: null,
+        },
         tx,
       );
 
@@ -969,7 +1022,10 @@ export class RequisitionsService {
 
     const cancellable: string[] = [RequisitionStatus.DRAFT, RequisitionStatus.IM_REVIEW];
     if (!cancellable.includes(existing.status)) {
-      throw new InvalidRequisitionTransitionError(existing.status as RequisitionStatus, 'cancelled');
+      throw new InvalidRequisitionTransitionError(
+        existing.status as RequisitionStatus,
+        'cancelled',
+      );
     }
 
     await this.db.transaction().execute(async (tx) => {
@@ -984,7 +1040,16 @@ export class RequisitionsService {
           summary: `Cancelled requisition ${existing.requisition_no}`,
           metadata: {},
         },
-        { actorId: actorId, actorName: null, actorEmail: null, actorRoles: [], requestMethod: null, requestPath: null, requestIp: null, userAgent: null },
+        {
+          actorId: actorId,
+          actorName: null,
+          actorEmail: null,
+          actorRoles: [],
+          requestMethod: null,
+          requestPath: null,
+          requestIp: null,
+          userAgent: null,
+        },
         tx,
       );
 
@@ -1062,10 +1127,7 @@ export class RequisitionsService {
   }
 
   /** Returns the assignee whose authority the actor is using, or null if they have none. */
-  private async resolveActingFor(
-    assignedUserId: string,
-    actorId: string,
-  ): Promise<string | null> {
+  private async resolveActingFor(assignedUserId: string, actorId: string): Promise<string | null> {
     if (assignedUserId === actorId) return assignedUserId;
     const delegated = await this.delegations.isEffectiveDelegate(assignedUserId, actorId);
     return delegated ? assignedUserId : null;

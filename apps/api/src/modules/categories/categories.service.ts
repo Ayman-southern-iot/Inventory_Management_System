@@ -43,10 +43,7 @@ export class CategoriesService {
    * single `import.apply` row names the job, and the diff the human approved lists every
    * category it was going to create.
    */
-  async createForImport(
-    tx: Tx,
-    input: { name: string; parentId: string | null },
-  ): Promise<string> {
+  async createForImport(tx: Tx, input: { name: string; parentId: string | null }): Promise<string> {
     return this.repo.insert({ name: input.name, parentId: input.parentId, isTrackable: true }, tx);
   }
 

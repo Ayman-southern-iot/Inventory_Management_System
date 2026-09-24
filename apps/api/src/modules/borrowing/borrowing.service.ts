@@ -67,11 +67,7 @@ export class BorrowingService {
    * promised the last unit while the IM thinks about it. `StockService.reserve` takes the row
    * lock, so the second submitter is refused rather than queued behind an optimistic check.
    */
-  async create(
-    input: CreateBorrowRequestInput,
-    requesterId: string,
-    context: AuditContext,
-  ) {
+  async create(input: CreateBorrowRequestInput, requesterId: string, context: AuditContext) {
     const product = await this.repo.findProductForBorrow(input.productId);
     if (!product) throw new NotFoundError('Product');
     if (!product.is_active) throw new ConflictError('That product has been archived');
@@ -187,7 +183,10 @@ export class BorrowingService {
     const request = await this.repo.findById(id);
     if (!request) throw new NotFoundError('Borrow request');
     if (request.status !== BorrowStatus.PENDING) {
-      throw new InvalidBorrowTransitionError(request.status, input.approve ? 'approved' : 'rejected');
+      throw new InvalidBorrowTransitionError(
+        request.status,
+        input.approve ? 'approved' : 'rejected',
+      );
     }
 
     const nextStatus = input.approve ? BorrowStatus.ISSUED : BorrowStatus.REJECTED;
@@ -277,12 +276,7 @@ export class BorrowingService {
    * Partial returns are normal, so the running `returned_qty` is incremented under the same
    * conditional UPDATE that guards against returning more than is outstanding.
    */
-  async recordReturn(
-    id: string,
-    input: ReturnBorrowInput,
-    actorId: string,
-    context: AuditContext,
-  ) {
+  async recordReturn(id: string, input: ReturnBorrowInput, actorId: string, context: AuditContext) {
     const request = await this.repo.findById(id);
     if (!request) throw new NotFoundError('Borrow request');
 
@@ -967,11 +961,7 @@ export class BorrowingService {
    * it are a single handover, and a split leaves either a reservation held by nothing or units
    * issued against no borrow.
    */
-  async issueFromStock(
-    input: IssueFromStockInput,
-    actorId: string,
-    context: AuditContext,
-  ) {
+  async issueFromStock(input: IssueFromStockInput, actorId: string, context: AuditContext) {
     const id = await this.db.transaction().execute(async (tx) => {
       const borrower = await tx
         .selectFrom('users')

@@ -2,11 +2,7 @@ import { type CanActivate, type ExecutionContext, Inject, Injectable } from '@ne
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
-import {
-  API_KEY_QUERY_PARAM,
-  API_KEY_TOKEN_PREFIX,
-  type ApiKeyScope,
-} from '@ims/shared';
+import { API_KEY_QUERY_PARAM, API_KEY_TOKEN_PREFIX, type ApiKeyScope } from '@ims/shared';
 import { CONFIG, type AppConfig } from '../../config';
 import {
   AccountDeactivatedError,
@@ -15,10 +11,7 @@ import {
   UnauthenticatedError,
 } from '../../common/errors';
 import { API_KEY_SCOPES_KEY } from '../api-keys/api-key.decorators';
-import {
-  ApiKeysService,
-  type AuthenticatedApiKey,
-} from '../api-keys/api-keys.service';
+import { ApiKeysService, type AuthenticatedApiKey } from '../api-keys/api-keys.service';
 import { ALLOW_PENDING_PASSWORD_KEY, IS_PUBLIC_KEY } from './auth.decorators';
 import { RefreshTokenRepository } from './refresh-token.repository';
 import type { AccessTokenPayload, RequestUser } from './request-user';

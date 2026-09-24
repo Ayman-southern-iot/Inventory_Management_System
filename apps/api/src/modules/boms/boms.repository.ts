@@ -45,9 +45,17 @@ export class BomsRepository {
    * BOMs numbered before this change keep their plain `BOM-000003`. Both shapes stay valid:
    * the serial is the identity and nothing parses the format.
    */
-  async nextBomNo(tx: Tx, requesterName: string | null, requesterEmail: string | null): Promise<string> {
+  async nextBomNo(
+    tx: Tx,
+    requesterName: string | null,
+    requesterEmail: string | null,
+  ): Promise<string> {
     const row = await sql<{ n: string }>`SELECT nextval('bom_no_seq') AS n`.execute(tx);
-    return documentNumber('BOM', Number(row.rows[0]?.n ?? 1), nameTokenFor(requesterName, requesterEmail));
+    return documentNumber(
+      'BOM',
+      Number(row.rows[0]?.n ?? 1),
+      nameTokenFor(requesterName, requesterEmail),
+    );
   }
 
   async insertBom(
@@ -433,7 +441,14 @@ export class BomsRepository {
       requisitionNo: lineRow.requisition_no ?? '',
     }));
 
-    return { ...toBom(row, sources.map((source) => source.requisitionNo)), lines, sources };
+    return {
+      ...toBom(
+        row,
+        sources.map((source) => source.requisitionNo),
+      ),
+      lines,
+      sources,
+    };
   }
 
   /* ----------------------------------------------------- PDF (task 4.3) */
@@ -442,7 +457,9 @@ export class BomsRepository {
    * The raw `pdf_path` for the download endpoint. `findDetail` deliberately collapses it to
    * `hasPdf: boolean` on the contract — the path is internal and never travels to the client.
    */
-  async findPdfPath(id: string): Promise<{ pdfPath: string | null; pdfGeneratedAt: Date | null; isVoid: boolean } | undefined> {
+  async findPdfPath(
+    id: string,
+  ): Promise<{ pdfPath: string | null; pdfGeneratedAt: Date | null; isVoid: boolean } | undefined> {
     const row = await this.db
       .selectFrom('boms')
       .select(['pdf_path', 'pdf_generated_at', 'is_void'])

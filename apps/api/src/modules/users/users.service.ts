@@ -287,11 +287,7 @@ export class UsersService {
     return this.findById(id);
   }
 
-  async resetPassword(
-    id: string,
-    input: ResetPasswordInput,
-    context: AuditContext,
-  ): Promise<void> {
+  async resetPassword(id: string, input: ResetPasswordInput, context: AuditContext): Promise<void> {
     const existing = await this.repo.findById(id);
     if (!existing) throw new NotFoundError('User');
 
@@ -316,7 +312,10 @@ export class UsersService {
           entityRef: existing.email,
           summary: `Reset password for ${existing.email}`,
           metadata: {
-            mustChangePassword: { before: existing.must_change_password, after: input.mustChangePassword },
+            mustChangePassword: {
+              before: existing.must_change_password,
+              after: input.mustChangePassword,
+            },
             sessionsRevoked: true,
           },
         },

@@ -74,7 +74,9 @@ describe('RolesGuard', () => {
   });
 
   it('rejects a user holding none of the required roles with FORBIDDEN', () => {
-    const error = thrownBy(() => guard.canActivate(contextFor('restricted', userWith(Role.GENERAL))));
+    const error = thrownBy(() =>
+      guard.canActivate(contextFor('restricted', userWith(Role.GENERAL))),
+    );
 
     expect(error.code).toBe(ErrorCode.FORBIDDEN);
     expect(error.getStatus()).toBe(HttpStatus.FORBIDDEN);

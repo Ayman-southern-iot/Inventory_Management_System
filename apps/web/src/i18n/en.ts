@@ -118,6 +118,7 @@ export const t = {
     inventoryProducts: 'Inventory',
     inventoryCategories: 'Categories',
     inventoryLocations: 'Locations',
+    inventoryImports: 'Bulk import',
     boms: 'Bills of Materials',
   },
 
@@ -1572,6 +1573,71 @@ export const t = {
       unknown: 'Please wait — this usually takes a few minutes.',
       retry: 'Try again',
       retrying: 'Checking…',
+    },
+    /** Past runs and their backups (§10). */
+    history: {
+      title: 'Past imports',
+      empty: 'Nothing has been imported yet.',
+      by: (name: string, status: string) => `${name} · ${status.toLowerCase().replace(/_/g, ' ')}`,
+      summary: (created: number, updated: number, retired: number, shelves: number) =>
+        `${created} created · ${updated} updated · ${retired} retired · ${shelves} shelves`,
+      wasRestore: 'This run restored an earlier snapshot.',
+      download: 'Download snapshot',
+      restore: 'Restore this state',
+      restoreConfirm: 'Yes, restore it',
+      deleteSnapshot: 'Delete snapshot',
+      noSnapshot: 'No backup is kept for this run.',
+      /**
+       * §10 says the three things a restore cannot do must be stated rather than discovered.
+       * The one that surprises people is the first: it is not a partial undo.
+       */
+      undoWarning: (when: string, laterRuns: number) =>
+        laterRuns === 0
+          ? `This puts the catalogue back to how it was on ${when}. Categories created since are emptied, not removed, and both movements stay in the ledger.`
+          : `This puts the catalogue back to how it was on ${when}. Every change since — ${laterRuns} import${laterRuns === 1 ? '' : 's'} — will be undone. Categories created since are emptied, not removed, and both movements stay in the ledger.`,
+    },
+    /** How a finished run reads. Cancelled is not a failure, so it does not say one. */
+    finished: (status: string) =>
+      status === 'COMPLETED'
+        ? 'The import finished. The catalogue now matches the file.'
+        : 'This import was discarded. Nothing was changed.',
+    startAnother: 'Import another file',
+    /** The human gate (I2): what the file would do, before anything is written. */
+    preview: {
+      title: 'Review before importing',
+      nothingToDo: 'This file matches the catalogue exactly. Importing it would change nothing.',
+      productsCreated: 'Products created',
+      productsUpdated: 'Products updated',
+      productsRetired: 'Products retired',
+      renamed: 'Renamed',
+      recategorised: 'Recategorised',
+      shelvesChanged: 'Shelves changed',
+      units: (added: number, removed: number) => `+${added} / −${removed} units`,
+      categoriesCreated: (count: number) =>
+        count === 1 ? '1 category will be created' : `${count} categories will be created`,
+      warnings: (count: number) =>
+        count === 1
+          ? 'Worth reading before you approve (1)'
+          : `Worth reading before you approve (${count})`,
+      problems: (count: number) =>
+        count === 1
+          ? 'This file cannot be imported (1 problem)'
+          : `This file cannot be imported (${count} problems)`,
+      atRow: (row: number) => `Row ${row}:`,
+      apply: 'Import these changes',
+      applying: 'Starting…',
+      cancel: 'Discard this file',
+      /** I5 — said plainly, because it is what makes approving safe. */
+      backup: 'The current inventory is backed up first, so this can be undone.',
+    },
+    /** Upload, the start of the whole loop. */
+    upload: {
+      title: 'Import products',
+      help: 'Export the products, edit that file, and upload it back. The columns must match.',
+      choose: 'Choose a CSV file',
+      uploading: 'Checking the file…',
+      exportFirst: 'Export current products',
+      busy: 'Another import is already in progress.',
     },
     /** The importing manager's own view: the brief asked for time and percentage, both moving. */
     progress: {

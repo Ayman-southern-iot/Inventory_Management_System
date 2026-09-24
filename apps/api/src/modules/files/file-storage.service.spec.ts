@@ -182,7 +182,9 @@ describe('FileStorageService', () => {
 
   it('does not treat a sibling directory with the same prefix as inside the root', () => {
     // `<dir>-evil` starts with `<dir>` as a string but is a different directory.
-    expect(() => service.absolutePathFor(`../${'ims-files-evil'}/x.png`)).toThrow(FileRejectedError);
+    expect(() => service.absolutePathFor(`../${'ims-files-evil'}/x.png`)).toThrow(
+      FileRejectedError,
+    );
   });
 
   it('never leaves a temp file behind on success', async () => {

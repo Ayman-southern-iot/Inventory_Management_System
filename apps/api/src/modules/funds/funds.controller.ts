@@ -178,7 +178,10 @@ export class FundsController {
     await this.funds.assertCanReadFunding(id, actor);
     const { contents, mimeType, fileName } = await this.funds.readInvoice(id, purchaseId);
     response.setHeader('Content-Type', mimeType);
-    response.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`);
+    response.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${encodeURIComponent(fileName)}"`,
+    );
     response.setHeader('Cache-Control', 'private, no-store');
     return new StreamableFile(contents);
   }

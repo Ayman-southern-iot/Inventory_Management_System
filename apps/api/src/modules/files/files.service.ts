@@ -74,6 +74,21 @@ export class FilesService {
     });
   }
 
+  /**
+   * Remove a stored file and its row, for the one case that genuinely wants the bytes back:
+   * an import snapshot an admin has chosen to delete (`importing_data.md` §10).
+   *
+   * The row goes first. Every foreign key that can point at a `stored_files` row is either
+   * `SET NULL` or `RESTRICT`, so a caller that has not already cleared a `RESTRICT` reference
+   * gets a constraint error here rather than an orphaned row and a missing file.
+   */
+  async remove(id: string): Promise<void> {
+    const row = await this.requireRow(id);
+    await this.repo.deleteById(id);
+    // Best-effort, as the sweep job's is: the row is the record, not the disk.
+    await this.storage.remove(row.relative_path);
+  }
+
   async requireRow(id: string): Promise<StoredFileRow> {
     const row = await this.repo.findById(id);
     if (!row) throw new NotFoundError('File');

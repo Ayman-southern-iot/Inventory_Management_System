@@ -31,10 +31,7 @@ export function buildProductCode(name: string, serial: number): string {
  * handed the same code. The UNIQUE index on `product_code` is still the guarantee — this just
  * means it is never reached in practice.
  */
-export async function generateProductCode(
-  conn: Kysely<Database>,
-  name: string,
-): Promise<string> {
+export async function generateProductCode(conn: Kysely<Database>, name: string): Promise<string> {
   const row = await sql<{ n: string }>`SELECT nextval('product_code_seq') AS n`.execute(conn);
   return buildProductCode(name, Number(row.rows[0]?.n ?? 1));
 }
