@@ -224,3 +224,24 @@ decided, the warning says plainly which of the two the button does.
   `IMPORT_MAX_CHANGED_SHELVES`, measured on the diff before the human gate, bounds the apply.
   Restore is exempt from the first two and not from the third. Implemented; the default is
   provisional until the benchmark in §15. Full statement: `importing_data.md` §11.6.
+
+- **OQ-IMP-2 — the import cannot create a category whose name contains a `/`.** `ANSWERED in
+  part` 2026-09-24: the half that was a live bug is fixed, the half that is a format limitation
+  is recorded here and left.
+
+  `category_path` joins names with ` / ` and the parser splits on `/`, so the separator is
+  ambiguous with the data. The seeded catalogue has ten categories named with a slash —
+  `Arduino / AVR`, `Motion / IMU`, `Potentiometers / Trimmers`, `Servo Drivers / ESCs` — and the
+  consequence was that **the importer refused its own unedited export** with
+  `CATEGORY_PATH_TOO_DEEP`. Found by running the §15 end-to-end against the demo stack; it made
+  the feature unusable on this catalogue, not merely awkward.
+
+  Fixed for every category that already exists: a `category_path` cell that matches a known path
+  in full is that category, and no splitting can improve on knowing. Scoped to the ambiguous ones
+  so an ordinary path resolves exactly as before, case-difference warning included.
+
+  **Still open, and left deliberately:** a category that does *not* exist yet and whose name
+  contains a slash cannot be created through a file, because nothing distinguishes it from a
+  nesting. Options are a different separator (which breaks every existing snapshot and the skill),
+  an escape (which people will get wrong by hand in Excel), or leaving it. Left: creating such a
+  category in the UI first and then importing against it works, and nobody has asked for it.

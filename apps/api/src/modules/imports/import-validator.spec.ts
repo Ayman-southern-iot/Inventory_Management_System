@@ -392,6 +392,59 @@ describe('validateImport', () => {
       expect(codes(result.errors)).toContain(ImportIssueCode.CATEGORY_PATH_TOO_DEEP);
     });
 
+    /**
+     * A category may be *named* with a slash. The seeded catalogue has ten — `Arduino / AVR`,
+     * `Motion / IMU`, `Servo Drivers / ESCs` — and the export joins a path with the same ` / `
+     * this function splits on, so the path read back is one level deeper than the real one. The
+     * live symptom was the importer refusing its own unedited export at 3 levels.
+     */
+    it('reads a category whose own name contains a slash as one step, not two', () => {
+      const ESCS = 'cccc1111-1111-4111-8111-00000000000e';
+      const lookups = world({
+        categories: [
+          category({
+            id: ELECTRONICS,
+            name: 'Electronics',
+            children: [
+              category({
+                id: COMPUTERS,
+                name: 'Motor Drivers',
+                parentId: ELECTRONICS,
+                children: [
+                  category({ id: ESCS, name: 'Servo Drivers / ESCs', parentId: COMPUTERS }),
+                ],
+              }),
+            ],
+          }),
+        ],
+      });
+
+      const result = validateImport(
+        [
+          row({
+            category_id: '',
+            category_path: 'Electronics / Motor Drivers / Servo Drivers / ESCs',
+          }),
+        ],
+        lookups,
+      );
+
+      expect(codes(result.errors)).not.toContain(ImportIssueCode.CATEGORY_PATH_TOO_DEEP);
+      expect(result.errors).toEqual([]);
+      // Resolved to the category that exists, not to a fourth level invented by the split.
+      expect(result.plan?.categoriesToCreate).toEqual([]);
+      expect(result.plan?.products[0]?.categoryId).toBe(ESCS);
+    });
+
+    /** The rescue is scoped to genuinely ambiguous names; four real levels are still refused. */
+    it('still refuses four real levels when no such category exists', () => {
+      const result = validateImport(
+        [row({ category_id: '', category_path: 'A / B / C / D' })],
+        world(),
+      );
+      expect(codes(result.errors)).toContain(ImportIssueCode.CATEGORY_PATH_TOO_DEEP);
+    });
+
     it('refuses a category path with a gap in it', () => {
       const result = validateImport([row({ category_id: '', category_path: 'A //  C' })], world());
       expect(codes(result.errors)).toContain(ImportIssueCode.CATEGORY_PATH_MALFORMED);

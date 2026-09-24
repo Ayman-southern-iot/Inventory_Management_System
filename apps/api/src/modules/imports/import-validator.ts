@@ -110,7 +110,7 @@ export function validateImport(rows: ParsedRow[], lookups: ImportLookups): Valid
 
   // 3 — types and ranges.
   const typeErrors: ImportIssue[] = [];
-  const typed = rows.map((row) => readRow(row, typeErrors, warnings));
+  const typed = rows.map((row) => readRow(row, typeErrors, warnings, lookups));
   if (typeErrors.length > 0) return { plan: null, errors: typeErrors, warnings };
 
   // 4 — internal consistency: what this file says about itself.
@@ -222,7 +222,12 @@ interface TypedRow {
 
 const uuid = z.string().uuid();
 
-function readRow(row: ParsedRow, errors: ImportIssue[], warnings: ImportIssue[]): TypedRow {
+function readRow(
+  row: ParsedRow,
+  errors: ImportIssue[],
+  warnings: ImportIssue[],
+  lookups: ImportLookups,
+): TypedRow {
   const cell = (column: ImportColumn): string => row.cells[column];
   const fail = (code: ImportIssueCode, column: ImportColumn, message: string): void => {
     errors.push(issue(code, row.line, column, cell(column), message));
@@ -310,7 +315,7 @@ function readRow(row: ParsedRow, errors: ImportIssue[], warnings: ImportIssue[])
     return false;
   };
 
-  const categoryPath = readCategoryPath(row, errors);
+  const categoryPath = readCategoryPath(row, errors, lookups);
   const code = text('product_code', productCodeSchema);
 
   if (code !== null && DATE_LIKE_CODE.test(code)) {
@@ -350,9 +355,30 @@ function readRow(row: ParsedRow, errors: ImportIssue[], warnings: ImportIssue[])
   };
 }
 
-function readCategoryPath(row: ParsedRow, errors: ImportIssue[]): string[] {
+function readCategoryPath(
+  row: ParsedRow,
+  errors: ImportIssue[],
+  lookups: ImportLookups,
+): string[] {
   const raw = row.cells.category_path;
   if (raw === '') return [];
+
+  /*
+   * A category may be *named* with a slash in it — `Arduino / AVR`, `Motion / IMU`,
+   * `Servo Drivers / ESCs` are all real rows in the seeded catalogue. The export joins a path
+   * with ` / ` and this function splits on `/`, so those names split into two steps and the path
+   * reads one level deeper than it is. The whole file was then refused with
+   * `CATEGORY_PATH_TOO_DEEP` — the importer rejecting its own unedited export.
+   *
+   * The separator is genuinely ambiguous with the data, so the only honest resolution is to ask
+   * the catalogue: if the whole cell is a path that already exists, it is that path, and no
+   * splitting can improve on knowing. `categoryByJoinedPath` holds only the ambiguous ones, so
+   * an ordinary path never reaches this and keeps its existing behaviour, spelling warning
+   * included. A *new* category whose name contains a slash still cannot be expressed — that is a
+   * limitation of the format, unchanged, and it is recorded as OQ-IMP-2.
+   */
+  const known = lookups.categoryByJoinedPath.get(lookupKey(raw));
+  if (known) return known.path;
 
   const segments = raw.split('/').map((segment) => collapse(segment));
 

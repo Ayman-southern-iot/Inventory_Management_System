@@ -13,6 +13,7 @@ import { AuditService } from '../audit/audit.service';
 import type { AuditContext } from '../audit/audit-context';
 import { stripBom } from './import-format';
 import { ImportValidationService } from './import-validation.service';
+import { ImportLockService } from './import-lock.service';
 import {
   ImportJobsRepository,
   type ImportJobReport,
@@ -35,13 +36,6 @@ import {
 export const IMPORT_JOB_KIND = 'products';
 
 /**
- * Just enough of `ImportLockService` for `abandon` to call the one unlock.
- *
- * Passed in rather than injected because the lock service depends on this module's repository
- * and injecting it here would close the circle. The narrow type is the point: this path may
- * release the lock and may do nothing else to it.
- */
-/**
  * Just the file operations a restore needs.
  *
  * Passed in rather than injected for the same reason `ImportLockRelease` is: this module is
@@ -63,6 +57,17 @@ export interface ImportSnapshotStore {
   remove(id: string): Promise<void>;
 }
 
+/**
+ * Just enough of `ImportLockService` for `abandon` to call the one unlock.
+ *
+ * The narrow type is the point: that path may release the lock and may do nothing else to it.
+ * The controller passes it in, which also lets `abandon` be tested without the lock service.
+ *
+ * It said here that injecting the lock service would close a dependency circle. It would not —
+ * `ImportLockService` depends on this module's *repository*, not on this service — and the crash
+ * reclaim below needs more of it than `release`, so the service is now injected as well. This
+ * interface stays because a caller that only releases should still only be able to release.
+ */
 export interface ImportLockRelease {
   release(jobId: string, status: ImportJobStatus | null): Promise<void>;
 }
@@ -73,6 +78,7 @@ export class ImportJobsService {
     private readonly repo: ImportJobsRepository,
     private readonly validation: ImportValidationService,
     private readonly audit: AuditService,
+    private readonly lock: ImportLockService,
     @Inject(CONFIG) private readonly config: AppConfig,
   ) {}
 
@@ -304,7 +310,30 @@ export class ImportJobsService {
    */
   private async expireStaleJob(): Promise<void> {
     const live = await this.repo.findLive();
-    if (!live || live.status !== ImportJobStatus.AWAITING_CONFIRMATION) return;
+    if (!live) return;
+
+    /*
+     * A job left `APPLYING` by a process that died, reclaimed here (C41).
+     *
+     * `ImportLockService.releaseIfDead` was written for exactly this and says so, but its only
+     * caller is `ImportLockGuard`, which returns early on `!isLocked()`. After a crash the
+     * restarted process holds no in-memory lock, so `isLocked()` is false, so the check never
+     * ran — and because `import_jobs_one_live` covers `APPLYING`, **every future import was
+     * refused 409 for ever.** Verified against the demo stack: the API was killed four seconds
+     * into a 3,657-shelf apply, and imports were still refused 135 seconds later, well past the
+     * 60-second heartbeat.
+     *
+     * Here rather than in the guard because this is the moment it matters — somebody is trying
+     * to start an import — and because `start` and `get` both already call this. It is still the
+     * same single unlock: `releaseIfDead` refuses to touch a job whose heartbeat is recent, so a
+     * long but healthy apply is never mistaken for a dead one.
+     */
+    if (live.status === ImportJobStatus.APPLYING) {
+      await this.lock.releaseIfDead();
+      return;
+    }
+
+    if (live.status !== ImportJobStatus.AWAITING_CONFIRMATION) return;
     if (!isExpired(live, this.config)) return;
 
     await this.repo.update(live.id, {

@@ -1,4 +1,5 @@
 import type { CategoryNode, Product, Room } from '@ims/shared';
+import { CATEGORY_PATH_SEPARATOR } from './import-format';
 
 /**
  * Everything validation needs to resolve a file, loaded once (`importing_data.md` §11.1).
@@ -84,6 +85,21 @@ export interface ImportLookups {
   productByCode: Map<string, LookupProduct>;
   categoryById: Map<string, LookupCategory>;
   categoryByPath: Map<string, LookupCategory>;
+  /**
+   * **Only the categories whose own name contains a `/`**, keyed by the whole joined path as the
+   * export writes it, lowercased.
+   *
+   * `category_path` joins names with ` / ` and the parser splits on `/`, so a category actually
+   * named `Servo Drivers / ESCs` comes back as two steps and its path reads one level deeper than
+   * it is. The seeded catalogue has ten such names (`Arduino / AVR`, `Motion / IMU`,
+   * `Potentiometers / Trimmers`, …), and the symptom was that **the importer refused its own
+   * unedited export** with `CATEGORY_PATH_TOO_DEEP`.
+   *
+   * Deliberately not every category: an unambiguous path must keep resolving exactly as before,
+   * including its case-difference warning. Only a path that is ambiguous by construction consults
+   * this, and only because splitting it cannot be right.
+   */
+  categoryByJoinedPath: Map<string, LookupCategory>;
   compartmentById: Map<string, LookupCompartment>;
   compartmentByStorageId: Map<string, LookupCompartment>;
   compartmentByLocation: Map<string, LookupCompartment>;
@@ -106,6 +122,7 @@ export function shelfKey(productId: string, compartmentId: string): string {
 export function buildImportLookups(raw: RawLookups): ImportLookups {
   const categoryById = new Map<string, LookupCategory>();
   const categoryByPath = new Map<string, LookupCategory>();
+  const categoryByJoinedPath = new Map<string, LookupCategory>();
 
   const walkCategory = (node: CategoryNode, ancestors: string[]): void => {
     const path = [...ancestors, node.name];
@@ -118,6 +135,13 @@ export function buildImportLookups(raw: RawLookups): ImportLookups {
     };
     categoryById.set(node.id, entry);
     categoryByPath.set(categoryKey(path), entry);
+    if (path.some((segment) => segment.includes('/'))) {
+      // First one wins. Two categories can only collide here if the catalogue already contains
+      // the same path spelled two ways, which the sibling-name unique index makes very unlikely
+      // and which is an existing ambiguity rather than one this map introduces.
+      const joined = lookupKey(path.join(CATEGORY_PATH_SEPARATOR));
+      if (!categoryByJoinedPath.has(joined)) categoryByJoinedPath.set(joined, entry);
+    }
     for (const child of node.children) walkCategory(child, path);
   };
   for (const node of raw.categories) walkCategory(node, []);
@@ -188,6 +212,7 @@ export function buildImportLookups(raw: RawLookups): ImportLookups {
     productByCode,
     categoryById,
     categoryByPath,
+    categoryByJoinedPath,
     compartmentById,
     compartmentByStorageId,
     compartmentByLocation,

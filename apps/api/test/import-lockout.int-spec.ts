@@ -8,6 +8,7 @@ import { createUserAndLogin, resetData } from './factories';
 import { createStockFixture, type StockFixture } from './stock-factories';
 import { StockService } from '../src/modules/stock/stock.service';
 import { ImportLockService } from '../src/modules/imports/import-lock.service';
+import { ImportJobsService } from '../src/modules/imports/import-jobs.service';
 
 /**
  * The system-wide lockout (`importing_data.md` §8, part I).
@@ -278,6 +279,56 @@ describe('the import lockout', () => {
         .where('id', '=', jobId)
         .executeTakeFirstOrThrow();
       expect(row.status).toBe(ImportJobStatus.FAILED);
+    });
+
+    /**
+     * **The test above calls `releaseIfDead` by hand, which is why the bug it describes shipped.**
+     *
+     * After a crash the restarted process holds no lock, so `ImportLockGuard` returns at
+     * `!isLocked()` and never reaches the reclaim. Nothing else called it. The row therefore sat
+     * `APPLYING` for ever and `import_jobs_one_live` refused **every future import** — found on
+     * the demo stack by killing the container four seconds into a 3,657-shelf apply and still
+     * being refused 135 seconds later, well past the 60-second heartbeat.
+     *
+     * So this one asserts the thing a person actually experiences: can I import again?
+     */
+    it('lets a new import start after a crash left a row applying', async () => {
+      const jobId = await lockedJob();
+      await stopTheHeart(jobId);
+      // Exactly what a restart leaves behind: the row live, the in-memory lock gone.
+      await lock.release(jobId, null);
+
+      const jobs = ctx.app.get(ImportJobsService);
+      const stored = await ctx.db
+        .insertInto('stored_files')
+        .values({
+          kind: 'PRODUCT_IMPORT',
+          relative_path: `product_import/${randomUUID()}.csv`,
+          original_name: 'next.csv',
+          mime_type: 'text/csv',
+          size_bytes: 10,
+          uploaded_by: actorId,
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+
+      // An empty file is refused on its contents — which is fine and is not what this asserts.
+      // What must not happen is IMPORT_ALREADY_RUNNING, from the slot the dead job still held.
+      const next = await jobs.start({
+        fileId: stored.id,
+        fileSha256: 'b'.repeat(64),
+        contents: '# ims-product-import v1\r\n',
+        actorId,
+      });
+      expect(next.id).not.toBe(jobId);
+
+      const dead = await ctx.db
+        .selectFrom('import_jobs')
+        .select(['status', 'finished_at'])
+        .where('id', '=', jobId)
+        .executeTakeFirstOrThrow();
+      expect(dead.status).toBe(ImportJobStatus.FAILED);
+      expect(dead.finished_at).not.toBeNull();
     });
   });
 
