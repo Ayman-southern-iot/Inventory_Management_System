@@ -137,11 +137,33 @@ const rawSchema = z.object({
    * 0.3, the GUC has to move first (`SET pg_trgm.similarity_threshold`), and that is a database
    * change, not a deploy one.
    *
-   * 0.45 is **a guess, not a measurement** — it separated the fixtures sensibly and has never
-   * been run over real product names. `importing_data.md` §15 tracks that as work before this
-   * feature is called done.
+   * **0.7, and the number is a judgement call rather than a measurement — because no clean cut
+   * exists.** Measured with `similarity()` on realistic name shapes, 2026-09-24:
+   *
+   * ```
+   * 1.000  USB-C to HDMI cable / USB-C to HDMI Cable   case only      must warn
+   * 0.810  Lenovo ThinkPad T14 / Lenovo ThinkPad T15   near model     borderline
+   * 0.760  Lenovo ThinkPad T14 / …T14 Gen 3            same family    likely duplicate
+   * 0.727  Lenovo ThinkPad T14 / Lenovo ThinkPda T14   typo           must warn
+   * 0.722  Screwdriver set     / Screw driver set      spacing        must warn
+   * 0.684  Office chair        / Office chair (black)  variant        likely duplicate
+   * 0.684  NVIDIA RTX 4090     / NVIDIA RTX 4080       sibling SKU    must NOT warn
+   * 0.647  Cable HDMI 2m       / Cable HDMI 3m         length         must NOT warn
+   * 0.625  M3 bolt 10mm        / M3 bolt 12mm          size           must NOT warn
+   * 0.000  Hokuyo UST-10LX     / Lenovo ThinkPad T14   unrelated      quiet
+   * ```
+   *
+   * **A genuine duplicate and a sibling SKU score identically at 0.684.** Trigram similarity
+   * cannot tell "same product, one typo" from "different product, one digit" — both are the same
+   * edit over the same stem — so the two classes overlap and no threshold separates them. That is
+   * the technique, not the number.
+   *
+   * 0.7 is therefore the best available cut: it keeps every must-warn above it and drops three of
+   * the four must-nots. It will still fire on sibling SKUs sometimes, which is survivable only
+   * because §2.4 made this warning-only. **0.45 was not merely unverified — it warned on
+   * everything sharing a stem**, which is the noise §2.4 exists to avoid.
    */
-  IMPORT_FUZZY_MATCH_THRESHOLD: z.coerce.number().min(0.3).max(1).default(0.45),
+  IMPORT_FUZZY_MATCH_THRESHOLD: z.coerce.number().min(0.3).max(1).default(0.7),
   /**
    * How long a validated import waits for somebody to approve it before it releases the
    * one-live slot. Checked when a request next looks at the job, never by a timer.
