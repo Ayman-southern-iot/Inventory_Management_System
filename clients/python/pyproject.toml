@@ -1,0 +1,10 @@
+[project]
+name = "ims-client"
+version = "0.2.0"
+description = "Client for the Southern IoT IMS integration API: API keys and the one-call stock take (ADR-0002)"
+requires-python = ">=3.10"
+dependencies = ["requests>=2.31,<3"]
+
+[tool.uv]
+# A single-file client and its smoke script, run with `uv run`; nothing is built or published.
+package = false
