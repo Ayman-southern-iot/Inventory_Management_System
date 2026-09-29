@@ -76,4 +76,5 @@ Recorded for the lead rather than decided: OQ-KT10, OQ-KT11, OQ-KT12 and G-21.
 
 - OQ-KT8 (per-category take limits) and OQ-KT9 (an emptied shelf answers 404, not 409).
 - `DIRECT_TAKE_MAX_QTY=10` is a guess.
-- The HTTPS hostname and the 5173 firewall are documented, not done. Nothing is deployed.
+- The HTTPS hostname and the 5173 firewall are documented, not done. This branch is not deployed; the VM runs `9f4176d` on the demo stack
+  (RUNBOOK §0 item 0).

@@ -1,3 +1,5 @@
+# Demo stack. Never run this in production; production is `infra/`.
+#
 # Inventory Management System — the whole system, one file, one command.
 #
 #     docker compose up -d

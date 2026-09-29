@@ -114,4 +114,5 @@ It also adds three config keys, all pinned in `TEST_ENV`: `ALLOW_DIRECT_TAKE`,
   does.
 - keys are used from outside the office LAN. Key clients are required to use the HTTPS hostname,
   and port 5173 is to be firewalled so only the proxy reaches it. Whether the deployed VM actually
-  enforces that is UNKNOWN, because nothing has been deployed there.
+  enforces that is UNKNOWN, because this branch has not been deployed. The VM runs `9f4176d` on
+  the demo stack (operator, 2026-09-27; RUNBOOK §0 item 0).
