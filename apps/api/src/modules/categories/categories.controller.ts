@@ -12,7 +12,8 @@ import {
 import { zodPipe } from '../../common/zod-validation.pipe';
 import { AuthenticatedThrottle } from '../../common/throttling';
 import { Roles } from '../auth/auth.decorators';
-import { ApiKeyScopes } from '../api-keys/api-key.decorators';
+import { ApiKeyScopes, CurrentApiKey } from '../api-keys/api-key.decorators';
+import { refuseActivationChangeByKey } from '../api-keys/api-key.policies';
 import { CurrentAuditContext } from '../audit/audit.decorators';
 import type { AuditContext } from '../audit/audit-context';
 import { CategoriesService } from './categories.service';
@@ -51,7 +52,8 @@ export class CategoriesController {
   }
 
   @ApiKeyScopes({
-    summary: 'Rename, move or deactivate a category. Send only the fields you are changing.',
+    summary:
+      'Rename or move a category. Send only the fields you are changing. A key cannot archive or re-activate one.',
     scopes: [ApiKeyScope.CATALOG_WRITE],
     body: updateCategorySchema,
   })
@@ -61,7 +63,9 @@ export class CategoriesController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body(zodPipe(updateCategorySchema)) body: UpdateCategoryInput,
     @CurrentAuditContext() ctx: AuditContext,
+    @CurrentApiKey() apiKey: { id: string } | null,
   ): Promise<Category> {
+    refuseActivationChangeByKey(apiKey, body.isActive);
     return this.categories.update(id, body, ctx);
   }
 }

@@ -25,7 +25,7 @@ import {
 } from './api-key-factories';
 import { createUser, createUserAndLogin, login, resetData } from './factories';
 import { TEST_PASSWORD } from './config/test-env';
-import { createStockFixture, createRoom } from './stock-factories';
+import { createCategory, createStockFixture, createRoom } from './stock-factories';
 
 /**
  * ADR-0002 — API keys that can act, through a service account.
@@ -485,6 +485,132 @@ describe('API keys that act (ADR-0002)', () => {
       const afterExpiry = await asKey(expired.token).get('/products');
       expect(afterExpiry.status).toBe(401);
       expect(afterExpiry.body.code).toBe(ErrorCode.API_KEY_INVALID);
+    });
+  });
+
+  /* ---------------------------------------------------------------- receive from a key */
+
+  /**
+   * OQ-KT10 (Arif, 2026-09-29): a key must send an Idempotency-Key on receive. A retried
+   * receive silently doubles stock, and reconciliation cannot see it — the ledger and the
+   * placements agree. A person in the web app is unchanged: the SPA does not send one today.
+   */
+  describe('receiving stock with a key', () => {
+    const ledgerCount = async (productId: string) =>
+      Number(
+        (
+          await ctx.db
+            .selectFrom('stock_ledger')
+            .select((eb) => eb.fn.countAll<string>().as('n'))
+            .where('product_id', '=', productId)
+            .executeTakeFirstOrThrow()
+        ).n,
+      );
+
+    it('refuses a key that sends no Idempotency-Key, and receives nothing', async () => {
+      const key = await issueBoundKey(admin, [ApiKeyScope.STOCK_RECEIVE]);
+      const fixture = await createStockFixture(ctx.db);
+      const response = await asKey(key.token)
+        .post('/stock/receive')
+        .send({ productId: fixture.productId, compartmentId: fixture.compartmentA, quantity: 4 });
+      expect(response.status).toBe(400);
+      expect(response.body.code).toBe(ErrorCode.VALIDATION_FAILED);
+      expect(JSON.stringify(response.body.details).toLowerCase()).toContain('idempotency-key');
+      expect(await ledgerCount(fixture.productId)).toBe(0);
+    });
+
+    it('receives once when a key replays the same Idempotency-Key', async () => {
+      const key = await issueBoundKey(admin, [ApiKeyScope.STOCK_RECEIVE]);
+      const fixture = await createStockFixture(ctx.db);
+      const idem = randomUUID();
+      const send = () =>
+        asKey(key.token)
+          .post('/stock/receive')
+          .set('Idempotency-Key', idem)
+          .send({ productId: fixture.productId, compartmentId: fixture.compartmentA, quantity: 4 });
+      const first = await send();
+      const second = await send();
+      expect(first.status, JSON.stringify(first.body)).toBe(200);
+      expect(second.status).toBe(200);
+      expect(await ledgerCount(fixture.productId)).toBe(1);
+    });
+
+    it('still lets a signed-in person receive without one, as today', async () => {
+      const fixture = await createStockFixture(ctx.db);
+      const response = await admin
+        .post('/stock/receive')
+        .send({ productId: fixture.productId, compartmentId: fixture.compartmentA, quantity: 4 });
+      expect(response.status, JSON.stringify(response.body)).toBe(200);
+      expect(await ledgerCount(fixture.productId)).toBe(1);
+    });
+  });
+
+  /* ---------------------------------------------------------------- archiving is a person's call */
+
+  /**
+   * OQ-KT12 (Arif, 2026-09-29): `catalog:write` creates and edits, but a key can neither archive
+   * nor re-activate a product or a category. Archiving takes an item out of circulation — nobody
+   * can borrow or take it — and that is a decision for a person in the web app.
+   */
+  describe('archiving with a key', () => {
+    it('refuses to archive or re-activate a product, and leaves it as it was', async () => {
+      const key = await issueBoundKey(admin, [ApiKeyScope.CATALOG_WRITE]);
+      const fixture = await createStockFixture(ctx.db);
+      for (const isActive of [false, true]) {
+        const response = await asKey(key.token)
+          .patch(`/products/${fixture.productId}`)
+          .send({ isActive });
+        expect(response.status, `isActive: ${isActive}`).toBe(403);
+        expect(response.body.code).toBe(ErrorCode.API_KEY_SCOPE_DENIED);
+      }
+      const row = await ctx.db
+        .selectFrom('products')
+        .select('is_active')
+        .where('id', '=', fixture.productId)
+        .executeTakeFirstOrThrow();
+      expect(row.is_active).toBe(true);
+    });
+
+    it('refuses to archive a category, and leaves it active', async () => {
+      const key = await issueBoundKey(admin, [ApiKeyScope.CATALOG_WRITE]);
+      // Empty, so a person *could* archive it: only the key rule may stop this one.
+      const categoryId = await createCategory(ctx.db);
+      const response = await asKey(key.token)
+        .patch(`/categories/${categoryId}`)
+        .send({ isActive: false });
+      expect(response.status).toBe(403);
+      expect(response.body.code).toBe(ErrorCode.API_KEY_SCOPE_DENIED);
+      const row = await ctx.db
+        .selectFrom('categories')
+        .select('is_active')
+        .where('id', '=', categoryId)
+        .executeTakeFirstOrThrow();
+      expect(row.is_active).toBe(true);
+
+      // The control: the same request from a person succeeds.
+      const asPerson = await admin.patch(`/categories/${categoryId}`).send({ isActive: false });
+      expect(asPerson.status, JSON.stringify(asPerson.body)).toBe(200);
+    });
+
+    it('still lets a key rename a product', async () => {
+      const key = await issueBoundKey(admin, [ApiKeyScope.CATALOG_WRITE]);
+      const fixture = await createStockFixture(ctx.db);
+      const name = `Renamed by key ${randomUUID().slice(0, 6)}`;
+      const response = await asKey(key.token).patch(`/products/${fixture.productId}`).send({ name });
+      expect(response.status, JSON.stringify(response.body)).toBe(200);
+      expect(response.body.name).toBe(name);
+    });
+
+    it('still lets an Inventory Manager archive a product in the web app', async () => {
+      const im = await createUserAndLogin(ctx.db, httpClient(ctx.app), {
+        roles: [Role.INVENTORY_MANAGER],
+      });
+      const fixture = await createStockFixture(ctx.db);
+      const response = await im.client
+        .patch(`/products/${fixture.productId}`)
+        .send({ isActive: false });
+      expect(response.status, JSON.stringify(response.body)).toBe(200);
+      expect(response.body.isActive).toBe(false);
     });
   });
 

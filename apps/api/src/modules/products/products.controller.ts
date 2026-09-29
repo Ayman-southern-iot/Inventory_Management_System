@@ -16,6 +16,7 @@ import { zodPipe } from '../../common/zod-validation.pipe';
 import { AuthenticatedThrottle } from '../../common/throttling';
 import { Roles } from '../auth/auth.decorators';
 import { ApiKeyScopes, CurrentApiKey } from '../api-keys/api-key.decorators';
+import { refuseActivationChangeByKey } from '../api-keys/api-key.policies';
 import { CurrentAuditContext } from '../audit/audit.decorators';
 import type { AuditContext } from '../audit/audit-context';
 import { ProductsService } from './products.service';
@@ -73,7 +74,8 @@ export class ProductsController {
   }
 
   @ApiKeyScopes({
-    summary: 'Edit a product. Send only the fields you are changing; stock is not touched.',
+    summary:
+      'Edit a product. Send only the fields you are changing; stock is not touched. A key cannot archive or re-activate one.',
     scopes: [ApiKeyScope.CATALOG_WRITE],
     body: updateProductSchema,
   })
@@ -83,7 +85,9 @@ export class ProductsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body(zodPipe(updateProductSchema)) body: UpdateProductInput,
     @CurrentAuditContext() ctx: AuditContext,
+    @CurrentApiKey() apiKey: { id: string } | null,
   ): Promise<ProductDetail> {
+    refuseActivationChangeByKey(apiKey, body.isActive);
     return this.products.update(id, body, ctx);
   }
 }
