@@ -443,27 +443,60 @@ After path A, put the new password in the root `.env`. IT points traffic back at
   SQL either.
 - **Revoke every API key and deactivate every service account** created while demo mode was on
   (§0.1).
-- **Archive the demo products, and only once they hold no stock and no open borrows.** The four
-  products are `LAP-0001`, `GPU-0001`, `CBL-0001` and `FRN-0001`, seeded on every root-stack
-  start. Check both, with step 1's `Q`:
+- **Retire the demo products.** The four products `LAP-0001`, `GPU-0001`, `CBL-0001` and
+  `FRN-0001` were seeded on every root-stack start, and the demo seed also receives stock: on the
+  dev database `CBL-0001` holds 55, `GPU-0001` 4 and `LAP-0001` 10. Retire them by adjusting
+  their stock to zero and then archiving them. **Never delete a product:** `stock_ledger` is
+  append-only and references it. The Inventory Manager does this, or an admin, because
+  `POST /stock/adjust` is limited to those two roles (`stock.controller.ts:123`).
 
-  ```bash
-  Q "select p.product_code, coalesce(sum(sp.quantity), 0), coalesce(sum(sp.reserved_qty), 0)
-     from products p left join stock_placements sp on sp.product_id = p.id
-     where p.product_code in ('LAP-0001','GPU-0001','CBL-0001','FRN-0001') group by 1 order by 1"
-  Q "select p.product_code, b.status, count(*) from borrow_requests b join products p on p.id = b.product_id
-     where p.product_code in ('LAP-0001','GPU-0001','CBL-0001','FRN-0001')
-     and b.status in ('PENDING','ISSUED','PARTIALLY_RETURNED') group by 1, 2"
-  ```
+  1. **Confirm the products exist on the VM, with their placements, and that nothing is borrowed.**
+     Use step 1's `Q`:
 
-  - Archive a product only when the first query shows `0|0` for it and the second lists nothing
-    for it.
-  - **If a demo product holds stock or an open borrow, stop.** Decide with the Inventory Manager
-    how to take the invented stock out through the normal stock screens; the ledger records it.
-    The demo seed does receive stock: on the dev database `CBL-0001` holds 55, `GPU-0001` 4 and
-    `LAP-0001` 10.
-  - **Never delete a product.** `stock_ledger` is append-only and references it. Archiving keeps
-    the history intact.
+     ```bash
+     Q "select p.product_code, p.id, sp.compartment_id, sp.quantity, sp.reserved_qty, sp.quarantined_qty
+        from products p left join stock_placements sp on sp.product_id = p.id
+        where p.product_code in ('LAP-0001','GPU-0001','CBL-0001','FRN-0001') order by 1"
+     Q "select p.product_code, b.status, count(*) from borrow_requests b join products p on p.id = b.product_id
+        where p.product_code in ('LAP-0001','GPU-0001','CBL-0001','FRN-0001')
+        and b.status in ('PENDING','ISSUED','PARTIALLY_RETURNED') group by 1, 2"
+     ```
+
+     - No rows from the first query means the demo catalogue is not on the VM, and this bullet is
+       done.
+     - **Any row from the second query, or a non-zero `reserved_qty` or `quarantined_qty`: stop.**
+       An adjustment can only remove available units (`quantity - reserved - quarantined`), and
+       a borrow has to be resolved through the borrowing screens first.
+  2. **Adjust each placement to zero** with the reason `Demo seed data, not physical stock`. The
+     delta is minus that placement's `quantity`. Each call writes one ADJUSTMENT row to the ledger
+     and one audit row. Signed in as the Inventory Manager:
+
+     ```bash
+     IMS=<the IMS address>
+     read -rs PW; TOKEN=$(curl -s -X POST "$IMS/api/v1/auth/login" -H 'Content-Type: application/json' \
+       -d "{\"email\":\"<IM email>\",\"password\":\"$PW\"}" | jq -r .accessToken); unset PW
+     # once per placement row from the first query, with -<quantity>:
+     curl -s -X POST "$IMS/api/v1/stock/adjust" -H "Authorization: Bearer $TOKEN" \
+       -H 'Content-Type: application/json' -H "Idempotency-Key: $(uuidgen)" \
+       -d '{"productId":"<p.id>","compartmentId":"<compartment_id>","delta":-<quantity>,
+            "reason":"Demo seed data, not physical stock"}'
+     ```
+
+     `FRN-0001` sits in the untracked Furniture category, so an adjustment on it is refused. The
+     seed gives it no stock, so it goes straight to archiving. Re-run the first query: every
+     placement row of the four products is gone, because a placement that reaches zero with
+     nothing reserved is removed.
+  3. **Archive each product.** Use Archive on the product screen, or call the API once per
+     product:
+
+     ```bash
+     curl -s -X PATCH "$IMS/api/v1/products/<p.id>" -H "Authorization: Bearer $TOKEN" \
+       -H 'Content-Type: application/json' -d '{"isActive":false}'
+     ```
+
+  4. **Reconciliation must stay 0.** Run both queries from step 1. An adjustment moves the ledger
+     and the placement together, so any other result means something else is wrong: stop and
+     read `docs/reference/` before touching anything.
 - Then work through the rest of §0.
 
 ### 1. Turn demo mode off — HARD BLOCKER
@@ -816,6 +849,43 @@ need it:
 # sign in, open a requisition, check a BOM PDF renders
 docker compose exec db psql -U ims -d postgres -c "DROP DATABASE ims_old;"
 ```
+
+### Admin lockout recovery — PROPOSED, not implemented
+
+**Nothing in this subsection exists yet.** It describes a command proposed on 2026-09-30 for
+review (the ADR-0002 review addendum, seed proposal). Do not look for it in the code.
+
+**The problem.** If every administrator is deactivated, or nobody knows an admin's password, no
+one can sign in to fix it. Today the only way back is an accident of the seed: a
+`SEED_ADMIN_EMAIL` that matches no user creates a new admin on the next start
+(`apps/api/scripts/seed.ts:164-221`). The same proposal removes that accident, because it also
+silently creates a second admin whenever the address drifts. The recovery command replaces it
+with something deliberate.
+
+**The proposed command**, one-shot, run on the host:
+
+```bash
+# Development checkout:
+pnpm --filter @ims/api seed:recover-admin --email <addr>
+# Production stack (infra/), in the API image:
+docker compose run --rm api npm run seed:recover-admin -- --email <addr>
+```
+
+What it would do:
+
+- **It refuses when any active human administrator exists**: an ADMIN role, `is_active`, and not
+  a service account. It exits non-zero and changes nothing. A working admin fixes accounts through
+  Admin → Users, not through this.
+- **Otherwise it creates or re-enables exactly one admin.**
+  - If `<addr>` exists, it is re-activated and given the ADMIN role.
+  - If not, it is created with GENERAL and ADMIN.
+  - Either way it gets a new temporary password shown once on the terminal, and
+    `must_change_password = true`, so the first sign-in forces a change.
+- **It writes an audit row** saying who ran it (the host user) and which account it touched. The
+  row cannot be switched off by the audit-action settings, because it is a security event.
+
+Until it exists, a lockout is recovered by restoring the latest backup (§5), or by the seed
+behaviour described above.
 
 ---
 
