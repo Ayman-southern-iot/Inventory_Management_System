@@ -1,9 +1,16 @@
 import { useMemo } from 'react';
-import { AlertTriangle, Copy } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import type { ApiKeyUsageDoc } from '@ims/shared';
-import { Button } from '@/components/ui/Button';
 import { t } from '@/i18n/en';
-import { useCopyToClipboard } from '@/lib/useCopyToClipboard';
+import { ApiEndpointCard } from './ApiEndpointCard';
+import { CopyableSnippet } from './CopyableSnippet';
+import {
+  browserExample,
+  isReadEndpoint,
+  readExample,
+  richestReadEndpoint,
+  writeExample,
+} from './api-key-usage-examples';
 
 /**
  * How to use a key, generated rather than written.
@@ -19,31 +26,12 @@ import { useCopyToClipboard } from '@/lib/useCopyToClipboard';
  * to remember to set per environment.
  */
 export function ApiKeyUsagePanel({ usage }: { usage: ApiKeyUsageDoc }) {
-  const copy = useCopyToClipboard();
   const baseUrl = `${window.location.origin}${usage.basePath}`;
-  /*
-   * The richest endpoint, not the first one. Sorted alphabetically, `/categories` comes first
-   * and makes a poor example — nobody's first question is "show me the category tree". The
-   * endpoint with the most query parameters is the one worth demonstrating, and it lands on
-   * the product list without naming it, so this stays right as the route list grows.
-   */
-  const example = useMemo(() => {
-    const richest = [...usage.endpoints].sort(
-      (a, b) => b.queryParams.length - a.queryParams.length || a.path.length - b.path.length,
-    )[0];
-    const path = richest?.path ?? '/products';
-    const paged = richest?.queryParams.some((param) => param.name === 'limit');
-    return `curl -H "Authorization: Bearer ${usage.tokenPrefix}your_key_here" \\\n  "${baseUrl}${path}${paged ? '?limit=100' : ''}"`;
-  }, [usage.endpoints, usage.tokenPrefix, baseUrl]);
 
-  /** The same call as a plain URL, for pasting into an address bar. */
-  const browserUrl = useMemo(() => {
-    const richest = [...usage.endpoints].sort(
-      (a, b) => b.queryParams.length - a.queryParams.length || a.path.length - b.path.length,
-    )[0];
-    const path = richest?.path ?? '/products';
-    return `${baseUrl}${path}?${usage.queryParam}=${usage.tokenPrefix}your_key_here`;
-  }, [usage.endpoints, usage.queryParam, usage.tokenPrefix, baseUrl]);
+  // Read examples come from GET endpoints only: `?api_key=` is refused on every other method.
+  const readEndpoint = useMemo(() => richestReadEndpoint(usage.endpoints), [usage.endpoints]);
+  const example = readEndpoint ? readExample(usage, baseUrl, readEndpoint) : null;
+  const browserUrl = readEndpoint ? browserExample(usage, baseUrl, readEndpoint) : null;
 
   return (
     <div className="flex flex-col gap-4 text-sm">
@@ -58,53 +46,28 @@ export function ApiKeyUsagePanel({ usage }: { usage: ApiKeyUsageDoc }) {
         </code>
       </section>
 
-      <section className="flex flex-col gap-1.5">
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-subtle">
-            {t.apiKeys.usageExample}
-          </h3>
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={<Copy aria-hidden className="size-4" />}
-            onClick={() => void copy(example)}
-          >
-            {t.apiKeys.copy}
-          </Button>
-        </div>
-        <pre className="overflow-x-auto rounded-[--radius-control] bg-surface-muted p-3 font-mono text-xs text-ink">
-          {example}
-        </pre>
-      </section>
+      {example ? <CopyableSnippet title={t.apiKeys.usageExample} text={example} /> : null}
 
       {/*
         Ayman chose the URL form over a header extension after the trade-off was put to him. It
         is shown with the reason it is the riskier option attached, and directly under the
         header example rather than instead of it — the warning belongs where the copy button is,
         not in a document nobody opens twice.
+
+        Since the 2026-09-29 security review the URL form is for a read-only key only: the API
+        refuses `?api_key=` for any key holding a write scope, even on a GET. This panel is not
+        tied to one key, so it cannot hide the URL for a write key — it states the rule first,
+        beside the URL it restricts.
       */}
-      <section className="flex flex-col gap-1.5">
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-subtle">
-            {t.apiKeys.usageBrowser}
-          </h3>
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={<Copy aria-hidden className="size-4" />}
-            onClick={() => void copy(browserUrl)}
-          >
-            {t.apiKeys.copy}
-          </Button>
-        </div>
-        <pre className="overflow-x-auto rounded-[--radius-control] bg-surface-muted p-3 font-mono text-xs text-ink">
-          {browserUrl}
-        </pre>
-        <p className="flex items-start gap-1.5 rounded-[--radius-control] bg-pending-subtle px-3 py-2 text-xs text-ink">
-          <AlertTriangle aria-hidden className="mt-px size-4 shrink-0" />
-          {t.apiKeys.usageBrowserBody}
-        </p>
-      </section>
+      {browserUrl ? (
+        <CopyableSnippet title={t.apiKeys.usageBrowser} text={browserUrl}>
+          <p className="text-xs font-medium text-ink">{t.apiKeys.usageWriteKeyHeaderOnly}</p>
+          <p className="flex items-start gap-1.5 rounded-[--radius-control] bg-pending-subtle px-3 py-2 text-xs text-ink">
+            <AlertTriangle aria-hidden className="mt-px size-4 shrink-0" />
+            {t.apiKeys.usageBrowserBody}
+          </p>
+        </CopyableSnippet>
+      ) : null}
 
       <section className="flex flex-col gap-2">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-subtle">
@@ -112,29 +75,13 @@ export function ApiKeyUsagePanel({ usage }: { usage: ApiKeyUsageDoc }) {
         </h3>
         <ul className="flex flex-col gap-2">
           {usage.endpoints.map((endpoint) => (
-            <li
-              key={`${endpoint.method} ${endpoint.path}`}
-              className="rounded-[--radius-control] border border-border p-3"
-            >
-              <p className="flex flex-wrap items-baseline gap-2">
-                <span className="rounded bg-brand-subtle px-1.5 py-0.5 font-mono text-2xs font-semibold text-brand">
-                  {endpoint.method}
-                </span>
-                <code className="font-mono text-xs text-ink">
-                  {usage.basePath}
-                  {endpoint.path}
-                </code>
-              </p>
-              <p className="mt-1 text-xs text-ink-muted">{endpoint.summary}</p>
-              <p className="mt-1.5 text-2xs text-ink-subtle">
-                <span className="font-medium">{t.apiKeys.usageParams}: </span>
-                {endpoint.queryParams.length === 0
-                  ? t.apiKeys.usageNoParams
-                  : endpoint.queryParams
-                      .map((param) => `${param.name} (${param.type})`)
-                      .join(', ')}
-              </p>
-            </li>
+            <ApiEndpointCard
+              // The server lists a route once per scope it accepts, so the scope is in the key.
+              key={`${endpoint.method} ${endpoint.path} ${endpoint.scope}`}
+              endpoint={endpoint}
+              basePath={usage.basePath}
+              example={isReadEndpoint(endpoint) ? null : writeExample(usage, baseUrl, endpoint)}
+            />
           ))}
         </ul>
       </section>
@@ -146,6 +93,9 @@ export function ApiKeyUsagePanel({ usage }: { usage: ApiKeyUsageDoc }) {
         <ul className="list-inside list-disc text-xs text-ink-muted">
           <li>{t.apiKeys.usageRateLimit.replace('{n}', String(usage.rateLimitPerMinute))}</li>
           <li>{t.apiKeys.usagePageSize.replace('{n}', String(usage.maxPageSize))}</li>
+          <li>
+            {t.apiKeys.usageWriteLifetime.replace('{n}', String(usage.writeKeyMaxLifetimeDays))}
+          </li>
         </ul>
       </section>
     </div>

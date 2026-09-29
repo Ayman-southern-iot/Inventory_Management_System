@@ -38,9 +38,16 @@ export const queryKeys = {
   },
   apiKeys: {
     all: () => ['api-keys'] as const,
+    /** Prefix for every key list, whatever its page or filter. */
+    lists: () => ['api-keys', 'list'] as const,
     list: (query: ListApiKeysQuery) => ['api-keys', 'list', query] as const,
     /** The generated integration docs. Static for a build, so it caches indefinitely. */
     usage: () => ['api-keys', 'usage'] as const,
+    /**
+     * Under the `api-keys` root on purpose: each account carries an enabled-key count, so every
+     * key mutation — which invalidates `all()` — has to refresh this list as well.
+     */
+    serviceAccounts: () => ['api-keys', 'service-accounts'] as const,
   },
   departments: {
     all: () => ['departments'] as const,

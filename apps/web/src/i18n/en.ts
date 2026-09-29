@@ -228,21 +228,53 @@ export const t = {
 
   apiKeys: {
     title: 'API keys',
-    subtitle: 'Credentials for other systems to read from this one. Read-only, and revocable.',
+    subtitle:
+      'Credentials for other systems to use this one. Read-only unless a key is given a scope that changes data, and always revocable.',
     newKey: 'New key',
     createTitle: 'Issue an API key',
     createSubtitle: 'The key is shown once. Copy it before you close this.',
     name: 'Name',
     namePlaceholder: 'Nightly product sync',
     nameHint: 'What uses it. A name nobody recognises in six months is a key nobody dares revoke.',
-    scopes: 'What it can read',
+    scopes: 'What it can reach',
+    scopesRequired: 'Tick at least one.',
+    scopeChangesData: 'Changes data',
     scopeInventoryRead: 'Inventory',
     scopeInventoryReadHint: 'Products, categories and storage locations. No people, no money.',
+    scopeCatalogWrite: 'Catalogue',
+    scopeCatalogWriteHint: 'Create and edit categories and products.',
+    scopeLocationsWrite: 'Storage locations',
+    scopeLocationsWriteHint: 'Create zones and compartments.',
+    scopeStockReceive: 'Receive stock',
+    scopeStockReceiveHint: 'Record goods arriving onto a shelf.',
+    scopeStockTake: 'Take stock',
+    scopeStockTakeHint: 'Take items off a shelf in one call. The service account becomes the holder.',
+    writeScopeNotice:
+      'A key that can change data acts as a service account, and everything it does is recorded against that account. It must expire within {n} days.',
+    serviceAccount: 'Acts as service account',
+    serviceAccountPlaceholder: 'Choose a service account',
+    serviceAccountHint: 'Only active accounts are listed.',
+    serviceAccountRequired: 'Choose the service account this key acts as.',
+    serviceAccountsNoneActive: 'There is no active service account yet. Create one below.',
+    serviceAccountsLoadFailed: 'The service accounts could not be loaded.',
+    newServiceAccount: 'New service account',
+    newServiceAccountPlaceholder: 'Lab drawer panel C576',
+    createServiceAccount: 'Create account',
+    serviceAccountCreated: 'Service account created.',
     expiry: 'Expires',
     expiryDays: '{n} days',
     expiryNever: 'Never',
     expiryHint: 'A key with no expiry works until somebody revokes it.',
+    expiryWriteHint: 'A key that can change data must expire, and within {n} days.',
+    expiryRequired: 'Choose when the key expires.',
     issue: 'Issue key',
+
+    // Demo-mode production refuses every key (ADR-0002), so the page says so up front.
+    demoDisabledTitle: 'API keys are switched off',
+    demoDisabledBody:
+      'Demo accounts are enabled on this deployment, so anyone can sign in as an administrator. Until they are turned off, every key is refused and no key or service account can be issued.',
+    settingsUnavailable:
+      'The key settings could not be loaded, so a key cannot be issued right now.',
 
     // The one-time reveal.
     createdTitle: 'Copy your key now',
@@ -260,6 +292,9 @@ export const t = {
     disabled: 'Disabled',
     expired: 'Expired',
     revoked: 'Revoked',
+    blocked: 'Blocked',
+    blockedByServiceAccount:
+      'Refused because its service account is deactivated. Activate the account to restore it.',
     lastUsed: 'Last used',
     neverUsed: 'Never used',
     createdBy: 'Issued by',
@@ -276,6 +311,23 @@ export const t = {
     showRevoked: 'Show revoked',
     emptyTitle: 'No API keys yet',
     emptyBody: 'Issue one to let another system read the inventory.',
+    serviceAccountColumn: 'Service account',
+
+    // Service accounts — what a key that changes data acts as.
+    serviceAccountsTitle: 'Service accounts',
+    serviceAccountsBody:
+      'What keys that change data act as. Deactivating one stops every key bound to it at once. Valid keys are the bound keys that are not revoked, disabled or expired.',
+    serviceAccountsEmptyTitle: 'No service accounts yet',
+    serviceAccountsEmptyBody:
+      'One is created from the key dialog when you issue a key that can change data.',
+    activeKeys: 'Valid keys',
+    activate: 'Activate',
+    deactivate: 'Deactivate',
+    deactivateConfirmTitle: 'Deactivate this service account?',
+    deactivateConfirmBody:
+      'Every key bound to {name} stops working at once ({n} working right now). The keys are not revoked: activating the account again restores them.',
+    serviceAccountActivated: 'Service account activated.',
+    serviceAccountDeactivated: 'Service account deactivated. Its keys are refused.',
 
     // The generated instructions.
     usageTitle: 'How to use a key',
@@ -289,6 +341,15 @@ export const t = {
     usageExample: 'Try it',
     usageParams: 'Query parameters',
     usageNoParams: 'None',
+    usageBodyParams: 'Body fields',
+    usageRequired: 'required',
+    usageScope: 'Scope',
+    usageIdempotency:
+      'Send an {header} header holding a fresh UUID for each operation. Repeating a request with the same value returns the first answer instead of doing it twice.',
+    usageWriteExample: 'Example',
+    usageWriteLifetime: 'A key that can change data expires within {n} days',
+    usageWriteKeyHeaderOnly:
+      'Read-only keys only. A key that can change data must only be sent in the Authorization header, never in a URL; the API refuses it there even for a read.',
     usageBrowser: 'Open it in a browser',
     usageBrowserBody:
       'Paste this into the address bar. The key travels in the URL, so it is written into server logs, your browser history, and the Referer header sent to other sites. Use the header above for anything automated, and revoke this key if the link is ever shared.',
@@ -1697,6 +1758,12 @@ export const t = {
     API_KEY_INVALID: 'That API key is not valid. It may have been revoked or have expired.',
     API_KEY_DISABLED: 'This API key has been disabled. Ask an administrator to enable it.',
     API_KEY_SCOPE_DENIED: 'This API key does not have access to that endpoint.',
+    API_KEYS_DISABLED_IN_DEMO:
+      'API keys are switched off while demo accounts are enabled. Turn demo mode off first.',
+    API_KEY_QUERY_NOT_ALLOWED:
+      'Send this API key in the Authorization header. A key in the URL is accepted only for reading, and only if the key is read-only.',
+    DIRECT_TAKE_DISABLED:
+      'Taking stock directly is switched off. Raise a borrow request for the Inventory Manager instead.',
     IMPORT_ALREADY_RUNNING:
       'An import is already in progress. Wait for it to finish, or abandon it first.',
     IMPORT_VALIDATION_FAILED: 'The file could not be imported. See the list of problems below.',
