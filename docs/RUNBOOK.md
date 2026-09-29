@@ -82,9 +82,18 @@ printed on a pre-printed letterhead pad instead, raise it to the height of the p
 A key is a bearer credential: whoever reads it off the network can use it until it is revoked.
 Do all three of these before issuing a key to the lab panel, the voice assistant or a script.
 
-1. **Key clients call the HTTPS hostname, never an IP on port 5173.** Point each integration at
-   the TLS site Caddy serves (`infra/docker-compose.yml`, ports 80/443, `IMS_DOMAIN`). Which
-   hostname that is has not been recorded in this repository; write it here once it is decided.
+1. **Key clients call `https://ims.siot.solutions`, never an IP or port 5173.** That is the
+   canonical HTTPS hostname, with Cloudflare in front and Caddy behind (Arif, 2026-09-29). Its DNS
+   answered with Cloudflare addresses on 2026-09-29.
+
+   **Check before go-live: client addresses behind Cloudflare.** `main.ts` trusts exactly one
+   proxy hop (`trust proxy: 1`), and `infra/Caddyfile` sets no `trusted_proxies`. Behind Cloudflare,
+   the address the API sees would then be a Cloudflare edge, not the client. Every per-address
+   limit would be shared by everyone behind that edge: the login ceiling, the session ceiling and
+   the per-address key tier. This is deduced from the config and has **not** been observed. The
+   usual fix is Caddy `trusted_proxies` set to Cloudflare's ranges plus
+   `client_ip_headers CF-Connecting-IP`, then confirm with one request that the audit row's
+   `request_ip` is the real client address.
 2. **Firewall port 5173 so that only the reverse proxy can reach it.** The demo stack
    (`docker-compose.yml`) publishes its Caddy on host port 5173 over **plain HTTP**. Any client
    that can reach 5173 directly can send a key in cleartext. Allow 5173 from the proxy only, and

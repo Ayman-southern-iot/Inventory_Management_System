@@ -529,6 +529,8 @@ their own DRAFT. The rule is deliberately narrow — it is reference material fo
 ├── package.json                  root scripts (dev, build, test, typecheck, lint, db:*)
 ├── pnpm-workspace.yaml           apps/* + packages/*
 ├── tsconfig.base.json            strict TS, noUncheckedIndexedAccess on
+├── clients/python/               ims_client.py for the integration API (keys, one-call take),
+│                                 its README and smoke_client.py (local API only); uv, not pnpm
 ├── .claude/
 │   ├── settings.json             permissions + hook wiring (SessionStart, PostToolUse)
 │   ├── rules/                    00..60 engineering rules, mostly path-scoped
@@ -1063,6 +1065,10 @@ reason the locking exists).
   user: that opens `@Roles` and fabricates the audit actor. A key still reaches a route only if
   the route carries `@ApiKeyScopes`, and `test/api-key-writes.int-spec.ts` walks the live route
   table to prove it.
+  Rules about what a key may do *inside* a route it can reach (no `isActive` on `PATCH`, an
+  `Idempotency-Key` on receive) live in the controller, through `@CurrentApiKey()` and
+  `modules/api-keys/api-key.policies.ts`, never in the services. §15.4 of the integration doc is
+  checked against the route registry by `test/integration-doc-drift.int-spec.ts`.
 - **Every query that turns a role into a list of people must filter
   `users.is_service_account = false`.** A service account holds INVENTORY_MANAGER so its keys can
   act. Without the filter it is handed requisition IM stages (`findAnyActiveUserWithRole` picks
