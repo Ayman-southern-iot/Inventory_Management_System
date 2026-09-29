@@ -88,6 +88,11 @@ export class LocationsController {
     return this.locations.updateRoom(id, body, ctx);
   }
 
+  @ApiKeyScopes({
+    summary: 'Create a zone inside an existing room.',
+    scopes: [ApiKeyScope.LOCATIONS_WRITE],
+    body: createZoneSchema,
+  })
   @Roles(Role.INVENTORY_MANAGER, Role.ADMIN)
   @Post('zones')
   async createZone(
@@ -107,6 +112,11 @@ export class LocationsController {
     return this.locations.updateZone(id, body, ctx);
   }
 
+  @ApiKeyScopes({
+    summary: 'Create a compartment (a shelf slot) inside an existing zone.',
+    scopes: [ApiKeyScope.LOCATIONS_WRITE],
+    body: createCompartmentSchema,
+  })
   @Roles(Role.INVENTORY_MANAGER, Role.ADMIN)
   @Post('compartments')
   async createCompartment(

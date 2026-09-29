@@ -36,6 +36,11 @@ export class CategoriesController {
     return this.categories.tree();
   }
 
+  @ApiKeyScopes({
+    summary: 'Create a category, at the top of the tree or under an existing parent.',
+    scopes: [ApiKeyScope.CATALOG_WRITE],
+    body: createCategorySchema,
+  })
   @Roles(Role.INVENTORY_MANAGER, Role.ADMIN)
   @Post()
   async create(
@@ -45,6 +50,11 @@ export class CategoriesController {
     return this.categories.create(body, ctx);
   }
 
+  @ApiKeyScopes({
+    summary: 'Rename, move or deactivate a category. Send only the fields you are changing.',
+    scopes: [ApiKeyScope.CATALOG_WRITE],
+    body: updateCategorySchema,
+  })
   @Roles(Role.INVENTORY_MANAGER, Role.ADMIN)
   @Patch(':id')
   async update(

@@ -90,6 +90,31 @@ const rawSchema = z.object({
    */
   API_KEY_TOUCH_INTERVAL_SECONDS: z.coerce.number().int().min(0).max(86_400).default(300),
   /**
+   * The longest a key holding any write scope may live, in days (OQ-KT3, Arif 2026-09-29).
+   * Read-only keys are unaffected and may still never expire (K6). A forgotten read key leaks
+   * the catalogue; a forgotten write key can empty a shelf, so it has to run out on its own.
+   */
+  API_KEY_WRITE_MAX_LIFETIME_DAYS: z.coerce.number().int().min(1).max(3650).default(180),
+  /**
+   * May stock be taken off a shelf in one call, `POST /stock/take` (ADR-0002)?
+   *
+   * Off by default: a release decision, like ALLOW_PARTIAL_FUNDING. With it off the route
+   * refuses with DIRECT_TAKE_DISABLED and the usage page does not list it; the borrow flow and
+   * the IM's issue-from-stock are unaffected.
+   */
+  ALLOW_DIRECT_TAKE: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+  /**
+   * The most units one take may remove (OQ-KT2, Arif 2026-09-29). Per call, not per day: a caller
+   * can make several, and each is its own audited, notified event.
+   *
+   * OPEN QUESTION: OQ-KT11 — OQ-KT2 decided the mechanism, not the number. 10 is a guess sized
+   * for a drawer panel handing out components; anything larger should go through a borrow.
+   */
+  DIRECT_TAKE_MAX_QTY: z.coerce.number().int().min(1).max(1_000_000).default(10),
+  /**
    * The ceiling on `GET /catalogue`, which is deliberately unpaginated because its whole job is
    * to hand a consuming frontend everything in one call. Past this it refuses loudly rather
    * than truncating — a catalogue quietly missing its last hundred products is worse than one
@@ -533,7 +558,15 @@ export interface AppConfig {
     readonly apiKey: { readonly limit: number; readonly ttlSeconds: number };
     readonly loginBurst: { readonly limit: number; readonly ttlSeconds: number };
   };
-  readonly apiKeys: { readonly touchIntervalSeconds: number };
+  readonly apiKeys: {
+    readonly touchIntervalSeconds: number;
+    readonly writeMaxLifetimeDays: number;
+  };
+  /** `POST /stock/take` (ADR-0002). */
+  readonly directTake: {
+    readonly isEnabled: boolean;
+    readonly maxQuantityPerCall: number;
+  };
   readonly catalogue: { readonly maxProducts: number };
   readonly imports: {
     readonly maxRows: number;
@@ -688,6 +721,11 @@ export function buildConfig(source: Record<string, string | undefined>): AppConf
     }),
     apiKeys: Object.freeze({
       touchIntervalSeconds: env.API_KEY_TOUCH_INTERVAL_SECONDS,
+      writeMaxLifetimeDays: env.API_KEY_WRITE_MAX_LIFETIME_DAYS,
+    }),
+    directTake: Object.freeze({
+      isEnabled: env.ALLOW_DIRECT_TAKE,
+      maxQuantityPerCall: env.DIRECT_TAKE_MAX_QTY,
     }),
     catalogue: Object.freeze({
       maxProducts: env.CATALOGUE_MAX_PRODUCTS,

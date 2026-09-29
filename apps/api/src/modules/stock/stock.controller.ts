@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Headers, HttpCode, HttpStatus, Post, Query } from '@nestjs/common';
 import {
+  ApiKeyScope,
   IDEMPOTENCY_HEADER,
   Role,
   adjustStockSchema,
@@ -17,6 +18,7 @@ import {
   type ResolveQuarantineInput,
 } from '@ims/shared';
 import { zodPipe } from '../../common/zod-validation.pipe';
+import { ApiKeyScopes } from '../api-keys/api-key.decorators';
 import { CurrentUser, Roles } from '../auth/auth.decorators';
 import type { RequestUser } from '../auth/request-user';
 import { CurrentAuditContext } from '../audit/audit.decorators';
@@ -51,6 +53,12 @@ export class StockController {
    * reconciliation compares the ledger against placements and both agree. Hence the
    * Idempotency-Key, which `idempotency_keys` has existed for since Phase 02.
    */
+  @ApiKeyScopes({
+    summary:
+      'Record goods arriving onto a shelf. Send an Idempotency-Key header so a retried request cannot receive twice.',
+    scopes: [ApiKeyScope.STOCK_RECEIVE],
+    body: receiveStockSchema,
+  })
   @Roles(Role.INVENTORY_MANAGER, Role.ADMIN)
   @Post('receive')
   @HttpCode(HttpStatus.OK)

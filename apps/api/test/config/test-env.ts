@@ -60,6 +60,11 @@ export const TEST_ENV: Record<string, string> = {
   // Zero, so the integration suite sees `last_used_at` move on every call. In production the
   // interval is what stops a busy integration writing once per read.
   API_KEY_TOUCH_INTERVAL_SECONDS: '0',
+  API_KEY_WRITE_MAX_LIFETIME_DAYS: '180',
+  // Pinned to the production default (off). The take specs build their app with a CONFIG
+  // override that switches it on, so the refusal and the feature are both exercised.
+  ALLOW_DIRECT_TAKE: 'false',
+  DIRECT_TAKE_MAX_QTY: '10',
   CATALOGUE_MAX_PRODUCTS: '5000',
   IMPORT_MAX_ROWS: '5000',
   IMPORT_MAX_FILE_BYTES: '5242880',

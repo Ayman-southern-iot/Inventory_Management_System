@@ -1139,9 +1139,11 @@ export class FundsService {
       const borrower = await tx
         .selectFrom('users')
         .where('id', '=', input.borrowerId)
-        .select(['id', 'is_active'])
+        .select(['id', 'is_active', 'is_service_account'])
         .executeTakeFirst();
-      if (!borrower) throw new NotFoundError('User');
+      // A borrower is a person (ADR-0002). A service account is reported as not found rather
+      // than refused, so the answer says nothing about which ids are machines.
+      if (!borrower || borrower.is_service_account) throw new NotFoundError('User');
       // Issuing to a deactivated account would create a borrow nobody can return.
       if (!borrower.is_active) {
         throw new ValidationFailedError({

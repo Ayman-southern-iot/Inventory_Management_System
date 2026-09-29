@@ -28,7 +28,7 @@ import { HealthController } from './modules/health/health.controller';
 import { ApiKeysModule } from './modules/api-keys/api-keys.module';
 import { CatalogueModule } from './modules/catalogue/catalogue.module';
 import { ImportsModule } from './modules/imports/imports.module';
-import { isApiKeyRequest } from './common/throttling';
+import { apiKeyTracker, isApiKeyRequest } from './common/throttling';
 
 const toMs = (seconds: number): number => seconds * 1000;
 
@@ -70,6 +70,16 @@ const throttlerOptions = [
   },
   {
     name: 'apiKey',
+    ttl: toMs(config.throttling.apiKey.ttlSeconds),
+    limit: config.throttling.apiKey.limit,
+    skipIf: (context: ExecutionContext) => !isApiKeyRequest(context),
+    // Counted per key — see `apiKeyTracker`.
+    getTracker: apiKeyTracker,
+  },
+  {
+    // The same ceiling counted per address, for every key-shaped request (ADR-0002 security
+    // review). Without it a caller could rotate made-up keys and never meet a limit.
+    name: 'apiKeyAddress',
     ttl: toMs(config.throttling.apiKey.ttlSeconds),
     limit: config.throttling.apiKey.limit,
     skipIf: (context: ExecutionContext) => !isApiKeyRequest(context),

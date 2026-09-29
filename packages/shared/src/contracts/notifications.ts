@@ -55,6 +55,12 @@ export const NOTIFICATION_TYPES = [
   'borrowing.returned',
   'borrowing.issued_to_you',
   /**
+   * To every IM: an API key took stock off a shelf (OQ-KT4). No human IM saw it happen, so this
+   * is how the people who answer for the shelf find out. Not sent when a person takes — they
+   * are an IM themselves, and nobody is notified of their own action.
+   */
+  'borrowing.taken_by_key',
+  /**
    * A loan has been moved onto this person's name. They may never have touched the borrow
    * form — the IM corrected the record — so this is the first they hear of being liable.
    */

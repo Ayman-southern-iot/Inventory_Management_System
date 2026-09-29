@@ -21,6 +21,12 @@ export interface AuditContext {
   requestPath: string | null;
   requestIp: string | null;
   userAgent: string | null;
+  /**
+   * The API key the actor presented, when the actor is a service account acting through one
+   * (ADR-0002). Lands in `audit_log.api_key_id`. Optional because only a request can carry a
+   * key: a job, the seeder and a hand-built context never do, and absent means "no key".
+   */
+  apiKeyId?: string | null;
 }
 
 /** For scheduled jobs and the seeder — no actor, no HTTP. */
@@ -39,8 +45,13 @@ export const SYSTEM_AUDIT_CONTEXT: AuditContext = {
  * Build an `AuditContext` from a logged-in request. Use this for every mutation handler that
  * already has `req.user` populated by the global JWT guard.
  */
-export function auditContextFromRequest(req: Request, user: RequestUser | null): AuditContext {
+export function auditContextFromRequest(
+  req: Request,
+  user: RequestUser | null,
+  apiKeyId: string | null = null,
+): AuditContext {
   return {
+    apiKeyId,
     actorId: user?.id ?? null,
     // Not on RequestUser — the JWT carries sub/email/roles and no name. Left null on
     // purpose: the audit insert resolves it from `actor_id` (see audit.repository.ts).

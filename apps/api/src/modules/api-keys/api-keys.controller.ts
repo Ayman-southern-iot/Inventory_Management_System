@@ -14,15 +14,20 @@ import {
 import {
   Role,
   createApiKeySchema,
+  createServiceAccountSchema,
   listApiKeysQuerySchema,
   updateApiKeySchema,
+  updateServiceAccountSchema,
   type ApiKey,
   type ApiKeyUsageDoc,
   type CreateApiKeyInput,
+  type CreateServiceAccountInput,
   type CreatedApiKey,
   type ListApiKeysQuery,
   type Paginated,
+  type ServiceAccount,
   type UpdateApiKeyInput,
+  type UpdateServiceAccountInput,
 } from '@ims/shared';
 import { zodPipe } from '../../common/zod-validation.pipe';
 import { AuthenticatedThrottle } from '../../common/throttling';
@@ -34,8 +39,10 @@ import { ApiKeysService } from './api-keys.service';
 
 /**
  * Issuing credentials is an administrator's job and nobody else's (K9), so the whole controller
- * is `@Roles(Role.ADMIN)` rather than per-route. An API key can never reach any of it: `@Roles`
- * needs `request.user`, which a key deliberately does not set — a key cannot mint more keys.
+ * is `@Roles(Role.ADMIN)` rather than per-route. An API key can never reach any of it, for two
+ * independent reasons (ADR-0002): no route here carries `@ApiKeyScopes`, so the guard refuses a
+ * key before `@Roles` is consulted; and the service account a bound key acts as holds only
+ * GENERAL and INVENTORY_MANAGER, never ADMIN. A key cannot mint more keys.
  */
 @AuthenticatedThrottle
 @Roles(Role.ADMIN)
@@ -92,5 +99,34 @@ export class ApiKeysController {
     @CurrentAuditContext() ctx: AuditContext,
   ): Promise<void> {
     return this.apiKeys.revoke(id, ctx);
+  }
+
+  /* ---------------------------------------------------------------- service accounts */
+
+  /**
+   * The principals write-capable keys act as (ADR-0002). Listed here and nowhere else — the
+   * Users screen shows people — so a key and the account it acts as are managed side by side.
+   */
+  @Get('service-accounts')
+  async listServiceAccounts(): Promise<ServiceAccount[]> {
+    return this.apiKeys.listServiceAccounts();
+  }
+
+  @Post('service-accounts')
+  async createServiceAccount(
+    @Body(zodPipe(createServiceAccountSchema)) body: CreateServiceAccountInput,
+    @CurrentAuditContext() ctx: AuditContext,
+  ): Promise<ServiceAccount> {
+    return this.apiKeys.createServiceAccount(body, ctx);
+  }
+
+  /** Deactivating stops every key bound to the account at once; reactivating restores them. */
+  @Patch('service-accounts/:id')
+  async setServiceAccountActive(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(zodPipe(updateServiceAccountSchema)) body: UpdateServiceAccountInput,
+    @CurrentAuditContext() ctx: AuditContext,
+  ): Promise<ServiceAccount> {
+    return this.apiKeys.setServiceAccountActive(id, body.isActive, ctx);
   }
 }

@@ -58,6 +58,13 @@ export interface UsersTable {
   last_login_at: Date | null;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
+  /**
+   * A principal an API key acts as, never a person (ADR-0002, migration 0039). Cannot sign in,
+   * and must be filtered out of every query that turns a role into a list of *people* —
+   * recipients, assignees, pickers. Set at creation and never changed: the composite FK from
+   * `api_keys` refuses the flip while a key is bound.
+   */
+  is_service_account: Generated<boolean>;
 }
 
 /** Roles are additive: one row per role a user holds. */
@@ -125,6 +132,13 @@ export interface ApiKeysTable {
   created_at: CreatedAt;
   revoked_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
   revoked_by: ColumnType<string | null, string | null | undefined, string | null>;
+  /**
+   * The service account this key acts as (migration 0039). Null for an unbound, read-only key,
+   * which has no principal at all (K4). Any write scope requires it — a CHECK, not a convention.
+   */
+  service_user_id: ColumnType<string | null, string | null | undefined, never>;
+  /** Always true; the second half of the FK that only lets a key reference a service account. */
+  service_user_is_service_account: ColumnType<boolean, never, never>;
 }
 
 /**
@@ -587,6 +601,8 @@ export interface AuditLogTable {
   user_agent: string | null;
   outcome: AuditOutcome;
   error_code: string | null;
+  /** The API key presented, when the actor is a service account acting through one (0039). */
+  api_key_id: ColumnType<string | null, string | null | undefined, never>;
   created_at: CreatedAt;
 }
 

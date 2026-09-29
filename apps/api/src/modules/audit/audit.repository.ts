@@ -41,6 +41,8 @@ export interface AuditInsert {
   user_agent: string | null;
   outcome: AuditOutcome;
   error_code: string | null;
+  /** The key a service account acted through (ADR-0002). Null for every person and every job. */
+  api_key_id: string | null;
 }
 
 /** Page metadata for the admin list, identical shape to the rest of the product. */
@@ -182,7 +184,7 @@ export class AuditRepository {
         action, entity_type, entity_id, entity_ref,
         summary, metadata,
         request_method, request_path, request_ip, user_agent,
-        outcome, error_code
+        outcome, error_code, api_key_id
       )
       VALUES (
         ${row.actor_id},
@@ -191,7 +193,7 @@ export class AuditRepository {
         ${row.action}, ${row.entity_type}, ${row.entity_id}, ${row.entity_ref},
         ${row.summary}, ${JSON.stringify(row.metadata ?? {})}::jsonb,
         ${row.request_method}, ${row.request_path}, ${row.request_ip}, ${row.user_agent},
-        ${row.outcome}, ${row.error_code}
+        ${row.outcome}, ${row.error_code}, ${row.api_key_id}::uuid
       )
     `.execute(writer);
   }

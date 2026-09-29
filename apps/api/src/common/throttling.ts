@@ -1,7 +1,11 @@
+import { createHash } from 'node:crypto';
 import { applyDecorators, type ExecutionContext } from '@nestjs/common';
 import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import { API_KEY_QUERY_PARAM, API_KEY_TOKEN_PREFIX } from '@ims/shared';
 import { config } from '../config';
+
+/** The scheme word the guard reads; the two must never disagree about what follows it. */
+const BEARER = 'Bearer ';
 
 /**
  * Shared throttler decorator bundles. Each named tier is configured in `config.throttling.*`
@@ -39,35 +43,71 @@ const ms = (s: number): number => s * 1000;
 const only = (...active: readonly string[]) =>
   SkipThrottle(
     Object.fromEntries(
-      (['auth', 'public', 'authenticated', 'apiKey', 'loginBurst'] as const)
+      (['auth', 'public', 'authenticated', 'apiKey', 'apiKeyAddress', 'loginBurst'] as const)
         .filter((tier) => !active.includes(tier))
         .map((tier) => [tier, true]),
     ),
   );
 
 /**
+ * The API key a request presents, read **exactly as `JwtAuthGuard` reads it**, or undefined.
+ *
+ * A `Bearer` header decides alone: a key if its trimmed value starts `ims_`, otherwise a session,
+ * whatever sits in the URL — the guard lets the header win, so this must too. Without a header,
+ * a trimmed `?api_key=`. Any disagreement with the guard lets a request be counted in one tier
+ * and treated as the other: before this was shared, a signed-in user could append a made-up
+ * `?api_key=` to skip their own ceiling, and padding a real key moved it into the looser one
+ * (security review, 2026-09-29).
+ */
+const presentedApiKey = (request: {
+  headers?: { authorization?: string };
+  query?: Record<string, unknown>;
+}): string | undefined => {
+  const header = request.headers?.authorization;
+  if (header?.startsWith(BEARER)) {
+    const token = header.slice(BEARER.length).trim();
+    return token.startsWith(API_KEY_TOKEN_PREFIX) ? token : undefined;
+  }
+  const queryValue = request.query?.[API_KEY_QUERY_PARAM];
+  const fromQuery = typeof queryValue === 'string' ? queryValue.trim() : undefined;
+  return fromQuery?.startsWith(API_KEY_TOKEN_PREFIX) ? fromQuery : undefined;
+};
+
+/**
  * Is this request presenting an API key rather than a session?
  *
- * Decided from the **raw header**, not from `request.apiKey`, and that is deliberate. Both the
+ * Decided from the **raw request**, not from `request.apiKey`, and that is deliberate. Both the
  * throttler and the auth guard are global guards, and their relative order is a function of
  * module registration rather than anything declared — reading state the auth guard may not have
  * written yet would work until someone reorders an import. The prefix is syntax; it needs no
  * validation to read, and a string that merely *looks* like a key is exactly what we want held
- * to the tighter ceiling, since that is what a brute-force against key values looks like.
+ * to the key ceilings, since that is what a brute-force against key values looks like.
  */
-export const isApiKeyRequest = (context: ExecutionContext): boolean => {
-  const request = context.switchToHttp().getRequest<{
-    headers?: { authorization?: string };
-    query?: Record<string, unknown>;
-  }>();
+export const isApiKeyRequest = (context: ExecutionContext): boolean =>
+  presentedApiKey(
+    context.switchToHttp().getRequest<{
+      headers?: { authorization?: string };
+      query?: Record<string, unknown>;
+    }>(),
+  ) !== undefined;
 
-  if (request.headers?.authorization?.startsWith(`Bearer ${API_KEY_TOKEN_PREFIX}`)) return true;
-
-  // A key may also arrive as `?api_key=...`. Without this it would be measured against the
-  // *human* ceiling — three times looser — which is the opposite of what a credential that
-  // travels in a URL deserves.
-  const queryValue = request.query?.[API_KEY_QUERY_PARAM];
-  return typeof queryValue === 'string' && queryValue.startsWith(API_KEY_TOKEN_PREFIX);
+/**
+ * The bucket the `apiKey` tier counts a request in: **the key itself** (ADR-0002), as a hash of
+ * the whole token.
+ *
+ * Per key so a credential's budget follows it: a key used from several addresses — a panel that
+ * moves, a leaked key replayed elsewhere — shares one allowance instead of getting one per host.
+ * The whole token, hashed, rather than the public `ims_xxxxxxxx` prefix, because that prefix is
+ * shown in the admin list and in audit rows: bucketing on it let anyone spend a real key's budget
+ * with made-up tokens that merely shared its first twelve characters. The hash keeps the secret
+ * itself out of the throttler's in-memory store.
+ *
+ * Every key-shaped request also counts against its address in the `apiKeyAddress` tier, which is
+ * what stops a caller rotating made-up keys for an unlimited run of lookups.
+ */
+export const apiKeyTracker = (request: Record<string, unknown>): string => {
+  const token = presentedApiKey(request) ?? '';
+  return `apikey:${createHash('sha256').update(token).digest('hex')}`;
 };
 
 /**
@@ -84,13 +124,18 @@ export const AuthenticatedThrottle = applyDecorators(
       limit: config.throttling.apiKey.limit,
       ttl: ms(config.throttling.apiKey.ttlSeconds),
     },
+    apiKeyAddress: {
+      limit: config.throttling.apiKey.limit,
+      ttl: ms(config.throttling.apiKey.ttlSeconds),
+    },
   }),
   /**
-   * Both ceilings are declared; exactly one applies. The tiers carry `skipIf` in
-   * `app.module.ts`, so a session is measured against `authenticated` and a key against the
-   * lower `apiKey` — a per-caller limit, which a per-route tier alone cannot express.
+   * A session is measured against `authenticated`; a key against **both** `apiKey` (per key)
+   * and `apiKeyAddress` (per address, Phase 10's original ceiling, same limit). The tiers carry
+   * `skipIf` in `app.module.ts`. Per key alone let made-up keys be rotated for an unlimited run;
+   * per address alone let one key be spread across hosts. Together neither is possible.
    */
-  only('authenticated', 'apiKey'),
+  only('authenticated', 'apiKey', 'apiKeyAddress'),
 );
 
 /** Strict tier for credential-bearing endpoints. */

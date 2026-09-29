@@ -121,6 +121,7 @@ export class AuditService {
       user_agent: context.userAgent,
       outcome: input.outcome ?? 'success',
       error_code: input.errorCode ?? null,
+      api_key_id: context.apiKeyId ?? null,
     };
 
     try {
@@ -185,6 +186,7 @@ export class AuditService {
       user_agent: context.userAgent,
       outcome: input.outcome ?? 'failure',
       error_code: input.errorCode ?? null,
+      api_key_id: context.apiKeyId ?? null,
     };
 
     try {

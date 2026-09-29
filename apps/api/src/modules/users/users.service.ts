@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { randomBytes, randomUUID } from 'node:crypto';
 import {
   PAGINATION_MAX_LIMIT,
   Role,
@@ -20,6 +21,12 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { NOTIFICATION_LINKS } from '../notifications/notifications.links';
 import type { AuditContext } from '../audit/audit-context';
 import { UsersRepository, toUser, type Tx, type UserWithRoles } from './users.repository';
+import {
+  SERVICE_ACCOUNT_DESIGNATION,
+  SERVICE_ACCOUNT_EMAIL_DOMAIN,
+  SERVICE_ACCOUNT_ROLES,
+  SERVICE_ACCOUNT_UNUSABLE_SECRET_BYTES,
+} from './constants';
 
 /** Postgres unique-violation. Catching it is how a duplicate email stays a single round trip. */
 const PG_UNIQUE_VIOLATION = '23505';
@@ -28,6 +35,17 @@ const PG_FOREIGN_KEY_VIOLATION = '23503';
 
 function isPgError(error: unknown, code: string): boolean {
   return typeof error === 'object' && error !== null && (error as { code?: string }).code === code;
+}
+
+/**
+ * The user-admin paths are for people. A service account's roles are fixed, it has no password
+ * anyone knows, and switching it off is done where its keys are listed (ADR-0002) — editing it
+ * through a form built for employees would be changing a machine's credentials by accident.
+ */
+function assertIsPerson(user: UserWithRoles): void {
+  if (user.is_service_account) {
+    throw new ConflictError('A service account is managed from the API keys screen');
+  }
 }
 
 @Injectable()
@@ -158,6 +176,7 @@ export class UsersService {
   async update(id: string, input: UpdateUserInput, context: AuditContext): Promise<User> {
     const existing = await this.repo.findById(id);
     if (!existing) throw new NotFoundError('User');
+    assertIsPerson(existing);
 
     try {
       await this.repo.connection.transaction().execute(async (tx) => {
@@ -250,6 +269,7 @@ export class UsersService {
   async setActive(id: string, isActive: boolean, context: AuditContext): Promise<User> {
     const existing = await this.repo.findById(id);
     if (!existing) throw new NotFoundError('User');
+    assertIsPerson(existing);
 
     if (!isActive && id === context.actorId) {
       throw new ForbiddenError('You cannot deactivate your own account');
@@ -290,6 +310,7 @@ export class UsersService {
   async resetPassword(id: string, input: ResetPasswordInput, context: AuditContext): Promise<void> {
     const existing = await this.repo.findById(id);
     if (!existing) throw new NotFoundError('User');
+    assertIsPerson(existing);
 
     const passwordHash = await this.passwords.hash(input.newPassword);
     await this.repo.connection.transaction().execute(async (tx) => {
@@ -349,6 +370,7 @@ export class UsersService {
   ): Promise<void> {
     const existing = await this.repo.findById(id);
     if (!existing) throw new NotFoundError('User');
+    assertIsPerson(existing);
 
     const ok = await this.passwords.verify(existing.password_hash, currentPassword);
     if (!ok) throw new ForbiddenError('Current password is incorrect');
@@ -358,6 +380,75 @@ export class UsersService {
     // name from `actor_id` — so the old `?? existing.full_name` was unreachable here and a
     // subject-as-actor bug everywhere else it appeared (D-030).
     await this.resetPassword(id, { newPassword, mustChangePassword: false }, context);
+  }
+
+  /* ---------------------------------------------------------------- service accounts */
+
+  /**
+   * Create the principal a write-capable key acts as (ADR-0002). A `users` row, so every FK that
+   * names an actor — ledger, borrow, audit, idempotency — works unchanged; flagged, so it is
+   * filtered out of everything that picks *people*.
+   */
+  async createServiceAccount(name: string, context: AuditContext): Promise<string> {
+    const email = `svc-${randomUUID()}@${SERVICE_ACCOUNT_EMAIL_DOMAIN}`;
+    const passwordHash = await this.passwords.hash(
+      randomBytes(SERVICE_ACCOUNT_UNUSABLE_SECRET_BYTES).toString('base64url'),
+    );
+
+    return this.repo.connection.transaction().execute(async (tx) => {
+      const id = await this.repo.insert(tx, {
+        email,
+        passwordHash,
+        fullName: name,
+        designation: SERVICE_ACCOUNT_DESIGNATION,
+        departmentId: null,
+        mustChangePassword: false,
+        isServiceAccount: true,
+      });
+      await this.repo.replaceRoles(tx, id, SERVICE_ACCOUNT_ROLES);
+      await this.audit.record(
+        {
+          action: 'service_account.create',
+          entityType: 'user',
+          entityId: id,
+          entityRef: name,
+          summary: `Created service account "${name}"`,
+          metadata: { name, roles: SERVICE_ACCOUNT_ROLES },
+        },
+        context,
+        tx,
+      );
+      return id;
+    });
+  }
+
+  /**
+   * The kill switch for every key bound to the account at once: the key guard re-reads the
+   * account's active flag on each request, exactly as the session guard does for a person.
+   */
+  async setServiceAccountActive(
+    id: string,
+    isActive: boolean,
+    context: AuditContext,
+  ): Promise<void> {
+    const existing = await this.repo.findById(id);
+    if (!existing?.is_service_account) throw new NotFoundError('Service account');
+
+    await this.repo.connection.transaction().execute(async (tx) => {
+      await this.repo.update(tx, id, { isActive });
+      await this.audit.record(
+        {
+          action: 'service_account.set_active',
+          entityType: 'user',
+          entityId: id,
+          entityRef: existing.full_name,
+          summary: `${isActive ? 'Activated' : 'Deactivated'} service account "${existing.full_name}"`,
+          metadata: { isActive },
+        },
+        context,
+        tx,
+      );
+    });
   }
 
   async touchLastLogin(id: string): Promise<void> {

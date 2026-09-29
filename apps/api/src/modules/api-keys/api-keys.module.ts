@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { DiscoveryModule } from '@nestjs/core';
 import { AuditModule } from '../audit/audit.module';
+import { UsersModule } from '../users/users.module';
 import { ApiKeyDocsService } from './api-key-docs.service';
 import { ApiKeysController } from './api-keys.controller';
 import { ApiKeysRepository } from './api-keys.repository';
@@ -18,7 +19,9 @@ import { ApiKeysService } from './api-keys.service';
  * for `@ApiKeyScopes` metadata rather than trusting a hand-maintained list.
  */
 @Module({
-  imports: [DiscoveryModule, AuditModule],
+  // UsersModule for service accounts: `users` is its table, so creating or switching one off
+  // goes through UsersService rather than a second writer here (ADR-0002).
+  imports: [DiscoveryModule, AuditModule, UsersModule],
   controllers: [ApiKeysController],
   providers: [ApiKeysRepository, ApiKeysService, ApiKeyDocsService],
   exports: [ApiKeysService],

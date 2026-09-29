@@ -179,6 +179,13 @@ export const AUDIT_ACTIONS = [
   'api_key.enable',
   'api_key.disable',
   'api_key.revoke',
+  /*
+   * Service accounts (ADR-0002) — the principals write-capable keys act as. A `users` row, so the
+   * entity type is `user`; separate actions because they are created and switched off from the
+   * API keys screen, never through the user-admin path, and an auditor should see which.
+   */
+  'service_account.create',
+  'service_account.set_active',
   // System
   'system.reminder_run',
   'system.check_failed',
@@ -253,6 +260,10 @@ export const AUDIT_ALWAYS_ON_ACTIONS = [
   'user.update',
   'user.set_active',
   'user.reset_password',
+  // A service account is a principal like a user; creating one or switching it off is the same
+  // class of decision as `user.create` / `user.set_active`, so it cannot be toggled out either.
+  'service_account.create',
+  'service_account.set_active',
   'settings.update',
   'approver_slot.assign',
   'approver_slot.clear',

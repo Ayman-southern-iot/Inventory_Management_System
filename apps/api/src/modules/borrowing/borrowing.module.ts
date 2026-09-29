@@ -6,6 +6,8 @@ import { BorrowingController } from './borrowing.controller';
 import { BorrowingRepository } from './borrowing.repository';
 import { BorrowingService } from './borrowing.service';
 import { OverdueBorrowJob } from './overdue.job';
+import { StockTakeController } from './stock-take.controller';
+import { StockTakeService } from './stock-take.service';
 
 /**
  * Borrowing owns no stock arithmetic of its own — every reserve, issue, release and return
@@ -13,8 +15,8 @@ import { OverdueBorrowJob } from './overdue.job';
  */
 @Module({
   imports: [AuditModule, StockModule, NotificationsModule],
-  controllers: [BorrowingController],
-  providers: [BorrowingService, BorrowingRepository, OverdueBorrowJob],
+  controllers: [BorrowingController, StockTakeController],
+  providers: [BorrowingService, BorrowingRepository, OverdueBorrowJob, StockTakeService],
   exports: [BorrowingService, BorrowingRepository],
 })
 export class BorrowingModule {}

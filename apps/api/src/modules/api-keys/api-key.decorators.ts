@@ -1,12 +1,24 @@
-import { SetMetadata, applyDecorators } from '@nestjs/common';
+import {
+  SetMetadata,
+  applyDecorators,
+  createParamDecorator,
+  type ExecutionContext,
+} from '@nestjs/common';
 import type { z } from 'zod';
 import type { ApiKeyScope } from '@ims/shared';
+import type { AppConfig } from '../../config';
 
 export const API_KEY_SCOPES_KEY = 'ims:apiKeyScopes';
 /** A one-line description of the route, shown on the generated usage page. */
 export const API_KEY_SUMMARY_KEY = 'ims:apiKeySummary';
 /** The route's query schema, so the usage page can list its parameters. */
 export const API_KEY_QUERY_KEY = 'ims:apiKeyQuery';
+/** The route's JSON body schema, so the usage page can list its fields (ADR-0002). */
+export const API_KEY_BODY_KEY = 'ims:apiKeyBody';
+/** The route refuses a request without an `Idempotency-Key` header. */
+export const API_KEY_IDEMPOTENT_KEY = 'ims:apiKeyIdempotent';
+/** A feature-flag predicate; the usage page leaves the route out while it is false. */
+export const API_KEY_ENABLED_KEY = 'ims:apiKeyEnabled';
 
 export interface ApiKeyRouteOptions {
   /**
@@ -22,6 +34,19 @@ export interface ApiKeyRouteOptions {
    * schema is written once and referenced here.
    */
   query?: z.ZodObject<z.ZodRawShape>;
+  /** The body schema the route validates with, for the same reason. Refined schemas are fine. */
+  body?: z.ZodTypeAny;
+  /**
+   * Documentation only: tells the integrator the route demands an `Idempotency-Key`. The route
+   * itself is what refuses a request without one — this does not enforce anything.
+   */
+  requiresIdempotencyKey?: boolean;
+  /**
+   * For a route behind a release flag. The usage page omits the route while this returns false,
+   * so it never advertises what the API would refuse. Read against the injected config, so a
+   * test app built with a different CONFIG sees its own answer. Does not gate the route.
+   */
+  isEnabled?: (config: AppConfig) => boolean;
 }
 
 /**
@@ -44,4 +69,19 @@ export const ApiKeyScopes = (options: ApiKeyRouteOptions) =>
     SetMetadata(API_KEY_SCOPES_KEY, options.scopes),
     SetMetadata(API_KEY_SUMMARY_KEY, options.summary),
     SetMetadata(API_KEY_QUERY_KEY, options.query),
+    SetMetadata(API_KEY_BODY_KEY, options.body),
+    SetMetadata(API_KEY_IDEMPOTENT_KEY, options.requiresIdempotencyKey ?? false),
+    SetMetadata(API_KEY_ENABLED_KEY, options.isEnabled),
   );
+
+/**
+ * The API key that authenticated this request, or null for a session.
+ *
+ * For the rare route that must answer a key differently from a person — today only
+ * `GET /products/:id`, which withholds who is borrowing what (K2). Reads what `JwtAuthGuard`
+ * set, which by the time a handler runs it always has.
+ */
+export const CurrentApiKey = createParamDecorator(
+  (_data: unknown, ctx: ExecutionContext): { id: string } | null =>
+    ctx.switchToHttp().getRequest<{ apiKey?: { id: string } }>().apiKey ?? null,
+);

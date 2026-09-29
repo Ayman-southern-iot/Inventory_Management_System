@@ -32,6 +32,19 @@ export const ErrorCode = {
    * is default-deny, so this is the code most integrators will meet first.
    */
   API_KEY_SCOPE_DENIED: 'API_KEY_SCOPE_DENIED',
+  /**
+   * Every key is refused, and none may be issued, while a production deployment runs with demo
+   * accounts on (ADR-0002). Demo mode lets anyone sign in as the administrator, so a key would
+   * authenticate nobody in particular — and one minted during it would come alive the day demo
+   * mode is switched off.
+   */
+  API_KEYS_DISABLED_IN_DEMO: 'API_KEYS_DISABLED_IN_DEMO',
+  /**
+   * A key sent as `?api_key=` on anything but a GET. The URL form exists so a person can paste a
+   * link into a browser to *read*; a credential in a URL is written into access logs and
+   * browser history, and must never be able to change anything.
+   */
+  API_KEY_QUERY_NOT_ALLOWED: 'API_KEY_QUERY_NOT_ALLOWED',
 
   /** One import at a time, enforced by a partial unique index rather than by a check. */
   IMPORT_ALREADY_RUNNING: 'IMPORT_ALREADY_RUNNING',
@@ -187,6 +200,8 @@ export const ErrorCode = {
   /** Logging a receipt that would take total funding past the approved amount. */
   /** Partial funding is switched off for this release; a receipt must clear the balance. */
   PARTIAL_FUNDING_DISABLED: 'PARTIAL_FUNDING_DISABLED',
+  /** `POST /stock/take` while `ALLOW_DIRECT_TAKE` is off (ADR-0002). The borrow flow still works. */
+  DIRECT_TAKE_DISABLED: 'DIRECT_TAKE_DISABLED',
   FUNDING_EXCEEDS_APPROVED: 'FUNDING_EXCEEDS_APPROVED',
   /** Receiving more units of an item into stock than were actually purchased. */
   RECEIVE_EXCEEDS_PURCHASED: 'RECEIVE_EXCEEDS_PURCHASED',
