@@ -48,8 +48,9 @@ branch on 2026-09-30:
 `infra/` reattaches the same data.
 
 **What does differ is the settings.** Both files' environments were fed through the API's own
-config parser and compared. They differ in nine places. Three of them break the switch if
-`infra/.env` is copied from the example unchanged. Step 4 lists them.
+config parser and compared. They differed in nine places. Three of them broke the switch when
+`infra/.env` was copied from the example as it stood before 2026-09-30. The example now carries
+the right values, and step 4 makes them mandatory; check any older `infra/.env` against it.
 
 From here on, run every `docker compose` command from `infra/`, except the steps below that
 still address the root stack.
@@ -288,9 +289,9 @@ openssl rand -hex 32    # three times: JWT_ACCESS_SECRET, JWT_REFRESH_SECRET, PD
 | `POSTGRES_DB`, `POSTGRES_USER` | As step 1 recorded (`ims` / `ims`) | They name the existing cluster. Changing them here renames nothing. |
 | `POSTGRES_PASSWORD` | Step 3 | |
 | `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `PDF_SIGNING_SECRET` | New | Everyone is signed out once, and open PDF links stop working (they expire in five minutes anyway). |
-| **`FILE_STORAGE_DIR`** | **`/app/storage/files`** | **Must be set.** The example's `./storage/files` resolves against the container's working directory `/app/apps/api` (`apps/api/Dockerfile:78`, `file-storage.service.ts:164`), which is off the `ims_files` volume. Every existing upload would vanish from the app, and new ones would be lost on the next recreate. |
-| **`PDF_STORAGE_DIR`** | **`/app/storage/pdf`** | **Must be set**, for the same reason. |
-| **`PDF_BROWSER_EXECUTABLE_PATH`** | **`/usr/bin/chromium-browser`** | **Must be set.** It is not in the example. Empty means puppeteer's bundled Chromium, which cannot run on the Alpine image (`config.schema.ts:486-489`), so BOM PDFs would fail. |
+| **`FILE_STORAGE_DIR`** | **`/app/storage/files`** | **Must be this value** (the example carries it since 2026-09-30). The old example's `./storage/files` resolves against the container's working directory `/app/apps/api` (`apps/api/Dockerfile:78`, `file-storage.service.ts:164`), which is off the `ims_files` volume. Every existing upload would vanish from the app, and new ones would be lost on the next recreate. |
+| **`PDF_STORAGE_DIR`** | **`/app/storage/pdf`** | **Must be this value**, for the same reason. |
+| **`PDF_BROWSER_EXECUTABLE_PATH`** | **`/usr/bin/chromium-browser`** | **Must be set.** The example only has it since 2026-09-30. Empty means puppeteer's bundled Chromium, which cannot run on the Alpine image (`config.schema.ts:486-489`), so BOM PDFs would fail. |
 | **`SEED_ADMIN_EMAIL`** | **The existing admin's address** (`admin@ims.local` unless the root `.env` set another) | `migrate` re-runs the seed on every start. An address that does not exist creates a **second** admin with `SEED_ADMIN_PASSWORD`. |
 | `SEED_ADMIN_PASSWORD` | A strong value | Used only if that address does not exist yet. |
 | `PDF_MARGIN_TOP_MM` | `20`, unless BOMs print on letterhead (§0.6) | The example says 45; the running stack uses 20. |
