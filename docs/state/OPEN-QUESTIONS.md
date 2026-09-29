@@ -245,3 +245,41 @@ decided, the warning says plainly which of the two the button does.
   nesting. Options are a different separator (which breaks every existing snapshot and the skill),
   an escape (which people will get wrong by hand in Excel), or leaving it. Left: creating such a
   category in the UI first and then importing against it works, and nobody has asked for it.
+
+## API keys that act, and direct take (filed 2026-09-29, ADR-0002)
+
+**OQ-KT1 – OQ-KT7 answered by Arif on 2026-09-29, when ADR-0002 was accepted.** The answers are
+below. The table underneath is kept as it was filed, so the reasoning each answer settled can still
+be read. Named `OQ-KT*` to stay clear of Phase 10's decisions `K1`–`K9`.
+
+- **OQ-KT1** → **No on-behalf take.** The holder is always the caller: the key's service account,
+  or the signed-in person. A caller may write a name into `purpose`. There is no `takenForUserId`.
+- **OQ-KT2** → **A per-call cap from config, `DIRECT_TAKE_MAX_QTY`.** No category column.
+  Per-category limits are filed as OQ-KT8.
+- **OQ-KT3** → **A key with any write scope must expire,** no later than
+  `API_KEY_WRITE_MAX_LIFETIME_DAYS` (default 180). Read-only keys still follow K6.
+- **OQ-KT4** → **Yes.** An in-app notification goes to the IMs on every take made with a key.
+- **OQ-KT5** → **`BORROW`.**
+- **OQ-KT6** → **K2 stands.** There is no `borrow:read`, and OQ-G1 stays closed. The take response
+  carries ids, quantities and the updated placement only, with no person names.
+- **OQ-KT7** → **No client uses `X-API-Key`.** Key clients must use the HTTPS hostname, and the
+  deploy docs now say port 5173 must be firewalled so only the proxy reaches it.
+- The ADR's `API_KEYS_ENABLED` flag was **dropped** at acceptance. With `NODE_ENV=production` and
+  `DEMO_ACCOUNTS_ENABLED=true`, the key guard refuses every key with `API_KEYS_DISABLED_IN_DEMO`.
+  Otherwise read-only keys behave as they do today.
+
+| ID | Status | Question | Working assumption | Blocks |
+|----|--------|----------|--------------------|--------|
+| OQ-KT8 | 🟢 | **Should direct take be limited per category** (for example, consumables only, or no laptops from a panel)? Filed from the OQ-KT2 answer, which settled a per-call cap and nothing more. A category rule would be a new `categories` column, which means a migration. | No per-category limit. `DIRECT_TAKE_MAX_QTY` caps each call, and `ALLOW_DIRECT_TAKE` is the off switch. | Nothing |
+
+As filed:
+
+| ID | Status | Question | Working assumption | Blocks |
+|----|--------|----------|--------------------|--------|
+| OQ-KT1 | ✅ | **May a key take on behalf of another person (`takenForUserId`), or only for its own service account?** A drawer panel is operated by a person, so the person is the natural holder. But a key naming the holder is a machine asserting who received the goods, with nothing to confirm it. With `takenForUserId` null the **service account becomes the holder**. For a consumable that is harmless. For a returnable it means the item sits on nobody's "my borrowings" list and nobody is chased for it. | A key may name any active human user (service accounts refused, deactivated users refused as `issueFromStock` does today). Null means the service account holds it. | Take |
+| OQ-KT2 | ✅ | **Should direct take be limited by category (e.g. consumables only) or by a maximum quantity per call?** If yes, a per-call maximum is business policy, so it belongs in an `app_settings` key (rule 10). A per-category rule is a new `categories` column, which is a migration. | No limit beyond available stock | Nothing |
+| OQ-KT3 | ✅ | **Key expiry: required with a maximum lifetime, or optional?** Already answered for read keys: **K6**, Ayman 2026-09-21: `null` means never and the UI defaults to 90 days. The part still open is whether K6 holds for a key that can **write**. A forgotten read key leaks the catalogue; a forgotten `stock:take` key can empty a shelf. | K6 unchanged for every key | Nothing |
+| OQ-KT4 | ✅ | **Should a take notify anyone beyond the holder?** The brief assumed approval notifies the IM. It does not. Approval notifies the **holder** (`borrowing.approved`, `borrowing.service.ts:236`), and it is *create* that notifies every IM (`borrowing.requested`, `:139`). `issueFromStock` sends `borrowing.issued_to_you` to the holder, and `notifications.service.ts:61` never notifies anyone of their own action. The real question is the key case: when a panel issues stock, no human IM saw it happen. Should the IMs be told? | Same as `issueFromStock`: the holder only, with no IM fan-out | Take |
+| OQ-KT5 | ✅ | **Ledger `ref_type` for a take: `BORROW` or a new `TAKE`?** `ref_type` is free `text` (`0006_inventory_core.ts:181`), not an enum, so a new value needs no migration. `stock-reconciliation.job.ts` and `modules/reports` never read it. The cost of `TAKE` is elsewhere: a take's returns are written as `BORROW` against the same `ref_id`, so one loan would carry two ref types. | `BORROW`. The route and the declared `channel` go in the audit metadata; a key-made take is also marked by `audit_log.api_key_id`. | Nothing |
+| OQ-KT6 | ✅ | **`borrow:read` reverses K2 and pre-empts OQ-G1. Whose call is that?** Ayman kept borrowing out of key reach because it names employees (K2). The stock ledger was left out because it names the actor on every row (OQ-G1, still open). The brief puts both `GET /borrowing` and `GET /stock/ledger` into `borrow:read`. It also needs a bound service account, since `GET /borrowing` reads `@CurrentUser`, and a service account holding IM would see **everyone's** borrows. | **Not built until answered.** Both routes stay key-denied, and the other four new scopes ship. | `borrow:read` |
+| OQ-KT7 | ✅ | **Is any client already written against `X-API-Key`?** The brief asked for that header. The shipped scheme is `Authorization: Bearer ims_…`, plus `?api_key=` for GETs, which was Ayman's choice, and the rate limiter, log redaction and generated usage page all key off it. If a panel or voice firmware already sends `X-API-Key`, accepting it as an alias is cheap, but it opens a third way in. | Bearer only. `?api_key=` is refused on every non-GET. | Nothing |

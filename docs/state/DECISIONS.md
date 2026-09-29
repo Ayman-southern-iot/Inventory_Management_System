@@ -1292,3 +1292,11 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   a no-op each time; a broken file refused with the catalogue byte-identical; restore, and restore
   after renaming a category and a room, both correct; and a SIGKILL four seconds into a
   3,657-shelf apply rolled back whole, did not strand the 503, and was reclaimed 60 seconds later.
+
+## Phase 11 — API keys that can act, and a one-call stock take
+
+- 2026-09-29 — **ADR-0002 accepted** (`docs/adr/0002-api-keys-and-direct-take.md`): Phase 10 keys
+  may be bound to a service account (`users.is_service_account`) and act as it; `POST /stock/take`
+  is a thin route over `issueFromStock` — a write needs a principal the FKs and audit can name, and
+  a person must never be that principal. Amends K3/K4; K2 stands (no `borrow:read`). Answers to
+  OQ-KT1 – OQ-KT7 are in `OPEN-QUESTIONS.md`.
