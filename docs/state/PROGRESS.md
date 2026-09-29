@@ -5,6 +5,24 @@
 
 ## Current position
 
+- **2026-09-29 — Phase 11 (ADR-0002): keys that act as a service account, and `POST /stock/take`.**
+  Built on branch `feat/api-keys-take` (`45d33c3`, `5e5e3c0`, `70762b8`, `fcb2e8c`, after the ADR
+  `4056eec`). **Not pushed, not merged, not deployed.** Plan: `plan/PHASE-11-api-key-writes-and-take.md`.
+  - Migration 0039, proven up → down → up on empty and seeded data, with automated tests for its
+    refusals and constraints. Service accounts are filtered from every role→people query. The
+    guard binds a key to its account. Four write scopes open seven routes. `POST /stock/take`
+    (idempotent, capped, off by default). The admin screen, and `15-integration-api.md`.
+  - Security and code reviews: no critical, high or blocking findings. The fixes they led to are
+    listed in the plan file. OQ-KT10/11/12 and G-21 are filed for the lead.
+  - **Verified (serial, on the M5):** typecheck clean · unit 25 / 249 / 477 · integration
+    **981 / 1 (66 files)** against a pre-change baseline on the same machine of **924 / 3 (64
+    files)**. The one remaining failure is the same `stock-import-lock` 30 s timeout the baseline
+    has (tunnel latency) · lint 20, the same findings · guard 8.
+  - Live smoke on the dev DB (the API built from the branch, three instances covering flag on,
+    flag off, and production plus demo): 19/20 PASS, whole-database reconciliation 0. The FAIL is
+    a byte-identity check on an idempotent replay: the same data in jsonb key order, one take.
+  - **Next:** Arif's merge decision; answers to OQ-KT10–KT12.
+
 - **2026-09-24 — the CSV product import is complete, parts A–L, and both of its unmeasured
   numbers are measured.** Part H landed as `StockService.adjustBatch` — one trackability check per
   distinct product rather than one per changed shelf, proved by counting the SQL rather than by
@@ -387,6 +405,7 @@
 | 09 | Taxonomy, rooms, Storage IDs, custody, project governance | ✅ done and verified | migrations 0032–0036, 744 int tests |
 | 10 | API keys — scoped read access for external systems | ✅ done and verified | migration 0037, 762 int tests |
 | — | CSV product import — export, validate, diff, apply, lockout, restore, skill | ✅ done and verified | `importing_data.md` parts A–L, migration 0038, 926 int tests |
+| 11 | API keys that act (service accounts) + one-call stock take | 🟡 built and verified on branch `feat/api-keys-take`, not merged | ADR-0002, migration 0039, 981/1 int tests (the 1 predates it) |
 
 Legend: ⬜ not started · 🟡 in progress · ✅ done and verified
 
