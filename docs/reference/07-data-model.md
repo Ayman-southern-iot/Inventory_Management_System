@@ -294,4 +294,37 @@ requisition_events (requisition_id, created_at)
 notifications (user_id, is_read, created_at DESC)
 ```
 
+### 7.5 API keys and service accounts (migrations 0037, 0039)
+
+Added after the original design, by Phase 10 and [ADR-0002](../adr/0002-api-keys-and-direct-take.md).
+The integrator's view is in `15-integration-api.md`.
+
+```
+api_keys            id, name, key_prefix (unique, shown), token_hash (unique, sha256 of the key),
+                    scopes api_key_scope[], is_active, expires_at, last_used_at,
+                    created_by → users, revoked_at, revoked_by → users,
+                    service_user_id → users (nullable), service_user_is_service_account (generated, always true)
+users               + is_service_account boolean not null default false
+audit_log           + api_key_id → api_keys (nullable)
+api_key_scope       enum: inventory:read, catalog:write, locations:write, stock:receive, stock:take
+```
+
+Constraints that carry the design:
+
+```sql
+-- a key can only ever be bound to a service account, never to a person
+FOREIGN KEY (service_user_id, service_user_is_service_account) REFERENCES users (id, is_service_account)
+-- any write scope needs a principal and an end date (OQ-KT3)
+CHECK (service_user_id IS NOT NULL OR scopes <@ ARRAY['inventory:read']::api_key_scope[])
+CHECK (expires_at      IS NOT NULL OR scopes <@ ARRAY['inventory:read']::api_key_scope[])
+-- revocation is final
+CHECK (revoked_at IS NULL OR is_active = false)
+```
+
+A service account is a `users` row that holds `GENERAL` and `INVENTORY_MANAGER` and cannot sign
+in. **Every query that turns a role into a list of people filters `is_service_account = false`**:
+recipients, requisition stage assignees, approver and delegate checks, pickers, the admin user
+list, the demo personas and the last-admin counter. Rolling back 0039 refuses once any service
+account, write-scoped key or keyed audit row exists.
+
 ---

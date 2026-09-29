@@ -8,7 +8,9 @@
 >
 > **Maintenance rule:** see `.claude/rules/05-ai-playbook.md`. A `PostToolUse` hook
 > (`.claude/hooks/playbook-reminder.sh`) reminds Claude to update this file after every
-> meaningful edit. Last updated: 2026-09-24 (CSV product import complete, parts A–L — §6 layout
+> meaningful edit. Last updated: 2026-09-29 (phase 11, ADR-0002: keys that act as a service
+> account, `POST /stock/take` — §11 config, §16 landmines, §18 notifications. Earlier,
+> 2026-09-24: CSV product import complete, parts A–L — §6 layout
 > gained the `imports` module and `test/bench/`, §16 gained the OR-compile landmine. Earlier,
 > 2026-09-21, phase 10: API keys — §6 layout, §16 landmines, §19 screen map; and phase 09: Room
 > above Zone, shelf-slot Storage IDs, optional nested categories, borrow custody).
@@ -880,6 +882,17 @@ and `PUT /admin/settings` rejects it. It is what distinguishes "this release int
 from "an admin switched it off": the latter stays off across every restart (`DECISIONS.md`,
 2026-08-07).
 
+**API keys and the one-call take** (ADR-0002, 2026-09-29) add three config keys, all in
+`config.schema.ts` and all pinned in `TEST_ENV`:
+
+- `ALLOW_DIRECT_TAKE`, default false. Opens `POST /stock/take`; while off, the route answers
+  `DIRECT_TAKE_DISABLED` and the usage page does not list it.
+- `DIRECT_TAKE_MAX_QTY`, default 10. Units per take, and a guess (OQ-KT11).
+- `API_KEY_WRITE_MAX_LIFETIME_DAYS`, default 180. The longest a write key may live (OQ-KT3).
+
+There is **no** `API_KEYS_ENABLED`. Production with `DEMO_ACCOUNTS_ENABLED=true` refuses every key,
+and refuses issuing keys and service accounts, with `API_KEYS_DISABLED_IN_DEMO`.
+
 **Two features ship off, behind config rather than `app_settings`** (2026-09-02):
 `ALLOW_PARTIAL_FUNDING` and `ALLOW_APPROVED_AMOUNT_REVISION`, both defaulting false in the `money`
 group. Env and not the settings table on purpose — this is a release decision about an unfinished
@@ -1043,10 +1056,27 @@ reason the locking exists).
   fool you: `.includes('inventory:read')` is `true` by *substring*, so a scope check keeps passing
   while it silently stops being a scope check. Read such a column as `::text[]` — see the
   `scopesAsArray` helper in `modules/api-keys/api-keys.repository.ts`.
-- **An API key is not a `RequestUser`, and must never be given one.** `JwtAuthGuard` leaves
-  `request.user` undefined for a key (migration 0037, Phase 10). Populating it is the obvious
-  shortcut and it opens `@Roles` — including the endpoint that mints more keys — and writes a
-  fabricated actor into `audit_log`. A key reaches a route only if it carries `@ApiKeyScopes`.
+- **A key's `request.user` is either nothing or a service account, never a person** (ADR-0002,
+  migration 0039). An unbound, read-only key leaves it undefined, as Phase 10 did. A key bound to
+  a service account sets it to that account, a `users` row with `is_service_account`, holding
+  only GENERAL and INVENTORY_MANAGER, that cannot sign in. Never populate it with a *synthetic*
+  user: that opens `@Roles` and fabricates the audit actor. A key still reaches a route only if
+  the route carries `@ApiKeyScopes`, and `test/api-key-writes.int-spec.ts` walks the live route
+  table to prove it.
+- **Every query that turns a role into a list of people must filter
+  `users.is_service_account = false`.** A service account holds INVENTORY_MANAGER so its keys can
+  act. Without the filter it is handed requisition IM stages (`findAnyActiveUserWithRole` picks
+  the *oldest* IM), receives every IM notification, and appears in pickers and the demo login
+  list. The current set is recorded in `docs/reference/07-data-model.md` §7.5. A new resolver
+  that forgets the filter will pass every test that has no service account in its fixture.
+- **On a Mac, supertest's `request(server)` can reach somebody else's server.** Given an unbound
+  server, it calls `listen(0)` for every request on the wildcard address, then dials 127.0.0.1.
+  Any desktop app already listening on 127.0.0.1 at that port wins the connection. Seen as an
+  HTML 404, a stranger's 401 JSON and a 426, each reading like a random API regression.
+  `createTestApp` now listens once on 127.0.0.1 and `httpClient` dials that address.
+- **`scripts/gate.sh` only works on Windows.** It polls `powershell.exe` for live vitest
+  processes, so on macOS it waits 15 minutes and aborts. On a Mac run the gate steps directly,
+  with `pgrep -f vitest` as the guard.
 - **A Storage ID is immutable, enforced by trigger** (migration 0034). Renaming a room does not
   rewrite the labels underneath it, and any `UPDATE` that changes an assigned
   `storage_compartments.storage_id` is refused. That is deliberate: the label is already stuck
@@ -1246,6 +1276,7 @@ Current best view is `docs/state/OPEN-QUESTIONS.md`. Snapshot of operator-action
 | Item overdue | nobody | **job logs only — unwired on purpose, OQ-E** |
 | Borrow custody reassigned | new holder **and** previous holder | bell |
 | Issued straight from the shelf | the person it was issued to | bell |
+| Stock taken with an API key (`POST /stock/take`) | every IM (people only) | bell, `borrowing.taken_by_key` — OQ-KT4 |
 | Requisition submitted | Inventory Manager | popup + badge |
 | IM approved | Approver 1 & 2 (or delegates) | badge + email |
 | Approval deadline passed, still pending | Assigned approver | job, repeats every 24h until acted |

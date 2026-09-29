@@ -645,6 +645,16 @@ row in the same session.
 
 Condensed, so you can scan it before starting work. Detail for most of these is in §8.
 
+- **A service account is a `users` row that is not a person** (ADR-0002, migration 0039). Any
+  query that turns a role into people must filter `is_service_account = false`, or a lab panel is
+  handed requisition stages, IM notifications and a place in every picker. The list of resolvers
+  is in `docs/reference/07-data-model.md` §7.5.
+- **On a Mac, a test request can land on another app's server.** Supertest given an unbound
+  server listens on the wildcard address per request and dials 127.0.0.1; any desktop app holding
+  that loopback port answers instead. The harness now binds 127.0.0.1 once (`test/app.ts`). If a
+  failure's body is HTML or not `{code, message}`, suspect this before the API.
+- **`scripts/gate.sh` is Windows-only** (it polls `powershell.exe`). On macOS run the steps by
+  hand behind a `pgrep -f vitest` check.
 - **Docker Desktop stops itself between sessions.** `docker info` first, always.
 - **A backtick inside a `` sql`…` `` template ends the literal.** Cost two debugging rounds:
   migration 0027, then `reports.repository.ts`. A SQL comment that quoted a table name in

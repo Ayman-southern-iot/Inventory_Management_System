@@ -35,6 +35,12 @@ curl -s http://<host>:5173/api/v1/auth/demo-accounts    # must NOT list accounts
 Then **change the password on every seeded account**, because the demo password was known:
 Admin → Users → Reset password, for all five.
 
+Then **revoke every API key and deactivate every service account that exists** (Admin → API
+keys). While demo mode was on, anyone could sign in as the administrator, so anything issued in
+that time was issued by nobody in particular. While demo mode is on in production the API refuses
+every key and refuses to issue new ones (ADR-0002). Anything minted before that refusal existed,
+or before this switch, starts working the moment demo mode goes off.
+
 ### 2. Push the repository — HARD BLOCKER
 
 At the time of writing the work exists on one laptop and nowhere else. A disk failure loses the
@@ -70,6 +76,38 @@ Until that is running, the database has the same single point of failure as the 
 
 `PDF_MARGIN_TOP_MM` is 20, which suits plain white A4 and fits five items to a page. If BOMs are
 printed on a pre-printed letterhead pad instead, raise it to the height of the printed area.
+
+### 7. Before any system uses an API key
+
+A key is a bearer credential: whoever reads it off the network can use it until it is revoked.
+Do all three of these before issuing a key to the lab panel, the voice assistant or a script.
+
+1. **Key clients call the HTTPS hostname, never an IP on port 5173.** Point each integration at
+   the TLS site Caddy serves (`infra/docker-compose.yml`, ports 80/443, `IMS_DOMAIN`). Which
+   hostname that is has not been recorded in this repository; write it here once it is decided.
+2. **Firewall port 5173 so that only the reverse proxy can reach it.** The demo stack
+   (`docker-compose.yml`) publishes its Caddy on host port 5173 over **plain HTTP**. Any client
+   that can reach 5173 directly can send a key in cleartext. Allow 5173 from the proxy only, and
+   check from another machine on the LAN:
+
+   ```bash
+   curl -m 5 -s -o /dev/null -w '%{http_code}\n' http://<host>:5173/   # expect 000 (no answer); any status means reachable
+   ```
+
+3. **Demo mode is off, and §0.1 is done** (seeded passwords reset, keys and service accounts
+   created under demo revoked). Until then every key is refused with
+   `403 API_KEYS_DISABLED_IN_DEMO`.
+
+To open the one-call take (`POST /stock/take`), set these in `.env` and recreate `api`:
+
+```bash
+ALLOW_DIRECT_TAKE=true                 # default false
+DIRECT_TAKE_MAX_QTY=10                 # units per take; default 10 (OQ-KT11 — a guess)
+API_KEY_WRITE_MAX_LIFETIME_DAYS=180    # longest a write key may live; default 180
+# THROTTLE_APIKEY_LIMIT / THROTTLE_APIKEY_TTL_SECONDS — per key and per address; default 120 / 60
+```
+
+The integrator's reference is `docs/reference/15-integration-api.md`.
 
 ---
 

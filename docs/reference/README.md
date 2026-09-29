@@ -21,3 +21,4 @@ The design doc, split so a session loads only what it needs.
 | `12-future.md` | What I'd revisit as this grows |
 | `13-open-questions.md` | Open questions |
 | `14-deployment.md` | Deployment & operations |
+| `15-integration-api.md` | API keys, service accounts and `POST /stock/take`, for integrators |
