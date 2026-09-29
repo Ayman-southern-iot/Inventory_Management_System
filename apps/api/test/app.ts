@@ -66,7 +66,16 @@ export async function createTestApp(overrides?: ConfigOverrides): Promise<TestAp
   // lets each test present its own source IP instead of sharing one bucket.
   app.set('trust proxy', 1);
 
-  await app.init();
+  /*
+   * Bound once, to loopback explicitly, rather than `init()` alone. Given an unbound server,
+   * supertest calls `listen(0)` for *every request* on the wildcard address and then dials
+   * 127.0.0.1 — and on macOS a process already listening on 127.0.0.1 at that same port wins the
+   * connection. With dozens of desktop apps holding loopback ports in the ephemeral range, a few
+   * requests per run reached somebody else's server (an HTML 404, a stranger's 401 JSON, a 426)
+   * and read as random API regressions. Once bound, supertest dials this address and never
+   * listens again (supertest 7 `lib/test.js` `serverAddress`). `listen` runs `init` itself.
+   */
+  await app.listen(0, '127.0.0.1');
 
   return {
     app,
