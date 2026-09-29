@@ -1327,3 +1327,17 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   5433. That follows Arif's all-Docker-on-the-keeper rule. The cost is an 18 ms round trip: a full
   integration run takes about 30 minutes, and `stock-import-lock` at scale times out at 30 s here,
   in the baseline as well as on the branch.
+- 2026-09-29 (follow-up) — **The four security-review tightenings are confirmed by Arif:** write
+  key refused in a URL, per-key and per-address throttling, re-enable refused in demo mode, empty
+  `activeBorrows` for keys.
+- 2026-09-29 (follow-up) — **OQ-KT10: an `Idempotency-Key` is required on `POST /stock/receive`
+  from a key.** A retried receive silently doubles stock and reconciliation cannot see it. People
+  are unchanged; the web app does not send one.
+- 2026-09-29 (follow-up) — **OQ-KT11: `DIRECT_TAKE_MAX_QTY` stays 10**, reviewed after one month
+  against the largest take in the ledger.
+- 2026-09-29 (follow-up) — **OQ-KT12: a key cannot archive or re-activate** a product or category.
+  It is decided in the controller through `api-key.policies.ts`, not the guard, because the guard
+  runs before the body is validated and the services stay unaware of keys.
+- 2026-09-29 (follow-up) — **§15.4 of the integration doc is checked by a test**
+  (`integration-doc-drift.int-spec.ts`) against the registry the admin usage page reads, so "the
+  page is right" cannot drift silently.

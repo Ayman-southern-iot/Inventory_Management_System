@@ -11,25 +11,27 @@
 API keys can be bound to a **service account**, a `users` row that is not a person, and act as it.
 Seven write routes are opened by four write scopes, and `POST /stock/take` issues stock in one
 idempotent call. It is a thin route over `issueFromStock` and is off unless `ALLOW_DIRECT_TAKE`.
-Migration **0039**. Everything before this (phases 00–10, CSV import) is unchanged.
-Integrators read `docs/reference/15-integration-api.md`.
+Migration **0039**. Follow-up done too: keys must send `Idempotency-Key` on receive
+(OQ-KT10), keys cannot archive (OQ-KT12), cap stays 10 (OQ-KT11). `15-integration-api.md` is
+corrected, and a test pins its §15.4 to the route registry. The Python client is in
+`clients/python/`. Everything before this (phases 00–10, CSV import) is unchanged.
 
 ## Next action
 
-1. **Arif reviews and merges** `feat/api-keys-take` (4 commits after the ADR). Nothing has been pushed.
-2. Answer **OQ-KT10** (require `Idempotency-Key` on receive for keys?), **OQ-KT11** (the cap number,
-   10 is a guess) and **OQ-KT12** (may `catalog:write` archive products?).
-3. Still waiting on Ayman: `IMPORT_MAX_CHANGED_SHELVES`, and **the VM**. Nothing is deployed there,
-   demo mode is ON, and no host address is recorded. Keys are refused in production while demo is
-   on. RUNBOOK §0.1 and §0.7 list what to do before any key is issued.
+1. **Arif reviews and merges** `feat/api-keys-take`. Nothing has been pushed.
+2. **Before go-live behind Cloudflare** (`ims.siot.solutions`): Caddy `trusted_proxies` plus
+   `CF-Connecting-IP`, or every per-address limit keys on a Cloudflare edge (RUNBOOK §0.7). This
+   is deduced from the config, not observed.
+3. Still waiting on Ayman: `IMPORT_MAX_CHANGED_SHELVES`, and **the VM**. Nothing is deployed there
+   and demo mode is ON; keys are refused in production while demo is on (RUNBOOK §0.1, §0.7).
 
 ## Green as of 2026-09-29, measured on the M5 (not the old Windows box)
 
 - typecheck clean · unit shared 25 · api 249 · web 477 · lint **20** (the same findings as before)
-- integration **981 pass / 1 fail (66 files)**. The 1 is `stock-import-lock` at scale timing out at
+- integration **989 pass / 1 fail (67 files)**. The 1 is `stock-import-lock` at scale timing out at
   30 s, which the pre-change baseline on this Mac did too (924/3). It is the tunnel latency.
-- guard-hardcoding **8** · migrations 0001–**0039** · live smoke on the dev DB: 19/20 PASS; the one
-  FAIL is a byte-identity check on an idempotent replay (the same data in jsonb key order).
+- guard-hardcoding **8** · migrations 0001–**0039** · smokes on the dev DB: 20/20 (E2 fixed to
+  compare parsed JSON); Python client smoke 5/5.
 
 ## Landmines — full list in `ASSIST.md` §9
 
@@ -54,5 +56,5 @@ Integrators read `docs/reference/15-integration-api.md`.
 ## Open debt
 
 `G-14` · `G-16` · `G-17` · `G-18` · `G-19` · `G-21` (borrow form 500 on an unknown project) ·
-PM 6/12/14/15 · `OQ-30` · `OQ-31` · `OQ-33` · `OQ-C` · `OQ-D` · `OQ-F` · `OQ-KT8`–`KT12`
+PM 6/12/14/15 · `OQ-30` · `OQ-31` · `OQ-33` · `OQ-C` · `OQ-D` · `OQ-F` · `OQ-KT8` · `OQ-KT9`
 · **overdue notifications are unwired on purpose (`OQ-E`) — not a gap, do not "fix"**

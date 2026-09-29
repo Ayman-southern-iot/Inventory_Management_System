@@ -12,6 +12,29 @@ Format:
 **Next:** the single next action, specific enough to start without thinking
 ```
 
+## 2026-09-29 (follow-up) — Phase 11: OQ-KT10–KT12, integration doc corrections, Python client
+
+**Did:**
+- **A1:** keys must send `Idempotency-Key` on receive.
+- **A3:** keys cannot archive or re-activate, enforced in the controller through
+  `api-key.policies.ts`; the guard cannot see the body and the services stay unaware of keys.
+- **A4:** E2 compares parsed JSON (PASS).
+- **B:** nine doc corrections (§15.1, 15.4, 15.5, 15.6, 15.7, 15.8, the new 15.10) and a drift
+  test (`integration-doc-drift.int-spec.ts`), shown red on an edited doc.
+- **C:** `clients/python/` with five fixes: `Retry-After-*` headers, 5xx retries, a loopback
+  opt-in, ambiguous drawer names, and the retries=0 None return. Smoke 5/5.
+
+**Decisions:** DECISIONS.md, Phase 11 "(follow-up)" lines.
+
+**Landmines:**
+- `ims.siot.solutions` is behind Cloudflare, but Caddy trusts no proxy, so per-address limits
+  would key on Cloudflare edges. Deduced, not observed; RUNBOOK §0.7.
+- `409 CONFLICT` and `404 NOT_FOUND` are each ambiguous by code on key routes; documented.
+- The web app sends no `Idempotency-Key` on receive (left alone by instruction).
+- A `uv run` in `clients/python` creates a `.venv` that ESLint used to scan; it is ignored now.
+
+**Next:** Arif's merge decision; the Caddy/Cloudflare client IP before go-live.
+
 ## 2026-09-29 — Phase 11: API keys that act as a service account, and `POST /stock/take`
 
 **Did:**

@@ -5,6 +5,19 @@
 
 ## Current position
 
+- **2026-09-29 (follow-up) — Phase 11: OQ-KT10–KT12 answered and built, integration doc
+  corrected, Python client in the repo.** Still on `feat/api-keys-take`, not pushed.
+  - A1: keys must send `Idempotency-Key` on `POST /stock/receive`; people are unchanged (the web
+    app does not send one).
+  - A3: a key cannot archive or re-activate a product or category (`api-key.policies.ts`).
+  - A2: cap stays 10. A4: smoke E2 now compares parsed JSON, and PASSES.
+  - B: nine corrections to `15-integration-api.md`, plus a drift test pinning §15.4 to the route
+    registry; RUNBOOK §0.7 records `ims.siot.solutions` and a Cloudflare client-IP pre-go-live check.
+  - C: `clients/python/` (the client with five fixes, a README, `smoke_client.py`), smoke 5/5.
+  - **Verified:** typecheck clean · unit 25 / 249 / 477 · integration **989 / 1 (67 files)**, the
+    same known timeout · lint 20 (same findings, after an ignore for the client's `.venv`) · guard 8.
+  - **Next:** Arif's merge decision; Caddy/Cloudflare client IP before go-live.
+
 - **2026-09-29 — Phase 11 (ADR-0002): keys that act as a service account, and `POST /stock/take`.**
   Built on branch `feat/api-keys-take` (`45d33c3`, `5e5e3c0`, `70762b8`, `fcb2e8c`, after the ADR
   `4056eec`). **Not pushed, not merged, not deployed.** Plan: `plan/PHASE-11-api-key-writes-and-take.md`.
@@ -405,7 +418,7 @@
 | 09 | Taxonomy, rooms, Storage IDs, custody, project governance | ✅ done and verified | migrations 0032–0036, 744 int tests |
 | 10 | API keys — scoped read access for external systems | ✅ done and verified | migration 0037, 762 int tests |
 | — | CSV product import — export, validate, diff, apply, lockout, restore, skill | ✅ done and verified | `importing_data.md` parts A–L, migration 0038, 926 int tests |
-| 11 | API keys that act (service accounts) + one-call stock take | 🟡 built and verified on branch `feat/api-keys-take`, not merged | ADR-0002, migration 0039, 981/1 int tests (the 1 predates it) |
+| 11 | API keys that act (service accounts) + one-call stock take | 🟡 built and verified on branch `feat/api-keys-take`, not merged | ADR-0002, migration 0039, follow-up KT10–KT12, 989/1 int tests (the 1 predates it) |
 
 Legend: ⬜ not started · 🟡 in progress · ✅ done and verified
 
