@@ -19,11 +19,11 @@ corrected, and a test pins its §15.4 to the route registry. The Python client i
 ## Next action
 
 1. **Arif reviews and merges** `feat/api-keys-take`. Nothing has been pushed.
-2. **Before go-live behind Cloudflare** (`ims.siot.solutions`): Caddy `trusted_proxies` plus
-   `CF-Connecting-IP`, or every per-address limit keys on a Cloudflare edge (RUNBOOK §0.7). This
-   is deduced from the config, not observed.
+2. **Real client IP behind Cloudflare is IT-owned**, open, and blocks go-live, not merge (RUNBOOK
+   §0.7: requirement, security condition, acceptance tests). The app side is done: the hop count
+   is `TRUST_PROXY_HOPS` (default 1). Do not touch the VM, proxy, Caddyfile or firewall for it.
 3. Still waiting on Ayman: `IMPORT_MAX_CHANGED_SHELVES`, and **the VM**. Nothing is deployed there
-   and demo mode is ON; keys are refused in production while demo is on (RUNBOOK §0.1, §0.7).
+   and demo mode is ON; keys are refused in production while demo is on (RUNBOOK §0.1, §0.8).
 
 ## Green as of 2026-09-29, measured on the M5 (not the old Windows box)
 

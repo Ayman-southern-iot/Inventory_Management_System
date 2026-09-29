@@ -53,8 +53,9 @@ function withOverrides(overrides: ConfigOverrides): AppConfig {
  */
 export async function createTestApp(overrides?: ConfigOverrides): Promise<TestApp> {
   const builder = Test.createTestingModule({ imports: [AppModule] });
+  const effective = overrides ? withOverrides(overrides) : config;
   if (overrides) {
-    builder.overrideProvider(CONFIG).useValue(withOverrides(overrides));
+    builder.overrideProvider(CONFIG).useValue(effective);
   }
   const moduleRef = await builder.compile();
 
@@ -62,9 +63,10 @@ export async function createTestApp(overrides?: ConfigOverrides): Promise<TestAp
   const app = moduleRef.createNestApplication<NestExpressApplication>({ logger: false });
   app.setGlobalPrefix(config.http.globalPrefix, { exclude: ['health'] });
   app.useGlobalFilters(new AllExceptionsFilter());
-  // Same as production: the rate limiters read the forwarded client address, which is what
-  // lets each test present its own source IP instead of sharing one bucket.
-  app.set('trust proxy', 1);
+  // Same as production, from the same config key: the rate limiters read the forwarded client
+  // address, which is what lets each test present its own source IP instead of sharing one
+  // bucket. An override of `http.trustProxyHops` reaches Express here, not only the provider.
+  app.set('trust proxy', effective.http.trustProxyHops);
 
   /*
    * Bound once, to loopback explicitly, rather than `init()` alone. Given an unbound server,

@@ -51,6 +51,10 @@ x-api-env: &api-env
   NODE_ENV: production
   TZ: Asia/Dhaka
 
+  # Proxy hops the API trusts in X-Forwarded-For. Set by whoever runs the proxy chain in front
+  # of this stack (RUNBOOK §0.7); passed through so a different chain needs no file edit here.
+  TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-1}
+
   # The three keys must all differ from each other or the API refuses to boot: identical
   # access and refresh secrets would let a refresh token verify as an access token, and a
   # leaked PDF download URL must not verify as a session.

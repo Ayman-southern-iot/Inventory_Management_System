@@ -43,7 +43,7 @@ request (see the harness fix below).
 - [x] **F. Tests.** `api-key-writes.int-spec.ts`, `stock-take.int-spec.ts`, and a throttle
   tracker unit spec; red on the base commit before green. The live-route-table walk proves
   default-deny.
-- [x] **G. Docs.** `docs/reference/15-integration-api.md`; RUNBOOK §0.1 and §0.7 (HTTPS hostname,
+- [x] **G. Docs.** `docs/reference/15-integration-api.md`; RUNBOOK §0.1 and §0.8, formerly §0.7 (HTTPS hostname,
   firewall 5173, demo revocation); data model §7.5; the notifications and permissions references;
   AI_PLAYBOOK; ASSIST §9.
 - [x] **Harness.** `test/app.ts` listens once on 127.0.0.1, because supertest's per-request

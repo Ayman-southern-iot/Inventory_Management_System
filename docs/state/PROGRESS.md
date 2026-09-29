@@ -12,7 +12,7 @@
   - A3: a key cannot archive or re-activate a product or category (`api-key.policies.ts`).
   - A2: cap stays 10. A4: smoke E2 now compares parsed JSON, and PASSES.
   - B: nine corrections to `15-integration-api.md`, plus a drift test pinning §15.4 to the route
-    registry; RUNBOOK §0.7 records `ims.siot.solutions` and a Cloudflare client-IP pre-go-live check.
+    registry; RUNBOOK §0.8 records `ims.siot.solutions`; the Cloudflare client-IP check is now §0.7, an IT handoff.
   - C: `clients/python/` (the client with five fixes, a README, `smoke_client.py`), smoke 5/5.
   - **Verified:** typecheck clean · unit 25 / 249 / 477 · integration **989 / 1 (67 files)**, the
     same known timeout · lint 20 (same findings, after an ignore for the client's `.venv`) · guard 8.

@@ -33,6 +33,25 @@ const rawSchema = z.object({
   // normally empty there and only populated for the Vite dev server.
   CORS_ALLOWED_ORIGINS: z.string().default(''),
 
+  /*
+   * How many reverse proxies in front of the API Express trusts in X-Forwarded-For. The peer
+   * that connects to the API is hop 1. `req.ip` is the address that many hops back, and it
+   * feeds every per-address limit (the login backoff, and every throttle tier but the per-key
+   * `apiKey`) and `audit_log.request_ip`. Too low and every user shares a proxy's address;
+   * too high and a caller chooses their own address by sending the header. 0 trusts nothing,
+   * for an API reached with no proxy at all.
+   *
+   * Whoever runs the proxy chain decides this, not the code (RUNBOOK §0.7). A blank value is an
+   * error rather than 0, because `z.coerce.number()` would turn `TRUST_PROXY_HOPS=` into "trust
+   * nothing" and silently put the whole company in one bucket.
+   */
+  TRUST_PROXY_HOPS: z
+    .string()
+    .regex(/^\d+$/, 'must be a whole number of proxy hops, e.g. 1')
+    .default('1')
+    .transform(Number)
+    .pipe(z.number().int().max(10)),
+
   POSTGRES_HOST: z.string().min(1),
   POSTGRES_PORT: z.coerce.number().int().min(1).max(65535).default(5432),
   POSTGRES_DB: z.string().min(1),
@@ -529,6 +548,7 @@ export interface AppConfig {
     readonly port: number;
     readonly globalPrefix: string;
     readonly corsOrigins: readonly string[];
+    readonly trustProxyHops: number;
   };
   readonly db: {
     readonly host: string;
@@ -673,6 +693,7 @@ export function buildConfig(source: Record<string, string | undefined>): AppConf
           .map((o) => o.trim())
           .filter(Boolean),
       ),
+      trustProxyHops: env.TRUST_PROXY_HOPS,
     }),
     db: Object.freeze({
       host: env.POSTGRES_HOST,

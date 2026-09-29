@@ -1341,3 +1341,10 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
 - 2026-09-29 (follow-up) — **§15.4 of the integration doc is checked by a test**
   (`integration-doc-drift.int-spec.ts`) against the registry the admin usage page reads, so "the
   page is right" cannot drift silently.
+- 2026-09-29 (Cloudflare real-IP) — **The client-IP fix belongs to the IT team; the app only makes
+  the hop count config.** `trust proxy` was the literal `1` in `main.ts`. It is now
+  `TRUST_PROXY_HOPS`: default 1, so behaviour is unchanged; 0–10 accepted; blank refused at boot,
+  because coerced it would be 0 and put every user in one bucket. IT's chain can then change without
+  a code change. The API still reads only `X-Forwarded-For`, never `CF-Connecting-IP`. RUNBOOK
+  §0.7 is the handoff (requirement, security condition, acceptance tests). It blocks go-live, not
+  merge. The API-key prerequisites moved to §0.8.

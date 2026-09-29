@@ -895,6 +895,13 @@ from "an admin switched it off": the latter stays off across every restart (`DEC
 There is **no** `API_KEYS_ENABLED`. Production with `DEMO_ACCOUNTS_ENABLED=true` refuses every key,
 and refuses issuing keys and service accounts, with `API_KEYS_DISABLED_IN_DEMO`.
 
+**The client address is config too** (2026-09-29). `TRUST_PROXY_HOPS` (default 1, 0–10, blank
+refuses to boot) is Express's `trust proxy` in `main.ts` and in `createTestApp`. `req.ip` is taken
+from `X-Forwarded-For` that many hops back. The API never reads `CF-Connecting-IP`. Every
+per-address limit and `audit_log.request_ip` rest on it. The proxy chain in front of production
+belongs to the IT team, and RUNBOOK §0.7 is the handoff: IT picks the chain and tells the app
+owner the hop count.
+
 **Two features ship off, behind config rather than `app_settings`** (2026-09-02):
 `ALLOW_PARTIAL_FUNDING` and `ALLOW_APPROVED_AMOUNT_REVISION`, both defaulting false in the `money`
 group. Env and not the settings table on purpose — this is a release decision about an unfinished

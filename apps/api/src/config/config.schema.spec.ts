@@ -75,6 +75,26 @@ describe('buildConfig', () => {
     expect(cfg.http.corsOrigins).toEqual(['http://a.test', 'http://b.test']);
   });
 
+  it('trusts one proxy hop by default, the chain the API has always assumed', () => {
+    expect(buildConfig(VALID_ENV).http.trustProxyHops).toBe(1);
+  });
+
+  it('reads TRUST_PROXY_HOPS, so a different proxy chain needs no code change', () => {
+    expect(buildConfig({ ...VALID_ENV, TRUST_PROXY_HOPS: '2' }).http.trustProxyHops).toBe(2);
+    expect(buildConfig({ ...VALID_ENV, TRUST_PROXY_HOPS: '0' }).http.trustProxyHops).toBe(0);
+  });
+
+  // Blank matters most: coerced, it would be 0 — trust nothing — and every user would share
+  // the proxy's address in every per-address limit.
+  it.each(['', ' ', '-1', '1.5', 'two', '11'])(
+    'refuses TRUST_PROXY_HOPS=%j instead of guessing a hop count',
+    (value) => {
+      expect(() => buildConfig({ ...VALID_ENV, TRUST_PROXY_HOPS: value })).toThrow(
+        /TRUST_PROXY_HOPS/,
+      );
+    },
+  );
+
   it('defaults the setting seeds so a fresh install boots without them', () => {
     const cfg = buildConfig(VALID_ENV);
     expect(cfg.settingSeeds.SETTING_EXPENSE_THRESHOLD_BDT).toBe(15_000);

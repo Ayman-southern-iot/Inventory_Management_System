@@ -9,8 +9,9 @@ If you are reading this during an incident, jump to [When something is wrong](#w
 
 ## 0. Before go-live — the checklist that must be done first
 
-Work down this list before the first real requisition. Items 1 and 2 are **hard blockers**: the
-system is not safe to hold real data until both are done.
+Work down this list before the first real requisition. Items 1, 2 and 7 are **hard blockers**:
+the system is not safe to hold real data until all three are done. Item 7 belongs to the **IT
+team**, not to this repository. It blocks go-live, not a merge.
 
 ### 1. Turn demo mode off — HARD BLOCKER
 
@@ -77,7 +78,85 @@ Until that is running, the database has the same single point of failure as the 
 `PDF_MARGIN_TOP_MM` is 20, which suits plain white A4 and fits five items to a page. If BOMs are
 printed on a pre-printed letterhead pad instead, raise it to the height of the printed area.
 
-### 7. Before any system uses an API key
+### 7. Real client IP behind Cloudflare — IT handoff — HARD BLOCKER for go-live
+
+**Owner:** IT team. **Status:** open. **Blocks:** go-live. It does **not** block merging the code.
+
+This section says what the application needs. How the proxy chain meets it is IT's decision.
+
+**Problem.** `https://ims.siot.solutions` has Cloudflare in front and Caddy behind (Arif,
+2026-09-29). Behind a proxy chain, every client can appear to the API as one address: a Cloudflare
+edge or a proxy. The API keeps its limits per client address. That covers the sign-in backoff and
+every rate-limit tier except the per-key one: `auth`, `loginBurst`, `public`, `authenticated` and
+`apiKeyAddress`. It also records that address in the audit log (the IP column of Admin → Audit
+log). If everyone shares one address, one person's failed sign-ins throttle the whole company,
+the key-address limit is shared by every panel, and the audit log cannot tell users apart. This
+follows from how the API reads the address. It has **not** been observed on the real chain,
+because nothing is deployed there yet.
+
+**Requirement.** The API must see each caller's real public IP.
+
+**Security condition.** Only the proxy directly in front of Caddy may reach port **5173**. If
+anything else can reach it, it can send its own `CF-Connecting-IP` or `X-Forwarded-For` and choose
+any address it likes. That bypasses every per-address limit above and writes a false IP into the
+audit log.
+
+**What the application expects to receive.**
+
+- **The header it reads is `X-Forwarded-For`, and only that.** The API does not read
+  `CF-Connecting-IP`, `X-Real-IP` or `Forwarded`.
+- **It trusts `TRUST_PROXY_HOPS` proxy hops, default `1`.** The peer that connects to the API is
+  hop 1. The API takes the client address from the `X-Forwarded-For` it receives, counting that
+  many entries from the right. With `1` it takes the rightmost entry; with `2`, the one before it.
+  If the header has fewer entries than that, it takes the leftmost one. So the real public IP must
+  arrive at that position, and every entry to its right must have been added by a proxy IT
+  controls.
+- **Changing the hop count is configuration, not code.** Set `TRUST_PROXY_HOPS` in the API's
+  environment and recreate `api`. That is `infra/.env` for the production stack; the root
+  `docker-compose.yml` passes the value through as well. It accepts 0–10. A blank value stops the
+  API from booting rather than being read as 0. **IT tells the app owner the value its chain
+  needs.**
+
+**Acceptance tests.** IT runs these after its change, once `TRUST_PROXY_HOPS` matches the chain.
+Tests (a) and (c) go through `https://ims.siot.solutions` from outside the office network. Use an
+email that is not an account, so that no real user's sign-in backoff is touched.
+
+a) **Two public IPs land in two buckets.** From two machines with different public IPs, send one
+   failed sign-in each, at least a minute after any earlier attempt from either machine:
+
+   ```bash
+   curl -s -D - -o /dev/null -X POST https://ims.siot.solutions/api/v1/auth/login \
+     -H 'Content-Type: application/json' \
+     -d '{"email":"it-check@example.com","password":"NotThePassword123"}' \
+     | grep -i x-ratelimit-remaining-auth
+   ```
+
+   **Pass:** both machines print the same `X-RateLimit-Remaining-auth` value, so each has its own
+   bucket. **Fail:** the second machine's value is lower than the first's, so they share one.
+
+b) **A forged header sent straight to the origin is refused or ignored.** From a machine that is
+   *not* the proxy in front of Caddy, try the origin directly:
+
+   ```bash
+   curl -m 5 -s -D - -o /dev/null -X POST http://<origin-host>:5173/api/v1/auth/login \
+     -H 'Content-Type: application/json' \
+     -H 'CF-Connecting-IP: 192.0.2.77' -H 'X-Forwarded-For: 192.0.2.77' \
+     -d '{"email":"it-forge@example.com","password":"NotThePassword123"}'
+   ```
+
+   **Pass:** there is no answer (refused), or the Admin → Audit log row for `it-forge@example.com`
+   shows an IP other than `192.0.2.77` (ignored). **Fail:** that row shows `192.0.2.77`.
+
+c) **The audit log records the real client IP for a sign-in.** From a machine whose public IP you
+   know, sign in at `https://ims.siot.solutions`, or send the failed sign-in from (a). In Admin →
+   Audit log, the `auth.login.success` or `auth.login.failure` row shows that machine's public IP.
+   Then repeat the request with `-H 'X-Forwarded-For: 192.0.2.77'` added. The row must still show
+   the real IP, because a hop count set too high lets a caller choose its own address.
+
+**To close this item,** IT reports the hop count its chain uses and the result of (a), (b) and (c).
+The app owner sets `TRUST_PROXY_HOPS` if it is not `1`, and ticks this item.
+
+### 8. Before any system uses an API key
 
 A key is a bearer credential: whoever reads it off the network can use it until it is revoked.
 Do all three of these before issuing a key to the lab panel, the voice assistant or a script.
@@ -85,24 +164,10 @@ Do all three of these before issuing a key to the lab panel, the voice assistant
 1. **Key clients call `https://ims.siot.solutions`, never an IP or port 5173.** That is the
    canonical HTTPS hostname, with Cloudflare in front and Caddy behind (Arif, 2026-09-29). Its DNS
    answered with Cloudflare addresses on 2026-09-29.
-
-   **Check before go-live: client addresses behind Cloudflare.** `main.ts` trusts exactly one
-   proxy hop (`trust proxy: 1`), and `infra/Caddyfile` sets no `trusted_proxies`. Behind Cloudflare,
-   the address the API sees would then be a Cloudflare edge, not the client. Every per-address
-   limit would be shared by everyone behind that edge: the login ceiling, the session ceiling and
-   the per-address key tier. This is deduced from the config and has **not** been observed. The
-   usual fix is Caddy `trusted_proxies` set to Cloudflare's ranges plus
-   `client_ip_headers CF-Connecting-IP`, then confirm with one request that the audit row's
-   `request_ip` is the real client address.
-2. **Firewall port 5173 so that only the reverse proxy can reach it.** The demo stack
-   (`docker-compose.yml`) publishes its Caddy on host port 5173 over **plain HTTP**. Any client
-   that can reach 5173 directly can send a key in cleartext. Allow 5173 from the proxy only, and
-   check from another machine on the LAN:
-
-   ```bash
-   curl -m 5 -s -o /dev/null -w '%{http_code}\n' http://<host>:5173/   # expect 000 (no answer); any status means reachable
-   ```
-
+2. **§0.7 is closed, including its security condition.** The per-address key limit
+   (`apiKeyAddress`) only works once the API sees real client addresses. The demo stack
+   (`docker-compose.yml`) publishes its Caddy on host port 5173 over **plain HTTP**, so a client
+   that can reach 5173 directly sends its key in cleartext.
 3. **Demo mode is off, and §0.1 is done** (seeded passwords reset, keys and service accounts
    created under demo revoked). Until then every key is refused with
    `403 API_KEYS_DISABLED_IN_DEMO`.

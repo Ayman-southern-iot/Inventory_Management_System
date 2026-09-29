@@ -31,6 +31,8 @@ export const TEST_ENV: Record<string, string> = {
   API_PORT: '3100',
   API_GLOBAL_PREFIX: 'api/v1',
   CORS_ALLOWED_ORIGINS: '',
+  // The harness sends one X-Forwarded-For entry per request (`nextClientIp`), as one proxy would.
+  TRUST_PROXY_HOPS: '1',
 
   POSTGRES_HOST: '127.0.0.1',
   POSTGRES_PORT: '5434',
