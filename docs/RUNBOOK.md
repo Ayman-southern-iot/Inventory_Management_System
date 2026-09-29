@@ -298,7 +298,7 @@ openssl rand -hex 32    # three times: JWT_ACCESS_SECRET, JWT_REFRESH_SECRET, PD
 | `TRUST_PROXY_HOPS` | As agreed with IT (§0.7) | |
 | `ALLOW_DIRECT_TAKE`, `DIRECT_TAKE_MAX_QTY`, `API_KEY_WRITE_MAX_LIFETIME_DAYS`, `THROTTLE_APIKEY_*` | As in §0.8 | None of these is in the example. |
 | `IMS_DOMAIN` | From IT, step 5 | |
-| `REGISTRY`, `IMS_TAG` | See step 6 | They name the images. |
+| `REGISTRY`, `IMS_TAG` | `local` unless images are published to a registry; any tag | `local` makes `deploy.sh` build the app images on the host (step 6). |
 
 The comparison found nothing else in the example that differs from what the stack runs today.
 The exceptions are demo mode and the new secrets, above, and `MONITOR_BACKUP_DIR=/backups`, which
@@ -343,17 +343,20 @@ docker compose down
 name `ims`, so the volumes `infra/` is about to reattach are exactly the ones `-v` deletes, and the
 dump becomes the only copy.**
 
-**Step 2b's rehearsal must have passed before any of this.** Start from `infra/`. `infra/deploy.sh`
-is the normal path, but three of its assumptions do not
-hold at this moment:
+**Step 2b's rehearsal must have passed before any of this.** Start from `infra/` with the manual
+sequence below, not `infra/deploy.sh`. The script is for later deploys, once `infra/` is running.
+Two of its steps do not fit this moment:
 
 1. Its first step is `./backup.sh`, which needs a running `db`.
 2. It runs `git pull --ff-only`. The checkout must be on the release branch, and it will pull.
-3. It runs `docker compose pull` for `${REGISTRY}/ims-api:${IMS_TAG}`. The VM builds its images
-   locally. With no such image in a registry, `pull` exits 1 and the script stops. That is
-   PROVEN with Compose v5.1.2 on our test host; the VM's Compose version is UNKNOWN.
 
-Unless the images are in a registry, run its steps by hand:
+With `REGISTRY=local` (no registry), the script pulls only `db` and `proxy`, using
+`pull --ignore-buildable` from Compose v2.15.0 on, and builds `api`, `migrate` and `web` on the
+host. Older Compose skips the pull and still builds. A plain `docker compose pull` of images that
+exist nowhere exits 1. That is PROVEN with Compose v5.1.2 on our test host; the VM's Compose
+version is UNKNOWN.
+
+Run its steps by hand:
 
 ```bash
 cd /root/ims/Inventory_Management_System/infra
