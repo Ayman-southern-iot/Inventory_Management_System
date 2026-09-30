@@ -29,6 +29,10 @@ endpoint, query the database, check the row. Report each as:
 Mandatory checks regardless of phase:
 
 - `pnpm typecheck`, `pnpm lint`, `pnpm test` all green (output above)
+- **Integration: `scripts/test-int-keeper.sh`**, run by hand; it takes a couple of minutes and is
+  not in the blocks above. It runs the suite on the keeper beside `ims-db-test`. Never gate
+  through the SSH tunnel: it stalls, and its timeouts look like lock waits but are not
+  (2026-09-30). The current baseline is in `docs/state/DECISIONS.md`.
 - No new hardcoded values: `bash .claude/hooks/guard-hardcoding.sh --scan-all`
 - Migrations apply from an empty database **and** roll back cleanly
 - If this phase touched stock: the concurrency test exists and passes, and

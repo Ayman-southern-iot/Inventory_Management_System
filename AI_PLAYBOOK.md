@@ -614,11 +614,30 @@ pnpm db:migrate           # apply migrations
 pnpm db:rollback          # one migration back
 pnpm db:make <name>       # generate empty migration
 pnpm db:seed              # idempotent reference data
-pnpm --filter @ims/api test:int   # integration tests (real Postgres)
+pnpm --filter @ims/api test:int   # integration tests (real Postgres) — host runs only, see below
+scripts/test-int-keeper.sh        # THE integration gate on the M5: runs on the keeper, no tunnel
 pnpm audit:deps           # dependency audit
 
 # Verification suite (run via /verify):
 bash .claude/hooks/guard-hardcoding.sh --scan-all
+```
+
+**Integration gate on the M5 = `scripts/test-int-keeper.sh`** (2026-09-30).
+
+- **What it does:** rsyncs the working tree to the keeper and runs the suite in a
+  `node:22.13-alpine` + Chromium container on the Docker network `ims-int`, reaching `ims-db-test`
+  by name. It exits with the suite's code, and `[filter …]` narrows it to some spec files.
+- **Why not the tunnel:** through the M5→keeper SSH tunnel the suite took 30–42 min and hit
+  spurious timeouts (`stock-import-lock` every run, one 15-minute `bom-transportation` hang). On
+  a database with no tunnel it ran 992/992 in 81 s with no lock waits (investigation in the
+  ADR-0002 review addendum).
+- **The tunnel is for ad-hoc dev only,** with keep-alives so a dead link fails in about 45 s
+  instead of hanging:
+
+```bash
+ssh -f -N -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes \
+  -L 5434:127.0.0.1:55434 -L 5433:127.0.0.1:55433 mini-keeper
+# or in ~/.ssh/config, under `Host mini-keeper`:  ServerAliveInterval 15 / ServerAliveCountMax 3
 ```
 
 **Ports:** API **3000**, web **5173**, dev Postgres **5433**, test Postgres **5434**. Ports
@@ -1088,8 +1107,10 @@ reason the locking exists).
   HTML 404, a stranger's 401 JSON and a 426, each reading like a random API regression.
   `createTestApp` now listens once on 127.0.0.1 and `httpClient` dials that address.
 - **`scripts/gate.sh` only works on Windows.** It polls `powershell.exe` for live vitest
-  processes, so on macOS it waits 15 minutes and aborts. On a Mac run the gate steps directly,
-  with `pgrep -f vitest` as the guard.
+  processes, so on macOS it waits 15 minutes and aborts. On a Mac, run the gate steps directly
+  with `pgrep -f vitest` as the guard, and run **integration through
+  `scripts/test-int-keeper.sh`, never through the SSH tunnel.** The tunnel stalls connections and
+  produces timeouts that look like lock waits but are not (2026-09-30).
 - **A Storage ID is immutable, enforced by trigger** (migration 0034). Renaming a room does not
   rewrite the labels underneath it, and any `UPDATE` that changes an assigned
   `storage_compartments.storage_id` is refused. That is deliberate: the label is already stuck

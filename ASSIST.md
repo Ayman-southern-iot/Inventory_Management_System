@@ -654,7 +654,9 @@ Condensed, so you can scan it before starting work. Detail for most of these is 
   that loopback port answers instead. The harness now binds 127.0.0.1 once (`test/app.ts`). If a
   failure's body is HTML or not `{code, message}`, suspect this before the API.
 - **`scripts/gate.sh` is Windows-only** (it polls `powershell.exe`). On macOS run the steps by
-  hand behind a `pgrep -f vitest` check.
+  hand behind a `pgrep -f vitest` check. The integration step is `scripts/test-int-keeper.sh`,
+  which runs the suite on the keeper beside its database. Through the SSH tunnel the suite
+  stalls, and the resulting timeouts look like lock waits but are not.
 - **Docker Desktop stops itself between sessions.** `docker info` first, always.
 - **A backtick inside a `` sql`…` `` template ends the literal.** Cost two debugging rounds:
   migration 0027, then `reports.repository.ts`. A SQL comment that quoted a table name in
