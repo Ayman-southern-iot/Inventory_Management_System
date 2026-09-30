@@ -12,6 +12,7 @@
 | Approval withdrawn | Requester + IM + other approver | bell |
 | BOM generated | Requester | bell |
 | Funds received (partial or full) | Requester | bell |
+| Stock taken with an API key (`POST /stock/take`) | Every Inventory Manager (people only, never a service account) | bell, `borrowing.taken_by_key`. ADR-0002, OQ-KT4 |
 
 Deliberately absent per your requirements doc: **the Inventory Manager is never pinged when the remaining balance of a partially funded request arrives** — they check the request back manually — and there is no low-stock alerting. The requester-facing "funds received" bell above fires only as a side effect of the IM logging a receipt; it is not a poll or a watcher. Both omissions are easy to reverse later — the job scaffolding is already there.
 

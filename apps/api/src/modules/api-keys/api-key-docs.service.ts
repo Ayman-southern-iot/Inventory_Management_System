@@ -14,7 +14,15 @@ import {
 } from '@ims/shared';
 import type { z } from 'zod';
 import { CONFIG, type AppConfig } from '../../config';
-import { API_KEY_QUERY_KEY, API_KEY_SCOPES_KEY, API_KEY_SUMMARY_KEY } from './api-key.decorators';
+import {
+  API_KEY_BODY_KEY,
+  API_KEY_ENABLED_KEY,
+  API_KEY_IDEMPOTENT_KEY,
+  API_KEY_QUERY_KEY,
+  API_KEY_SCOPES_KEY,
+  API_KEY_SUMMARY_KEY,
+} from './api-key.decorators';
+import { ApiKeysService } from './api-keys.service';
 
 /**
  * Builds the "how to use this key" document from the **live route table**.
@@ -34,6 +42,7 @@ export class ApiKeyDocsService {
   constructor(
     private readonly discovery: DiscoveryService,
     private readonly scanner: MetadataScanner,
+    private readonly apiKeys: ApiKeysService,
     @Inject(CONFIG) private readonly config: AppConfig,
   ) {}
 
@@ -45,6 +54,8 @@ export class ApiKeyDocsService {
       tokenPrefix: API_KEY_TOKEN_PREFIX,
       rateLimitPerMinute: this.config.throttling.apiKey.limit,
       maxPageSize: PAGINATION_MAX_LIMIT,
+      writeKeyMaxLifetimeDays: this.config.apiKeys.writeMaxLifetimeDays,
+      keysDisabledInDemo: this.apiKeys.isDisabledInDemo,
       endpoints: this.collect(),
     };
   }
@@ -70,12 +81,21 @@ export class ApiKeyDocsService {
           | undefined;
         if (!scopes || scopes.length === 0) continue;
 
+        // A route behind a release flag is not advertised while the flag is off (ADR-0002).
+        const isEnabled = Reflect.getMetadata(API_KEY_ENABLED_KEY, handler) as
+          | ((config: AppConfig) => boolean)
+          | undefined;
+        if (isEnabled && !isEnabled(this.config)) continue;
+
         const summary = (Reflect.getMetadata(API_KEY_SUMMARY_KEY, handler) as string) ?? '';
         const verb = Reflect.getMetadata(METHOD_METADATA, handler) as RequestMethod | undefined;
         const routePath = Reflect.getMetadata(PATH_METADATA, handler) as string | undefined;
         const query = Reflect.getMetadata(API_KEY_QUERY_KEY, handler) as
           | z.ZodObject<z.ZodRawShape>
           | undefined;
+        const body = Reflect.getMetadata(API_KEY_BODY_KEY, handler) as z.ZodTypeAny | undefined;
+        const requiresIdempotencyKey =
+          (Reflect.getMetadata(API_KEY_IDEMPOTENT_KEY, handler) as boolean | undefined) ?? false;
 
         for (const scope of scopes) {
           endpoints.push({
@@ -83,7 +103,9 @@ export class ApiKeyDocsService {
             path: joinPath(controllerPath, routePath),
             scope,
             summary,
-            queryParams: describeQuery(query),
+            queryParams: describeFields(query),
+            bodyParams: describeFields(body),
+            requiresIdempotencyKey,
           });
         }
       }
@@ -96,17 +118,20 @@ export class ApiKeyDocsService {
 }
 
 /**
- * The route's query parameters, read off the same zod schema the route validates with.
+ * The route's query parameters or body fields, read off the same zod schema the route validates
+ * with. A body schema is usually refined (`superRefine`), so it is unwrapped to its object first;
+ * anything that is not an object underneath documents no fields rather than guessing.
  *
  * `_def.typeName` rather than `instanceof`: zod is resolved through pnpm and a schema built in
  * `@ims/shared` is not necessarily an instance of the `ZodOptional` this file imported. Reading
  * the discriminant is version-proof where an identity check is not.
  */
-function describeQuery(
-  schema: z.ZodObject<z.ZodRawShape> | undefined,
-): ApiEndpointDoc['queryParams'] {
+function describeFields(schema: z.ZodTypeAny | undefined): ApiEndpointDoc['queryParams'] {
   if (!schema) return [];
-  return Object.entries(schema.shape).map(([name, field]) => ({
+  const object = unwrap(schema);
+  if ((object._def as { typeName?: string }).typeName !== 'ZodObject') return [];
+  const shape = (object as z.ZodObject<z.ZodRawShape>).shape;
+  return Object.entries(shape).map(([name, field]) => ({
     name,
     type: zodTypeName(field),
     // A field with a default is not something the caller has to send.

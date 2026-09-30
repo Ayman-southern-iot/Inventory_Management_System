@@ -33,6 +33,25 @@ const rawSchema = z.object({
   // normally empty there and only populated for the Vite dev server.
   CORS_ALLOWED_ORIGINS: z.string().default(''),
 
+  /*
+   * How many reverse proxies in front of the API Express trusts in X-Forwarded-For. The peer
+   * that connects to the API is hop 1. `req.ip` is the address that many hops back, and it
+   * feeds every per-address limit (the login backoff, and every throttle tier but the per-key
+   * `apiKey`) and `audit_log.request_ip`. Too low and every user shares a proxy's address;
+   * too high and a caller chooses their own address by sending the header. 0 trusts nothing,
+   * for an API reached with no proxy at all.
+   *
+   * Whoever runs the proxy chain decides this, not the code (RUNBOOK §0.7). A blank value is an
+   * error rather than 0, because `z.coerce.number()` would turn `TRUST_PROXY_HOPS=` into "trust
+   * nothing" and silently put the whole company in one bucket.
+   */
+  TRUST_PROXY_HOPS: z
+    .string()
+    .regex(/^\d+$/, 'must be a whole number of proxy hops, e.g. 1')
+    .default('1')
+    .transform(Number)
+    .pipe(z.number().int().max(10)),
+
   POSTGRES_HOST: z.string().min(1),
   POSTGRES_PORT: z.coerce.number().int().min(1).max(65535).default(5432),
   POSTGRES_DB: z.string().min(1),
@@ -89,6 +108,31 @@ const rawSchema = z.object({
    * floor this is one UPDATE per read on an otherwise read-only path. Zero means always.
    */
   API_KEY_TOUCH_INTERVAL_SECONDS: z.coerce.number().int().min(0).max(86_400).default(300),
+  /**
+   * The longest a key holding any write scope may live, in days (OQ-KT3, Arif 2026-09-29).
+   * Read-only keys are unaffected and may still never expire (K6). A forgotten read key leaks
+   * the catalogue; a forgotten write key can empty a shelf, so it has to run out on its own.
+   */
+  API_KEY_WRITE_MAX_LIFETIME_DAYS: z.coerce.number().int().min(1).max(3650).default(180),
+  /**
+   * May stock be taken off a shelf in one call, `POST /stock/take` (ADR-0002)?
+   *
+   * Off by default: a release decision, like ALLOW_PARTIAL_FUNDING. With it off the route
+   * refuses with DIRECT_TAKE_DISABLED and the usage page does not list it; the borrow flow and
+   * the IM's issue-from-stock are unaffected.
+   */
+  ALLOW_DIRECT_TAKE: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+  /**
+   * The most units one take may remove (OQ-KT2, Arif 2026-09-29). Per call, not per day: a caller
+   * can make several, and each is its own audited, notified event.
+   *
+   * OPEN QUESTION: OQ-KT11 — OQ-KT2 decided the mechanism, not the number. 10 is a guess sized
+   * for a drawer panel handing out components; anything larger should go through a borrow.
+   */
+  DIRECT_TAKE_MAX_QTY: z.coerce.number().int().min(1).max(1_000_000).default(10),
   /**
    * The ceiling on `GET /catalogue`, which is deliberately unpaginated because its whole job is
    * to hand a consuming frontend everything in one call. Past this it refuses loudly rather
@@ -504,6 +548,7 @@ export interface AppConfig {
     readonly port: number;
     readonly globalPrefix: string;
     readonly corsOrigins: readonly string[];
+    readonly trustProxyHops: number;
   };
   readonly db: {
     readonly host: string;
@@ -533,7 +578,15 @@ export interface AppConfig {
     readonly apiKey: { readonly limit: number; readonly ttlSeconds: number };
     readonly loginBurst: { readonly limit: number; readonly ttlSeconds: number };
   };
-  readonly apiKeys: { readonly touchIntervalSeconds: number };
+  readonly apiKeys: {
+    readonly touchIntervalSeconds: number;
+    readonly writeMaxLifetimeDays: number;
+  };
+  /** `POST /stock/take` (ADR-0002). */
+  readonly directTake: {
+    readonly isEnabled: boolean;
+    readonly maxQuantityPerCall: number;
+  };
   readonly catalogue: { readonly maxProducts: number };
   readonly imports: {
     readonly maxRows: number;
@@ -640,6 +693,7 @@ export function buildConfig(source: Record<string, string | undefined>): AppConf
           .map((o) => o.trim())
           .filter(Boolean),
       ),
+      trustProxyHops: env.TRUST_PROXY_HOPS,
     }),
     db: Object.freeze({
       host: env.POSTGRES_HOST,
@@ -688,6 +742,11 @@ export function buildConfig(source: Record<string, string | undefined>): AppConf
     }),
     apiKeys: Object.freeze({
       touchIntervalSeconds: env.API_KEY_TOUCH_INTERVAL_SECONDS,
+      writeMaxLifetimeDays: env.API_KEY_WRITE_MAX_LIFETIME_DAYS,
+    }),
+    directTake: Object.freeze({
+      isEnabled: env.ALLOW_DIRECT_TAKE,
+      maxQuantityPerCall: env.DIRECT_TAKE_MAX_QTY,
     }),
     catalogue: Object.freeze({
       maxProducts: env.CATALOGUE_MAX_PRODUCTS,

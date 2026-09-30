@@ -27,8 +27,9 @@ async function bootstrap(): Promise<void> {
   }
 
   // Caddy sets X-Forwarded-For; without this every login attempt looks like it came from the
-  // proxy and the per-IP rate limit would throttle the entire company at once.
-  app.set('trust proxy', 1);
+  // proxy and the per-IP rate limit would throttle the entire company at once. The hop count is
+  // the proxy chain's, so it is config (TRUST_PROXY_HOPS, RUNBOOK §0.7), not a literal here.
+  app.set('trust proxy', config.http.trustProxyHops);
 
   app.enableShutdownHooks();
 

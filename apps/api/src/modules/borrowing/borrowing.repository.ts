@@ -32,6 +32,16 @@ export class BorrowingRepository {
     return todayIn(this.config.reportingTimeZone);
   }
 
+  /** Existence only, so a take can answer 404 for an unknown project instead of an FK 500. */
+  async projectExists(projectId: string): Promise<boolean> {
+    const row = await this.db
+      .selectFrom('projects')
+      .where('id', '=', projectId)
+      .select('id')
+      .executeTakeFirst();
+    return row !== undefined;
+  }
+
   async findProductForBorrow(productId: string) {
     return this.db
       .selectFrom('products')

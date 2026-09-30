@@ -3,69 +3,57 @@
 > Auto-injected every session by the `SessionStart` hook. **Keep under ~60 lines.** Deeper, on
 > demand: `ASSIST.md` · `SESSION-LOG.md` · `DECISIONS.md` · `OPEN-QUESTIONS.md` · `docs/RUNBOOK.md`.
 
-**Updated:** 2026-09-24
+**Updated:** 2026-09-30
 
 ## Where the build is
 
-**Phases 00–10 complete, and the CSV product import is complete — `importing_data.md` parts A–L,
-all of them.** Export → hand to Claude → edit → import, with a diff a human approves, a backup
-taken first, a system-wide lockout while it applies, one-click restore, and history.
-
-Both unmeasured numbers are measured. `IMPORT_FUZZY_MATCH_THRESHOLD` is **0.7** (0.684 is both a
-real duplicate and a sibling SKU, so it is a judgement call on a curve — closed, not answered).
-`IMPORT_MAX_CHANGED_SHELVES` stays **5,000**: 500 / 5,000 / 20,000 shelves take 2.4 s / 37.7 s /
-126.8 s, linear, and the apply is a full outage throughout. Raising it is now a policy call.
-
-**§15's end-to-end ran against the rebuilt local demo stack and found two blockers, both fixed**
-(`importing_data.md` §15 has the table): the importer refused its own unedited export, and a
-crash mid-apply refused every later import for ever. Re-verified after.
+**Phase 11 (ADR-0002) is built on branch `feat/api-keys-take`: not pushed, not merged, not deployed.**
+API keys bound to a **service account** (a `users` row that is not a person) act as it: four write
+scopes open seven routes, and `POST /stock/take` issues stock in one idempotent call (off unless
+`ALLOW_DIRECT_TAKE`). Migration **0039**. Keys need `Idempotency-Key` on receive (OQ-KT10) and
+cannot archive (OQ-KT12). `TRUST_PROXY_HOPS` makes the proxy hop count config. Python client in
+`clients/python/`. Everything before this (phases 00–10, CSV import) is unchanged.
 
 ## Next action
 
-Nothing assigned. Two things waiting on Ayman:
+1. **Arif reviews and merges** `feat/api-keys-take`. Nothing has been pushed.
+2. **Real client IP behind Cloudflare is IT-owned**, open, and blocks go-live, not merge (RUNBOOK
+   §0.7: requirement, security condition, acceptance tests). The app side is done: the hop count
+   is `TRUST_PROXY_HOPS` (default 1). Do not touch the VM, proxy, Caddyfile or firewall for it.
+3. **Production must run `infra/` first** (RUNBOOK §0 item 0). The VM runs the root demo stack at
+   `9f4176d` (operator, 2026-09-27): demo on, Phase 11 settings not passed. The switch needs IT in
+   the window (5173 → 80/443). Still waiting on Ayman: `IMPORT_MAX_CHANGED_SHELVES`.
 
-1. **Raise or keep `IMPORT_MAX_CHANGED_SHELVES`** now the timings exist.
-2. **The VM.** Nothing has been deployed there — all of the above is the *local* demo stack. It is
-   still on old code (the rate-limit fix `03426df` is pushed, not deployed) and **demo mode is ON**
-   (`GET /auth/demo-accounts` answers unauthenticated). **No host address is recorded anywhere in
-   this repo**; every runbook line says `<host>`. Ask, and settle demo vs production, first.
-   Offsite backups (**G-16**) and a restore drill (**G-17**) are still owed.
+## Green as of 2026-09-30 (`9f0d716`), measured on the M5
 
-## Green as of 2026-09-24 — measured serially, not remembered
-
-- `pnpm typecheck` clean · `pnpm test` → shared 25 · api 242 · web 450
-- `pnpm lint` → **20 pre-existing errors. Not green.** Compare against 20, not zero.
-- `pnpm --filter @ims/api test:int` → **927 pass / 0 fail (64 files)**
-- `guard-hardcoding.sh --scan-all` → **8**, against a documented baseline of 7.
-- Migrations 0001–**0038** applied. Benchmarks are in `apps/api/test/bench/`, run by hand via
-  `vitest.bench.config.ts` — **not** in the suite; they take minutes and leave undeletable rows.
+- typecheck clean · unit shared 25 · api 257 · web 477 · lint **20** (the same findings as before)
+- integration **992 / 992 (68 files), no known failures**, via `scripts/test-int-keeper.sh` at
+  `a271479`, 80 s. The old `stock-import-lock` timeouts were the SSH tunnel (DECISIONS 2026-09-30).
+- guard-hardcoding **8** · migrations 0001–**0039** · smokes on the dev DB: 20/20 (E2 fixed to
+  compare parsed JSON); Python client smoke 5/5.
 
 ## Landmines — full list in `ASSIST.md` §9
 
-- **Never run two test suites at once.** One shared `db-test`; two runs truncate each other and
-  produce a *convincing fake regression* in a random innocent spec. Use `scripts/gate.sh`.
-- **Shell heredocs and `node -e` mangle prose**, and a `sed` substitution hits every matching line
-  in the file, not the one you meant. Write code with the Write/Edit tools.
-- **A green suite said nothing about whether the import worked.** Two blockers in five minutes of
-  running it for real; a spec that builds its own world reaches neither. A test that calls the
-  recovery function *by hand* has tested the function, not the path.
-- **A long `OR` list cannot be compiled.** Kysely walks the tree by recursion, so a few thousand
-  terms overflow the stack *while building the SQL*, non-deterministically — it passed at 5,000
-  one run and failed the next. Chunk any `eb.or` built from a collection (`stock/constants.ts`).
-- **Built output goes stale and lies confidently.** A seed or config change needs `--build`.
-- **`pnpm typecheck` reads `packages/shared/dist`.** Change a contract, rebuild shared.
-- **Two compose files.** Root = demo, secrets hardcoded in the public repo. `infra/` = production.
-- **`test-env.int-spec` refuses an unpinned config key.** A new `config.schema.ts` key must be
-  pinned in `TEST_ENV` or the suite fails.
-- **`resetData` keeps requisitions and cannot delete products**, so both accumulate across a run.
-  Make every fixture value run-unique and filter by id, never by a name substring.
-- **An import locks the whole API out, and the lock lives in process memory** — `resetData` cannot
-  clear it, a spec that engages it must release it in `afterEach`, and it breaks the day the API
-  runs two instances. `release` is the only thing that clears it.
+- **This Mac: Postgres runs on the keeper, never locally.** Integration gate =
+  **`scripts/test-int-keeper.sh`** (runs beside `ims-db-test`, ~90 s). The `ssh -L` tunnels
+  (5434/5433, keep-alives in AI_PLAYBOOK §7) are for ad-hoc dev only: they stall and fake timeouts.
+  Node **22** is keg-only: `PATH=/opt/homebrew/opt/node@22/bin:$PATH`. `scripts/gate.sh` is Windows-only.
+- **Every role→people query must filter `users.is_service_account = false`** (list in
+  `07-data-model.md` §7.5), or a panel gets requisition stages, IM notices and picker slots.
+- **A response body that is HTML, or not `{code, message}`, came from another app**, not the API.
+  The harness now binds 127.0.0.1; do not revert it.
+- **Never run two test suites at once.** One shared `db-test`.
+- **`pnpm typecheck` reads `packages/shared/dist`.** Change a contract, rebuild shared. Built
+  output goes stale and lies confidently: a seed, config or API change needs `--build`.
+- **Two compose files.** Root = demo (and what the VM runs today); `infra/` = production.
+- **`test-env.int-spec` refuses an unpinned config key.** Pin every new one in `TEST_ENV`.
+- **`resetData` keeps requisitions and cannot delete a user who moved stock.** A full run leaves
+  >100 users, so anything reading "the first page of users" needs fixtures that sort first.
+- **An import locks the whole API out, and the lock lives in process memory.**
 - **`D-nnn` is the QA defect numbering** — cite decisions by `OQ-*` / `G-*`.
 
 ## Open debt
 
-`G-14` · `G-16` · `G-17` · `G-18` · `G-19` · PM 6/12/14/15 · `OQ-30` · `OQ-31` · `OQ-33` ·
-`OQ-C` · `OQ-D` · **`OQ-F`** (uncategorised products are treated as trackable) ·
-**overdue notifications are unwired on purpose (`OQ-E`, Ayman's call) — not a gap, do not "fix"**
+`G-14` · `G-16` · `G-17` · `G-18` · `G-19` · `G-21` (borrow form 500 on an unknown project) ·
+PM 6/12/14/15 · `OQ-30` · `OQ-31` · `OQ-33` · `OQ-C` · `OQ-D` · `OQ-F` · `OQ-KT8` · `OQ-KT9`
+· **overdue notifications are unwired on purpose (`OQ-E`) — not a gap, do not "fix"**

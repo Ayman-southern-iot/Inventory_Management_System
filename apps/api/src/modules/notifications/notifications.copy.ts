@@ -160,6 +160,21 @@ export const NOTIFICATION_COPY: Record<NotificationType, NotificationTemplate> =
     },
   },
   /**
+   * The actor is the service account (e.g. "Lab drawer panel C576"), so the title says which
+   * machine took stock — the one fact an IM needs to go and look (OQ-KT4).
+   */
+  'borrowing.taken_by_key': {
+    severity: 'info',
+    title: (ref, actor) => `${actor ?? 'An API key'} took ${ref} from stock`,
+    body: (c) => {
+      const parts = [
+        c.quantity ? `${c.quantity} unit(s)` : null,
+        c.dueDate ? `due back on ${c.dueDate}` : 'not returnable',
+      ].filter(Boolean);
+      return parts.join(', ');
+    },
+  },
+  /**
    * The two halves of a custody reassignment. They are separate types rather than one with a
    * flag because they say opposite things to different people, and the second one — "it is no
    * longer against you" — is what turns the trail into something the previous holder can point

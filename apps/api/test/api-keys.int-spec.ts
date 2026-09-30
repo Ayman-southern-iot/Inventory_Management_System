@@ -315,17 +315,33 @@ describe('API keys', () => {
       // Pinned deliberately. This list is the public surface of every key ever issued, so a
       // route joining it should be a decision somebody made, not a diff nobody read — when this
       // assertion fails, the question is "did we mean to open that?", not "update the test".
+      //
+      // Widened 2026-09-29: yes, we meant to. ADR-0002 (accepted by Arif) opens the seven write
+      // routes below to keys bound to a service account. `POST /stock/take` is absent because
+      // this app runs with ALLOW_DIRECT_TAKE off, and a switched-off route is not advertised.
       expect(paths).toEqual([
         '/catalogue',
         '/categories',
+        '/categories',
+        '/categories/:id',
         '/locations',
+        '/locations/compartments',
         '/locations/rooms',
+        '/locations/zones',
+        '/products',
         '/products',
         '/products/:id',
+        '/products/:id',
+        '/stock/receive',
       ]);
-      expect(
-        response.body.endpoints.every((e: { method: string }) => e.method === 'GET'),
-      ).toBe(true);
+      // Was "every endpoint is a GET" (K3). Its replacement: a route that changes anything may
+      // only be opened by a write scope, never by `inventory:read`.
+      for (const endpoint of response.body.endpoints as Array<{ method: string; scope: string }>) {
+        if (endpoint.method === 'GET') continue;
+        expect(endpoint.scope, `${endpoint.method} opened by ${endpoint.scope}`).not.toBe(
+          ApiKeyScope.INVENTORY_READ,
+        );
+      }
     });
 
     it('describes the query parameters a caller may send', async () => {

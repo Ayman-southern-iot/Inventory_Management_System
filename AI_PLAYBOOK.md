@@ -8,7 +8,9 @@
 >
 > **Maintenance rule:** see `.claude/rules/05-ai-playbook.md`. A `PostToolUse` hook
 > (`.claude/hooks/playbook-reminder.sh`) reminds Claude to update this file after every
-> meaningful edit. Last updated: 2026-09-24 (CSV product import complete, parts A–L — §6 layout
+> meaningful edit. Last updated: 2026-09-29 (phase 11, ADR-0002: keys that act as a service
+> account, `POST /stock/take` — §11 config, §16 landmines, §18 notifications. Earlier,
+> 2026-09-24: CSV product import complete, parts A–L — §6 layout
 > gained the `imports` module and `test/bench/`, §16 gained the OR-compile landmine. Earlier,
 > 2026-09-21, phase 10: API keys — §6 layout, §16 landmines, §19 screen map; and phase 09: Room
 > above Zone, shelf-slot Storage IDs, optional nested categories, borrow custody).
@@ -527,6 +529,8 @@ their own DRAFT. The rule is deliberately narrow — it is reference material fo
 ├── package.json                  root scripts (dev, build, test, typecheck, lint, db:*)
 ├── pnpm-workspace.yaml           apps/* + packages/*
 ├── tsconfig.base.json            strict TS, noUncheckedIndexedAccess on
+├── clients/python/               ims_client.py for the integration API (keys, one-call take),
+│                                 its README and smoke_client.py (local API only); uv, not pnpm
 ├── .claude/
 │   ├── settings.json             permissions + hook wiring (SessionStart, PostToolUse)
 │   ├── rules/                    00..60 engineering rules, mostly path-scoped
@@ -610,11 +614,30 @@ pnpm db:migrate           # apply migrations
 pnpm db:rollback          # one migration back
 pnpm db:make <name>       # generate empty migration
 pnpm db:seed              # idempotent reference data
-pnpm --filter @ims/api test:int   # integration tests (real Postgres)
+pnpm --filter @ims/api test:int   # integration tests (real Postgres) — host runs only, see below
+scripts/test-int-keeper.sh        # THE integration gate on the M5: runs on the keeper, no tunnel
 pnpm audit:deps           # dependency audit
 
 # Verification suite (run via /verify):
 bash .claude/hooks/guard-hardcoding.sh --scan-all
+```
+
+**Integration gate on the M5 = `scripts/test-int-keeper.sh`** (2026-09-30).
+
+- **What it does:** rsyncs the working tree to the keeper and runs the suite in a
+  `node:22.13-alpine` + Chromium container on the Docker network `ims-int`, reaching `ims-db-test`
+  by name. It exits with the suite's code, and `[filter …]` narrows it to some spec files.
+- **Why not the tunnel:** through the M5→keeper SSH tunnel the suite took 30–42 min and hit
+  spurious timeouts (`stock-import-lock` every run, one 15-minute `bom-transportation` hang). On
+  a database with no tunnel it ran 992/992 in 81 s with no lock waits (investigation in the
+  ADR-0002 review addendum).
+- **The tunnel is for ad-hoc dev only,** with keep-alives so a dead link fails in about 45 s
+  instead of hanging:
+
+```bash
+ssh -f -N -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes \
+  -L 5434:127.0.0.1:55434 -L 5433:127.0.0.1:55433 mini-keeper
+# or in ~/.ssh/config, under `Host mini-keeper`:  ServerAliveInterval 15 / ServerAliveCountMax 3
 ```
 
 **Ports:** API **3000**, web **5173**, dev Postgres **5433**, test Postgres **5434**. Ports
@@ -880,6 +903,24 @@ and `PUT /admin/settings` rejects it. It is what distinguishes "this release int
 from "an admin switched it off": the latter stays off across every restart (`DECISIONS.md`,
 2026-08-07).
 
+**API keys and the one-call take** (ADR-0002, 2026-09-29) add three config keys, all in
+`config.schema.ts` and all pinned in `TEST_ENV`:
+
+- `ALLOW_DIRECT_TAKE`, default false. Opens `POST /stock/take`; while off, the route answers
+  `DIRECT_TAKE_DISABLED` and the usage page does not list it.
+- `DIRECT_TAKE_MAX_QTY`, default 10. Units per take, and a guess (OQ-KT11).
+- `API_KEY_WRITE_MAX_LIFETIME_DAYS`, default 180. The longest a write key may live (OQ-KT3).
+
+There is **no** `API_KEYS_ENABLED`. Production with `DEMO_ACCOUNTS_ENABLED=true` refuses every key,
+and refuses issuing keys and service accounts, with `API_KEYS_DISABLED_IN_DEMO`.
+
+**The client address is config too** (2026-09-29). `TRUST_PROXY_HOPS` (default 1, 0–10, blank
+refuses to boot) is Express's `trust proxy` in `main.ts` and in `createTestApp`. `req.ip` is taken
+from `X-Forwarded-For` that many hops back. The API never reads `CF-Connecting-IP`. Every
+per-address limit and `audit_log.request_ip` rest on it. The proxy chain in front of production
+belongs to the IT team, and RUNBOOK §0.7 is the handoff: IT picks the chain and tells the app
+owner the hop count.
+
 **Two features ship off, behind config rather than `app_settings`** (2026-09-02):
 `ALLOW_PARTIAL_FUNDING` and `ALLOW_APPROVED_AMOUNT_REVISION`, both defaulting false in the `money`
 group. Env and not the settings table on purpose — this is a release decision about an unfinished
@@ -1043,10 +1084,33 @@ reason the locking exists).
   fool you: `.includes('inventory:read')` is `true` by *substring*, so a scope check keeps passing
   while it silently stops being a scope check. Read such a column as `::text[]` — see the
   `scopesAsArray` helper in `modules/api-keys/api-keys.repository.ts`.
-- **An API key is not a `RequestUser`, and must never be given one.** `JwtAuthGuard` leaves
-  `request.user` undefined for a key (migration 0037, Phase 10). Populating it is the obvious
-  shortcut and it opens `@Roles` — including the endpoint that mints more keys — and writes a
-  fabricated actor into `audit_log`. A key reaches a route only if it carries `@ApiKeyScopes`.
+- **A key's `request.user` is either nothing or a service account, never a person** (ADR-0002,
+  migration 0039). An unbound, read-only key leaves it undefined, as Phase 10 did. A key bound to
+  a service account sets it to that account, a `users` row with `is_service_account`, holding
+  only GENERAL and INVENTORY_MANAGER, that cannot sign in. Never populate it with a *synthetic*
+  user: that opens `@Roles` and fabricates the audit actor. A key still reaches a route only if
+  the route carries `@ApiKeyScopes`, and `test/api-key-writes.int-spec.ts` walks the live route
+  table to prove it.
+  Rules about what a key may do *inside* a route it can reach (no `isActive` on `PATCH`, an
+  `Idempotency-Key` on receive) live in the controller, through `@CurrentApiKey()` and
+  `modules/api-keys/api-key.policies.ts`, never in the services. §15.4 of the integration doc is
+  checked against the route registry by `test/integration-doc-drift.int-spec.ts`.
+- **Every query that turns a role into a list of people must filter
+  `users.is_service_account = false`.** A service account holds INVENTORY_MANAGER so its keys can
+  act. Without the filter it is handed requisition IM stages (`findAnyActiveUserWithRole` picks
+  the *oldest* IM), receives every IM notification, and appears in pickers and the demo login
+  list. The current set is recorded in `docs/reference/07-data-model.md` §7.5. A new resolver
+  that forgets the filter will pass every test that has no service account in its fixture.
+- **On a Mac, supertest's `request(server)` can reach somebody else's server.** Given an unbound
+  server, it calls `listen(0)` for every request on the wildcard address, then dials 127.0.0.1.
+  Any desktop app already listening on 127.0.0.1 at that port wins the connection. Seen as an
+  HTML 404, a stranger's 401 JSON and a 426, each reading like a random API regression.
+  `createTestApp` now listens once on 127.0.0.1 and `httpClient` dials that address.
+- **`scripts/gate.sh` only works on Windows.** It polls `powershell.exe` for live vitest
+  processes, so on macOS it waits 15 minutes and aborts. On a Mac, run the gate steps directly
+  with `pgrep -f vitest` as the guard, and run **integration through
+  `scripts/test-int-keeper.sh`, never through the SSH tunnel.** The tunnel stalls connections and
+  produces timeouts that look like lock waits but are not (2026-09-30).
 - **A Storage ID is immutable, enforced by trigger** (migration 0034). Renaming a room does not
   rewrite the labels underneath it, and any `UPDATE` that changes an assigned
   `storage_compartments.storage_id` is refused. That is deliberate: the label is already stuck
@@ -1246,6 +1310,7 @@ Current best view is `docs/state/OPEN-QUESTIONS.md`. Snapshot of operator-action
 | Item overdue | nobody | **job logs only — unwired on purpose, OQ-E** |
 | Borrow custody reassigned | new holder **and** previous holder | bell |
 | Issued straight from the shelf | the person it was issued to | bell |
+| Stock taken with an API key (`POST /stock/take`) | every IM (people only) | bell, `borrowing.taken_by_key` — OQ-KT4 |
 | Requisition submitted | Inventory Manager | popup + badge |
 | IM approved | Approver 1 & 2 (or delegates) | badge + email |
 | Approval deadline passed, still pending | Assigned approver | job, repeats every 24h until acted |

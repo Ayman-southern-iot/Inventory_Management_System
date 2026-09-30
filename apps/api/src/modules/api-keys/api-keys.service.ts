@@ -1,35 +1,38 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { createHash, randomBytes } from 'node:crypto';
 import {
+  API_KEY_DISPLAY_PREFIX_CHARS,
   API_KEY_TOKEN_PREFIX,
+  hasWriteScope,
   type ApiKey,
   type ApiKeyScope,
   type CreateApiKeyInput,
+  type CreateServiceAccountInput,
   type CreatedApiKey,
   type ListApiKeysQuery,
   type Paginated,
+  type ServiceAccount,
 } from '@ims/shared';
 import { CONFIG, type AppConfig } from '../../config';
 import {
   ApiKeyDisabledError,
   ApiKeyInvalidError,
+  ApiKeysDisabledInDemoError,
   ConflictError,
   NotFoundError,
+  ValidationFailedError,
 } from '../../common/errors';
 import { AuditService } from '../audit/audit.service';
 import type { AuditContext } from '../audit/audit-context';
-import { ApiKeysRepository, type ApiKeyRow } from './api-keys.repository';
+import type { RequestUser } from '../auth/request-user';
+import { UsersService } from '../users/users.service';
+import { ApiKeysRepository, type ApiKeyRow, type ServiceAccountRow } from './api-keys.repository';
 
 /**
  * 32 bytes of randomness, base64url-encoded. Well past the point where guessing is the attack
  * anybody would choose, and short enough to paste into a config file without wrapping.
  */
 const TOKEN_BYTES = 32;
-/**
- * How much of the token is kept in the clear for the admin list. Enough to tell two keys apart
- * at a glance, far too little to narrow a search: the remaining ~35 characters are the secret.
- */
-const DISPLAY_PREFIX_CHARS = 8;
 
 const MS_PER_DAY = 86_400_000;
 
@@ -38,10 +41,17 @@ function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
-/** What an authenticated key carries for the rest of the request. Note: no user, no roles. */
+/**
+ * What an authenticated key carries for the rest of the request.
+ *
+ * `serviceAccount` is the principal a bound key acts as (ADR-0002) — the guard puts it on
+ * `request.user`, so `@Roles`, `@CurrentUser` and the audit trail see an ordinary actor. Null for
+ * an unbound, read-only key, which keeps Phase 10's rule: no user, no roles (K4).
+ */
 export interface AuthenticatedApiKey {
   id: string;
   scopes: readonly ApiKeyScope[];
+  serviceAccount: RequestUser | null;
 }
 
 @Injectable()
@@ -51,6 +61,7 @@ export class ApiKeysService {
   constructor(
     private readonly repository: ApiKeysRepository,
     private readonly audit: AuditService,
+    private readonly users: UsersService,
     @Inject(CONFIG) private readonly config: AppConfig,
   ) {}
 
@@ -73,6 +84,22 @@ export class ApiKeysService {
     if (!row.is_active) throw new ApiKeyDisabledError();
 
     /*
+     * A bound key is only as alive as its account. Deactivating the account is the kill switch
+     * for every key it holds, and it answers DISABLED rather than INVALID for the same reason a
+     * switched-off key does (OQ-G2): the key is real, and the integrator's next step is their
+     * admin. The roles are the ones in the database *now*, never a copy taken at issue.
+     */
+    let serviceAccount: RequestUser | null = null;
+    if (row.service_user_id !== null) {
+      if (!row.service_user_is_active) throw new ApiKeyDisabledError();
+      serviceAccount = {
+        id: row.service_user_id,
+        email: row.service_user_email ?? '',
+        roles: row.service_user_roles ?? [],
+      };
+    }
+
+    /*
      * Fire-and-forget. A failure to record *when* a key was used must never turn a successful
      * read into a 500 — the read already succeeded by the time we get here, and the stamp is a
      * convenience for the admin list, not part of the answer.
@@ -83,7 +110,21 @@ export class ApiKeysService {
         this.logger.warn(`Could not stamp last_used_at for API key ${row.id}: ${String(error)}`);
       });
 
-    return { id: row.id, scopes: row.scopes };
+    return { id: row.id, scopes: row.scopes, serviceAccount };
+  }
+
+  /**
+   * Production running demo accounts: anyone can sign in as the administrator, so a key would
+   * authenticate nobody in particular, and one minted now would come alive the day demo mode is
+   * turned off (ADR-0002). Every key is refused and none may be issued. Outside that one
+   * combination nothing changes — read-only keys behave exactly as they did.
+   */
+  get isDisabledInDemo(): boolean {
+    return this.config.isProduction && this.config.demo.accountsEnabled;
+  }
+
+  assertAvailable(): void {
+    if (this.isDisabledInDemo) throw new ApiKeysDisabledInDemoError();
   }
 
   async list(query: ListApiKeysQuery): Promise<Paginated<ApiKey>> {
@@ -101,9 +142,34 @@ export class ApiKeysService {
    */
   async create(input: CreateApiKeyInput, context: AuditContext): Promise<CreatedApiKey> {
     if (!context.actorId) throw new ConflictError('An API key must be created by a signed-in user');
+    this.assertAvailable();
+
+    // The contract already demands an account and an expiry for a write scope; the *ceiling* on
+    // that expiry is config, which the contract cannot see (OQ-KT3).
+    const maxDays = this.config.apiKeys.writeMaxLifetimeDays;
+    if (
+      hasWriteScope(input.scopes) &&
+      input.expiresInDays !== null &&
+      input.expiresInDays > maxDays
+    ) {
+      throw new ValidationFailedError({
+        path: 'expiresInDays',
+        message: `A key that can make changes may last at most ${maxDays} days`,
+      });
+    }
+    // Checked here for a sentence rather than a 500; migration 0039's FK is the guarantee.
+    if (
+      input.serviceAccountId !== null &&
+      !(await this.repository.isActiveServiceAccount(input.serviceAccountId))
+    ) {
+      throw new ValidationFailedError({
+        path: 'serviceAccountId',
+        message: 'Choose an active service account',
+      });
+    }
 
     const token = `${API_KEY_TOKEN_PREFIX}${randomBytes(TOKEN_BYTES).toString('base64url')}`;
-    const keyPrefix = token.slice(0, API_KEY_TOKEN_PREFIX.length + DISPLAY_PREFIX_CHARS);
+    const keyPrefix = token.slice(0, API_KEY_TOKEN_PREFIX.length + API_KEY_DISPLAY_PREFIX_CHARS);
 
     const expiresAt =
       input.expiresInDays === null ? null : new Date(Date.now() + input.expiresInDays * MS_PER_DAY);
@@ -115,6 +181,7 @@ export class ApiKeysService {
       scopes: input.scopes,
       expiresAt,
       createdBy: context.actorId,
+      serviceUserId: input.serviceAccountId,
     });
 
     await this.audit.record(
@@ -126,7 +193,12 @@ export class ApiKeysService {
         summary: `Issued API key "${input.name}"`,
         // The prefix, the scopes and the expiry. Never the token, and never its hash — an audit
         // row is read by more people than the table it describes.
-        metadata: { keyPrefix, scopes: input.scopes, expiresAt: expiresAt?.toISOString() ?? null },
+        metadata: {
+          keyPrefix,
+          scopes: input.scopes,
+          expiresAt: expiresAt?.toISOString() ?? null,
+          serviceAccountId: input.serviceAccountId,
+        },
       },
       context,
     );
@@ -137,6 +209,9 @@ export class ApiKeysService {
   }
 
   async setActive(id: string, isActive: boolean, context: AuditContext): Promise<ApiKey> {
+    // Switching a key back on in demo-mode production is minting it again: it would come alive
+    // the day demo ends. Switching one off only ever makes things safer, so it stays allowed.
+    if (isActive) this.assertAvailable();
     const existing = await this.repository.findById(id);
     if (!existing) throw new NotFoundError('API key');
     if (existing.revoked_at !== null) {
@@ -185,6 +260,54 @@ export class ApiKeysService {
       context,
     );
   }
+
+  /* ---------------------------------------------------------------- service accounts */
+
+  async listServiceAccounts(): Promise<ServiceAccount[]> {
+    const rows = await this.repository.listServiceAccounts();
+    return rows.map(toServiceAccount);
+  }
+
+  /**
+   * Refused in demo-mode production for the same reason a key is: an account made by whoever
+   * signed in as the demo administrator would be waiting, ready to be bound, the day demo ends.
+   */
+  async createServiceAccount(
+    input: CreateServiceAccountInput,
+    context: AuditContext,
+  ): Promise<ServiceAccount> {
+    this.assertAvailable();
+    const id = await this.users.createServiceAccount(input.name, context);
+    return this.requireServiceAccount(id);
+  }
+
+  async setServiceAccountActive(
+    id: string,
+    isActive: boolean,
+    context: AuditContext,
+  ): Promise<ServiceAccount> {
+    // Same reasoning as `setActive`: re-activating an account in demo mode revives every key
+    // bound to it for the day demo ends. Deactivating stays allowed.
+    if (isActive) this.assertAvailable();
+    await this.users.setServiceAccountActive(id, isActive, context);
+    return this.requireServiceAccount(id);
+  }
+
+  private async requireServiceAccount(id: string): Promise<ServiceAccount> {
+    const row = await this.repository.findServiceAccount(id);
+    if (!row) throw new NotFoundError('Service account');
+    return toServiceAccount(row);
+  }
+}
+
+function toServiceAccount(row: ServiceAccountRow): ServiceAccount {
+  return {
+    id: row.id,
+    name: row.full_name,
+    isActive: row.is_active,
+    activeKeyCount: row.active_key_count,
+    createdAt: row.created_at.toISOString(),
+  };
 }
 
 /**
@@ -207,5 +330,8 @@ function toApiKey(row: ApiKeyRow): ApiKey {
     // Derived rather than stored: expiry is a function of the clock, not a state somebody sets,
     // and a stored flag would be wrong for however long it took a job to notice.
     isExpired: row.expires_at !== null && row.expires_at.getTime() <= Date.now(),
+    serviceAccountId: row.service_user_id,
+    serviceAccountName: row.service_account_name,
+    serviceAccountIsActive: row.service_account_is_active,
   };
 }

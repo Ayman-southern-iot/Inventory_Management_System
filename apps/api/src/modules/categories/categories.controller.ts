@@ -12,7 +12,8 @@ import {
 import { zodPipe } from '../../common/zod-validation.pipe';
 import { AuthenticatedThrottle } from '../../common/throttling';
 import { Roles } from '../auth/auth.decorators';
-import { ApiKeyScopes } from '../api-keys/api-key.decorators';
+import { ApiKeyScopes, CurrentApiKey } from '../api-keys/api-key.decorators';
+import { refuseActivationChangeByKey } from '../api-keys/api-key.policies';
 import { CurrentAuditContext } from '../audit/audit.decorators';
 import type { AuditContext } from '../audit/audit-context';
 import { CategoriesService } from './categories.service';
@@ -36,6 +37,11 @@ export class CategoriesController {
     return this.categories.tree();
   }
 
+  @ApiKeyScopes({
+    summary: 'Create a category, at the top of the tree or under an existing parent.',
+    scopes: [ApiKeyScope.CATALOG_WRITE],
+    body: createCategorySchema,
+  })
   @Roles(Role.INVENTORY_MANAGER, Role.ADMIN)
   @Post()
   async create(
@@ -45,13 +51,21 @@ export class CategoriesController {
     return this.categories.create(body, ctx);
   }
 
+  @ApiKeyScopes({
+    summary:
+      'Rename or move a category. Send only the fields you are changing. A key cannot archive or re-activate one.',
+    scopes: [ApiKeyScope.CATALOG_WRITE],
+    body: updateCategorySchema,
+  })
   @Roles(Role.INVENTORY_MANAGER, Role.ADMIN)
   @Patch(':id')
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body(zodPipe(updateCategorySchema)) body: UpdateCategoryInput,
     @CurrentAuditContext() ctx: AuditContext,
+    @CurrentApiKey() apiKey: { id: string } | null,
   ): Promise<Category> {
+    refuseActivationChangeByKey(apiKey, body.isActive);
     return this.categories.update(id, body, ctx);
   }
 }

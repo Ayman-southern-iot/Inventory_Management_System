@@ -15,7 +15,8 @@ import {
 import { zodPipe } from '../../common/zod-validation.pipe';
 import { AuthenticatedThrottle } from '../../common/throttling';
 import { Roles } from '../auth/auth.decorators';
-import { ApiKeyScopes } from '../api-keys/api-key.decorators';
+import { ApiKeyScopes, CurrentApiKey } from '../api-keys/api-key.decorators';
+import { refuseActivationChangeByKey } from '../api-keys/api-key.policies';
 import { CurrentAuditContext } from '../audit/audit.decorators';
 import type { AuditContext } from '../audit/audit-context';
 import { ProductsService } from './products.service';
@@ -44,10 +45,25 @@ export class ProductsController {
     scopes: [ApiKeyScope.INVENTORY_READ],
   })
   @Get(':id')
-  async findOne(@Param('id', ParseUUIDPipe) id: string): Promise<ProductDetail> {
-    return this.products.findById(id);
+  async findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentApiKey() apiKey: { id: string } | null,
+  ): Promise<ProductDetail> {
+    const detail = await this.products.findById(id);
+    /*
+     * K2: borrowing names employees and stays out of key reach (reaffirmed 2026-09-29 as
+     * OQ-KT6). The loan list carries each borrower's name, so a key gets none of it — how much
+     * is out still shows in the placements' reserved and available figures. Found by the
+     * ADR-0002 security review; key-readable since Phase 10.
+     */
+    return apiKey ? { ...detail, activeBorrows: [] } : detail;
   }
 
+  @ApiKeyScopes({
+    summary: 'Create a product in the catalogue. It holds no stock until something is received.',
+    scopes: [ApiKeyScope.CATALOG_WRITE],
+    body: createProductSchema,
+  })
   @Roles(Role.INVENTORY_MANAGER, Role.ADMIN)
   @Post()
   async create(
@@ -57,13 +73,21 @@ export class ProductsController {
     return this.products.create(body, ctx);
   }
 
+  @ApiKeyScopes({
+    summary:
+      'Edit a product. Send only the fields you are changing; stock is not touched. A key cannot archive or re-activate one.',
+    scopes: [ApiKeyScope.CATALOG_WRITE],
+    body: updateProductSchema,
+  })
   @Roles(Role.INVENTORY_MANAGER, Role.ADMIN)
   @Patch(':id')
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body(zodPipe(updateProductSchema)) body: UpdateProductInput,
     @CurrentAuditContext() ctx: AuditContext,
+    @CurrentApiKey() apiKey: { id: string } | null,
   ): Promise<ProductDetail> {
+    refuseActivationChangeByKey(apiKey, body.isActive);
     return this.products.update(id, body, ctx);
   }
 }

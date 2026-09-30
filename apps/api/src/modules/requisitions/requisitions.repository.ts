@@ -133,6 +133,9 @@ export class RequisitionsRepository {
       .innerJoin('user_roles', 'user_roles.user_id', 'users.id')
       .where('users.is_active', '=', true)
       .where('user_roles.role', '=', role)
+      // A stage needs a person to review it. A service account holds IM so its keys can act
+      // (ADR-0002) and would otherwise be handed requisitions nobody can open.
+      .where('users.is_service_account', '=', false)
       .$if(excludeUserId !== undefined, (qb) => qb.where('users.id', '!=', excludeUserId!))
       .select('users.id')
       .orderBy('users.created_at')

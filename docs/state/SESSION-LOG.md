@@ -12,6 +12,61 @@ Format:
 **Next:** the single next action, specific enough to start without thinking
 ```
 
+## 2026-09-29 (follow-up) — Phase 11: OQ-KT10–KT12, integration doc corrections, Python client
+
+**Did:**
+- **A1:** keys must send `Idempotency-Key` on receive.
+- **A3:** keys cannot archive or re-activate, enforced in the controller through
+  `api-key.policies.ts`; the guard cannot see the body and the services stay unaware of keys.
+- **A4:** E2 compares parsed JSON (PASS).
+- **B:** nine doc corrections (§15.1, 15.4, 15.5, 15.6, 15.7, 15.8, the new 15.10) and a drift
+  test (`integration-doc-drift.int-spec.ts`), shown red on an edited doc.
+- **C:** `clients/python/` with five fixes: `Retry-After-*` headers, 5xx retries, a loopback
+  opt-in, ambiguous drawer names, and the retries=0 None return. Smoke 5/5.
+
+**Decisions:** DECISIONS.md, Phase 11 "(follow-up)" lines.
+
+**Landmines:**
+- `ims.siot.solutions` is behind Cloudflare, but Caddy trusts no proxy, so per-address limits
+  would key on Cloudflare edges. Deduced, not observed; RUNBOOK §0.7.
+- `409 CONFLICT` and `404 NOT_FOUND` are each ambiguous by code on key routes; documented.
+- The web app sends no `Idempotency-Key` on receive (left alone by instruction).
+- A `uv run` in `clients/python` creates a `.venv` that ESLint used to scan; it is ignored now.
+
+**Next:** Arif's merge decision; the Caddy/Cloudflare client IP before go-live.
+
+## 2026-09-29 — Phase 11: API keys that act as a service account, and `POST /stock/take`
+
+**Did:**
+- **Step 0 found that most of the brief already existed.** Phase 10's keys (0037) and Phase 09's
+  `issueFromStock`. ADR-0002 extends both instead of rebuilding them, and Arif accepted it with
+  amendments: no `API_KEYS_ENABLED`, K2 stands, the holder is always the caller, write keys must
+  expire.
+- **Built:** migration 0039 (service accounts, write scopes, `audit_log.api_key_id`, a composite FK
+  that only a service account satisfies); guard, key service and admin routes; filters for
+  service accounts in every role→people query; `POST /stock/take`; the admin screen; the
+  integration doc.
+- **Security and code review, then fixes:** a write key in a URL, throttle bucket escapes,
+  re-enabling in demo mode, borrower names in `GET /products/:id` (a Phase 10 K2 leak), and a
+  take read-back that could have let a retry take twice.
+- **The first run on this Mac:** node_modules, `.env`, Node 22, and the DBs on the keeper. Found
+  the supertest port-shadowing flake and fixed it in the harness.
+
+**Decisions:** DECISIONS.md, Phase 11 section (10 lines). The ones worth knowing: 403 for a
+deactivated account's key (OQ-G2, confirmed by Arif); throttling per key and per address; the URL
+form only for read-only keys; fixed service-account roles.
+
+**Landmines:**
+- The branch is not pushed or merged, so the main checkout is still at the pre-feature code.
+- `stock-import-lock` at scale times out on this Mac; this is not a regression.
+- One `api-keys.int-spec.ts` assertion was widened: the pinned route list. It is a tripwire whose
+  own comment asks "did we mean to open that?", and ADR-0002 says yes. It is flagged in the report.
+- The smoke left dedicated `SMOKE …` rows in the dev DB: one product, one room, two keys (both
+  revoked), service accounts (deactivated). Harmless, and the DB is tmpfs anyway.
+
+**Next:** Arif decides the merge; then OQ-KT10 (receive idempotency for keys), OQ-KT11 (the cap
+number) and OQ-KT12 (may `catalog:write` archive products?).
+
 ## 2026-09-20 — Phase 09 opened: Parts G, F, E-a, and a rate limit that refused every 11th request
 
 **Did:**

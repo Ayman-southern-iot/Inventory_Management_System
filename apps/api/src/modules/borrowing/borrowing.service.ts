@@ -39,6 +39,17 @@ import {
 const BORROW_REF_TYPE = 'BORROW';
 
 /**
+ * What a caller other than the IM's own form adds to an issue-from-stock handover. Used by
+ * `POST /stock/take` (ADR-0002), which is this same transaction reached by a different route.
+ */
+export interface IssueFromStockOptions {
+  /** Merged into the `borrowing.issue_on_behalf` audit metadata — which route, which channel. */
+  auditMetadata?: Readonly<Record<string, unknown>>;
+  /** Also tell every IM (OQ-KT4). For a take made with an API key, which no human witnessed. */
+  notifyInventoryManagers?: boolean;
+}
+
+/**
  * `expected_return_date` is a `date` column, and since D-014 the driver hands it back as raw
  * `YYYY-MM-DD` text. The `Date` branch is a guard: if that parser is ever removed this shifts a
  * calendar day rather than throwing, which is the bug it exists to stop.
@@ -627,9 +638,11 @@ export class BorrowingService {
       const incoming = await tx
         .selectFrom('users')
         .where('id', '=', input.holderId)
-        .select(['id', 'full_name', 'is_active'])
+        .select(['id', 'full_name', 'is_active', 'is_service_account'])
         .executeTakeFirst();
-      if (!incoming) throw new NotFoundError('User');
+      // A service account is not a person anyone can be chased as (ADR-0002). Moving a loan *off*
+      // one onto a human is the useful direction and stays allowed; onto one is refused.
+      if (!incoming || incoming.is_service_account) throw new NotFoundError('User');
       // Same rule and wording as `issueFromStock`: a deactivated account cannot return
       // anything, so making them liable for it creates a loan nobody can close.
       if (!incoming.is_active) {
@@ -961,14 +974,24 @@ export class BorrowingService {
    * it are a single handover, and a split leaves either a reservation held by nothing or units
    * issued against no borrow.
    */
-  async issueFromStock(input: IssueFromStockInput, actorId: string, context: AuditContext) {
+  async issueFromStock(
+    input: IssueFromStockInput,
+    actorId: string,
+    context: AuditContext,
+    options: IssueFromStockOptions = {},
+  ) {
     const id = await this.db.transaction().execute(async (tx) => {
       const borrower = await tx
         .selectFrom('users')
         .where('id', '=', input.borrowerId)
-        .select(['id', 'full_name', 'is_active'])
+        .select(['id', 'full_name', 'is_active', 'is_service_account'])
         .executeTakeFirst();
-      if (!borrower) throw new NotFoundError('User');
+      // A service account holds stock only through its own take, where it is the actor
+      // (ADR-0002, OQ-KT1). An IM cannot issue to one: the picker never offers it, and a borrow
+      // recorded against a machine would sit on nobody's list.
+      if (!borrower || (borrower.is_service_account && borrower.id !== actorId)) {
+        throw new NotFoundError('User');
+      }
       // Issuing to a deactivated account would create a borrow nobody can return. Same rule
       // and wording as the purchase path in funds.service.ts.
       if (!borrower.is_active) {
@@ -1036,6 +1059,9 @@ export class BorrowingService {
           entityRef: borrowNo,
           summary: `Issued ${input.quantity} unit(s) on ${borrowNo} to ${borrower.full_name} from stock`,
           metadata: {
+            // First, so a caller's extras can annotate the row but never overwrite what it
+            // records — which borrow, whose, how many.
+            ...options.auditMetadata,
             borrowNo,
             requesterId: input.borrowerId,
             productId: input.productId,
@@ -1063,6 +1089,25 @@ export class BorrowingService {
         },
         tx,
       );
+
+      // A key took this: no human IM saw it, so every IM is told (OQ-KT4). Inside the same
+      // transaction, so a take that commits cannot lack its notice.
+      if (options.notifyInventoryManagers) {
+        await this.notifications.notify(
+          {
+            type: 'borrowing.taken_by_key',
+            userIds: await this.notifications.usersWithRole(Role.INVENTORY_MANAGER, tx),
+            ref: borrowNo,
+            link: NOTIFICATION_LINKS.borrowingQueue,
+            entityType: 'borrowing',
+            entityId: borrowId,
+            actorId,
+            actorName: context.actorName,
+            context: { quantity: input.quantity, dueDate: input.expectedReturnDate },
+          },
+          tx,
+        );
+      }
 
       return borrowId;
     });

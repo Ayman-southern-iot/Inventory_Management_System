@@ -50,3 +50,17 @@ export class BorrowReturnNotFoundError extends DomainError {
     );
   }
 }
+
+/**
+ * `POST /stock/take` while `ALLOW_DIRECT_TAKE` is off (ADR-0002). Its own code so an integrator
+ * can tell "switched off here" from "you may not", and the SPA can say so in plain words.
+ */
+export class DirectTakeDisabledError extends DomainError {
+  constructor() {
+    super(
+      ErrorCode.DIRECT_TAKE_DISABLED,
+      'Taking stock directly is switched off on this system. Raise a borrow request instead.',
+      HttpStatus.FORBIDDEN,
+    );
+  }
+}

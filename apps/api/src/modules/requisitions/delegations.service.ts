@@ -80,6 +80,8 @@ export class DelegationsService {
       .where('users.id', '=', input.delegateUserId)
       .where('users.is_active', '=', true)
       .where('user_roles.role', '=', Role.APPROVER)
+      // A delegate is a person who will act; never a service account (ADR-0002).
+      .where('users.is_service_account', '=', false)
       .select('users.id')
       .executeTakeFirst();
     if (!delegate) throw new ConflictError('The delegate must be an active approver');

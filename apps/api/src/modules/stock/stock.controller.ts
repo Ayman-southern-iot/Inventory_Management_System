@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Headers, HttpCode, HttpStatus, Post, Query } from '@nestjs/common';
 import {
+  ApiKeyScope,
   IDEMPOTENCY_HEADER,
   Role,
   adjustStockSchema,
@@ -17,6 +18,7 @@ import {
   type ResolveQuarantineInput,
 } from '@ims/shared';
 import { zodPipe } from '../../common/zod-validation.pipe';
+import { ApiKeyScopes, CurrentApiKey } from '../api-keys/api-key.decorators';
 import { CurrentUser, Roles } from '../auth/auth.decorators';
 import type { RequestUser } from '../auth/request-user';
 import { CurrentAuditContext } from '../audit/audit.decorators';
@@ -26,7 +28,7 @@ import { toPlacement } from './stock.mappers';
 import { StockService } from './stock.service';
 import { IdempotencyService } from '../../common/idempotency.service';
 import { AuthenticatedThrottle } from '../../common/throttling';
-import { ConflictError } from '../../common/errors';
+import { ConflictError, ValidationFailedError } from '../../common/errors';
 
 /**
  * Only the movements a human performs are exposed.
@@ -51,6 +53,13 @@ export class StockController {
    * reconciliation compares the ledger against placements and both agree. Hence the
    * Idempotency-Key, which `idempotency_keys` has existed for since Phase 02.
    */
+  @ApiKeyScopes({
+    summary:
+      'Record goods arriving onto a shelf. An Idempotency-Key header is required, so a retried request cannot receive twice.',
+    scopes: [ApiKeyScope.STOCK_RECEIVE],
+    body: receiveStockSchema,
+    requiresIdempotencyKey: true,
+  })
   @Roles(Role.INVENTORY_MANAGER, Role.ADMIN)
   @Post('receive')
   @HttpCode(HttpStatus.OK)
@@ -58,8 +67,21 @@ export class StockController {
     @Body(zodPipe(receiveStockSchema)) body: ReceiveStockInput,
     @CurrentUser() actor: RequestUser,
     @CurrentAuditContext() audit: AuditContext,
+    @CurrentApiKey() apiKey: { id: string } | null,
     @Headers(IDEMPOTENCY_HEADER) idempotencyKey?: string,
   ): Promise<Placement[]> {
+    /*
+     * Required from a key, optional for a person (OQ-KT10, Arif 2026-09-29). A machine retries on
+     * its own — flaky Wi-Fi, a timeout — and a retried receive doubles the stock with nothing to
+     * detect it. The web app does not send the header on receive today, and a person is unchanged.
+     * Same answer, same shape as `POST /stock/take`.
+     */
+    if (apiKey && !idempotencyKey?.trim()) {
+      throw new ValidationFailedError({
+        path: IDEMPOTENCY_HEADER,
+        message: 'Send an Idempotency-Key header, a fresh random value for each distinct receive',
+      });
+    }
     return this.runOnce(idempotencyKey, actor.id, `stock:receive:${body.productId}`, async () => {
       await this.stock.receive(
         {

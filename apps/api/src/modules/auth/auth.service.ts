@@ -47,7 +47,10 @@ export class AuthService {
     await this.throttle.assertIpNotThrottled(context.ip);
     const failures = await this.throttle.countRecentFailures(input.email, context.ip);
 
-    const user = await this.users.findAuthRecordByEmail(input.email);
+    const found = await this.users.findAuthRecordByEmail(input.email);
+    // A service account cannot sign in (ADR-0002). Treated exactly as an unknown address — same
+    // dummy-hash timing, same error — so the response cannot say that one exists.
+    const user = found?.is_service_account ? undefined : found;
 
     // Verify against a dummy hash when the email is unknown, so a missing account and a wrong
     // password take the same time. Otherwise the response latency enumerates valid emails.
@@ -190,7 +193,8 @@ export class AuthService {
 
   private async requireActiveUser(userId: string): Promise<UserWithRoles> {
     const user = await this.users.findAuthRecordById(userId);
-    if (!user) throw new TokenExpiredError();
+    // No service account can hold a session; if one ever appeared, it is not honoured.
+    if (!user || user.is_service_account) throw new TokenExpiredError();
     if (!user.is_active) {
       await this.refreshTokens.revokeAllForUser(user.id, RefreshRevocationReason.ADMIN_REVOKED);
       throw new AccountDeactivatedError();

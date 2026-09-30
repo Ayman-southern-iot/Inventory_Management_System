@@ -488,6 +488,97 @@ describe('migrations', () => {
     });
   });
 
+  describe('0039 — keys bound to service accounts', () => {
+    const BEFORE = '0038_import_jobs';
+
+    async function person(email: string, isServiceAccount = false): Promise<string> {
+      const row = await sql<{ id: string }>`
+        INSERT INTO users (email, password_hash, full_name, designation, is_service_account)
+        VALUES (${email}, 'x', ${email}, 'Test', ${isServiceAccount})
+        RETURNING id
+      `.execute(db);
+      return row.rows[0]!.id;
+    }
+
+    async function isApplied(): Promise<boolean> {
+      const row = await sql<{ n: string }>`
+        SELECT count(*) AS n FROM kysely_migration WHERE name = '0039_api_key_service_accounts'
+      `.execute(db);
+      return Number(row.rows[0]!.n) === 1;
+    }
+
+    it('rolls back with a read-only key in place, shrinking the scope enum back to one value', async () => {
+      await migrateUp(db);
+      const creator = await person('creator.0039@ims.test');
+      await sql`
+        INSERT INTO api_keys (name, key_prefix, token_hash, scopes, created_by)
+        VALUES ('Catalogue sync', 'ims_0039read', 'h-0039-read',
+                ARRAY['inventory:read']::api_key_scope[], ${creator})
+      `.execute(db);
+
+      await migrateToNamed(db, BEFORE);
+      const range = await sql<{ r: string }>`
+        SELECT enum_range(NULL::api_key_scope)::text AS r
+      `.execute(db);
+      expect(range.rows[0]!.r).toBe('{inventory:read}');
+      const kept = await sql<{ scopes: string }>`
+        SELECT scopes::text AS scopes FROM api_keys WHERE key_prefix = 'ims_0039read'
+      `.execute(db);
+      expect(kept.rows[0]!.scopes).toBe('{inventory:read}');
+
+      // And forward again: `ADD VALUE IF NOT EXISTS` cannot trip over a label that survived.
+      await migrateUp(db);
+      expect(await isApplied()).toBe(true);
+    });
+
+    it('refuses to roll back once a service account exists', async () => {
+      await migrateUp(db);
+      await person('panel.0039@ims.test', true);
+      await expect(migrateToNamed(db, BEFORE)).rejects.toThrow();
+      expect(await isApplied()).toBe(true);
+    });
+
+    it('refuses to roll back once an audit row records which key acted', async () => {
+      await migrateUp(db);
+      const creator = await person('auditor.0039@ims.test');
+      const key = await sql<{ id: string }>`
+        INSERT INTO api_keys (name, key_prefix, token_hash, scopes, created_by)
+        VALUES ('Reader', 'ims_0039audt', 'h-0039-audit',
+                ARRAY['inventory:read']::api_key_scope[], ${creator})
+        RETURNING id
+      `.execute(db);
+      await sql`
+        INSERT INTO audit_log (action, entity_type, summary, actor_roles, metadata, outcome, api_key_id)
+        VALUES ('api_key.create', 'api_key', 'keyed row', '[]'::jsonb, '{}'::jsonb, 'success',
+                ${key.rows[0]!.id})
+      `.execute(db);
+      await expect(migrateToNamed(db, BEFORE)).rejects.toThrow();
+      expect(await isApplied()).toBe(true);
+    });
+
+    it('refuses a write key with no account or no expiry, a key bound to a person, and the flip back', async () => {
+      await migrateUp(db);
+      const human = await person('human.0039@ims.test');
+      const panel = await person('bound.0039@ims.test', true);
+      const insert = (prefix: string, account: string | null, expires: boolean) =>
+        sql`
+          INSERT INTO api_keys (name, key_prefix, token_hash, scopes, created_by, service_user_id, expires_at)
+          VALUES ('w', ${prefix}, ${`h-${prefix}`}, ARRAY['stock:take']::api_key_scope[], ${human},
+                  ${account}, ${expires ? sql`now() + interval '1 day'` : null})
+        `.execute(db);
+
+      await expect(insert('ims_0039noac', null, true)).rejects.toThrow();
+      await expect(insert('ims_0039noex', panel, false)).rejects.toThrow();
+      await expect(insert('ims_0039humn', human, true)).rejects.toThrow();
+      await insert('ims_0039good', panel, true);
+
+      // A bound account cannot be turned back into a person (ON UPDATE RESTRICT on the FK).
+      await expect(
+        sql`UPDATE users SET is_service_account = false WHERE id = ${panel}`.execute(db),
+      ).rejects.toThrow();
+    });
+  });
+
   it('allows only one company-wide row per approver slot', async () => {
     await migrateUp(db);
     await sql`INSERT INTO approver_slots (department_id, slot_no) VALUES (NULL, 1)`.execute(db);

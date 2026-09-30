@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
-import type { ApiKeyScope } from '@ims/shared';
+import type { ApiKeyScope, Role } from '@ims/shared';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
 
@@ -20,9 +20,18 @@ export interface ApiKeyRow {
   created_by_name: string;
   created_at: Date;
   revoked_at: Date | null;
+  service_user_id: string | null;
+  service_account_name: string | null;
+  service_account_is_active: boolean | null;
 }
 
-/** What the auth path needs, and nothing more. No name, no creator, no timestamps. */
+/**
+ * What the auth path needs, and nothing more. No name, no creator, no timestamps.
+ *
+ * The `service_*` columns are the bound service account, read in the same indexed lookup so a
+ * key that acts costs no second round trip: its active flag (a deactivated account stops every
+ * key bound to it) and its roles, re-read on every request exactly as a session's are.
+ */
 export interface ApiKeyAuthRow {
   id: string;
   scopes: ApiKeyScope[];
@@ -30,6 +39,19 @@ export interface ApiKeyAuthRow {
   expires_at: Date | null;
   last_used_at: Date | null;
   revoked_at: Date | null;
+  service_user_id: string | null;
+  service_user_email: string | null;
+  service_user_is_active: boolean | null;
+  service_user_roles: Role[] | null;
+}
+
+/** One row of the service-accounts list on the API keys screen. */
+export interface ServiceAccountRow {
+  id: string;
+  full_name: string;
+  is_active: boolean;
+  created_at: Date;
+  active_key_count: number;
 }
 
 /**
@@ -47,6 +69,29 @@ export interface ApiKeyAuthRow {
  */
 const scopesAsArray = sql<ApiKeyScope[]>`api_keys.scopes::text[]`.as('scopes');
 
+/** The bound account's roles, as text so pg parses the array (same trap as `scopes` above). */
+const serviceUserRoles = sql<Role[] | null>`(
+  SELECT array_agg(ur.role::text ORDER BY ur.role) FROM user_roles ur WHERE ur.user_id = svc.id
+)`.as('service_user_roles');
+
+/** Columns every admin-facing read selects, so `list` and `findById` cannot drift apart. */
+const ADMIN_COLUMNS = [
+  'api_keys.id',
+  'api_keys.name',
+  'api_keys.key_prefix',
+  scopesAsArray,
+  'api_keys.is_active',
+  'api_keys.expires_at',
+  'api_keys.last_used_at',
+  'api_keys.created_by',
+  'users.full_name as created_by_name',
+  'api_keys.created_at',
+  'api_keys.revoked_at',
+  'api_keys.service_user_id',
+  'svc.full_name as service_account_name',
+  'svc.is_active as service_account_is_active',
+] as const;
+
 @Injectable()
 export class ApiKeysRepository {
   constructor(@Inject(DB) private readonly db: Db) {}
@@ -61,8 +106,20 @@ export class ApiKeysRepository {
   async findByTokenHash(tokenHash: string): Promise<ApiKeyAuthRow | undefined> {
     return this.db
       .selectFrom('api_keys')
-      .select(['id', scopesAsArray, 'is_active', 'expires_at', 'last_used_at', 'revoked_at'])
-      .where('token_hash', '=', tokenHash)
+      .leftJoin('users as svc', 'svc.id', 'api_keys.service_user_id')
+      .select([
+        'api_keys.id',
+        scopesAsArray,
+        'api_keys.is_active',
+        'api_keys.expires_at',
+        'api_keys.last_used_at',
+        'api_keys.revoked_at',
+        'api_keys.service_user_id',
+        'svc.email as service_user_email',
+        'svc.is_active as service_user_is_active',
+        serviceUserRoles,
+      ])
+      .where('api_keys.token_hash', '=', tokenHash)
       .executeTakeFirst() as Promise<ApiKeyAuthRow | undefined>;
   }
 
@@ -95,19 +152,8 @@ export class ApiKeysRepository {
     let query = this.db
       .selectFrom('api_keys')
       .innerJoin('users', 'users.id', 'api_keys.created_by')
-      .select([
-        'api_keys.id',
-        'api_keys.name',
-        'api_keys.key_prefix',
-        scopesAsArray,
-        'api_keys.is_active',
-        'api_keys.expires_at',
-        'api_keys.last_used_at',
-        'api_keys.created_by',
-        'users.full_name as created_by_name',
-        'api_keys.created_at',
-        'api_keys.revoked_at',
-      ]);
+      .leftJoin('users as svc', 'svc.id', 'api_keys.service_user_id')
+      .select(ADMIN_COLUMNS);
 
     if (!params.includeRevoked) query = query.where('api_keys.revoked_at', 'is', null);
 
@@ -130,19 +176,8 @@ export class ApiKeysRepository {
     return this.db
       .selectFrom('api_keys')
       .innerJoin('users', 'users.id', 'api_keys.created_by')
-      .select([
-        'api_keys.id',
-        'api_keys.name',
-        'api_keys.key_prefix',
-        scopesAsArray,
-        'api_keys.is_active',
-        'api_keys.expires_at',
-        'api_keys.last_used_at',
-        'api_keys.created_by',
-        'users.full_name as created_by_name',
-        'api_keys.created_at',
-        'api_keys.revoked_at',
-      ])
+      .leftJoin('users as svc', 'svc.id', 'api_keys.service_user_id')
+      .select(ADMIN_COLUMNS)
       .where('api_keys.id', '=', id)
       .executeTakeFirst() as Promise<ApiKeyRow | undefined>;
   }
@@ -154,6 +189,7 @@ export class ApiKeysRepository {
     scopes: ApiKeyScope[];
     expiresAt: Date | null;
     createdBy: string;
+    serviceUserId: string | null;
   }): Promise<string> {
     const inserted = await this.db
       .insertInto('api_keys')
@@ -164,6 +200,7 @@ export class ApiKeysRepository {
         scopes: sql<ApiKeyScope[]>`${params.scopes}::api_key_scope[]`,
         expires_at: params.expiresAt,
         created_by: params.createdBy,
+        service_user_id: params.serviceUserId,
       })
       .returning('id')
       .executeTakeFirstOrThrow();
@@ -194,5 +231,52 @@ export class ApiKeysRepository {
       .where('revoked_at', 'is', null)
       .executeTakeFirst();
     return Number(result.numUpdatedRows) > 0;
+  }
+
+  /* ---------------------------------------------------------------- service accounts */
+
+  /**
+   * Every service account, with how many of its keys would currently authenticate. Read here
+   * rather than in the users module because the count is a fact about keys; the *writes* to
+   * `users` stay in `UsersService`, which owns that table.
+   */
+  async listServiceAccounts(): Promise<ServiceAccountRow[]> {
+    return this.serviceAccounts().orderBy('users.full_name').execute();
+  }
+
+  async findServiceAccount(id: string): Promise<ServiceAccountRow | undefined> {
+    return this.serviceAccounts().where('users.id', '=', id).executeTakeFirst();
+  }
+
+  private serviceAccounts() {
+    return this.db
+      .selectFrom('users')
+      .where('users.is_service_account', '=', true)
+      .select([
+        'users.id',
+        'users.full_name',
+        'users.is_active',
+        'users.created_at',
+        // Keys that would authenticate if the account were active: not revoked, not switched off,
+        // not past their expiry. The count the deactivate warning quotes, so it must not
+        // include keys that already stopped working on their own.
+        sql<number>`(
+          SELECT count(*)::int FROM api_keys k
+          WHERE k.service_user_id = users.id AND k.revoked_at IS NULL AND k.is_active
+            AND (k.expires_at IS NULL OR k.expires_at > now())
+        )`.as('active_key_count'),
+      ]);
+  }
+
+  /** Is this id an *active service account* — the only thing a key may be bound to? */
+  async isActiveServiceAccount(id: string): Promise<boolean> {
+    const row = await this.db
+      .selectFrom('users')
+      .where('id', '=', id)
+      .where('is_service_account', '=', true)
+      .where('is_active', '=', true)
+      .select('id')
+      .executeTakeFirst();
+    return row !== undefined;
   }
 }

@@ -213,6 +213,9 @@ export class ApproverSlotsService {
       .innerJoin('user_roles', 'user_roles.user_id', 'users.id')
       .where('users.is_active', '=', true)
       .where('user_roles.role', '=', Role.APPROVER)
+      // Service accounts never hold APPROVER; filtered anyway so no future grant can make one
+      // an approver substitute (ADR-0002).
+      .where('users.is_service_account', '=', false)
       .where('users.id', '!=', excludeUserId)
       .select('users.id')
       .orderBy('users.created_at')
@@ -227,6 +230,7 @@ export class ApproverSlotsService {
       .where('users.id', '=', userId)
       .where('users.is_active', '=', true)
       .where('user_roles.role', '=', Role.APPROVER)
+      .where('users.is_service_account', '=', false)
       .select('users.id')
       .executeTakeFirst();
 

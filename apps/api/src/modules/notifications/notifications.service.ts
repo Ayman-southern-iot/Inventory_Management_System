@@ -119,13 +119,19 @@ export class NotificationsService {
 
   /* -------------------------------------------------- recipient resolution */
 
-  /** Everyone holding a role, active only. A deactivated user has no queue to add to. */
+  /**
+   * Everyone holding a role, active only. A deactivated user has no queue to add to.
+   *
+   * People only: a service account holds INVENTORY_MANAGER so its keys can act (ADR-0002), but
+   * nobody reads its bell — without this filter every "tell the IMs" would also land on a panel.
+   */
   async usersWithRole(role: Role, tx?: Tx): Promise<string[]> {
     const rows = await (tx ?? this.db)
       .selectFrom('user_roles')
       .innerJoin('users', 'users.id', 'user_roles.user_id')
       .where('user_roles.role', '=', role)
       .where('users.is_active', '=', true)
+      .where('users.is_service_account', '=', false)
       .select('users.id')
       .execute();
     return rows.map((row) => row.id);

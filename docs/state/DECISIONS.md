@@ -1292,3 +1292,73 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   a no-op each time; a broken file refused with the catalogue byte-identical; restore, and restore
   after renaming a category and a room, both correct; and a SIGKILL four seconds into a
   3,657-shelf apply rolled back whole, did not strand the 503, and was reclaimed 60 seconds later.
+
+## Phase 11 — API keys that can act, and a one-call stock take
+
+- 2026-09-29 — **ADR-0002 accepted** (`docs/adr/0002-api-keys-and-direct-take.md`): Phase 10 keys
+  may be bound to a service account (`users.is_service_account`) and act as it; `POST /stock/take`
+  is a thin route over `issueFromStock` — a write needs a principal the FKs and audit can name, and
+  a person must never be that principal. Amends K3/K4; K2 stands (no `borrow:read`). Answers to
+  OQ-KT1 – OQ-KT7 are in `OPEN-QUESTIONS.md`.
+- 2026-09-29 — **Demo-mode production refuses *creating* and *re-enabling* keys and service
+  accounts, not only using keys.** Anything minted or revived while anyone can sign in as admin
+  comes alive the day demo ends. Switching things off stays allowed.
+- 2026-09-29 — **Service accounts hold a fixed role set, GENERAL plus INVENTORY_MANAGER, with no
+  toggle.** Every write a key can reach is an IM route, so a key's scopes are what narrow it. The
+  user-admin paths refuse service accounts, so nothing can add APPROVER or ADMIN.
+- 2026-09-29 — **A key whose service account is deactivated answers `403 API_KEY_DISABLED`**, on a
+  read and on a take (OQ-G2). The brief had said 401; Arif confirmed 403 when amending smoke S11a.
+  Revoked, unknown or expired still answer `401 API_KEY_INVALID`.
+- 2026-09-29 — **Key throttling counts per key *and* per address**, with the same
+  `THROTTLE_APIKEY_*` limit. The per-key bucket is a sha256 of the whole token, never the public
+  prefix. Per key alone let made-up keys be rotated without limit; the prefix let a stranger spend
+  a real key's budget (security review).
+- 2026-09-29 — **`?api_key=` works only for a read-only key.** A write key in a URL is refused even
+  on a GET, because proxy logs and browser history keep the URL.
+- 2026-09-29 — **`GET /products/:id` answers a key with an empty `activeBorrows`.** The list names
+  borrowers, which breaks K2; it had been key-readable since Phase 10.
+- 2026-09-29 — **The take's placement read-back cannot fail the take.** It runs after commit but
+  inside the idempotency callback, and a failure there would drop the claim and let a retry take
+  twice. It degrades to `placement: null`.
+- 2026-09-29 — **The integration harness listens once on 127.0.0.1.** Supertest's per-request
+  wildcard listen let other macOS apps answer test requests (the baseline's 426).
+- 2026-09-29 — **On this Mac, test and dev Postgres run on the keeper** (`ims-db-test` at
+  127.0.0.1:55434 and `ims-db-dev` at :55433, tmpfs), reached by SSH tunnels to local 5434 and
+  5433. That follows Arif's all-Docker-on-the-keeper rule. The cost is an 18 ms round trip: a full
+  integration run takes about 30 minutes, and `stock-import-lock` at scale times out at 30 s here,
+  in the baseline as well as on the branch. **Superseded 2026-09-30, below:** those timeouts were
+  the tunnel, and the integration gate now runs on the keeper.
+- 2026-09-29 (follow-up) — **The four security-review tightenings are confirmed by Arif:** write
+  key refused in a URL, per-key and per-address throttling, re-enable refused in demo mode, empty
+  `activeBorrows` for keys.
+- 2026-09-29 (follow-up) — **OQ-KT10: an `Idempotency-Key` is required on `POST /stock/receive`
+  from a key.** A retried receive silently doubles stock and reconciliation cannot see it. People
+  are unchanged; the web app does not send one.
+- 2026-09-29 (follow-up) — **OQ-KT11: `DIRECT_TAKE_MAX_QTY` stays 10**, reviewed after one month
+  against the largest take in the ledger.
+- 2026-09-29 (follow-up) — **OQ-KT12: a key cannot archive or re-activate** a product or category.
+  It is decided in the controller through `api-key.policies.ts`, not the guard, because the guard
+  runs before the body is validated and the services stay unaware of keys.
+- 2026-09-29 (follow-up) — **§15.4 of the integration doc is checked by a test**
+  (`integration-doc-drift.int-spec.ts`) against the registry the admin usage page reads, so "the
+  page is right" cannot drift silently.
+- 2026-09-29 (Cloudflare real-IP) — **The client-IP fix belongs to the IT team; the app only makes
+  the hop count config.** `trust proxy` was the literal `1` in `main.ts`. It is now
+  `TRUST_PROXY_HOPS`: default 1, so behaviour is unchanged; 0–10 accepted; blank refused at boot,
+  because coerced it would be 0 and put every user in one bucket. IT's chain can then change without
+  a code change. The API still reads only `X-Forwarded-For`, never `CF-Connecting-IP`. RUNBOOK
+  §0.7 is the handoff (requirement, security condition, acceptance tests). It blocks go-live, not
+  merge. The API-key prerequisites moved to §0.8.
+- 2026-09-30 — **The integration gate runs on the keeper, beside its database:
+  `scripts/test-int-keeper.sh`.** Arif chose option (b). The baseline is now **992 / 992 (68
+  files), no known failures**, measured at `a271479` in 80 s. `stock-import-lock` is off the
+  known-failures list.
+  - **Why:** the M5→keeper SSH tunnel stalled connections. `stock-import-lock` timed out in every
+    run, and `bom-transportation` once hung for 15 minutes. On a database with no tunnel in the
+    path, 10 of 10 isolated `bom-transportation` runs and 5 of 5 `stock-import-lock` runs passed,
+    with `lock_timeout=20s` and a lock sampler that saw no blocked session. The full suite passed
+    992/992 in 81 s. The investigation is in the ADR-0002 review addendum.
+  - **The tunnel is ad-hoc dev only,** with ServerAliveInterval 15 / ServerAliveCountMax 3.
+  - **The runner puts test storage on a tmpfs.** The unpinned storage dirs (G-18) otherwise wrote
+    into the synced checkout. The monitoring spec's disk check then measured the keeper's own disk
+    (87% used on 2026-09-30) and failed two tests.

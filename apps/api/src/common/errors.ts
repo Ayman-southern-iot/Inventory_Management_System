@@ -101,6 +101,28 @@ export class ApiKeyScopeDeniedError extends DomainError {
   }
 }
 
+/** Production with demo accounts on: no key authenticates and none may be issued (ADR-0002). */
+export class ApiKeysDisabledInDemoError extends DomainError {
+  constructor() {
+    super(
+      ErrorCode.API_KEYS_DISABLED_IN_DEMO,
+      'API keys are unavailable while this deployment runs with demo accounts enabled',
+      HttpStatus.FORBIDDEN,
+    );
+  }
+}
+
+/** A key in the URL on a write. The URL form is for reading in a browser, nothing else. */
+export class ApiKeyQueryNotAllowedError extends DomainError {
+  constructor() {
+    super(
+      ErrorCode.API_KEY_QUERY_NOT_ALLOWED,
+      'An API key in the URL can only be used to read. Send it in the Authorization header',
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+}
+
 /* ------------------------------------------------------------------ CSV import */
 
 export class ImportAlreadyRunningError extends DomainError {

@@ -4,8 +4,11 @@ import type {
   ApiKeyUsageDoc,
   ApproverSlot,
   CreateApiKeyInput,
+  CreateServiceAccountInput,
   CreatedApiKey,
   ListApiKeysQuery,
+  ServiceAccount,
+  UpdateServiceAccountInput,
   AuditEntry,
   CreateDepartmentInput,
   CreateUserInput,
@@ -209,5 +212,52 @@ export function useRevokeApiKey() {
   return useMutation({
     mutationFn: (id: string) => api.del<void>(`/admin/api-keys/${id}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.apiKeys.all() }),
+  });
+}
+
+/* ----------------------------- service accounts ----------------------------- */
+
+/**
+ * The principals a key that changes data acts as (ADR-0002). Not paginated by the API: there is
+ * one per integration, and both the section and the key dialog's picker need the whole list.
+ */
+export function useServiceAccounts() {
+  return useQuery({
+    queryKey: queryKeys.apiKeys.serviceAccounts(),
+    queryFn: ({ signal }) =>
+      api.get<ServiceAccount[]>('/admin/api-keys/service-accounts', signal),
+  });
+}
+
+/**
+ * Only the account list is stale afterwards: a new account has no keys. Returning the
+ * invalidation makes `mutateAsync` wait for the refetch, so the picker already offers the new
+ * account by the time the caller selects it.
+ */
+export function useCreateServiceAccount() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateServiceAccountInput) =>
+      api.post<ServiceAccount>('/admin/api-keys/service-accounts', input),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.apiKeys.serviceAccounts() }),
+  });
+}
+
+/**
+ * The kill switch for every key bound to the account. The account list and every key list go
+ * stale: each key row carries `serviceAccountIsActive`, so its bound keys now read Blocked (or
+ * stop doing so). The usage document is left alone — it is static for a build.
+ */
+export function useSetServiceAccountActive() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, isActive }: { id: string } & UpdateServiceAccountInput) =>
+      api.patch<ServiceAccount>(`/admin/api-keys/service-accounts/${id}`, { isActive }),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.apiKeys.serviceAccounts() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.apiKeys.lists() }),
+      ]),
   });
 }

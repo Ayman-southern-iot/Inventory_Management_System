@@ -51,6 +51,7 @@ export class UsersRepository {
         'users.signature_file_id',
         'users.created_at',
         'users.updated_at',
+        'users.is_service_account',
         'departments.name as department_name',
         ROLES_AGG.as('roles'),
       ]);
@@ -70,6 +71,9 @@ export class UsersRepository {
     let base = this.db
       .selectFrom('users')
       .leftJoin('departments', 'departments.id', 'users.department_id')
+      // People only. Service accounts are managed on the API keys screen (ADR-0002), and this
+      // list also feeds the demo-mode login page, which must never offer a machine as a persona.
+      .where('users.is_service_account', '=', false)
       .$if(!query.includeInactive, (qb) => qb.where('users.is_active', '=', true))
       .$if(query.departmentId !== undefined, (qb) =>
         qb.where('users.department_id', '=', query.departmentId!),
@@ -111,6 +115,7 @@ export class UsersRepository {
           'users.signature_file_id',
           'users.created_at',
           'users.updated_at',
+          'users.is_service_account',
           'departments.name as department_name',
           ROLES_AGG.as('roles'),
         ])
@@ -142,6 +147,8 @@ export class UsersRepository {
     let base = this.db
       .selectFrom('users')
       .where('users.is_active', '=', true)
+      // A picker offers people — a delegate, a borrower. Never a service account (ADR-0002).
+      .where('users.is_service_account', '=', false)
       .$if(query.role !== undefined, (qb) =>
         qb.where((eb) =>
           eb.exists(
@@ -188,6 +195,8 @@ export class UsersRepository {
       designation: string;
       departmentId: string | null;
       mustChangePassword: boolean;
+      /** Only `UsersService.createServiceAccount` sets this. Immutable afterwards (0039's FK). */
+      isServiceAccount?: boolean;
     },
   ): Promise<string> {
     const row = await tx
@@ -199,6 +208,7 @@ export class UsersRepository {
         designation: values.designation,
         department_id: values.departmentId,
         must_change_password: values.mustChangePassword,
+        is_service_account: values.isServiceAccount ?? false,
       })
       .returning('id')
       .executeTakeFirstOrThrow();
@@ -276,6 +286,9 @@ export class UsersRepository {
         holders.map((h) => h.user_id),
       )
       .where('users.is_active', '=', true)
+      // "Is a person still able to hold this role" — a service account cannot sign in, so it
+      // never counts as the one who keeps the system reachable.
+      .where('users.is_service_account', '=', false)
       .select((eb) => eb.fn.countAll<number>().as('count'))
       .executeTakeFirst();
 
@@ -288,6 +301,7 @@ export class UsersRepository {
       .innerJoin('users', 'users.id', 'user_roles.user_id')
       .where('user_roles.role', '=', role)
       .where('users.is_active', '=', true)
+      .where('users.is_service_account', '=', false)
       .select((eb) => eb.fn.countAll<number>().as('count'))
       .executeTakeFirst();
     return row?.count ?? 0;

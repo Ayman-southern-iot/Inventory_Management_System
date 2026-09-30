@@ -132,27 +132,33 @@ const borrowLineShape = z
   });
 
 /**
- * Shared by the request and the IM's straight-to-issued handover, so the two can never
- * disagree about whether a consumable may carry a return date.
+ * The one statement of the return-date rule, as a plain predicate so a server path that learns
+ * `isReturnable` late — `POST /stock/take` resolves it from the product — applies exactly this,
+ * not a copy of it. Null when the pair is consistent.
  */
-const refineReturnDate = (
+export const returnDateProblem = (
+  isReturnable: boolean,
+  expectedReturnDate: string | null,
+): string | null => {
+  // A consumable is issued and never comes back, so a return date is a contradiction.
+  if (!isReturnable && expectedReturnDate !== null) {
+    return 'A consumable is not returned, so it has no return date';
+  }
+  if (isReturnable && expectedReturnDate === null) return 'An expected return date is required';
+  return null;
+};
+
+/**
+ * Shared by the request, the IM's straight-to-issued handover and `POST /stock/take`, so the
+ * three can never disagree about whether a consumable may carry a return date.
+ */
+export const refineReturnDate = (
   input: { isReturnable: boolean; expectedReturnDate: string | null },
   ctx: z.RefinementCtx,
 ): void => {
-  // A consumable is issued and never comes back, so a return date is a contradiction.
-  if (!input.isReturnable && input.expectedReturnDate !== null) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['expectedReturnDate'],
-      message: 'A consumable is not returned, so it has no return date',
-    });
-  }
-  if (input.isReturnable && input.expectedReturnDate === null) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['expectedReturnDate'],
-      message: 'An expected return date is required',
-    });
+  const problem = returnDateProblem(input.isReturnable, input.expectedReturnDate);
+  if (problem) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['expectedReturnDate'], message: problem });
   }
 };
 

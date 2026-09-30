@@ -26,14 +26,30 @@ export const LOGIN_MAX_ATTEMPTS = 3;
 export const TEST_PASSWORD = 'IntegrationPass1';
 export const ROTATED_PASSWORD = 'RotatedPass9xyz';
 
+/**
+ * Where the suite finds its database and browser. The defaults are a host run: the test Postgres
+ * on 127.0.0.1:5434 (the `db-test` compose service, or the keeper's `ims-db-test` through an SSH
+ * tunnel), and puppeteer's own browser. `scripts/test-int-keeper.sh` runs the suite in a
+ * container beside the database instead, and sets these to reach it by container name and to use
+ * the image's Chromium.
+ *
+ * Named `IMS_INT_*` on purpose. A developer's `.env` sets `POSTGRES_*`, never these, so the
+ * forcing below still stops a stray shell variable from aiming the suite at the dev database.
+ */
+const RUNNER_DB_HOST = process.env.IMS_INT_DB_HOST ?? '127.0.0.1';
+const RUNNER_DB_PORT = process.env.IMS_INT_DB_PORT ?? '5434';
+const RUNNER_BROWSER_PATH = process.env.IMS_INT_BROWSER_PATH ?? '';
+
 export const TEST_ENV: Record<string, string> = {
   NODE_ENV: 'test',
   API_PORT: '3100',
   API_GLOBAL_PREFIX: 'api/v1',
   CORS_ALLOWED_ORIGINS: '',
+  // The harness sends one X-Forwarded-For entry per request (`nextClientIp`), as one proxy would.
+  TRUST_PROXY_HOPS: '1',
 
-  POSTGRES_HOST: '127.0.0.1',
-  POSTGRES_PORT: '5434',
+  POSTGRES_HOST: RUNNER_DB_HOST,
+  POSTGRES_PORT: RUNNER_DB_PORT,
   POSTGRES_DB: TEST_DB_NAME,
   POSTGRES_USER: 'ims',
   POSTGRES_PASSWORD: 'ims_test_password',
@@ -60,6 +76,11 @@ export const TEST_ENV: Record<string, string> = {
   // Zero, so the integration suite sees `last_used_at` move on every call. In production the
   // interval is what stops a busy integration writing once per read.
   API_KEY_TOUCH_INTERVAL_SECONDS: '0',
+  API_KEY_WRITE_MAX_LIFETIME_DAYS: '180',
+  // Pinned to the production default (off). The take specs build their app with a CONFIG
+  // override that switches it on, so the refusal and the feature are both exercised.
+  ALLOW_DIRECT_TAKE: 'false',
+  DIRECT_TAKE_MAX_QTY: '10',
   CATALOGUE_MAX_PRODUCTS: '5000',
   IMPORT_MAX_ROWS: '5000',
   IMPORT_MAX_FILE_BYTES: '5242880',
@@ -107,7 +128,7 @@ export const TEST_ENV: Record<string, string> = {
    *     calendar-day assertion cannot drift with the host.
    */
   DEMO_ACCOUNTS_ENABLED: 'false',
-  PDF_BROWSER_EXECUTABLE_PATH: '',
+  PDF_BROWSER_EXECUTABLE_PATH: RUNNER_BROWSER_PATH,
   REPORTING_TIME_ZONE: 'Asia/Dhaka',
   // The Storage ID shape. Pinned rather than allowlisted: migrations.int-spec asserts the exact
   // labels the 0034 backfill produces, so a developer's .env must not be able to change them.
