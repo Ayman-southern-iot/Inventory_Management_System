@@ -5,6 +5,10 @@
 
 ## Current position
 
+- **2026-09-30 — Integration gate moved to the keeper (`scripts/test-int-keeper.sh`).** The suite
+  passes **992 / 992 (68 files)** at `a271479`. The `stock-import-lock` failure recorded below was the
+  SSH tunnel, not the code (DECISIONS 2026-09-30). The measurements below stand as they were taken.
+
 - **2026-09-29 (follow-up) — Phase 11: OQ-KT10–KT12 answered and built, integration doc
   corrected, Python client in the repo.** Still on `feat/api-keys-take`, not pushed.
   - A1: keys must send `Idempotency-Key` on `POST /stock/receive`; people are unchanged (the web

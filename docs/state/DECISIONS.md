@@ -1326,7 +1326,8 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   127.0.0.1:55434 and `ims-db-dev` at :55433, tmpfs), reached by SSH tunnels to local 5434 and
   5433. That follows Arif's all-Docker-on-the-keeper rule. The cost is an 18 ms round trip: a full
   integration run takes about 30 minutes, and `stock-import-lock` at scale times out at 30 s here,
-  in the baseline as well as on the branch.
+  in the baseline as well as on the branch. **Superseded 2026-09-30, below:** those timeouts were
+  the tunnel, and the integration gate now runs on the keeper.
 - 2026-09-29 (follow-up) — **The four security-review tightenings are confirmed by Arif:** write
   key refused in a URL, per-key and per-address throttling, re-enable refused in demo mode, empty
   `activeBorrows` for keys.
@@ -1348,3 +1349,16 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   a code change. The API still reads only `X-Forwarded-For`, never `CF-Connecting-IP`. RUNBOOK
   §0.7 is the handoff (requirement, security condition, acceptance tests). It blocks go-live, not
   merge. The API-key prerequisites moved to §0.8.
+- 2026-09-30 — **The integration gate runs on the keeper, beside its database:
+  `scripts/test-int-keeper.sh`.** Arif chose option (b). The baseline is now **992 / 992 (68
+  files), no known failures**, measured at `a271479` in 80 s. `stock-import-lock` is off the
+  known-failures list.
+  - **Why:** the M5→keeper SSH tunnel stalled connections. `stock-import-lock` timed out in every
+    run, and `bom-transportation` once hung for 15 minutes. On a database with no tunnel in the
+    path, 10 of 10 isolated `bom-transportation` runs and 5 of 5 `stock-import-lock` runs passed,
+    with `lock_timeout=20s` and a lock sampler that saw no blocked session. The full suite passed
+    992/992 in 81 s. The investigation is in the ADR-0002 review addendum.
+  - **The tunnel is ad-hoc dev only,** with ServerAliveInterval 15 / ServerAliveCountMax 3.
+  - **The runner puts test storage on a tmpfs.** The unpinned storage dirs (G-18) otherwise wrote
+    into the synced checkout. The monitoring spec's disk check then measured the keeper's own disk
+    (87% used on 2026-09-30) and failed two tests.

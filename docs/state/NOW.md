@@ -27,17 +27,17 @@ cannot archive (OQ-KT12). `TRUST_PROXY_HOPS` makes the proxy hop count config. P
 ## Green as of 2026-09-30 (`9f0d716`), measured on the M5
 
 - typecheck clean · unit shared 25 · api 257 · web 477 · lint **20** (the same findings as before)
-- integration **991 pass / 1 fail (68 files)**: the 1 is `stock-import-lock` at scale timing out at
-  30 s (tunnel latency, in the baseline too). `bom-transportation` failing once was the port flake.
+- integration **992 / 992 (68 files), no known failures**, via `scripts/test-int-keeper.sh` at
+  `a271479`, 80 s. The old `stock-import-lock` timeouts were the SSH tunnel (DECISIONS 2026-09-30).
 - guard-hardcoding **8** · migrations 0001–**0039** · smokes on the dev DB: 20/20 (E2 fixed to
   compare parsed JSON); Python client smoke 5/5.
 
 ## Landmines — full list in `ASSIST.md` §9
 
-- **This Mac: Postgres runs on the keeper, never locally.** `ims-db-test` (5434) and `ims-db-dev`
-  (5433) are keeper containers on tmpfs, reached through `ssh -L` tunnels; both vanish with the
-  tunnel or a reboot. Node **22** is keg-only: prefix `PATH=/opt/homebrew/opt/node@22/bin:$PATH`.
-  `scripts/gate.sh` is Windows-only, so run the steps by hand. A full integration run takes ~30 min.
+- **This Mac: Postgres runs on the keeper, never locally.** Integration gate =
+  **`scripts/test-int-keeper.sh`** (runs beside `ims-db-test`, ~90 s). The `ssh -L` tunnels
+  (5434/5433, keep-alives in AI_PLAYBOOK §7) are for ad-hoc dev only: they stall and fake timeouts.
+  Node **22** is keg-only: `PATH=/opt/homebrew/opt/node@22/bin:$PATH`. `scripts/gate.sh` is Windows-only.
 - **Every role→people query must filter `users.is_service_account = false`** (list in
   `07-data-model.md` §7.5), or a panel gets requisition stages, IM notices and picker slots.
 - **A response body that is HTML, or not `{code, message}`, came from another app**, not the API.
