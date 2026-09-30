@@ -109,8 +109,13 @@ keeper_docker volume create "$STORE_VOLUME" >/dev/null
 # ------------------------------------------------------------------------------ 4. run
 echo "==> Integration suite on the keeper: ${DB_CONTAINER}:${DB_PORT_IN_NETWORK} via network ${NETWORK}"
 set +e
+# Uploads and rendered PDFs go to apps/api/storage (FILE_STORAGE_DIR / PDF_STORAGE_DIR are not
+# pinned in TEST_ENV, gap G-18). A tmpfs keeps them per run instead of piling up in the synced
+# checkout (the first full run left 124 files), and keeps the monitoring spec's disk check off the
+# keeper's own disk: that disk was 87% used on 2026-09-30, and the check failed on it.
 keeper_docker run --rm --init --name "$RUNNER_NAME" --network "$NETWORK" \
   -v "${REMOTE_ABS}:/repo" -v "${STORE_VOLUME}:/pnpm-store" -w /repo \
+  --tmpfs /repo/apps/api/storage:rw,size=1g \
   -e npm_config_store_dir=/pnpm-store \
   -e IMS_INT_DB_HOST="$DB_CONTAINER" \
   -e IMS_INT_DB_PORT="$DB_PORT_IN_NETWORK" \
