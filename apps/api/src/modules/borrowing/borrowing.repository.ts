@@ -16,6 +16,7 @@ import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
 import { ConflictError } from '../../common/errors';
 import type { Tx } from '../audit/audit.repository';
+import { DIRECT_TAKE_ALLOWANCE_LOCK } from './constants';
 
 /** A writer that is either the pool-backed db or a kysely transaction handle. */
 type Writer = Db | Tx;
@@ -33,6 +34,29 @@ export class BorrowingRepository {
   }
 
   /** Existence only, so a take can answer 404 for an unknown project instead of an FK 500. */
+  /**
+   * Units this account has taken since midnight in the business calendar, counted after taking a
+   * per-account advisory lock that lasts until `tx` ends. A second take by the same account waits
+   * here until the first commits or rolls back, so two concurrent takes cannot both spend the
+   * same remaining allowance. Takes by other accounts are not affected.
+   *
+   * A service account holds borrows only through its own takes (ADR-0002, OQ-KT1), so every
+   * borrow row it requested is a take; what was later returned still counts as taken today.
+   */
+  async unitsTakenTodayLocked(tx: Tx, requesterId: string): Promise<number> {
+    await sql`
+      SELECT pg_advisory_xact_lock(hashtextextended(${`${DIRECT_TAKE_ALLOWANCE_LOCK}:${requesterId}`}, 0))
+    `.execute(tx);
+    const midnight = sql<Date>`(${this.today()}::date)::timestamp AT TIME ZONE ${this.config.reportingTimeZone}`;
+    const row = await tx
+      .selectFrom('borrow_requests')
+      .select(sql<number>`COALESCE(SUM(quantity), 0)::int`.as('units'))
+      .where('requester_id', '=', requesterId)
+      .where('created_at', '>=', midnight)
+      .executeTakeFirstOrThrow();
+    return row.units;
+  }
+
   async projectExists(projectId: string): Promise<boolean> {
     const row = await this.db
       .selectFrom('projects')

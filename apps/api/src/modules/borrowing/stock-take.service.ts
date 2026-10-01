@@ -99,6 +99,11 @@ export class StockTakeService {
         // OQ-KT4: a take made with a key tells the IMs. A person taking — an IM or an admin —
         // was at the shelf themselves, so nothing happened that no human saw.
         notifyInventoryManagers: context.apiKeyId != null,
+        // Only a key's account has a daily allowance (Arif 2026-10-01): a person at the shelf is
+        // the check on themselves, and their takes are not counted.
+        ...(context.apiKeyId != null
+          ? { dailyUnitAllowance: this.config.directTake.dailyUnitsPerAccount }
+          : {}),
       },
     );
 

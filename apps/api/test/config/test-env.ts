@@ -73,6 +73,9 @@ export const TEST_ENV: Record<string, string> = {
   THROTTLE_AUTHENTICATED_TTL_SECONDS: '60',
   THROTTLE_APIKEY_LIMIT: '120',
   THROTTLE_APIKEY_TTL_SECONDS: '60',
+  // The take route's own window (Arif 2026-10-01): stock-take.int-spec makes the eleventh call.
+  THROTTLE_TAKE_LIMIT: '10',
+  THROTTLE_TAKE_TTL_SECONDS: '60',
   // Zero, so the integration suite sees `last_used_at` move on every call. In production the
   // interval is what stops a busy integration writing once per read.
   API_KEY_TOUCH_INTERVAL_SECONDS: '0',
@@ -81,6 +84,8 @@ export const TEST_ENV: Record<string, string> = {
   // override that switches it on, so the refusal and the feature are both exercised.
   ALLOW_DIRECT_TAKE: 'false',
   DIRECT_TAKE_MAX_QTY: '10',
+  // stock-take.int-spec takes the whole allowance, then the unit past it.
+  DIRECT_TAKE_DAILY_UNITS_PER_ACCOUNT: '100',
   CATALOGUE_MAX_PRODUCTS: '5000',
   IMPORT_MAX_ROWS: '5000',
   IMPORT_MAX_FILE_BYTES: '5242880',

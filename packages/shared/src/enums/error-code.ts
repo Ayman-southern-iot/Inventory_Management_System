@@ -202,6 +202,12 @@ export const ErrorCode = {
   PARTIAL_FUNDING_DISABLED: 'PARTIAL_FUNDING_DISABLED',
   /** `POST /stock/take` while `ALLOW_DIRECT_TAKE` is off (ADR-0002). The borrow flow still works. */
   DIRECT_TAKE_DISABLED: 'DIRECT_TAKE_DISABLED',
+  /**
+   * A key's service account has taken its DIRECT_TAKE_DAILY_UNITS_PER_ACCOUNT for the day (Arif
+   * 2026-10-01). 429 with `{ limit, takenToday, requested }`; the allowance resets at midnight in
+   * REPORTING_TIME_ZONE.
+   */
+  DIRECT_TAKE_DAILY_LIMIT_REACHED: 'DIRECT_TAKE_DAILY_LIMIT_REACHED',
   FUNDING_EXCEEDS_APPROVED: 'FUNDING_EXCEEDS_APPROVED',
   /** Receiving more units of an item into stock than were actually purchased. */
   RECEIVE_EXCEEDS_PURCHASED: 'RECEIVE_EXCEEDS_PURCHASED',

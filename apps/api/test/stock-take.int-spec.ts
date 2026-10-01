@@ -6,6 +6,7 @@ import { createTestApp, httpClient, type HttpClient, type TestApp } from './app'
 import { issueBoundKey, type BoundKey } from './api-key-factories';
 import { createUser, createUserAndLogin, login, resetData } from './factories';
 import { createStockFixture, placementOf, type StockFixture } from './stock-factories';
+import { TEST_ENV } from './config/test-env';
 
 /**
  * ADR-0002 — `POST /stock/take`, stock off a shelf in one idempotent call.
@@ -49,6 +50,10 @@ describe('POST /stock/take (ADR-0002)', () => {
   const assertReconciled = async () => {
     expect(await stock.findReconciliationMismatches()).toEqual([]);
   };
+
+  const ledgerRowsFor = async (productId: string): Promise<number> =>
+    (await ctx.db.selectFrom('stock_ledger').select('id').where('product_id', '=', productId).execute())
+      .length;
 
   beforeAll(async () => {
     ctx = await createTestApp({ directTake: { isEnabled: true } });
@@ -359,6 +364,27 @@ describe('POST /stock/take (ADR-0002)', () => {
     expect((await placementOf(ctx.db, fixture.productId, fixture.compartmentA))?.quantity).toBe(15);
   });
 
+  it('refuses the eleventh take in a window from one key (THROTTLE_TAKE_LIMIT), taking nothing', async () => {
+    const limit = Number(TEST_ENV.THROTTLE_TAKE_LIMIT);
+    // Enough on the shelf that, without the throttle, the extra take would succeed rather than
+    // fail on stock — so only the throttle can be what refuses it.
+    await stock.receive(
+      { productId: fixture.productId, compartmentId: fixture.compartmentA, quantity: limit },
+      { performedBy: im.id, refType: 'TEST' },
+    );
+    const client = asKey(key.token);
+    for (let n = 1; n <= limit; n += 1) {
+      expect((await take(client, { isReturnable: false })).status, `take ${n} of ${limit}`).toBe(201);
+    }
+    const ledgerBefore = await ledgerRowsFor(fixture.productId);
+
+    const refused = await take(client, { isReturnable: false });
+    expect(refused.status).toBe(429);
+    expect(refused.body.code).toBe(ErrorCode.RATE_LIMITED);
+    expect(await ledgerRowsFor(fixture.productId)).toBe(ledgerBefore);
+    await assertReconciled();
+  });
+
   it('is refused to a key without stock:take and to a person without a stock role', async () => {
     const other = await issueBoundKey(admin, [ApiKeyScope.CATALOG_WRITE]);
     const wrongScope = await take(asKey(other.token), { isReturnable: false });
@@ -464,3 +490,99 @@ describe('POST /stock/take while ALLOW_DIRECT_TAKE is off (the default)', () => 
     expect(paths).toContain('POST /stock/receive');
   });
 });
+
+/**
+ * The daily allowance of one service account (DIRECT_TAKE_DAILY_UNITS_PER_ACCOUNT, Arif
+ * 2026-10-01). Here one call may take the whole allowance, so the cap — not the per-call
+ * DIRECT_TAKE_MAX_QTY nor the THROTTLE_TAKE_LIMIT window — is what refuses. At the shipped
+ * defaults those two multiply to exactly the daily cap, so the cap only binds across windows.
+ */
+describe('POST /stock/take against DIRECT_TAKE_DAILY_UNITS_PER_ACCOUNT', () => {
+  const dailyCap = Number(TEST_ENV.DIRECT_TAKE_DAILY_UNITS_PER_ACCOUNT);
+  let ctx: TestApp;
+  let stock: StockService;
+  let admin: HttpClient;
+  let im: { id: string; client: HttpClient };
+  let fixture: StockFixture;
+
+  const asKey = (token: string): HttpClient => httpClient(ctx.app, { token });
+
+  const take = (client: HttpClient, quantity: number) =>
+    client
+      .post('/stock/take')
+      .set('Idempotency-Key', randomUUID())
+      .send({
+        productId: fixture.productId,
+        compartmentId: fixture.compartmentA,
+        quantity,
+        isReturnable: false,
+      });
+
+  const ledgerRows = async (): Promise<number> =>
+    (await ctx.db.selectFrom('stock_ledger').select('id').where('product_id', '=', fixture.productId).execute())
+      .length;
+
+  beforeAll(async () => {
+    ctx = await createTestApp({ directTake: { isEnabled: true, maxQuantityPerCall: dailyCap } });
+    stock = ctx.app.get(StockService, { strict: false });
+  });
+
+  afterAll(async () => {
+    await ctx.close();
+  });
+
+  beforeEach(async () => {
+    await resetData(ctx.db);
+    admin = (await createUserAndLogin(ctx.db, httpClient(ctx.app), { roles: [Role.ADMIN] }))
+      .client;
+    const imUser = await createUser(ctx.db, { roles: [Role.INVENTORY_MANAGER] });
+    const imHttp = httpClient(ctx.app);
+    im = { id: imUser.id, client: imHttp.as((await login(imHttp, imUser.email)).accessToken) };
+    fixture = await createStockFixture(ctx.db);
+    await stock.receive(
+      { productId: fixture.productId, compartmentId: fixture.compartmentA, quantity: dailyCap * 4 },
+      { performedBy: im.id, refType: 'TEST' },
+    );
+  });
+
+  it("refuses the unit past a service account's daily allowance, taking nothing", async () => {
+    const key = await issueBoundKey(admin, [ApiKeyScope.STOCK_TAKE]);
+    const client = asKey(key.token);
+    expect((await take(client, dailyCap)).status).toBe(201);
+    const ledgerBefore = await ledgerRows();
+
+    const refused = await take(client, 1);
+    expect(refused.status).toBe(429);
+    expect(refused.body.code).toBe(ErrorCode.DIRECT_TAKE_DAILY_LIMIT_REACHED);
+    expect(refused.body.details).toEqual({ limit: dailyCap, takenToday: dailyCap, requested: 1 });
+    expect(await ledgerRows()).toBe(ledgerBefore);
+    expect(await stock.findReconciliationMismatches()).toEqual([]);
+  });
+
+  it('lets only one of two simultaneous takes spend the last of the allowance', async () => {
+    const key = await issueBoundKey(admin, [ApiKeyScope.STOCK_TAKE]);
+    const client = asKey(key.token);
+    expect((await take(client, dailyCap - 5)).status).toBe(201);
+
+    const statuses = (await Promise.all([take(client, 5), take(client, 5)])).map((r) => r.status);
+    expect(statuses.sort()).toEqual([201, 429]);
+    const taken = await ctx.db
+      .selectFrom('borrow_requests')
+      .select(ctx.db.fn.sum<number>('quantity').as('units'))
+      .where('requester_id', '=', key.serviceAccountId)
+      .executeTakeFirstOrThrow();
+    expect(Number(taken.units)).toBe(dailyCap);
+  });
+
+  it('counts each service account on its own, and never a person', async () => {
+    const first = await issueBoundKey(admin, [ApiKeyScope.STOCK_TAKE]);
+    const second = await issueBoundKey(admin, [ApiKeyScope.STOCK_TAKE]);
+    expect((await take(asKey(first.token), dailyCap)).status).toBe(201);
+    // A second account's allowance is untouched by the first one's day.
+    expect((await take(asKey(second.token), dailyCap)).status).toBe(201);
+    // A person at the shelf is not a key: no daily allowance applies to them.
+    expect((await take(im.client, dailyCap)).status).toBe(201);
+    expect((await take(im.client, 1)).status).toBe(201);
+  });
+});
+

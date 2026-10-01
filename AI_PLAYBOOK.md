@@ -910,6 +910,14 @@ from "an admin switched it off": the latter stays off across every restart (`DEC
   `DIRECT_TAKE_DISABLED` and the usage page does not list it.
 - `DIRECT_TAKE_MAX_QTY`, default 10. Units per take, and a guess (OQ-KT11).
 - `API_KEY_WRITE_MAX_LIFETIME_DAYS`, default 180. The longest a write key may live (OQ-KT3).
+- `THROTTLE_TAKE_LIMIT` / `THROTTLE_TAKE_TTL_SECONDS`, default 10 / 60 (Arif 2026-10-01). The
+  take route's own window, applied by `TakeThrottle` in `common/throttling.ts` to all three tiers
+  a take is counted in.
+- `DIRECT_TAKE_DAILY_UNITS_PER_ACCOUNT`, default 100 (Arif 2026-10-01). Units a service account
+  may take per calendar day in `REPORTING_TIME_ZONE`; a key take only. It is checked inside
+  `issueFromStock`'s transaction under a per-account advisory lock
+  (`BorrowingRepository.unitsTakenTodayLocked`), so concurrent takes cannot overspend it. Over it:
+  `429 DIRECT_TAKE_DAILY_LIMIT_REACHED`.
 
 There is **no** `API_KEYS_ENABLED`. Production with `DEMO_ACCOUNTS_ENABLED=true` refuses every key,
 and refuses issuing keys and service accounts, with `API_KEYS_DISABLED_IN_DEMO`.
