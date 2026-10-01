@@ -1362,3 +1362,12 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   - **The runner puts test storage on a tmpfs.** The unpinned storage dirs (G-18) otherwise wrote
     into the synced checkout. The monitoring spec's disk check then measured the keeper's own disk
     (87% used on 2026-09-30) and failed two tests.
+- 2026-10-01 (Ayman, ADR-0002 retrospective review) — **K2 is confirmed in these words: no
+  person's name reaches an API key, on any route.** That covers a response body, not only the
+  scopes: `borrow:read` stays out (OQ-KT6), the take answers ids and quantities only, and every
+  route a key can reach returns an empty `activeBorrows`, including `POST` and `PATCH
+  /products`. The review found `PATCH /products/:id` still returning borrower and project names to
+  a `catalog:write` key (the 2026-09-29 entry above only closed the `GET`); that is a defect
+  against this decision, not a new rule, and `withoutLoansForKey` in `api-key.policies.ts` is the
+  one place that closes it. OQ-KT6 had been answered by Arif; K2 is Ayman's call, so this entry is
+  the owner's answer.

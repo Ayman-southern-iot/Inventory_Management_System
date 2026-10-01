@@ -16,7 +16,7 @@ import { zodPipe } from '../../common/zod-validation.pipe';
 import { AuthenticatedThrottle } from '../../common/throttling';
 import { Roles } from '../auth/auth.decorators';
 import { ApiKeyScopes, CurrentApiKey } from '../api-keys/api-key.decorators';
-import { refuseActivationChangeByKey } from '../api-keys/api-key.policies';
+import { refuseActivationChangeByKey, withoutLoansForKey } from '../api-keys/api-key.policies';
 import { CurrentAuditContext } from '../audit/audit.decorators';
 import type { AuditContext } from '../audit/audit-context';
 import { ProductsService } from './products.service';
@@ -49,14 +49,8 @@ export class ProductsController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentApiKey() apiKey: { id: string } | null,
   ): Promise<ProductDetail> {
-    const detail = await this.products.findById(id);
-    /*
-     * K2: borrowing names employees and stays out of key reach (reaffirmed 2026-09-29 as
-     * OQ-KT6). The loan list carries each borrower's name, so a key gets none of it — how much
-     * is out still shows in the placements' reserved and available figures. Found by the
-     * ADR-0002 security review; key-readable since Phase 10.
-     */
-    return apiKey ? { ...detail, activeBorrows: [] } : detail;
+    // K2: the loan list names each borrower, so a key gets none of it (api-key.policies.ts).
+    return withoutLoansForKey(apiKey, await this.products.findById(id));
   }
 
   @ApiKeyScopes({
@@ -69,8 +63,9 @@ export class ProductsController {
   async create(
     @Body(zodPipe(createProductSchema)) body: CreateProductInput,
     @CurrentAuditContext() ctx: AuditContext,
+    @CurrentApiKey() apiKey: { id: string } | null,
   ): Promise<ProductDetail> {
-    return this.products.create(body, ctx);
+    return withoutLoansForKey(apiKey, await this.products.create(body, ctx));
   }
 
   @ApiKeyScopes({
@@ -88,6 +83,6 @@ export class ProductsController {
     @CurrentApiKey() apiKey: { id: string } | null,
   ): Promise<ProductDetail> {
     refuseActivationChangeByKey(apiKey, body.isActive);
-    return this.products.update(id, body, ctx);
+    return withoutLoansForKey(apiKey, await this.products.update(id, body, ctx));
   }
 }
