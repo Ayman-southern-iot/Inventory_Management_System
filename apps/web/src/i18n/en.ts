@@ -1764,6 +1764,8 @@ export const t = {
       'Send this API key in the Authorization header. A key in the URL is accepted only for reading, and only if the key is read-only.',
     DIRECT_TAKE_DISABLED:
       'Taking stock directly is switched off. Raise a borrow request for the Inventory Manager instead.',
+    DIRECT_TAKE_DAILY_LIMIT_REACHED:
+      "This key's account has taken its allowance of stock for today. Raise a borrow request, or try again tomorrow.",
     IMPORT_ALREADY_RUNNING:
       'An import is already in progress. Wait for it to finish, or abandon it first.',
     IMPORT_VALIDATION_FAILED: 'The file could not be imported. See the list of problems below.',

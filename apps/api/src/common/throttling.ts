@@ -138,6 +138,20 @@ export const AuthenticatedThrottle = applyDecorators(
   only('authenticated', 'apiKey', 'apiKeyAddress'),
 );
 
+/**
+ * `POST /stock/take`'s own, tighter window (THROTTLE_TAKE_LIMIT per THROTTLE_TAKE_TTL_SECONDS,
+ * Arif 2026-10-01). A handler-level `@Throttle` replaces the class-level limits of the tiers it
+ * names, for this route only, and the storage key is per route, so a caller's takes are counted
+ * apart from the rest of its requests. All three tiers a take can be measured in are named — a
+ * session in `authenticated`, a key in `apiKey` and `apiKeyAddress` — so neither path keeps the
+ * looser general ceiling. The class-level `only(...)` still skips the other tiers.
+ */
+export const TakeThrottle = Throttle({
+  authenticated: { limit: config.throttling.take.limit, ttl: ms(config.throttling.take.ttlSeconds) },
+  apiKey: { limit: config.throttling.take.limit, ttl: ms(config.throttling.take.ttlSeconds) },
+  apiKeyAddress: { limit: config.throttling.take.limit, ttl: ms(config.throttling.take.ttlSeconds) },
+});
+
 /** Strict tier for credential-bearing endpoints. */
 export const authThrottle = applyDecorators(
   Throttle({

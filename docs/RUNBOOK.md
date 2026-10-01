@@ -296,7 +296,7 @@ openssl rand -hex 32    # three times: JWT_ACCESS_SECRET, JWT_REFRESH_SECRET, PD
 | `SEED_ADMIN_PASSWORD` | A strong value | Used only if that address does not exist yet. |
 | `PDF_MARGIN_TOP_MM` | `20`, unless BOMs print on letterhead (§0.6) | The example says 45; the running stack uses 20. |
 | `TRUST_PROXY_HOPS` | As agreed with IT (§0.7) | |
-| `ALLOW_DIRECT_TAKE`, `DIRECT_TAKE_MAX_QTY`, `API_KEY_WRITE_MAX_LIFETIME_DAYS`, `THROTTLE_APIKEY_*` | As in §0.8 | None of these is in the example. |
+| `ALLOW_DIRECT_TAKE`, `DIRECT_TAKE_MAX_QTY`, `DIRECT_TAKE_DAILY_UNITS_PER_ACCOUNT`, `API_KEY_WRITE_MAX_LIFETIME_DAYS`, `THROTTLE_APIKEY_*`, `THROTTLE_TAKE_*` | As in §0.8 | None of these is in the example. |
 | `IMS_DOMAIN` | From IT, step 5 | |
 | `REGISTRY`, `IMS_TAG` | `local` unless images are published to a registry; any tag | `local` makes `deploy.sh` build the app images on the host (step 6). |
 
@@ -668,8 +668,10 @@ To open the one-call take (`POST /stock/take`), set these in `.env` and recreate
 ```bash
 ALLOW_DIRECT_TAKE=true                 # default false
 DIRECT_TAKE_MAX_QTY=10                 # units per take; default 10 (OQ-KT11 — a guess)
+DIRECT_TAKE_DAILY_UNITS_PER_ACCOUNT=100  # units a service account may take per day; default 100
 API_KEY_WRITE_MAX_LIFETIME_DAYS=180    # longest a write key may live; default 180
 # THROTTLE_APIKEY_LIMIT / THROTTLE_APIKEY_TTL_SECONDS — per key and per address; default 120 / 60
+# THROTTLE_TAKE_LIMIT / THROTTLE_TAKE_TTL_SECONDS — POST /stock/take only; default 10 / 60
 ```
 
 The integrator's reference is `docs/reference/15-integration-api.md`.

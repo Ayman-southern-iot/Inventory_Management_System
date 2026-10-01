@@ -104,6 +104,14 @@ const rawSchema = z.object({
   THROTTLE_APIKEY_LIMIT: z.coerce.number().int().min(1).max(100_000).default(120),
   THROTTLE_APIKEY_TTL_SECONDS: durationSecondsSchema.default(60),
   /**
+   * `POST /stock/take`'s own window (Arif 2026-10-01, ASK 2). The general key ceiling above lets
+   * one key make 120 takes a minute, each of up to DIRECT_TAKE_MAX_QTY units: 1,200 units a minute
+   * from one leaked key. Takes are counted per caller on this route alone — per key, per address
+   * and per session — so the rest of the API keeps its own budget.
+   */
+  THROTTLE_TAKE_LIMIT: z.coerce.number().int().min(1).max(100_000).default(10),
+  THROTTLE_TAKE_TTL_SECONDS: durationSecondsSchema.default(60),
+  /**
    * How stale `api_keys.last_used_at` may be before the next request refreshes it. Without a
    * floor this is one UPDATE per read on an otherwise read-only path. Zero means always.
    */
@@ -133,6 +141,13 @@ const rawSchema = z.object({
    * for a drawer panel handing out components; anything larger should go through a borrow.
    */
   DIRECT_TAKE_MAX_QTY: z.coerce.number().int().min(1).max(1_000_000).default(10),
+  /**
+   * The most units one service account may take in a calendar day, in REPORTING_TIME_ZONE (Arif
+   * 2026-10-01, ASK 2). Bounds what a leaked stock:take key can remove, and with it how many IM
+   * notices its takes can raise, regardless of how its calls are spread over the day. A person
+   * taking at the shelf has no daily allowance; only key takes count, per account.
+   */
+  DIRECT_TAKE_DAILY_UNITS_PER_ACCOUNT: z.coerce.number().int().min(1).max(1_000_000).default(100),
   /**
    * The ceiling on `GET /catalogue`, which is deliberately unpaginated because its whole job is
    * to hand a consuming frontend everything in one call. Past this it refuses loudly rather
@@ -576,6 +591,7 @@ export interface AppConfig {
     readonly public: { readonly limit: number; readonly ttlSeconds: number };
     readonly authenticated: { readonly limit: number; readonly ttlSeconds: number };
     readonly apiKey: { readonly limit: number; readonly ttlSeconds: number };
+    readonly take: { readonly limit: number; readonly ttlSeconds: number };
     readonly loginBurst: { readonly limit: number; readonly ttlSeconds: number };
   };
   readonly apiKeys: {
@@ -586,6 +602,7 @@ export interface AppConfig {
   readonly directTake: {
     readonly isEnabled: boolean;
     readonly maxQuantityPerCall: number;
+    readonly dailyUnitsPerAccount: number;
   };
   readonly catalogue: { readonly maxProducts: number };
   readonly imports: {
@@ -735,6 +752,10 @@ export function buildConfig(source: Record<string, string | undefined>): AppConf
         limit: env.THROTTLE_APIKEY_LIMIT,
         ttlSeconds: env.THROTTLE_APIKEY_TTL_SECONDS,
       }),
+      take: Object.freeze({
+        limit: env.THROTTLE_TAKE_LIMIT,
+        ttlSeconds: env.THROTTLE_TAKE_TTL_SECONDS,
+      }),
       loginBurst: Object.freeze({
         limit: env.LOGIN_BURST_LIMIT,
         ttlSeconds: env.LOGIN_BURST_TTL_SECONDS,
@@ -747,6 +768,7 @@ export function buildConfig(source: Record<string, string | undefined>): AppConf
     directTake: Object.freeze({
       isEnabled: env.ALLOW_DIRECT_TAKE,
       maxQuantityPerCall: env.DIRECT_TAKE_MAX_QTY,
+      dailyUnitsPerAccount: env.DIRECT_TAKE_DAILY_UNITS_PER_ACCOUNT,
     }),
     catalogue: Object.freeze({
       maxProducts: env.CATALOGUE_MAX_PRODUCTS,
