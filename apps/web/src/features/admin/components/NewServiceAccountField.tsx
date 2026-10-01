@@ -14,17 +14,28 @@ import { messageForError } from '@/lib/error-message';
 import { useCreateServiceAccount } from '../api';
 
 interface NewServiceAccountFieldProps {
-  /** Handed the account the server created, so the caller can select it straight away. */
-  onCreated: (account: ServiceAccount) => void;
+  /**
+   * Handed the account the server created, so the key dialog can select it straight away. The
+   * Service accounts panel passes nothing: the new account simply appears in its list.
+   */
+  onCreated?: (account: ServiceAccount) => void;
+  /**
+   * The field's label. The panel passes its own, so the panel's field and the dialog's never
+   * share an accessible name while the dialog is open over the page.
+   */
+  label?: string;
 }
 
 /**
- * Create a service account without leaving the key dialog.
+ * Create a service account, from the key dialog or from the Service accounts panel.
  *
  * Deliberately not a `<form>`: it sits inside the key dialog's form, and a nested form is invalid
  * HTML. Enter is caught here instead, so it creates the account rather than submitting the key.
  */
-export function NewServiceAccountField({ onCreated }: NewServiceAccountFieldProps) {
+export function NewServiceAccountField({
+  onCreated,
+  label = t.apiKeys.newServiceAccount,
+}: NewServiceAccountFieldProps) {
   const toast = useToast();
   const create = useCreateServiceAccount();
   const form = useForm<CreateServiceAccountInput>({
@@ -37,7 +48,7 @@ export function NewServiceAccountField({ onCreated }: NewServiceAccountFieldProp
       const account = await create.mutateAsync(values);
       toast.success(t.apiKeys.serviceAccountCreated);
       form.reset({ name: '' });
-      onCreated(account);
+      onCreated?.(account);
     } catch (error) {
       toast.error(messageForError(error));
     }
@@ -51,7 +62,7 @@ export function NewServiceAccountField({ onCreated }: NewServiceAccountFieldProp
           `name` is required. This name is only needed if you choose to create an account.
         */}
         <TextField
-          label={t.apiKeys.newServiceAccount}
+          label={label}
           placeholder={t.apiKeys.newServiceAccountPlaceholder}
           required={false}
           error={form.formState.errors.name?.message}

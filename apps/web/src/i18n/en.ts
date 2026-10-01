@@ -258,6 +258,8 @@ export const t = {
     serviceAccountsNoneActive: 'There is no active service account yet. Create one below.',
     serviceAccountsLoadFailed: 'The service accounts could not be loaded.',
     newServiceAccount: 'New service account',
+    // The panel's own label, distinct from the key dialog's field that can be open over it.
+    newServiceAccountOnPanel: 'Add a service account',
     newServiceAccountPlaceholder: 'Lab drawer panel C576',
     createServiceAccount: 'Create account',
     serviceAccountCreated: 'Service account created.',
@@ -319,7 +321,7 @@ export const t = {
       'What keys that change data act as. Deactivating one stops every key bound to it at once. Valid keys are the bound keys that are not revoked, disabled or expired.',
     serviceAccountsEmptyTitle: 'No service accounts yet',
     serviceAccountsEmptyBody:
-      'One is created from the key dialog when you issue a key that can change data.',
+      'Create one above, or from the key dialog when you issue a key that can change data.',
     activeKeys: 'Valid keys',
     activate: 'Activate',
     deactivate: 'Deactivate',
