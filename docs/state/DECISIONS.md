@@ -1371,8 +1371,9 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
     per calendar day in the business time zone, for key takes only; people are not counted. It is
     exact under concurrency (a per-account advisory lock inside the issuing transaction). Over it:
     `429 DIRECT_TAKE_DAILY_LIMIT_REACHED` with `{ limit, takenToday, requested }`.
-  - **One key beyond the decision:** `THROTTLE_TAKE_TTL_SECONDS`, because every throttle limit in
-    `config.schema.ts` has its window as its own key. Drop it and reuse the API-key window if the
-    reviewer prefers.
+  - **`THROTTLE_TAKE_TTL_SECONDS` stays** (Arif, 2026-10-01): every throttle limit in
+    `config.schema.ts` has its window as its own key.
+  - **The take throttle applies to web users too, on purpose** (Arif, 2026-10-01): a person taking
+    in the web app is counted in the `authenticated` tier on that route.
   - IM notifications stay one per take (OQ-KT4); the two limits bound how many there can be.
 
