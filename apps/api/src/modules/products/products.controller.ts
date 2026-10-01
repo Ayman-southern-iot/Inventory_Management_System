@@ -16,7 +16,7 @@ import { zodPipe } from '../../common/zod-validation.pipe';
 import { AuthenticatedThrottle } from '../../common/throttling';
 import { Roles } from '../auth/auth.decorators';
 import { ApiKeyScopes, CurrentApiKey } from '../api-keys/api-key.decorators';
-import { refuseActivationChangeByKey, withoutLoansForKey } from '../api-keys/api-key.policies';
+import { refuseActivationChangeByKey } from '../api-keys/api-key.policies';
 import { CurrentAuditContext } from '../audit/audit.decorators';
 import type { AuditContext } from '../audit/audit-context';
 import { ProductsService } from './products.service';
@@ -45,12 +45,10 @@ export class ProductsController {
     scopes: [ApiKeyScope.INVENTORY_READ],
   })
   @Get(':id')
-  async findOne(
-    @Param('id', ParseUUIDPipe) id: string,
-    @CurrentApiKey() apiKey: { id: string } | null,
-  ): Promise<ProductDetail> {
-    // K2: the loan list names each borrower, so a key gets none of it (api-key.policies.ts).
-    return withoutLoansForKey(apiKey, await this.products.findById(id));
+  async findOne(@Param('id', ParseUUIDPipe) id: string): Promise<ProductDetail> {
+    // K2: a key is answered with an empty loan list by KeyResponseRedactionInterceptor, which
+    // covers every key-authenticated request, this one included.
+    return this.products.findById(id);
   }
 
   @ApiKeyScopes({
@@ -63,9 +61,8 @@ export class ProductsController {
   async create(
     @Body(zodPipe(createProductSchema)) body: CreateProductInput,
     @CurrentAuditContext() ctx: AuditContext,
-    @CurrentApiKey() apiKey: { id: string } | null,
   ): Promise<ProductDetail> {
-    return withoutLoansForKey(apiKey, await this.products.create(body, ctx));
+    return this.products.create(body, ctx);
   }
 
   @ApiKeyScopes({
@@ -83,6 +80,6 @@ export class ProductsController {
     @CurrentApiKey() apiKey: { id: string } | null,
   ): Promise<ProductDetail> {
     refuseActivationChangeByKey(apiKey, body.isActive);
-    return withoutLoansForKey(apiKey, await this.products.update(id, body, ctx));
+    return this.products.update(id, body, ctx);
   }
 }

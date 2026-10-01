@@ -1,5 +1,5 @@
 import { Module, type ExecutionContext } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ConfigModule, config } from './config';
@@ -26,6 +26,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { HealthController } from './modules/health/health.controller';
 import { ApiKeysModule } from './modules/api-keys/api-keys.module';
+import { KeyResponseRedactionInterceptor } from './modules/api-keys/key-response-redaction.interceptor';
 import { CatalogueModule } from './modules/catalogue/catalogue.module';
 import { ImportsModule } from './modules/imports/imports.module';
 import { apiKeyTracker, isApiKeyRequest } from './common/throttling';
@@ -124,6 +125,10 @@ const throttlerOptions = [
     DashboardModule,
   ],
   controllers: [HealthController],
-  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
+  providers: [
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    // K2: the one place a key-authenticated answer is stripped of anything naming a person.
+    { provide: APP_INTERCEPTOR, useClass: KeyResponseRedactionInterceptor },
+  ],
 })
 export class AppModule {}
