@@ -585,6 +585,19 @@ describe('ApiKeysPage', () => {
       );
     });
 
+    it('creates an account from the panel itself, with no key dialog open', async () => {
+      accounts = [];
+      const user = userEvent.setup();
+      renderPage();
+
+      // Only the panel offers the field here: the key dialog is closed.
+      await user.type(screen.getByLabelText(new RegExp(t.apiKeys.newServiceAccountOnPanel)), 'Bench scanner');
+      await user.click(screen.getByRole('button', { name: t.apiKeys.createServiceAccount }));
+
+      await waitFor(() => expect(createAccountSpy).toHaveBeenCalledWith({ name: 'Bench scanner' }));
+      expect(createSpy).not.toHaveBeenCalled();
+    });
+
     it('says how an account comes to exist when there is none', () => {
       accounts = [];
       renderPage();
