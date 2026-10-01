@@ -131,7 +131,7 @@ export function ApiKeysPage() {
         </QueryBoundary>
       </Panel>
 
-      <ServiceAccountsPanel />
+      <ServiceAccountsPanel canCreateAccount={usage.data !== undefined && !isDisabledInDemo} />
 
       {usage.data && !isDisabledInDemo ? (
         <CreateApiKeyDialog

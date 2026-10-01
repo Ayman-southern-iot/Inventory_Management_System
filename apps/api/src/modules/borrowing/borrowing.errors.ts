@@ -64,3 +64,19 @@ export class DirectTakeDisabledError extends DomainError {
     );
   }
 }
+
+/**
+ * A key's service account has used its daily allowance (DIRECT_TAKE_DAILY_UNITS_PER_ACCOUNT, Arif
+ * 2026-10-01). 429 rather than 409: nothing about the shelf is wrong, the caller is over its quota
+ * until the day turns. The details let a panel say how much is left instead of guessing.
+ */
+export class DirectTakeDailyLimitError extends DomainError {
+  constructor(limit: number, takenToday: number, requested: number) {
+    super(
+      ErrorCode.DIRECT_TAKE_DAILY_LIMIT_REACHED,
+      `This key's account may take ${limit} units a day and has taken ${takenToday} today, so ${requested} more would exceed it. Raise a borrow request, or try again tomorrow.`,
+      HttpStatus.TOO_MANY_REQUESTS,
+      { limit, takenToday, requested },
+    );
+  }
+}

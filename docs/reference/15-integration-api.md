@@ -162,6 +162,11 @@ What a take does:
   `expectedReturnDate` (`YYYY-MM-DD`); a consumable must not have one.
 - **At most `DIRECT_TAKE_MAX_QTY` units per call** (default 10). Anything larger goes through a
   borrow request.
+- **At most `DIRECT_TAKE_DAILY_UNITS_PER_ACCOUNT` units a day per service account** (default 100),
+  counted across all of that account's keys and reset at midnight in the business time zone. Over
+  it, a take answers `429 DIRECT_TAKE_DAILY_LIMIT_REACHED` with `{ limit, takenToday, requested }`
+  and takes nothing. A person taking in the web app has no daily allowance.
+- **Takes have their own, tighter rate limit** (§15.7).
 - **The response carries ids and quantities only, with no names.**
 - **When a take empties a cell:**
   - The response has `placement: null`, because the stock row for an emptied cell is removed.
@@ -204,6 +209,11 @@ endpoint, counted twice:
 
 Over either limit, the answer is `429 RATE_LIMITED`.
 
+**`POST /stock/take` has its own window:** `THROTTLE_TAKE_LIMIT` takes per
+`THROTTLE_TAKE_TTL_SECONDS` (default 10 per 60 s), counted the same two ways, and apart from the
+caller's other requests. The eleventh take in the window answers `429 RATE_LIMITED`. At the
+defaults that is at most 10 calls × 10 units a minute, and the daily allowance (§15.5) caps the day.
+
 **There is no plain `Retry-After` header.** Each limit that trips sends its own header, a whole
 number of **seconds** until that bucket reopens:
 
@@ -235,6 +245,7 @@ Every error body is `{ "code", "message", "details"? }`. Branch on `code`, never
 | 404 | `NOT_FOUND` | Also returned for **an empty cell**: its row is removed at zero (OQ-KT9). On a take, read it as "cell empty". |
 | 409 | `CONFLICT` | Archived product, or the same idempotent request is still in flight. The code does not tell the two apart; see §15.10. |
 | 429 | `RATE_LIMITED` | Slow down. See `Retry-After-apiKey` / `Retry-After-apiKeyAddress` (§15.7). |
+| 429 | `DIRECT_TAKE_DAILY_LIMIT_REACHED` | The service account has taken its daily allowance. `details`: `{ limit, takenToday, requested }`. |
 
 ### 15.9 Switching it on
 
@@ -244,6 +255,8 @@ Every error body is `{ "code", "message", "details"? }`. Branch on `code`, never
 | `DIRECT_TAKE_MAX_QTY` | `10` | Units per take. Kept at 10 (OQ-KT11); to be reviewed after one month of use against the largest take in the ledger. |
 | `API_KEY_WRITE_MAX_LIFETIME_DAYS` | `180` | The longest a write key may live. |
 | `THROTTLE_APIKEY_LIMIT` / `_TTL_SECONDS` | `120` / `60` | Per key and per address, each per endpoint. |
+| `THROTTLE_TAKE_LIMIT` / `THROTTLE_TAKE_TTL_SECONDS` | `10` / `60` | `POST /stock/take` only, per key, per address and per session. |
+| `DIRECT_TAKE_DAILY_UNITS_PER_ACCOUNT` | `100` | Units a service account may take per calendar day (business time zone). People are not counted. |
 
 Keys work only while demo mode is off in production. Before relying on them, see
 `docs/RUNBOOK.md` §0: turn demo mode off, reset the seeded passwords, and **revoke any key or
@@ -262,6 +275,7 @@ How a machine client should react to each answer. Branch on `code`, never on `me
 | `API_KEYS_DISABLED_IN_DEMO` (403) | Turn demo mode off in production. |
 | `API_KEY_SCOPE_DENIED` (403) | Issue a key with the right scope, or do the action in the web app (archiving, rooms). |
 | `DIRECT_TAKE_DISABLED` (403) | Set `ALLOW_DIRECT_TAKE=true`, or use a borrow request. |
+| `DIRECT_TAKE_DAILY_LIMIT_REACHED` (429) | Stop taking for the day, or use a borrow request. Retrying today will not succeed. |
 | `FORBIDDEN` (403) | The service account lacks the role the route needs. |
 
 **Retryable: retry the same request, a bounded number of times.**

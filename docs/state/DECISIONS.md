@@ -1362,6 +1362,21 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   - **The runner puts test storage on a tmpfs.** The unpinned storage dirs (G-18) otherwise wrote
     into the synced checkout. The monitoring spec's disk check then measured the keeper's own disk
     (87% used on 2026-09-30) and failed two tests.
+- 2026-10-01 — **A take has an aggregate ceiling (Arif, ASK 2 of Ayman's review).** Before this, one
+  leaked `stock:take` key could remove 120 calls × 10 units = 1,200 units a minute, each take
+  paging every IM, because the throttle counts per route per key at the general 120 / 60 s.
+  - **A route window:** `THROTTLE_TAKE_LIMIT` takes per `THROTTLE_TAKE_TTL_SECONDS` (10 / 60) on
+    `POST /stock/take`, for keys and sessions alike.
+  - **A per-service-account daily allowance:** `DIRECT_TAKE_DAILY_UNITS_PER_ACCOUNT` (100) units
+    per calendar day in the business time zone, for key takes only; people are not counted. It is
+    exact under concurrency (a per-account advisory lock inside the issuing transaction). Over it:
+    `429 DIRECT_TAKE_DAILY_LIMIT_REACHED` with `{ limit, takenToday, requested }`.
+  - **`THROTTLE_TAKE_TTL_SECONDS` stays** (Arif, 2026-10-01): every throttle limit in
+    `config.schema.ts` has its window as its own key.
+  - **The take throttle applies to web users too, on purpose** (Arif, 2026-10-01): a person taking
+    in the web app is counted in the `authenticated` tier on that route.
+  - IM notifications stay one per take (OQ-KT4); the two limits bound how many there can be.
+
 - 2026-10-01 (Ayman, ADR-0002 retrospective review) — **K2 is confirmed in these words: no
   person's name reaches an API key, on any route.** That covers a response body, not only the
   scopes: `borrow:read` stays out (OQ-KT6), the take answers ids and quantities only, and every

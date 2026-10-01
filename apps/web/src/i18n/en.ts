@@ -258,6 +258,8 @@ export const t = {
     serviceAccountsNoneActive: 'There is no active service account yet. Create one below.',
     serviceAccountsLoadFailed: 'The service accounts could not be loaded.',
     newServiceAccount: 'New service account',
+    // The panel's own label, distinct from the key dialog's field that can be open over it.
+    newServiceAccountOnPanel: 'Add a service account',
     newServiceAccountPlaceholder: 'Lab drawer panel C576',
     createServiceAccount: 'Create account',
     serviceAccountCreated: 'Service account created.',
@@ -319,7 +321,7 @@ export const t = {
       'What keys that change data act as. Deactivating one stops every key bound to it at once. Valid keys are the bound keys that are not revoked, disabled or expired.',
     serviceAccountsEmptyTitle: 'No service accounts yet',
     serviceAccountsEmptyBody:
-      'One is created from the key dialog when you issue a key that can change data.',
+      'Create one above, or from the key dialog when you issue a key that can change data.',
     activeKeys: 'Valid keys',
     activate: 'Activate',
     deactivate: 'Deactivate',
@@ -1764,6 +1766,8 @@ export const t = {
       'Send this API key in the Authorization header. A key in the URL is accepted only for reading, and only if the key is read-only.',
     DIRECT_TAKE_DISABLED:
       'Taking stock directly is switched off. Raise a borrow request for the Inventory Manager instead.',
+    DIRECT_TAKE_DAILY_LIMIT_REACHED:
+      "This key's account has taken its allowance of stock for today. Raise a borrow request, or try again tomorrow.",
     IMPORT_ALREADY_RUNNING:
       'An import is already in progress. Wait for it to finish, or abandon it first.',
     IMPORT_VALIDATION_FAILED: 'The file could not be imported. See the list of problems below.',

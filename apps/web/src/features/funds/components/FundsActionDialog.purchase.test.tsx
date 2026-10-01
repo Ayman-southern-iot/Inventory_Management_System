@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
@@ -185,6 +185,11 @@ describe('recording a purchase', () => {
     await user.clear(line);
     await user.click(screen.getByRole('button', { name: t.common.save }));
     expect(line).toHaveAttribute('aria-invalid', 'true');
+    // A failed save moves focus to the first marked control one frame later (`focusFirstInvalid`).
+    // Typing before that frame lands races it: the frame can arrive between the click that focuses
+    // this line and the keystrokes, which then go to the vendor box, and the line keeps its mark.
+    // So wait for the move it makes, rather than for time.
+    await waitFor(() => expect(document.activeElement).toHaveAttribute('aria-invalid', 'true'));
 
     await user.type(line, '150');
 

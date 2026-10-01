@@ -9,7 +9,7 @@ import {
 } from '@ims/shared';
 import { ConflictError, ValidationFailedError } from '../../common/errors';
 import { IdempotencyService } from '../../common/idempotency.service';
-import { AuthenticatedThrottle } from '../../common/throttling';
+import { AuthenticatedThrottle, TakeThrottle } from '../../common/throttling';
 import { zodPipe } from '../../common/zod-validation.pipe';
 import { ApiKeyScopes } from '../api-keys/api-key.decorators';
 import { CurrentUser, Roles } from '../auth/auth.decorators';
@@ -47,6 +47,7 @@ export class StockTakeController {
     isEnabled: (config) => config.directTake.isEnabled,
   })
   @Roles(Role.INVENTORY_MANAGER, Role.ADMIN)
+  @TakeThrottle
   @Post('take')
   @HttpCode(HttpStatus.CREATED)
   async take(

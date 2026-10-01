@@ -8,6 +8,7 @@ import { useToast } from '@/components/ui/Toast';
 import { t } from '@/i18n/en';
 import { messageForError } from '@/lib/error-message';
 import { useServiceAccounts, useSetServiceAccountActive } from '../api';
+import { NewServiceAccountField } from './NewServiceAccountField';
 
 /**
  * The accounts keys that change data act as (ADR-0002), managed here rather than on the Users
@@ -16,7 +17,16 @@ import { useServiceAccounts, useSetServiceAccountActive } from '../api';
  * Deactivating is the kill switch for every key bound to the account at once, so it sits behind
  * the same in-app confirm as revoking a key. Activating is not confirmed: it undoes a pause.
  */
-export function ServiceAccountsPanel() {
+interface ServiceAccountsPanelProps {
+  /**
+   * Whether the server will accept a new account right now. False while the usage document is
+   * still loading and in demo mode, where the API refuses keys and accounts alike, so the panel
+   * never offers what it would refuse.
+   */
+  canCreateAccount: boolean;
+}
+
+export function ServiceAccountsPanel({ canCreateAccount }: ServiceAccountsPanelProps) {
   const toast = useToast();
   const accounts = useServiceAccounts();
   const setActive = useSetServiceAccountActive();
@@ -39,6 +49,14 @@ export function ServiceAccountsPanel() {
       <header className="border-b border-border px-4 py-3">
         <h2 className="text-sm font-semibold text-ink">{t.apiKeys.serviceAccountsTitle}</h2>
         <p className="mt-0.5 text-xs text-ink-muted">{t.apiKeys.serviceAccountsBody}</p>
+        {/* Before this, an account could only be made inside the key dialog after ticking a scope
+            that changes data (Ayman's review, ASK 5): an admin preparing a panel had nowhere
+            obvious to start. */}
+        {canCreateAccount ? (
+          <div className="mt-3 max-w-md">
+            <NewServiceAccountField label={t.apiKeys.newServiceAccountOnPanel} />
+          </div>
+        ) : null}
       </header>
 
       <QueryBoundary

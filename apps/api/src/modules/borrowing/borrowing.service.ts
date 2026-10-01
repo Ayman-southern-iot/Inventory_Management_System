@@ -32,6 +32,7 @@ import type { Tx } from '../audit/audit.repository';
 import {
   BorrowAlreadyDecidedError,
   BorrowReturnNotFoundError,
+  DirectTakeDailyLimitError,
   InvalidBorrowTransitionError,
 } from './borrowing.errors';
 
@@ -47,6 +48,12 @@ export interface IssueFromStockOptions {
   auditMetadata?: Readonly<Record<string, unknown>>;
   /** Also tell every IM (OQ-KT4). For a take made with an API key, which no human witnessed. */
   notifyInventoryManagers?: boolean;
+  /**
+   * The borrower's daily allowance in units (DIRECT_TAKE_DAILY_UNITS_PER_ACCOUNT), for a take made
+   * with a key. Counted and spent inside this transaction, under a per-account lock, so the cap is
+   * exact under concurrency rather than approximately right.
+   */
+  dailyUnitAllowance?: number;
 }
 
 /**
@@ -999,6 +1006,13 @@ export class BorrowingService {
           path: 'borrowerId',
           message: 'That user is deactivated, so nothing can be issued to them',
         });
+      }
+
+      if (options.dailyUnitAllowance !== undefined) {
+        const takenToday = await this.repo.unitsTakenTodayLocked(tx, input.borrowerId);
+        if (takenToday + input.quantity > options.dailyUnitAllowance) {
+          throw new DirectTakeDailyLimitError(options.dailyUnitAllowance, takenToday, input.quantity);
+        }
       }
 
       const borrowNo = await this.nextBorrowNo(tx);
