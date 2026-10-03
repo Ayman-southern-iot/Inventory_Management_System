@@ -45,18 +45,10 @@ export class ProductsController {
     scopes: [ApiKeyScope.INVENTORY_READ],
   })
   @Get(':id')
-  async findOne(
-    @Param('id', ParseUUIDPipe) id: string,
-    @CurrentApiKey() apiKey: { id: string } | null,
-  ): Promise<ProductDetail> {
-    const detail = await this.products.findById(id);
-    /*
-     * K2: borrowing names employees and stays out of key reach (reaffirmed 2026-09-29 as
-     * OQ-KT6). The loan list carries each borrower's name, so a key gets none of it — how much
-     * is out still shows in the placements' reserved and available figures. Found by the
-     * ADR-0002 security review; key-readable since Phase 10.
-     */
-    return apiKey ? { ...detail, activeBorrows: [] } : detail;
+  async findOne(@Param('id', ParseUUIDPipe) id: string): Promise<ProductDetail> {
+    // K2: a key is answered with an empty loan list by KeyResponseRedactionInterceptor, which
+    // covers every key-authenticated request, this one included.
+    return this.products.findById(id);
   }
 
   @ApiKeyScopes({

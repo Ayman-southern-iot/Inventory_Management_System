@@ -691,6 +691,61 @@ describe('API keys that act (ADR-0002)', () => {
       expect(JSON.stringify(asKey.body)).not.toContain('Saad Rahman');
       expect(JSON.stringify(asKey.body)).not.toContain(borrower.id);
     });
+
+    /**
+     * Review of 223396d, 2026-10-01: `PATCH /products/:id` and `POST /products` answer with the
+     * same `ProductDetail` the GET does, and only the GET withheld the loan list. So a
+     * `catalog:write` key learned who had an item by editing it. K2 covers a response body, not
+     * only the scopes: no person's name reaches a key on any route.
+     */
+    it('does not tell a key who has an item when it edits that item', async () => {
+      const im = await createUserAndLogin(ctx.db, httpClient(ctx.app), {
+        roles: [Role.INVENTORY_MANAGER],
+      });
+      const fixture = await createStockFixture(ctx.db);
+      await ctx.app
+        .get(StockService, { strict: false })
+        .receive(
+          { productId: fixture.productId, compartmentId: fixture.compartmentA, quantity: 5 },
+          { performedBy: im.user.id, refType: 'TEST' },
+        );
+      const borrower = await createUser(ctx.db, { fullName: 'Tahmid Karim' });
+      const issued = await im.client.post('/borrowing/issue-from-stock').send({
+        borrowerId: borrower.id,
+        productId: fixture.productId,
+        compartmentId: fixture.compartmentA,
+        quantity: 2,
+        isReturnable: true,
+        expectedReturnDate: '2026-12-31',
+      });
+      expect(issued.status, JSON.stringify(issued.body)).toBe(201);
+
+      // A person editing the same product still sees the loan: the redaction is for keys only.
+      const editedByPerson = await im.client
+        .patch(`/products/${fixture.productId}`)
+        .send({ description: 'edited by a person' });
+      expect(editedByPerson.status).toBe(200);
+      expect(JSON.stringify(editedByPerson.body.activeBorrows)).toContain('Tahmid Karim');
+
+      const key = await issueBoundKey(admin, [ApiKeyScope.CATALOG_WRITE]);
+      const editedByKey = await httpClient(ctx.app, { token: key.token })
+        .patch(`/products/${fixture.productId}`)
+        .send({ description: 'edited by a key' });
+      expect(editedByKey.status, JSON.stringify(editedByKey.body)).toBe(200);
+      expect(editedByKey.body.description).toBe('edited by a key');
+      expect(editedByKey.body.activeBorrows).toEqual([]);
+      expect(JSON.stringify(editedByKey.body)).not.toContain('Tahmid Karim');
+      expect(JSON.stringify(editedByKey.body)).not.toContain(borrower.id);
+    });
+
+    it('answers a key that creates a product with an empty loan list', async () => {
+      const key = await issueBoundKey(admin, [ApiKeyScope.CATALOG_WRITE]);
+      const created = await httpClient(ctx.app, { token: key.token })
+        .post('/products')
+        .send({ name: `K2 create ${Date.now()}`, unit: 'pcs' });
+      expect(created.status, JSON.stringify(created.body)).toBe(201);
+      expect(created.body.activeBorrows).toEqual([]);
+    });
   });
 
   /* ---------------------------------------------------------------- default-deny, proven */

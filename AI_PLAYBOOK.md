@@ -443,6 +443,10 @@ pre-filled in the IM's allocation dialog.
   re-attaching it per controller would force every feature module to import `JwtModule` to
   satisfy the injector.
 - **The actor is always `req.user.id`.** Never trust a client-supplied user id.
+- **No person reaches an API key (K2), enforced in one place:** `KeyResponseRedactionInterceptor`
+  (`APP_INTERCEPTOR`) empties every `activeBorrows` in any answer to a key-authenticated request.
+  Do not redact per handler. `api-key-no-person-data.int-spec.ts` walks every key-reachable route
+  in the registry, so a new key route needs a case there, or that test fails (2026-10-01).
 
 ### 5.7 Supporting document on a requisition
 
