@@ -33,7 +33,6 @@ export class BorrowingRepository {
     return todayIn(this.config.reportingTimeZone);
   }
 
-  /** Existence only, so a take can answer 404 for an unknown project instead of an FK 500. */
   /**
    * Units this account has taken since midnight in the business calendar, counted after taking a
    * per-account advisory lock that lasts until `tx` ends. A second take by the same account waits
@@ -42,6 +41,12 @@ export class BorrowingRepository {
    *
    * A service account holds borrows only through its own takes (ADR-0002, OQ-KT1), so every
    * borrow row it requested is a take; what was later returned still counts as taken today.
+   *
+   * Exact only at READ COMMITTED, Postgres's default, which nothing in this codebase changes. The
+   * sum below is its own statement after the lock, so it sees the take that held the lock before
+   * it. Under REPEATABLE READ the snapshot would be fixed at the transaction's first read (the
+   * borrower row in `issueFromStock`), before the lock, and the cap would silently miss a
+   * concurrent take.
    */
   async unitsTakenTodayLocked(tx: Tx, requesterId: string): Promise<number> {
     await sql`
@@ -57,6 +62,7 @@ export class BorrowingRepository {
     return row.units;
   }
 
+  /** Existence only, so a take can answer 404 for an unknown project instead of an FK 500. */
   async projectExists(projectId: string): Promise<boolean> {
     const row = await this.db
       .selectFrom('projects')
