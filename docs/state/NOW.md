@@ -15,18 +15,18 @@ the admin panel. Migration **0039**; Python client in `clients/python/`. Phases 
 
 **`chore/lint-clean`** (from `86de70f`, local only): lint 20 → **0**, bulk import shows **"Coming soon"**
 (UI only; the import API is still live, no env flag), and the Playwright audit (`docs/playwright_audit.md`,
-skill `playwright-audit`, 104 ops, 9 findings). **`fix/professional-messages`** (on top of it, local only,
-no PR): `docs/message_audit.md` M1–M10 fixed — zod wording, per-call overrides, `errorsPlain`, 6 new
-`ErrorCode`s (duplicate dept/room/zone/compartment, department in use, location holds stock), `role=alert`
-toasts. The local `api` and `web` containers run this branch with demo mode **off**; the VM is untouched.
+skill `playwright-audit`, 104 ops). **`fix/professional-messages`** (on top of it): every audit finding fixed
+except F4/F5 (`docs/playwright_audit.md`), and `docs/message_audit.md` fixed — plain zod wording, per-call
+overrides, `errorsPlain`, 8 new `ErrorCode`s (duplicate dept/room/zone/compartment/user email, in-use dept and
+location, last administrator), `ConfirmDialog` on 4 one-click destructive actions, `role=alert` toasts. The
+local `api` and `web` containers run this branch with demo mode **off**; the VM is untouched.
 
 ## Next action
 
-1. **Push both branches and open the PRs** (nothing is pushed). Owner decisions left open: a
-   `USER_EMAIL_IN_USE` code (user management is on the auth STOP list), confirmations on user/
-   compartment deactivation and borrow reject (M6), expense threshold of 0 (M11), and whether "Coming
-   soon" should also close the import API. Audit F1 (stale requisition after a BOM,
-   `features/boms/api.ts:81-84`) and F2 (403 on every requisition page, `FundsPanel.tsx:47`) are unfixed.
+1. **Open the PRs** for `chore/lint-clean` and `fix/professional-messages`. Open for the owner: minimum
+   expense threshold (OQ-35) and BOM vendor optional (OQ-36), whether a borrow reject needs a reason, whether
+   "Coming soon" should also close the import API, F4 (demo-accounts 404 with demo off) and F5 (login
+   lockout per address, matters once Cloudflare hides client IPs).
 2. **Real client IP behind Cloudflare is IT-owned**, open, and blocks go-live (RUNBOOK §0.7). The
    app side is done: `TRUST_PROXY_HOPS` (default 1). Do not touch the VM, proxy or firewall for it.
 3. **Production must run `infra/` first** (RUNBOOK §0 item 0). The VM runs the root demo stack at
@@ -35,9 +35,9 @@ toasts. The local `api` and `web` containers run this branch with demo mode **of
 
 ## Green as of 2026-10-04 (`fix/professional-messages`), measured on Windows
 
-- typecheck clean · unit shared 25 · api 257 · web **524** · **lint 0 (exit 0)** · guard-hardcoding **8**
-- integration **1022 / 1022 (70 files)**, 289 s, local `db-test` (`docker compose -f
-  infra/docker-compose.dev.yml up -d db-test`, port 5434). Was 1013 / 69 (+9 for the new codes).
+- typecheck clean · unit shared 25 · api 257 · web **557** · **lint 0 (exit 0)** · guard-hardcoding **8**
+- integration **1024 / 1024 (70 files)**, 275 s, local `db-test` (`docker compose -f
+  infra/docker-compose.dev.yml up -d db-test`, port 5434). Was 1013 / 69 (+11 for the new codes).
 
 ## Landmines — full list in `ASSIST.md` §9
 

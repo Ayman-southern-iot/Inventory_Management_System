@@ -5,7 +5,16 @@
 
 ## Current position
 
-- **2026-10-04 (latest) — Messages made professional: `fix/professional-messages`, local, not pushed.**
+- **2026-10-04 (final) — Audit findings and message audit fixed; verified; pushed (see SESSION-LOG).**
+  On top of the message work below: F1 stale requisition after a BOM, F2 403 on requisition pages, F6 throttler
+  text, F7 BOM approval chain (words, formatted times, headers from copy); `USER_EMAIL_IN_USE` and
+  `LAST_ADMINISTRATOR`; `ConfirmDialog` for deactivating a user, department or compartment and rejecting a borrow;
+  OQ-35 (threshold floor) and OQ-36 (BOM vendor) logged, not guessed. F9 retracted (my mistake). **Verified:**
+  typecheck · lint 0 · unit shared 25 / api 257 / web 557 · integration **1024 / 1024 (70 files)** · each new test
+  shown failing first · full 104-operation audit and the message probe re-run against rebuilt local containers.
+  Three `users.int-spec.ts` assertions updated on purpose (code `CONFLICT` -> the specific one; still 409).
+
+- **2026-10-04 (earlier) — Messages made professional: `fix/professional-messages`.**
   Fixes M1–M10 of `docs/message_audit.md`: plain validation wording (client map + server field issues), a
   per-call override on `messageForError`, figure-free twins for templated errors, `role=alert` toasts, ~45
   copy edits, inline required markers on the add-to-inventory form, and six new `ErrorCode`s for duplicate

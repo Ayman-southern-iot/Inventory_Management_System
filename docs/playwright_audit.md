@@ -25,10 +25,23 @@ builds a BOM and takes requisition A through every money stage to **In stock**, 
 and the admin finishes with users, departments, API keys and the audit log.
 
 Most WARNs are the same two findings (F2 on requisition pages, F4 on the login page). The real
-defects are below; **none was fixed**, because the ask was an audit.
+defects are below. They were recorded first and **fixed afterwards** (branch `fix/professional-messages`):
+
+| # | Finding | Status |
+|---|---|---|
+| F1 | Requisition stale after a BOM | **Fixed.** `useBomMutation` now refreshes the requisitions on the BOM. |
+| F2 | 403 on every requisition page for non-IM | **Fixed.** `useBomForRequisition` takes `enabled`; `FundsPanel` passes `canAct`. |
+| F3 | Raw zod text, unmarked Storage ID | **Fixed** (see `docs/message_audit.md`). |
+| F4 | Login page requests `/auth/demo-accounts`, 404 when demo is off | **Not fixed.** Stopping the request needs a public flag on an auth endpoint (the auth STOP list). Cosmetic. |
+| F5 | Login lockout keyed by address | **Not changed.** Working as designed per `ASSIST.md`; stays a risk until the Cloudflare client IP is solved. |
+| F6 | `ThrottlerException: Too Many Requests` leaked | **Fixed.** The text is a sentence now. The missing generic `Retry-After` is deliberate (per-tier headers carry it). |
+| F7 | Raw enums and UTC timestamps on the BOM chain | **Fixed.** Also removed hardcoded column headers. |
+| F8 | Generic message for a duplicate zone | **Fixed** by specific error codes. |
+| F9 | Escape does not close the notification panel | **Retracted: my mistake.** The panel closes on Escape, outside click and focus-inside Escape (re-tested live). The screenshot showed it open because my script clicked the bell a second time. |
 
 ## Findings
 
+The findings below are as first written, so the reasoning stays visible; the table above is the current status.
 Ranked. Severity is my judgement. "Verified" means I reproduced it and read the response or the
 code, not that I inferred it.
 
@@ -101,16 +114,15 @@ The "Approval chain (frozen at generation)" table shows `INVENTORY_MANAGER` / `A
 The server's answer names the clash (`A zone called "Zone-A" already exists in <room>`); the toast
 does not. The user is told something conflicts, not what.
 
-### F9. Escape does not close the notification panel. Low (accessibility).
-`Escape` closes the room, zone and compartment dialogs but not the notification panel;
-a second click on the bell does. The project's own accessibility floor says popovers and dialogs close
-on Escape. Exception, **by design**: the "Copy your key now" dialog ignores Escape until you press
+### F9. Escape does not close the notification panel. **Retracted.**
+Wrong: the panel does close on Escape (see the status table). What stays true: the room, zone and
+compartment dialogs close on Escape, and, **by design**, the "Copy your key now" dialog ignores Escape until you press
 "I have copied it", which is right for a one-time secret.
 
 ### Notes, not defects
-- **Borrow Approve and Reject are single clicks** with no confirmation and no reason; Reject
-  releases the reservation at once ("Rejected. The reservation has been released."). Consistent with
-  `docs/reference/05-user-flows.md` §5.1; worth a product decision on whether a reject should ask why.
+- **Borrow Reject was a single click** that released the reservation at once. It now asks first
+  ("Reject this request?"); Approve is still one click, as `docs/reference/05-user-flows.md` §5.1 shows.
+  Whether a reject should also require a reason is left open.
 - **Fresh install cannot submit a requisition below the threshold.** The Settings screen's
   *Sub-threshold approver* starts "Not assigned" and the submit is refused: "No approver is set for
   requests below the expense threshold. An administrator must choose one in Settings -> Sub-threshold

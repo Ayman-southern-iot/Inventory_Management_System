@@ -12,7 +12,23 @@ Format:
 **Next:** the single next action, specific enough to start without thinking
 ```
 
-## 2026-10-04 (latest) — Messages made professional
+## 2026-10-04 (final) — Everything fixed, verified, pushed
+
+**Did:** on the owner's "fix all": F1 (BOM mutation refreshes its requisitions), F2 (`useBomForRequisition` takes
+`enabled`, `FundsPanel` passes `canAct`), F6 (throttler text), F7 (BOM chain), `USER_EMAIL_IN_USE` and
+`LAST_ADMINISTRATOR`, and `ConfirmDialog` on user/department/compartment deactivation and borrow reject, each with a
+test shown failing first. Logged OQ-35 and OQ-36 instead of guessing business rules. Retracted F9: the bell does close
+on Escape; my script had clicked it twice. Full gate green, containers rebuilt, 104-op audit and message probe re-run.
+
+**Decisions:** user-management codes done on the owner's explicit instruction (auth STOP list); three existing
+`users.int-spec.ts` assertions updated for the new codes. F4 and F5 deliberately not changed. See DECISIONS 2026-10-04.
+
+**Landmines:** the local `api` and `web` containers run this branch (demo off); `docker compose up -d --build api web`
+restores the committed default. Integrators creating zones or compartments see new codes (still 409).
+
+**Next:** open the PRs; the owner decisions in NOW.md.
+
+## 2026-10-04 (earlier) — Messages made professional
 
 **Did:** committed the audit work (`bf7a3cc`), cut `fix/professional-messages`, and fixed M1–M10: humanizer +
 widened zod map, `messageForError` overrides and `errorsPlain`, `role=alert` toasts, ~45 copy edits, add-to-inventory

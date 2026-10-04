@@ -244,6 +244,14 @@ async function im(audit, state) {
   await scenario(page, 'I8', 'IM', 'Borrowing queue', 'Open the Pending list (empty state wording)', async () => {
     await page.getByRole('button', { name: 'Pending', exact: true }).click();
   });
+  await scenario(page, 'I11', 'IM', 'Borrowing queue', 'Press Reject on a pending request, then Cancel', async () => {
+    const reject = page.getByRole('button', { name: /^Reject BR-/ }).first();
+    if ((await reject.count()) === 0) return '(no pending request to try)';
+    await reject.click();
+    const text = (await page.getByRole('dialog').innerText()).replace(/\s+/g, ' ');
+    await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
+    return text;
+  });
 
   // Read-only: pressing Generate with the fields empty created a real BOM the first time.
   if (state && state.reqs && state.reqs.D) {
@@ -315,6 +323,13 @@ async function admin(audit) {
   });
   await scenario(page, 'A9', 'Admin', 'API keys', 'Add a service account with an empty name', async () => {
     await click(page, 'Create account');
+  });
+  await nav(page, '/admin/users');
+  await scenario(page, 'A10', 'Admin', 'Users', 'Press Deactivate on a user, then Cancel', async () => {
+    await page.getByRole('button', { name: /^Deactivate / }).first().click();
+    const text = (await page.getByRole('dialog').innerText()).replace(/\s+/g, ' ');
+    await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
+    return text;
   });
   await s.context.close();
 }
