@@ -1,3 +1,9 @@
+/**
+ * `?kiosk=1` on the login page shows the on-screen keyboard and returns to the panel after
+ * sign-in, for a kiosk whose browser was pointed at the login page directly.
+ */
+export const KIOSK_LOGIN_PARAM = 'kiosk';
+
 /** Route paths in one place, so a rename is one edit and never a broken string literal. */
 export const ROUTES = {
   login: '/login',
