@@ -76,6 +76,10 @@ export const queryKeys = {
     /** The full Room → Zone → Compartment tree the Locations page renders. */
     rooms: () => ['locations', 'rooms'] as const,
   },
+  /** `GET /catalogue`: every product with its shelves and no person data. The lab panel's feed. */
+  catalogue: {
+    all: () => ['catalogue'] as const,
+  },
   ledger: {
     all: () => ['ledger'] as const,
     list: (query: ListLedgerQuery) => ['ledger', 'list', query] as const,

@@ -1,10 +1,11 @@
+import { lazy, Suspense } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { ErrorCode, Role } from '@ims/shared';
 import { ApiError } from '@/api/client';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { AppShell } from '@/components/layout/AppShell';
-import { EmptyState } from '@/components/ui/states';
+import { EmptyState, LoadingState } from '@/components/ui/states';
 import { ToastProvider } from '@/components/ui/Toast';
 import { AuthProvider } from '@/features/auth/auth-context';
 import { ImportLockProvider } from '@/features/imports/components/ImportLockProvider';
@@ -35,6 +36,14 @@ import { t } from '@/i18n/en';
 import { ProtectedRoute } from '@/routes/ProtectedRoute';
 import { ROUTES } from '@/routes/paths';
 import { DocumentTitle } from '@/lib/useDocumentTitle';
+
+/**
+ * The lab panel is its own chunk: the kiosk loads it, nobody else does, and its drawer plan is
+ * data no other screen needs. Every other page is still in the main bundle.
+ */
+const PanelPage = lazy(() =>
+  import('@/features/panel/pages/PanelPage').then((module) => ({ default: module.PanelPage })),
+);
 
 const RETRYABLE_ATTEMPTS = 2;
 
@@ -83,6 +92,16 @@ export function App() {
                   <Route path={ROUTES.login} element={<LoginPage />} />
 
                   <Route element={<ProtectedRoute />}>
+                    {/* Signed in, any role, but outside the shell: the panel is the whole
+                        screen. A lost session lands on the login page like any other route. */}
+                    <Route
+                      path={ROUTES.panel}
+                      element={
+                        <Suspense fallback={<LoadingState />}>
+                          <PanelPage />
+                        </Suspense>
+                      }
+                    />
                     <Route element={<AppShell />}>
                       <Route path={ROUTES.dashboard} element={<DashboardPage />} />
                       <Route path={ROUTES.changePassword} element={<ChangePasswordPage />} />

@@ -1803,6 +1803,51 @@ export const t = {
     },
   },
 
+  /** `components/ui/OnScreenKeyboard`: for a touch screen with no keyboard of its own. */
+  onScreenKeyboard: {
+    label: 'On-screen keyboard',
+    backspace: 'Delete',
+    clear: 'Clear',
+    space: 'Space',
+    shift: 'Shift',
+    symbols: 'Symbols',
+    symbolsKey: '#+=',
+    letters: 'Letters',
+    lettersKey: 'ABC',
+  },
+
+  /** The lab panel (`/panel`): a read-only "where is it?" screen on a wall-mounted touch panel. */
+  panel: {
+    pageTitle: 'Where is it?',
+    searchLabel: 'Search for a part',
+    resultsLabel: 'Search results',
+    searchPlaceholder: 'Part name, part number or drawer code',
+    clearSearch: 'Clear search',
+    keyboardShow: 'Keyboard',
+    keyboardHide: 'Hide keyboard',
+    noMatch: 'No match — try a part number or a drawer code like A3',
+    moreResults: (count: number) => `${count} more — type more to narrow it down`,
+    drawerResult: 'Drawer',
+    notOnShelf: 'Not on any shelf',
+    notOnPlan: 'Not on the drawer plan',
+    onHand: (count: number) => `${count} on hand`,
+    free: (count: number) => `${count} free`,
+    cabinetsTitle: 'Cabinets',
+    openShelves: 'Open shelves',
+    backToOverview: 'All cabinets',
+    drawerBack: 'Back',
+    drawerFront: 'Front · handle',
+    partsInCell: (count: number) => `${count} part${count === 1 ? '' : 's'}`,
+    cellContentsTitle: (address: string) => `In ${address}`,
+    cellEmpty: 'Nothing is recorded in this cell.',
+    pickCell: 'Tap a cell to see what is in it.',
+    loading: 'Loading the catalogue…',
+    offline: (retrySeconds: number) =>
+      `Cannot reach the server. Trying again every ${retrySeconds} s.`,
+    offlineShowing: (time: string) => `Showing counts from ${time}.`,
+    refreshFailed: 'The latest counts could not be loaded.',
+  },
+
   errors: {
     VALIDATION_FAILED: 'Some of those values are not valid. Check them and try again.',
     BORROW_INVALID_TRANSITION: 'That is no longer possible for this request. Refresh to see why.',

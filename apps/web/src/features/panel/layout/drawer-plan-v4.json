@@ -1,0 +1,3878 @@
+{
+ "version": "v4",
+ "date": "2026-10-04",
+ "source": "Lab_Inventory_and_Drawer_Plan_v4.xlsx",
+ "conventions": {
+  "cell_code": "row+column of the front-left base cell, \"-\" opposite base cell; row 1 = front, column A = left as you face the drawer",
+  "grid_rows_r_r1": "counted from the BACK (row 1 of the tray UI = back), as the 3D renderer expects",
+  "coordinates": "world mm, same frame as the 3D model"
+ },
+ "cabinets": [
+  {
+   "id": "A",
+   "name": "Cabinet A",
+   "sub": "Electronics",
+   "drawers": [
+    {
+     "code": "A1",
+     "pos": 1,
+     "name": "Tools — debug, soldering, test",
+     "hex": "F79646",
+     "band": "Orange",
+     "access": "Daily",
+     "notes": "Top drawer = best reach. ESD mat + shadow-foam cut-outs; an empty outline = missing tool. No solvents or Li-ion in this drawer.",
+     "rows": 4,
+     "cols": 8,
+     "min": [
+      17.0,
+      1026.0,
+      3958.5
+     ],
+     "max": [
+      887.0,
+      1247.0,
+      5678.0
+     ],
+     "front": [
+      887.0,
+      1026.0,
+      3958.5
+     ],
+     "labelAt": [
+      817.5,
+      1136.5,
+      5368.0
+     ],
+     "labelSize": [
+      560,
+      137.0
+     ],
+     "cells": [
+      {
+       "cell": "1A-1B",
+       "zone": "Front",
+       "purpose": "Soldering — daily",
+       "inv": "",
+       "sugg": "Iron tips in stand, ESD tweezers, solder wire Sn63/37 0.5 + 0.8 mm, flux pen/gel, brass tip cleaner",
+       "ins": "Shadow foam",
+       "r": 4,
+       "r1": 4,
+       "c0": 0,
+       "c1": 1,
+       "min": [
+        588.8,
+        1061.0,
+        5228.5
+       ],
+       "max": [
+        778.0,
+        1247.0,
+        5639.0
+       ]
+      },
+      {
+       "cell": "1C-1D",
+       "zone": "Front",
+       "purpose": "Hand tools",
+       "inv": "",
+       "sugg": "Flush cutters, needle-nose pliers, auto wire stripper, precision bit set, hex + Torx L-keys, scalpel",
+       "ins": "Shadow foam",
+       "r": 4,
+       "r1": 4,
+       "c0": 2,
+       "c1": 3,
+       "min": [
+        588.8,
+        1061.0,
+        4818.0
+       ],
+       "max": [
+        778.0,
+        1247.0,
+        5228.5
+       ]
+      },
+      {
+       "cell": "1E-1F",
+       "zone": "Front",
+       "purpose": "Meters & leads",
+       "inv": "",
+       "sugg": "Multimeter + fused leads, test hooks, mini-grabbers, croc jumper leads, USB-C power meter",
+       "ins": "Shadow foam",
+       "r": 4,
+       "r1": 4,
+       "c0": 4,
+       "c1": 5,
+       "min": [
+        588.8,
+        1061.0,
+        4407.5
+       ],
+       "max": [
+        778.0,
+        1247.0,
+        4818.0
+       ]
+      },
+      {
+       "cell": "1G-1H",
+       "zone": "Front",
+       "purpose": "Debug & programming adapters",
+       "inv": "ST-Link V3 MINIE ×2; USB-TTL CH343 ×4; USB-CAN adapter ×2",
+       "sugg": "USB-RS485 adapter, SWD/JTAG ribbons + adapters",
+       "ins": "ESD pouches",
+       "r": 4,
+       "r1": 4,
+       "c0": 6,
+       "c1": 7,
+       "min": [
+        588.8,
+        1061.0,
+        3997.0
+       ],
+       "max": [
+        778.0,
+        1247.0,
+        4407.5
+       ]
+      },
+      {
+       "cell": "2A-2B",
+       "zone": "Middle",
+       "purpose": "Crimping",
+       "inv": "",
+       "sugg": "JST PH/XH crimper, ferrule crimper, pin-extraction tool",
+       "ins": "Shadow foam",
+       "r": 3,
+       "r1": 3,
+       "c0": 0,
+       "c1": 1,
+       "min": [
+        399.5,
+        1061.0,
+        5228.5
+       ],
+       "max": [
+        588.8,
+        1247.0,
+        5639.0
+       ]
+      },
+      {
+       "cell": "2C-2D",
+       "zone": "Middle",
+       "purpose": "Bench cables",
+       "inv": "",
+       "sugg": "USB-C/C, A/C, micro-USB, USB isolator",
+       "ins": "Velcro",
+       "r": 3,
+       "r1": 3,
+       "c0": 2,
+       "c1": 3,
+       "min": [
+        399.5,
+        1061.0,
+        4818.0
+       ],
+       "max": [
+        588.8,
+        1247.0,
+        5228.5
+       ]
+      },
+      {
+       "cell": "2E-2F",
+       "zone": "Middle",
+       "purpose": "Power test leads",
+       "inv": "",
+       "sugg": "Banana leads, bench PSU leads, XT60 test pigtails",
+       "ins": "Velcro",
+       "r": 3,
+       "r1": 3,
+       "c0": 4,
+       "c1": 5,
+       "min": [
+        399.5,
+        1061.0,
+        4407.5
+       ],
+       "max": [
+        588.8,
+        1247.0,
+        4818.0
+       ]
+      },
+      {
+       "cell": "2G-2H",
+       "zone": "Middle",
+       "purpose": "Measuring & inspection",
+       "inv": "",
+       "sugg": "Digital calipers, steel rule, loupe, UV torch, K-type probe",
+       "ins": "Shadow foam",
+       "r": 3,
+       "r1": 3,
+       "c0": 6,
+       "c1": 7,
+       "min": [
+        399.5,
+        1061.0,
+        3997.0
+       ],
+       "max": [
+        588.8,
+        1247.0,
+        4407.5
+       ]
+      },
+      {
+       "cell": "3A-3D",
+       "zone": "Middle",
+       "purpose": "Logic analyser & probes",
+       "inv": "Differential probe ×1 (original case, fragile)",
+       "sugg": "Saleae Logic Pro 8 (being sourced), spare scope probes",
+       "ins": "Original cases",
+       "r": 2,
+       "r1": 2,
+       "c0": 0,
+       "c1": 3,
+       "min": [
+        210.2,
+        1061.0,
+        4818.0
+       ],
+       "max": [
+        399.5,
+        1247.0,
+        5639.0
+       ]
+      },
+      {
+       "cell": "3E-3F",
+       "zone": "Middle",
+       "purpose": "Rework",
+       "inv": "",
+       "sugg": "Hot-air nozzles, desoldering pump, wick, Kapton tape, low-melt solder, stencil + squeegee",
+       "ins": "Tray",
+       "r": 2,
+       "r1": 2,
+       "c0": 4,
+       "c1": 5,
+       "min": [
+        210.2,
+        1061.0,
+        4407.5
+       ],
+       "max": [
+        399.5,
+        1247.0,
+        4818.0
+       ]
+      },
+      {
+       "cell": "3G-3H",
+       "zone": "Middle",
+       "purpose": "ESD & bench consumables",
+       "inv": "",
+       "sugg": "Wrist straps, heel grounders, ESD bags, lint-free wipes (no solvent bottles in drawers)",
+       "ins": "Small-parts box",
+       "r": 2,
+       "r1": 2,
+       "c0": 6,
+       "c1": 7,
+       "min": [
+        210.2,
+        1061.0,
+        3997.0
+       ],
+       "max": [
+        399.5,
+        1247.0,
+        4407.5
+       ]
+      },
+      {
+       "cell": "4A-4D",
+       "zone": "Back",
+       "purpose": "Programming fixtures",
+       "inv": "",
+       "sugg": "SOIC-8 clip, pogo-pin jigs, Tag-Connect cables, ESP-Prog, Pico debug probe",
+       "ins": "ESD pouches",
+       "r": 1,
+       "r1": 1,
+       "c0": 0,
+       "c1": 3,
+       "min": [
+        21.0,
+        1061.0,
+        4818.0
+       ],
+       "max": [
+        210.2,
+        1247.0,
+        5639.0
+       ]
+      },
+      {
+       "cell": "4E-4H",
+       "zone": "Back",
+       "purpose": "Tool spares",
+       "inv": "",
+       "sugg": "Spare tips, DMM fuses, AA/AAA/CR2032 (no Li-ion packs), spare blades",
+       "ins": "Small-parts box",
+       "r": 1,
+       "r1": 1,
+       "c0": 4,
+       "c1": 7,
+       "min": [
+        21.0,
+        1061.0,
+        3997.0
+       ],
+       "max": [
+        210.2,
+        1247.0,
+        4818.0
+       ]
+      }
+     ]
+    },
+    {
+     "code": "A2",
+     "pos": 2,
+     "name": "Controllers & programming boards",
+     "hex": "4F81BD",
+     "band": "Blue",
+     "access": "Daily",
+     "notes": "ESD bags; silica gel + humidity card. Front row = boards in use, rows 3–4 = sealed spares (FIFO). Two-tier allowed (≤ 85 mm boxes).",
+     "rows": 4,
+     "cols": 8,
+     "min": [
+      17.0,
+      775.0,
+      3958.5
+     ],
+     "max": [
+      887.0,
+      996.0,
+      5678.0
+     ],
+     "front": [
+      887.0,
+      775.0,
+      3958.5
+     ],
+     "labelAt": [
+      817.5,
+      885.5,
+      5368.0
+     ],
+     "labelSize": [
+      560,
+      137.0
+     ],
+     "cells": [
+      {
+       "cell": "1A",
+       "zone": "Front",
+       "purpose": "ESP32-S3 dev boards",
+       "inv": "ESP32-S3-DevKitC-1 ×5 (N16R8)",
+       "sugg": "",
+       "ins": "ESD bags",
+       "r": 4,
+       "r1": 4,
+       "c0": 0,
+       "c1": 0,
+       "min": [
+        588.8,
+        810.0,
+        5433.8
+       ],
+       "max": [
+        778.0,
+        996.0,
+        5639.0
+       ]
+      },
+      {
+       "cell": "1B",
+       "zone": "Front",
+       "purpose": "STM32 Nucleo",
+       "inv": "NUCLEO-F401RE ×2; NUCLEO-F446RE ×2",
+       "sugg": "",
+       "ins": "ESD bags",
+       "r": 4,
+       "r1": 4,
+       "c0": 1,
+       "c1": 1,
+       "min": [
+        588.8,
+        810.0,
+        5228.5
+       ],
+       "max": [
+        778.0,
+        996.0,
+        5433.8
+       ]
+      },
+      {
+       "cell": "1C",
+       "zone": "Front",
+       "purpose": "RP2350",
+       "inv": "Raspberry Pi Pico 2 ×5",
+       "sugg": "",
+       "ins": "ESD bags",
+       "r": 4,
+       "r1": 4,
+       "c0": 2,
+       "c1": 2,
+       "min": [
+        588.8,
+        810.0,
+        5023.2
+       ],
+       "max": [
+        778.0,
+        996.0,
+        5228.5
+       ]
+      },
+      {
+       "cell": "1D",
+       "zone": "Front",
+       "purpose": "STM32 Black Pill",
+       "inv": "STM32F411 Black Pill ×5",
+       "sugg": "",
+       "ins": "ESD bags",
+       "r": 4,
+       "r1": 4,
+       "c0": 3,
+       "c1": 3,
+       "min": [
+        588.8,
+        810.0,
+        4818.0
+       ],
+       "max": [
+        778.0,
+        996.0,
+        5023.2
+       ]
+      },
+      {
+       "cell": "1E",
+       "zone": "Front",
+       "purpose": "ESP32 bare modules",
+       "inv": "ESP32-WROOM-32 module ×10",
+       "sugg": "",
+       "ins": "ESD tray + silica gel",
+       "r": 4,
+       "r1": 4,
+       "c0": 4,
+       "c1": 4,
+       "min": [
+        588.8,
+        810.0,
+        4612.8
+       ],
+       "max": [
+        778.0,
+        996.0,
+        4818.0
+       ]
+      },
+      {
+       "cell": "1F",
+       "zone": "Front",
+       "purpose": "Other ESP32 dev kits",
+       "inv": "",
+       "sugg": "ESP32-C3 / C6 / P4 dev kits",
+       "ins": "ESD bags",
+       "r": 4,
+       "r1": 4,
+       "c0": 5,
+       "c1": 5,
+       "min": [
+        588.8,
+        810.0,
+        4407.5
+       ],
+       "max": [
+        778.0,
+        996.0,
+        4612.8
+       ]
+      },
+      {
+       "cell": "1G",
+       "zone": "Front",
+       "purpose": "Arduino-class boards",
+       "inv": "",
+       "sugg": "Uno/Nano-class boards",
+       "ins": "ESD bags",
+       "r": 4,
+       "r1": 4,
+       "c0": 6,
+       "c1": 6,
+       "min": [
+        588.8,
+        810.0,
+        4202.2
+       ],
+       "max": [
+        778.0,
+        996.0,
+        4407.5
+       ]
+      },
+      {
+       "cell": "1H",
+       "zone": "Front",
+       "purpose": "Other MCU boards",
+       "inv": "",
+       "sugg": "Other STM32/RP boards, micro:bit V2",
+       "ins": "ESD bags",
+       "r": 4,
+       "r1": 4,
+       "c0": 7,
+       "c1": 7,
+       "min": [
+        588.8,
+        810.0,
+        3997.0
+       ],
+       "max": [
+        778.0,
+        996.0,
+        4202.2
+       ]
+      },
+      {
+       "cell": "2A-2B",
+       "zone": "Middle",
+       "purpose": "Breakouts & bridges",
+       "inv": "",
+       "sugg": "USB-C breakouts, level shifters, CH340 boards",
+       "ins": "ESD bags",
+       "r": 3,
+       "r1": 3,
+       "c0": 0,
+       "c1": 1,
+       "min": [
+        399.5,
+        810.0,
+        5228.5
+       ],
+       "max": [
+        588.8,
+        996.0,
+        5639.0
+       ]
+      },
+      {
+       "cell": "2C-2D",
+       "zone": "Middle",
+       "purpose": "Shields & expansion boards",
+       "inv": "",
+       "sugg": "Pico/ESP expansion boards, Arduino shields",
+       "ins": "ESD bags",
+       "r": 3,
+       "r1": 3,
+       "c0": 2,
+       "c1": 3,
+       "min": [
+        399.5,
+        810.0,
+        4818.0
+       ],
+       "max": [
+        588.8,
+        996.0,
+        5228.5
+       ]
+      },
+      {
+       "cell": "2E-2H",
+       "zone": "Middle",
+       "purpose": "Free — growth",
+       "inv": "",
+       "sugg": "",
+       "ins": "",
+       "r": 3,
+       "r1": 3,
+       "c0": 4,
+       "c1": 7,
+       "min": [
+        399.5,
+        810.0,
+        3997.0
+       ],
+       "max": [
+        588.8,
+        996.0,
+        4818.0
+       ]
+      },
+      {
+       "cell": "3A-3D",
+       "zone": "Middle",
+       "purpose": "Sealed spares — ESP32 family (FIFO)",
+       "inv": "",
+       "sugg": "Unopened spares of row-1 ESP32 boards",
+       "ins": "Sealed ESD bags",
+       "r": 2,
+       "r1": 2,
+       "c0": 0,
+       "c1": 3,
+       "min": [
+        210.2,
+        810.0,
+        4818.0
+       ],
+       "max": [
+        399.5,
+        996.0,
+        5639.0
+       ]
+      },
+      {
+       "cell": "3E-3H",
+       "zone": "Middle",
+       "purpose": "Sealed spares — STM32 / RP (FIFO)",
+       "inv": "",
+       "sugg": "Unopened spares of row-1 STM32/RP boards",
+       "ins": "Sealed ESD bags",
+       "r": 2,
+       "r1": 2,
+       "c0": 4,
+       "c1": 7,
+       "min": [
+        210.2,
+        810.0,
+        3997.0
+       ],
+       "max": [
+        399.5,
+        996.0,
+        4818.0
+       ]
+      },
+      {
+       "cell": "4A-4H",
+       "zone": "Back",
+       "purpose": "Free — growth",
+       "inv": "",
+       "sugg": "",
+       "ins": "",
+       "r": 1,
+       "r1": 1,
+       "c0": 0,
+       "c1": 7,
+       "min": [
+        21.0,
+        810.0,
+        3997.0
+       ],
+       "max": [
+        210.2,
+        996.0,
+        5639.0
+       ]
+      }
+     ]
+    },
+    {
+     "code": "A3",
+     "pos": 3,
+     "name": "Connectors & most-used fasteners",
+     "hex": "FFC000",
+     "band": "Yellow",
+     "access": "Daily",
+     "notes": "Two-tier: top = quick-grab boxes, bottom = sealed refill. Opening a refill bag = reorder trigger.",
+     "rows": 4,
+     "cols": 8,
+     "min": [
+      17.0,
+      524.0,
+      3958.5
+     ],
+     "max": [
+      887.0,
+      745.0,
+      5678.0
+     ],
+     "front": [
+      887.0,
+      524.0,
+      3958.5
+     ],
+     "labelAt": [
+      817.5,
+      634.5,
+      5368.0
+     ],
+     "labelSize": [
+      560,
+      137.0
+     ],
+     "cells": [
+      {
+       "cell": "1A",
+       "zone": "Front",
+       "purpose": "M3 fasteners — most used",
+       "inv": "",
+       "sugg": "M3 SHCS + button head 4–20 mm, nuts, nylock, washers",
+       "ins": "Two-tier 24-slot boxes",
+       "r": 4,
+       "r1": 4,
+       "c0": 0,
+       "c1": 0,
+       "min": [
+        588.8,
+        559.0,
+        5433.8
+       ],
+       "max": [
+        778.0,
+        745.0,
+        5639.0
+       ]
+      },
+      {
+       "cell": "1B",
+       "zone": "Front",
+       "purpose": "M2 / M2.5 fasteners",
+       "inv": "",
+       "sugg": "M2/M2.5 screws, nuts, PCB standoffs",
+       "ins": "Two-tier 24-slot boxes",
+       "r": 4,
+       "r1": 4,
+       "c0": 1,
+       "c1": 1,
+       "min": [
+        588.8,
+        559.0,
+        5228.5
+       ],
+       "max": [
+        778.0,
+        745.0,
+        5433.8
+       ]
+      },
+      {
+       "cell": "1C",
+       "zone": "Front",
+       "purpose": "Standoffs & inserts",
+       "inv": "",
+       "sugg": "Nylon + brass standoff kits M2.5/M3, heat-set inserts M2/M2.5/M3",
+       "ins": "Two-tier boxes",
+       "r": 4,
+       "r1": 4,
+       "c0": 2,
+       "c1": 2,
+       "min": [
+        588.8,
+        559.0,
+        5023.2
+       ],
+       "max": [
+        778.0,
+        745.0,
+        5228.5
+       ]
+      },
+      {
+       "cell": "1D",
+       "zone": "Front",
+       "purpose": "JST & Dupont",
+       "inv": "JST connector kit box ×2 (PH 2.0 + XH 2.54)",
+       "sugg": "Dupont housing + pin kit",
+       "ins": "Original kit boxes",
+       "r": 4,
+       "r1": 4,
+       "c0": 3,
+       "c1": 3,
+       "min": [
+        588.8,
+        559.0,
+        4818.0
+       ],
+       "max": [
+        778.0,
+        745.0,
+        5023.2
+       ]
+      },
+      {
+       "cell": "1E",
+       "zone": "Front",
+       "purpose": "Power connectors",
+       "inv": "XT60 / XT30 pairs ×20 (genuine Amass)",
+       "sugg": "XT60 pigtails",
+       "ins": "Small-parts box",
+       "r": 4,
+       "r1": 4,
+       "c0": 4,
+       "c1": 4,
+       "min": [
+        588.8,
+        559.0,
+        4612.8
+       ],
+       "max": [
+        778.0,
+        745.0,
+        4818.0
+       ]
+      },
+      {
+       "cell": "1F",
+       "zone": "Front",
+       "purpose": "Barrel & terminal blocks",
+       "inv": "Barrel connector pairs ×20 (5.5×2.1); screw terminal blocks (5.08 + 3.5 mm)",
+       "sugg": "2EDG pluggable terminals",
+       "ins": "Small-parts box",
+       "r": 4,
+       "r1": 4,
+       "c0": 5,
+       "c1": 5,
+       "min": [
+        588.8,
+        559.0,
+        4407.5
+       ],
+       "max": [
+        778.0,
+        745.0,
+        4612.8
+       ]
+      },
+      {
+       "cell": "1G",
+       "zone": "Front",
+       "purpose": "Headers & sockets",
+       "inv": "",
+       "sugg": "Pin headers 1×40 / 2×40 M+F, IC sockets, jumper caps",
+       "ins": "Small-parts box",
+       "r": 4,
+       "r1": 4,
+       "c0": 6,
+       "c1": 6,
+       "min": [
+        588.8,
+        559.0,
+        4202.2
+       ],
+       "max": [
+        778.0,
+        745.0,
+        4407.5
+       ]
+      },
+      {
+       "cell": "1H",
+       "zone": "Front",
+       "purpose": "Heat-shrink & wiring hardware",
+       "inv": "",
+       "sugg": "Heat-shrink, cable ties, spiral wrap, Wago 221",
+       "ins": "Small-parts box",
+       "r": 4,
+       "r1": 4,
+       "c0": 7,
+       "c1": 7,
+       "min": [
+        588.8,
+        559.0,
+        3997.0
+       ],
+       "max": [
+        778.0,
+        745.0,
+        4202.2
+       ]
+      },
+      {
+       "cell": "2A-2B",
+       "zone": "Middle",
+       "purpose": "Industrial connectors",
+       "inv": "",
+       "sugg": "GX12/GX16 aviation, M8/M12 sensor connectors (RS-485/Modbus field wiring)",
+       "ins": "Small-parts box",
+       "r": 3,
+       "r1": 3,
+       "c0": 0,
+       "c1": 1,
+       "min": [
+        399.5,
+        559.0,
+        5228.5
+       ],
+       "max": [
+        588.8,
+        745.0,
+        5639.0
+       ]
+      },
+      {
+       "cell": "2C-2D",
+       "zone": "Middle",
+       "purpose": "Board-to-wire kits",
+       "inv": "",
+       "sugg": "Molex Micro-Fit, KF2510, JST-GH/SH",
+       "ins": "Original kit boxes",
+       "r": 3,
+       "r1": 3,
+       "c0": 2,
+       "c1": 3,
+       "min": [
+        399.5,
+        559.0,
+        4818.0
+       ],
+       "max": [
+        588.8,
+        745.0,
+        5228.5
+       ]
+      },
+      {
+       "cell": "2E-2F",
+       "zone": "Middle",
+       "purpose": "Jumper wires",
+       "inv": "",
+       "sugg": "M-M, M-F, F-F; short silicone wire cuts (spools in A5-2E-2H)",
+       "ins": "Bundled",
+       "r": 3,
+       "r1": 3,
+       "c0": 4,
+       "c1": 5,
+       "min": [
+        399.5,
+        559.0,
+        4407.5
+       ],
+       "max": [
+        588.8,
+        745.0,
+        4818.0
+       ]
+      },
+      {
+       "cell": "2G-2H",
+       "zone": "Middle",
+       "purpose": "Crimp terminals & ferrules",
+       "inv": "",
+       "sugg": "Bootlace ferrules, ring/spade terminals, loose JST/Dupont pins",
+       "ins": "Small-parts box",
+       "r": 3,
+       "r1": 3,
+       "c0": 6,
+       "c1": 7,
+       "min": [
+        399.5,
+        559.0,
+        3997.0
+       ],
+       "max": [
+        588.8,
+        745.0,
+        4407.5
+       ]
+      },
+      {
+       "cell": "3A-3D",
+       "zone": "Middle",
+       "purpose": "Refill — fasteners (sealed)",
+       "inv": "",
+       "sugg": "Sealed bags that top up row 1 fastener cells",
+       "ins": "Sealed bags",
+       "r": 2,
+       "r1": 2,
+       "c0": 0,
+       "c1": 3,
+       "min": [
+        210.2,
+        559.0,
+        4818.0
+       ],
+       "max": [
+        399.5,
+        745.0,
+        5639.0
+       ]
+      },
+      {
+       "cell": "3E-3H",
+       "zone": "Middle",
+       "purpose": "Refill — connectors (sealed)",
+       "inv": "",
+       "sugg": "Sealed bags that top up row 1 connector cells",
+       "ins": "Sealed bags",
+       "r": 2,
+       "r1": 2,
+       "c0": 4,
+       "c1": 7,
+       "min": [
+        210.2,
+        559.0,
+        3997.0
+       ],
+       "max": [
+        399.5,
+        745.0,
+        4818.0
+       ]
+      },
+      {
+       "cell": "4A-4H",
+       "zone": "Back",
+       "purpose": "Free — growth",
+       "inv": "",
+       "sugg": "",
+       "ins": "",
+       "r": 1,
+       "r1": 1,
+       "c0": 0,
+       "c1": 7,
+       "min": [
+        21.0,
+        559.0,
+        3997.0
+       ],
+       "max": [
+        210.2,
+        745.0,
+        5639.0
+       ]
+      }
+     ]
+    },
+    {
+     "code": "A4",
+     "pos": 4,
+     "name": "Sensors & feedback",
+     "hex": "9BBB59",
+     "band": "Green",
+     "access": "Weekly",
+     "notes": "ESD bags; magnets in their own lidded box, away from encoders in storage.",
+     "rows": 4,
+     "cols": 8,
+     "min": [
+      17.0,
+      273.0,
+      3958.5
+     ],
+     "max": [
+      887.0,
+      494.0,
+      5678.0
+     ],
+     "front": [
+      887.0,
+      273.0,
+      3958.5
+     ],
+     "labelAt": [
+      817.5,
+      383.5,
+      5368.0
+     ],
+     "labelSize": [
+      560,
+      137.0
+     ],
+     "cells": [
+      {
+       "cell": "1A",
+       "zone": "Front",
+       "purpose": "Angle encoders + magnets (paired)",
+       "inv": "AS5047P breakout ×6; diametric magnets 6×2.5 mm ×20",
+       "sugg": "",
+       "ins": "Magnets in own lidded box",
+       "r": 4,
+       "r1": 4,
+       "c0": 0,
+       "c1": 0,
+       "min": [
+        588.8,
+        308.0,
+        5433.8
+       ],
+       "max": [
+        778.0,
+        494.0,
+        5639.0
+       ]
+      },
+      {
+       "cell": "1B",
+       "zone": "Front",
+       "purpose": "Current sense",
+       "inv": "INA240A2 + shunt ×6",
+       "sugg": "INA219/INA226 modules",
+       "ins": "ESD bags",
+       "r": 4,
+       "r1": 4,
+       "c0": 1,
+       "c1": 1,
+       "min": [
+        588.8,
+        308.0,
+        5228.5
+       ],
+       "max": [
+        778.0,
+        494.0,
+        5433.8
+       ]
+      },
+      {
+       "cell": "1C",
+       "zone": "Front",
+       "purpose": "Limit / homing",
+       "inv": "Optical slot sensors + microswitches ×20",
+       "sugg": "",
+       "ins": "Small-parts box",
+       "r": 4,
+       "r1": 4,
+       "c0": 2,
+       "c1": 2,
+       "min": [
+        588.8,
+        308.0,
+        5023.2
+       ],
+       "max": [
+        778.0,
+        494.0,
+        5228.5
+       ]
+      },
+      {
+       "cell": "1D",
+       "zone": "Front",
+       "purpose": "IMU / motion",
+       "inv": "",
+       "sugg": "MPU6050, ICM-42688, BNO085",
+       "ins": "ESD bags",
+       "r": 4,
+       "r1": 4,
+       "c0": 3,
+       "c1": 3,
+       "min": [
+        588.8,
+        308.0,
+        4818.0
+       ],
+       "max": [
+        778.0,
+        494.0,
+        5023.2
+       ]
+      },
+      {
+       "cell": "1E",
+       "zone": "Front",
+       "purpose": "Distance & presence",
+       "inv": "",
+       "sugg": "ToF VL53L0X/L1X, ultrasonic, IR line sensors",
+       "ins": "ESD bags",
+       "r": 4,
+       "r1": 4,
+       "c0": 4,
+       "c1": 4,
+       "min": [
+        588.8,
+        308.0,
+        4612.8
+       ],
+       "max": [
+        778.0,
+        494.0,
+        4818.0
+       ]
+      },
+      {
+       "cell": "1F",
+       "zone": "Front",
+       "purpose": "Environmental",
+       "inv": "",
+       "sugg": "SHT3x, DS18B20, pressure, gas",
+       "ins": "ESD bags",
+       "r": 4,
+       "r1": 4,
+       "c0": 5,
+       "c1": 5,
+       "min": [
+        588.8,
+        308.0,
+        4407.5
+       ],
+       "max": [
+        778.0,
+        494.0,
+        4612.8
+       ]
+      },
+      {
+       "cell": "1G",
+       "zone": "Front",
+       "purpose": "Hall & current modules",
+       "inv": "",
+       "sugg": "ACS712, hall switches",
+       "ins": "ESD bags",
+       "r": 4,
+       "r1": 4,
+       "c0": 6,
+       "c1": 6,
+       "min": [
+        588.8,
+        308.0,
+        4202.2
+       ],
+       "max": [
+        778.0,
+        494.0,
+        4407.5
+       ]
+      },
+      {
+       "cell": "1H",
+       "zone": "Front",
+       "purpose": "Cameras / vision",
+       "inv": "",
+       "sugg": "OV2640/OV5640, USB cameras",
+       "ins": "ESD bags",
+       "r": 4,
+       "r1": 4,
+       "c0": 7,
+       "c1": 7,
+       "min": [
+        588.8,
+        308.0,
+        3997.0
+       ],
+       "max": [
+        778.0,
+        494.0,
+        4202.2
+       ]
+      },
+      {
+       "cell": "2A-2B",
+       "zone": "Middle",
+       "purpose": "Flow",
+       "inv": "Flow meter YF-S201 class ×4",
+       "sugg": "",
+       "ins": "Bagged",
+       "r": 3,
+       "r1": 3,
+       "c0": 0,
+       "c1": 1,
+       "min": [
+        399.5,
+        308.0,
+        5228.5
+       ],
+       "max": [
+        588.8,
+        494.0,
+        5639.0
+       ]
+      },
+      {
+       "cell": "2C-2F",
+       "zone": "Middle",
+       "purpose": "RS-485 / Modbus sensor samples",
+       "inv": "",
+       "sugg": "Industrial sensor samples incl. large flow meters (now fit here)",
+       "ins": "Merged cell",
+       "r": 3,
+       "r1": 3,
+       "c0": 2,
+       "c1": 5,
+       "min": [
+        399.5,
+        308.0,
+        4407.5
+       ],
+       "max": [
+        588.8,
+        494.0,
+        5228.5
+       ]
+      },
+      {
+       "cell": "2G-2H",
+       "zone": "Middle",
+       "purpose": "Load & strain",
+       "inv": "",
+       "sugg": "Load cells, HX711 boards",
+       "ins": "ESD bags",
+       "r": 3,
+       "r1": 3,
+       "c0": 6,
+       "c1": 7,
+       "min": [
+        399.5,
+        308.0,
+        3997.0
+       ],
+       "max": [
+        588.8,
+        494.0,
+        4407.5
+       ]
+      },
+      {
+       "cell": "3A-3D",
+       "zone": "Middle",
+       "purpose": "Sensor spares (sealed)",
+       "inv": "",
+       "sugg": "Unopened spares of row-1 sensors",
+       "ins": "Sealed ESD bags",
+       "r": 2,
+       "r1": 2,
+       "c0": 0,
+       "c1": 3,
+       "min": [
+        210.2,
+        308.0,
+        4818.0
+       ],
+       "max": [
+        399.5,
+        494.0,
+        5639.0
+       ]
+      },
+      {
+       "cell": "3E-3H",
+       "zone": "Middle",
+       "purpose": "Free — growth",
+       "inv": "",
+       "sugg": "",
+       "ins": "",
+       "r": 2,
+       "r1": 2,
+       "c0": 4,
+       "c1": 7,
+       "min": [
+        210.2,
+        308.0,
+        3997.0
+       ],
+       "max": [
+        399.5,
+        494.0,
+        4818.0
+       ]
+      },
+      {
+       "cell": "4A-4H",
+       "zone": "Back",
+       "purpose": "Free — growth",
+       "inv": "",
+       "sugg": "",
+       "ins": "",
+       "r": 1,
+       "r1": 1,
+       "c0": 0,
+       "c1": 7,
+       "min": [
+        21.0,
+        308.0,
+        3997.0
+       ],
+       "max": [
+        210.2,
+        494.0,
+        5639.0
+       ]
+      }
+     ]
+    },
+    {
+     "code": "A5",
+     "pos": 5,
+     "name": "Passives, semiconductors & prototyping",
+     "hex": "8B5A2B",
+     "band": "Brown",
+     "access": "Weekly",
+     "notes": "Bottom drawer: heaviest small parts (wire spools, component books). Moisture-sensitive ICs/reels in dry bags + desiccant.",
+     "rows": 4,
+     "cols": 8,
+     "min": [
+      17.0,
+      22.0,
+      3958.5
+     ],
+     "max": [
+      887.0,
+      243.0,
+      5678.0
+     ],
+     "front": [
+      887.0,
+      22.0,
+      3958.5
+     ],
+     "labelAt": [
+      817.5,
+      132.5,
+      5368.0
+     ],
+     "labelSize": [
+      560,
+      137.0
+     ],
+     "cells": [
+      {
+       "cell": "1A-1B",
+       "zone": "Front",
+       "purpose": "Capacitors — SMD & MLCC",
+       "inv": "Motor terminal capacitors 100 nF 100 V X7R (bulk)",
+       "sugg": "SMD resistor/capacitor sample books",
+       "ins": "Component books",
+       "r": 4,
+       "r1": 4,
+       "c0": 0,
+       "c1": 1,
+       "min": [
+        588.8,
+        57.0,
+        5228.5
+       ],
+       "max": [
+        778.0,
+        243.0,
+        5639.0
+       ]
+      },
+      {
+       "cell": "1C-1D",
+       "zone": "Front",
+       "purpose": "THT passives",
+       "inv": "",
+       "sugg": "Resistor + capacitor assortments",
+       "ins": "Assortment boxes",
+       "r": 4,
+       "r1": 4,
+       "c0": 2,
+       "c1": 3,
+       "min": [
+        588.8,
+        57.0,
+        4818.0
+       ],
+       "max": [
+        778.0,
+        243.0,
+        5228.5
+       ]
+      },
+      {
+       "cell": "1E",
+       "zone": "Front",
+       "purpose": "Protection & diodes",
+       "inv": "TVS diode assortment (SMBJ 24–58 V)",
+       "sugg": "Schottky, zener, 1N4148",
+       "ins": "Assortment box",
+       "r": 4,
+       "r1": 4,
+       "c0": 4,
+       "c1": 4,
+       "min": [
+        588.8,
+        57.0,
+        4612.8
+       ],
+       "max": [
+        778.0,
+        243.0,
+        4818.0
+       ]
+      },
+      {
+       "cell": "1F",
+       "zone": "Front",
+       "purpose": "Transistors & MOSFETs",
+       "inv": "",
+       "sugg": "AO3400, IRLZ44N, optocouplers",
+       "ins": "Assortment box",
+       "r": 4,
+       "r1": 4,
+       "c0": 5,
+       "c1": 5,
+       "min": [
+        588.8,
+        57.0,
+        4407.5
+       ],
+       "max": [
+        778.0,
+        243.0,
+        4612.8
+       ]
+      },
+      {
+       "cell": "1G",
+       "zone": "Front",
+       "purpose": "EMI",
+       "inv": "Ferrite clamp cores ×20",
+       "sugg": "Ferrite beads, inductors",
+       "ins": "Small-parts box",
+       "r": 4,
+       "r1": 4,
+       "c0": 6,
+       "c1": 6,
+       "min": [
+        588.8,
+        57.0,
+        4202.2
+       ],
+       "max": [
+        778.0,
+        243.0,
+        4407.5
+       ]
+      },
+      {
+       "cell": "1H",
+       "zone": "Front",
+       "purpose": "Regulators, crystals, LEDs",
+       "inv": "",
+       "sugg": "AMS1117 etc., crystals, LEDs",
+       "ins": "Assortment box",
+       "r": 4,
+       "r1": 4,
+       "c0": 7,
+       "c1": 7,
+       "min": [
+        588.8,
+        57.0,
+        3997.0
+       ],
+       "max": [
+        778.0,
+        243.0,
+        4202.2
+       ]
+      },
+      {
+       "cell": "2A-2B",
+       "zone": "Middle",
+       "purpose": "Prototyping boards",
+       "inv": "Double-sided FR-4 perfboard ×20",
+       "sugg": "",
+       "ins": "Upright file slot",
+       "r": 3,
+       "r1": 3,
+       "c0": 0,
+       "c1": 1,
+       "min": [
+        399.5,
+        57.0,
+        5228.5
+       ],
+       "max": [
+        588.8,
+        243.0,
+        5639.0
+       ]
+      },
+      {
+       "cell": "2C-2D",
+       "zone": "Middle",
+       "purpose": "Breadboards",
+       "inv": "",
+       "sugg": "Full + half breadboards, jumper kits",
+       "ins": "Stacked flat",
+       "r": 3,
+       "r1": 3,
+       "c0": 2,
+       "c1": 3,
+       "min": [
+        399.5,
+        57.0,
+        4818.0
+       ],
+       "max": [
+        588.8,
+        243.0,
+        5228.5
+       ]
+      },
+      {
+       "cell": "2E-2H",
+       "zone": "Middle",
+       "purpose": "Wire spools",
+       "inv": "",
+       "sugg": "Hook-up + silicone wire 22/24/26/30 AWG",
+       "ins": "Spool rod across the cell",
+       "r": 3,
+       "r1": 3,
+       "c0": 4,
+       "c1": 7,
+       "min": [
+        399.5,
+        57.0,
+        3997.0
+       ],
+       "max": [
+        588.8,
+        243.0,
+        4818.0
+       ]
+      },
+      {
+       "cell": "3A-3D",
+       "zone": "Middle",
+       "purpose": "ICs & tubes (dry storage)",
+       "inv": "",
+       "sugg": "Moisture-sensitive ICs in dry bags + desiccant",
+       "ins": "Dry bags",
+       "r": 2,
+       "r1": 2,
+       "c0": 0,
+       "c1": 3,
+       "min": [
+        210.2,
+        57.0,
+        4818.0
+       ],
+       "max": [
+        399.5,
+        243.0,
+        5639.0
+       ]
+      },
+      {
+       "cell": "3E-3H",
+       "zone": "Middle",
+       "purpose": "Reels (dry storage)",
+       "inv": "",
+       "sugg": "Part reels in dry bags + desiccant",
+       "ins": "Dry bags",
+       "r": 2,
+       "r1": 2,
+       "c0": 4,
+       "c1": 7,
+       "min": [
+        210.2,
+        57.0,
+        3997.0
+       ],
+       "max": [
+        399.5,
+        243.0,
+        4818.0
+       ]
+      },
+      {
+       "cell": "4A-4D",
+       "zone": "Back",
+       "purpose": "Component sample books",
+       "inv": "",
+       "sugg": "SMD sample books (overflow from 1A-1B)",
+       "ins": "Books upright",
+       "r": 1,
+       "r1": 1,
+       "c0": 0,
+       "c1": 3,
+       "min": [
+        21.0,
+        57.0,
+        4818.0
+       ],
+       "max": [
+        210.2,
+        243.0,
+        5639.0
+       ]
+      },
+      {
+       "cell": "4E-4H",
+       "zone": "Back",
+       "purpose": "Free — growth",
+       "inv": "",
+       "sugg": "",
+       "ins": "",
+       "r": 1,
+       "r1": 1,
+       "c0": 4,
+       "c1": 7,
+       "min": [
+        21.0,
+        57.0,
+        3997.0
+       ],
+       "max": [
+        210.2,
+        243.0,
+        4818.0
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "B",
+   "name": "Cabinet B",
+   "sub": "RF, power, motion & mechanical",
+   "drawers": [
+    {
+     "code": "B1",
+     "pos": 1,
+     "name": "Comms, LoRaWAN & RF",
+     "hex": "4BACC6",
+     "band": "Cyan",
+     "access": "Weekly",
+     "notes": "Light items at the top. ESD mat; SMA caps on every RF port; never stack on antennas.",
+     "rows": 4,
+     "cols": 8,
+     "min": [
+      17.0,
+      1011.0,
+      22.0
+     ],
+     "max": [
+      887.0,
+      1232.0,
+      1741.5
+     ],
+     "front": [
+      887.0,
+      1011.0,
+      22.0
+     ],
+     "labelAt": [
+      817.5,
+      1121.5,
+      1431.5
+     ],
+     "labelSize": [
+      560,
+      137.0
+     ],
+     "cells": [
+      {
+       "cell": "1A",
+       "zone": "Front",
+       "purpose": "CAN transceivers",
+       "inv": "SN65HVD230 transceiver ×6",
+       "sugg": "",
+       "ins": "ESD bags",
+       "r": 4,
+       "r1": 4,
+       "c0": 0,
+       "c1": 0,
+       "min": [
+        588.8,
+        1046.0,
+        1497.2
+       ],
+       "max": [
+        778.0,
+        1232.0,
+        1702.5
+       ]
+      },
+      {
+       "cell": "1B",
+       "zone": "Front",
+       "purpose": "RS-485 transceivers",
+       "inv": "",
+       "sugg": "MAX3485 / auto-direction TTL-RS485 modules",
+       "ins": "ESD bags",
+       "r": 4,
+       "r1": 4,
+       "c0": 1,
+       "c1": 1,
+       "min": [
+        588.8,
+        1046.0,
+        1292.0
+       ],
+       "max": [
+        778.0,
+        1232.0,
+        1497.2
+       ]
+      },
+      {
+       "cell": "1C-1D",
+       "zone": "Front",
+       "purpose": "LoRa modules",
+       "inv": "",
+       "sugg": "RAK3172, RAK3312 / WisBlock, SX1262 breakouts",
+       "ins": "ESD bags",
+       "r": 4,
+       "r1": 4,
+       "c0": 2,
+       "c1": 3,
+       "min": [
+        588.8,
+        1046.0,
+        881.5
+       ],
+       "max": [
+        778.0,
+        1232.0,
+        1292.0
+       ]
+      },
+      {
+       "cell": "1E",
+       "zone": "Front",
+       "purpose": "Wi-Fi / BLE / cellular",
+       "inv": "",
+       "sugg": "4G modules (SIM7600 class), SIM holder",
+       "ins": "ESD bags",
+       "r": 4,
+       "r1": 4,
+       "c0": 4,
+       "c1": 4,
+       "min": [
+        588.8,
+        1046.0,
+        676.2
+       ],
+       "max": [
+        778.0,
+        1232.0,
+        881.5
+       ]
+      },
+      {
+       "cell": "1F",
+       "zone": "Front",
+       "purpose": "Ethernet",
+       "inv": "",
+       "sugg": "W5500 modules, RJ45 breakouts, PoE splitters",
+       "ins": "ESD bags",
+       "r": 4,
+       "r1": 4,
+       "c0": 5,
+       "c1": 5,
+       "min": [
+        588.8,
+        1046.0,
+        471.0
+       ],
+       "max": [
+        778.0,
+        1232.0,
+        676.2
+       ]
+      },
+      {
+       "cell": "1G-1H",
+       "zone": "Front",
+       "purpose": "Antennas & RF adapters",
+       "inv": "",
+       "sugg": "868/915 MHz whips, u.FL→SMA pigtails, SMA adapters + caps",
+       "ins": "Small-parts box",
+       "r": 4,
+       "r1": 4,
+       "c0": 6,
+       "c1": 7,
+       "min": [
+        588.8,
+        1046.0,
+        60.5
+       ],
+       "max": [
+        778.0,
+        1232.0,
+        471.0
+       ]
+      },
+      {
+       "cell": "2A-2D",
+       "zone": "Middle",
+       "purpose": "LoRaWAN nodes & field-test devices",
+       "inv": "",
+       "sugg": "Finished nodes, field-test units",
+       "ins": "Merged cell",
+       "r": 3,
+       "r1": 3,
+       "c0": 0,
+       "c1": 3,
+       "min": [
+        399.5,
+        1046.0,
+        881.5
+       ],
+       "max": [
+        588.8,
+        1232.0,
+        1702.5
+       ]
+      },
+      {
+       "cell": "2E-2H",
+       "zone": "Middle",
+       "purpose": "Gateways & concentrators",
+       "inv": "",
+       "sugg": "Concentrator cards (RAK2287 class), indoor gateways",
+       "ins": "Foam",
+       "r": 3,
+       "r1": 3,
+       "c0": 4,
+       "c1": 7,
+       "min": [
+        399.5,
+        1046.0,
+        60.5
+       ],
+       "max": [
+        588.8,
+        1232.0,
+        881.5
+       ]
+      },
+      {
+       "cell": "3A-3D",
+       "zone": "Middle",
+       "purpose": "RF test accessories",
+       "inv": "",
+       "sugg": "Attenuators, 50 Ω loads, coax jumpers, SMA torque wrench",
+       "ins": "Small-parts box",
+       "r": 2,
+       "r1": 2,
+       "c0": 0,
+       "c1": 3,
+       "min": [
+        210.2,
+        1046.0,
+        881.5
+       ],
+       "max": [
+        399.5,
+        1232.0,
+        1702.5
+       ]
+      },
+      {
+       "cell": "3E-3H",
+       "zone": "Middle",
+       "purpose": "Free — growth",
+       "inv": "",
+       "sugg": "",
+       "ins": "",
+       "r": 2,
+       "r1": 2,
+       "c0": 4,
+       "c1": 7,
+       "min": [
+        210.2,
+        1046.0,
+        60.5
+       ],
+       "max": [
+        399.5,
+        1232.0,
+        881.5
+       ]
+      },
+      {
+       "cell": "4A-4H",
+       "zone": "Back",
+       "purpose": "Free — growth",
+       "inv": "",
+       "sugg": "",
+       "ins": "",
+       "r": 1,
+       "r1": 1,
+       "c0": 0,
+       "c1": 7,
+       "min": [
+        21.0,
+        1046.0,
+        60.5
+       ],
+       "max": [
+        210.2,
+        1232.0,
+        1702.5
+       ]
+      }
+     ]
+    },
+    {
+     "code": "B2",
+     "pos": 2,
+     "name": "Motion — motor drivers & motors",
+     "hex": "8064A2",
+     "band": "Purple",
+     "access": "Weekly",
+     "notes": "Drivers in the front row (ESD bags), motors behind. Each motor bagged with its cable.",
+     "rows": 4,
+     "cols": 8,
+     "min": [
+      17.0,
+      760.0,
+      22.0
+     ],
+     "max": [
+      887.0,
+      981.0,
+      1741.5
+     ],
+     "front": [
+      887.0,
+      760.0,
+      22.0
+     ],
+     "labelAt": [
+      817.5,
+      870.5,
+      1431.5
+     ],
+     "labelSize": [
+      560,
+      137.0
+     ],
+     "cells": [
+      {
+       "cell": "1A-1B",
+       "zone": "Front",
+       "purpose": "Brushed servo drives",
+       "inv": "Leadshine DCS810 ×2",
+       "sugg": "Manual + wiring card with each drive",
+       "ins": "Anti-static bags",
+       "r": 4,
+       "r1": 4,
+       "c0": 0,
+       "c1": 1,
+       "min": [
+        588.8,
+        795.0,
+        1292.0
+       ],
+       "max": [
+        778.0,
+        981.0,
+        1702.5
+       ]
+      },
+      {
+       "cell": "1C",
+       "zone": "Front",
+       "purpose": "H-bridge modules",
+       "inv": "TB6612FNG module ×10; DRV8833 module ×10",
+       "sugg": "",
+       "ins": "ESD bags, split box",
+       "r": 4,
+       "r1": 4,
+       "c0": 2,
+       "c1": 2,
+       "min": [
+        588.8,
+        795.0,
+        1086.8
+       ],
+       "max": [
+        778.0,
+        981.0,
+        1292.0
+       ]
+      },
+      {
+       "cell": "1D",
+       "zone": "Front",
+       "purpose": "Stepper & bus drivers",
+       "inv": "TMC2208 v1.2 ×8",
+       "sugg": "Feetech URT-1 bus adapter, BTS7960-class drivers",
+       "ins": "ESD bags",
+       "r": 4,
+       "r1": 4,
+       "c0": 3,
+       "c1": 3,
+       "min": [
+        588.8,
+        795.0,
+        881.5
+       ],
+       "max": [
+        778.0,
+        981.0,
+        1086.8
+       ]
+      },
+      {
+       "cell": "1E-1F",
+       "zone": "Front",
+       "purpose": "BLDC / FOC drivers",
+       "inv": "",
+       "sugg": "SimpleFOC boards, ODrive-class drivers",
+       "ins": "ESD bags",
+       "r": 4,
+       "r1": 4,
+       "c0": 4,
+       "c1": 5,
+       "min": [
+        588.8,
+        795.0,
+        471.0
+       ],
+       "max": [
+        778.0,
+        981.0,
+        881.5
+       ]
+      },
+      {
+       "cell": "1G-1H",
+       "zone": "Front",
+       "purpose": "Motor & encoder cables",
+       "inv": "",
+       "sugg": "Servo/encoder leads, extension cables",
+       "ins": "Velcro",
+       "r": 4,
+       "r1": 4,
+       "c0": 6,
+       "c1": 7,
+       "min": [
+        588.8,
+        795.0,
+        60.5
+       ],
+       "max": [
+        778.0,
+        981.0,
+        471.0
+       ]
+      },
+      {
+       "cell": "2A-2D",
+       "zone": "Middle",
+       "purpose": "Serial bus servos",
+       "inv": "Feetech STS3215 ×14",
+       "sugg": "",
+       "ins": "Foam, each bagged with cable",
+       "r": 3,
+       "r1": 3,
+       "c0": 0,
+       "c1": 3,
+       "min": [
+        399.5,
+        795.0,
+        881.5
+       ],
+       "max": [
+        588.8,
+        981.0,
+        1702.5
+       ]
+      },
+      {
+       "cell": "2E-2F",
+       "zone": "Middle",
+       "purpose": "Geared DC + encoder",
+       "inv": "JGB37-520 + hall encoder ×4",
+       "sugg": "",
+       "ins": "Foam",
+       "r": 3,
+       "r1": 3,
+       "c0": 4,
+       "c1": 5,
+       "min": [
+        399.5,
+        795.0,
+        471.0
+       ],
+       "max": [
+        588.8,
+        981.0,
+        881.5
+       ]
+      },
+      {
+       "cell": "2G",
+       "zone": "Middle",
+       "purpose": "Micro gearmotors",
+       "inv": "N20 gearmotor + encoder ×6",
+       "sugg": "",
+       "ins": "Small-parts box",
+       "r": 3,
+       "r1": 3,
+       "c0": 6,
+       "c1": 6,
+       "min": [
+        399.5,
+        795.0,
+        265.8
+       ],
+       "max": [
+        588.8,
+        981.0,
+        471.0
+       ]
+      },
+      {
+       "cell": "2H",
+       "zone": "Middle",
+       "purpose": "Hobby servos",
+       "inv": "",
+       "sugg": "SG90 / MG996R",
+       "ins": "Small-parts box",
+       "r": 3,
+       "r1": 3,
+       "c0": 7,
+       "c1": 7,
+       "min": [
+        399.5,
+        795.0,
+        60.5
+       ],
+       "max": [
+        588.8,
+        981.0,
+        265.8
+       ]
+      },
+      {
+       "cell": "3A-3D",
+       "zone": "Middle",
+       "purpose": "Steppers",
+       "inv": "",
+       "sugg": "NEMA-17 steppers",
+       "ins": "Foam",
+       "r": 2,
+       "r1": 2,
+       "c0": 0,
+       "c1": 3,
+       "min": [
+        210.2,
+        795.0,
+        881.5
+       ],
+       "max": [
+        399.5,
+        981.0,
+        1702.5
+       ]
+      },
+      {
+       "cell": "3E-3F",
+       "zone": "Middle",
+       "purpose": "BLDC / gimbal motors",
+       "inv": "",
+       "sugg": "BLDC/gimbal motors",
+       "ins": "Foam",
+       "r": 2,
+       "r1": 2,
+       "c0": 4,
+       "c1": 5,
+       "min": [
+        210.2,
+        795.0,
+        471.0
+       ],
+       "max": [
+        399.5,
+        981.0,
+        881.5
+       ]
+      },
+      {
+       "cell": "3G-3H",
+       "zone": "Middle",
+       "purpose": "Fans, pumps, solenoids",
+       "inv": "",
+       "sugg": "",
+       "ins": "Bagged",
+       "r": 2,
+       "r1": 2,
+       "c0": 6,
+       "c1": 7,
+       "min": [
+        210.2,
+        795.0,
+        60.5
+       ],
+       "max": [
+        399.5,
+        981.0,
+        471.0
+       ]
+      },
+      {
+       "cell": "4A-4H",
+       "zone": "Back",
+       "purpose": "Free — large motors",
+       "inv": "",
+       "sugg": "Large gearmotors (heavy items to the back)",
+       "ins": "",
+       "r": 1,
+       "r1": 1,
+       "c0": 0,
+       "c1": 7,
+       "min": [
+        21.0,
+        795.0,
+        60.5
+       ],
+       "max": [
+        210.2,
+        981.0,
+        1702.5
+       ]
+      }
+     ]
+    },
+    {
+     "code": "B3",
+     "pos": 3,
+     "name": "Power & safety",
+     "hex": "C0504D",
+     "band": "Red",
+     "access": "Monthly",
+     "notes": "No Li-ion/LiPo in any drawer — they live in the fire-safe box (zone LB).",
+     "rows": 4,
+     "cols": 8,
+     "min": [
+      17.0,
+      509.0,
+      22.0
+     ],
+     "max": [
+      887.0,
+      730.0,
+      1741.5
+     ],
+     "front": [
+      887.0,
+      509.0,
+      22.0
+     ],
+     "labelAt": [
+      817.5,
+      619.5,
+      1431.5
+     ],
+     "labelSize": [
+      560,
+      137.0
+     ],
+     "cells": [
+      {
+       "cell": "1A-1B",
+       "zone": "Front",
+       "purpose": "Emergency stops & switching",
+       "inv": "E-stop switch ×3",
+       "sugg": "Relays, SSRs",
+       "ins": "Bagged",
+       "r": 4,
+       "r1": 4,
+       "c0": 0,
+       "c1": 1,
+       "min": [
+        588.8,
+        544.0,
+        1292.0
+       ],
+       "max": [
+        778.0,
+        730.0,
+        1702.5
+       ]
+      },
+      {
+       "cell": "1C-1D",
+       "zone": "Front",
+       "purpose": "Fuses",
+       "inv": "Fuse holders + fuse kit (blade 2–30 A)",
+       "sugg": "",
+       "ins": "Kit box",
+       "r": 4,
+       "r1": 4,
+       "c0": 2,
+       "c1": 3,
+       "min": [
+        588.8,
+        544.0,
+        881.5
+       ],
+       "max": [
+        778.0,
+        730.0,
+        1292.0
+       ]
+      },
+      {
+       "cell": "1E-1F",
+       "zone": "Front",
+       "purpose": "Power modules",
+       "inv": "",
+       "sugg": "Buck/boost/LDO modules",
+       "ins": "ESD bags",
+       "r": 4,
+       "r1": 4,
+       "c0": 4,
+       "c1": 5,
+       "min": [
+        588.8,
+        544.0,
+        471.0
+       ],
+       "max": [
+        778.0,
+        730.0,
+        881.5
+       ]
+      },
+      {
+       "cell": "1G-1H",
+       "zone": "Front",
+       "purpose": "Bulk capacitors",
+       "inv": "Bulk capacitors 2200 µF 63 V ×10",
+       "sugg": "",
+       "ins": "Small-parts box",
+       "r": 4,
+       "r1": 4,
+       "c0": 6,
+       "c1": 7,
+       "min": [
+        588.8,
+        544.0,
+        60.5
+       ],
+       "max": [
+        778.0,
+        730.0,
+        471.0
+       ]
+      },
+      {
+       "cell": "2A-2B",
+       "zone": "Middle",
+       "purpose": "Charger",
+       "inv": "Balance charger iMAX B6 class ×1",
+       "sugg": "Charge leads (batteries: zone LB)",
+       "ins": "Original box",
+       "r": 3,
+       "r1": 3,
+       "c0": 0,
+       "c1": 1,
+       "min": [
+        399.5,
+        544.0,
+        1292.0
+       ],
+       "max": [
+        588.8,
+        730.0,
+        1702.5
+       ]
+      },
+      {
+       "cell": "2C-2D",
+       "zone": "Middle",
+       "purpose": "Regen / braking",
+       "inv": "Braking resistor 10 Ω 50 W ×4",
+       "sugg": "",
+       "ins": "Bagged",
+       "r": 3,
+       "r1": 3,
+       "c0": 2,
+       "c1": 3,
+       "min": [
+        399.5,
+        544.0,
+        881.5
+       ],
+       "max": [
+        588.8,
+        730.0,
+        1292.0
+       ]
+      },
+      {
+       "cell": "2E-2H",
+       "zone": "Middle",
+       "purpose": "Power supplies & mains",
+       "inv": "",
+       "sugg": "5/12/24 V adapters, IEC leads",
+       "ins": "Merged cell",
+       "r": 3,
+       "r1": 3,
+       "c0": 4,
+       "c1": 7,
+       "min": [
+        399.5,
+        544.0,
+        60.5
+       ],
+       "max": [
+        588.8,
+        730.0,
+        881.5
+       ]
+      },
+      {
+       "cell": "3A-3D",
+       "zone": "Middle",
+       "purpose": "DIN-rail & panel parts",
+       "inv": "",
+       "sugg": "DIN-rail PSU, MCBs, DIN terminal blocks, rail offcuts",
+       "ins": "Laid flat",
+       "r": 2,
+       "r1": 2,
+       "c0": 0,
+       "c1": 3,
+       "min": [
+        210.2,
+        544.0,
+        881.5
+       ],
+       "max": [
+        399.5,
+        730.0,
+        1702.5
+       ]
+      },
+      {
+       "cell": "3E-3H",
+       "zone": "Middle",
+       "purpose": "Heavy wire & lugs",
+       "inv": "",
+       "sugg": "Heavy-gauge wire, ring lugs, cable glands",
+       "ins": "Coiled",
+       "r": 2,
+       "r1": 2,
+       "c0": 4,
+       "c1": 7,
+       "min": [
+        210.2,
+        544.0,
+        60.5
+       ],
+       "max": [
+        399.5,
+        730.0,
+        881.5
+       ]
+      },
+      {
+       "cell": "4A-4H",
+       "zone": "Back",
+       "purpose": "Free — growth",
+       "inv": "",
+       "sugg": "",
+       "ins": "",
+       "r": 1,
+       "r1": 1,
+       "c0": 0,
+       "c1": 7,
+       "min": [
+        21.0,
+        544.0,
+        60.5
+       ],
+       "max": [
+        210.2,
+        730.0,
+        1702.5
+       ]
+      }
+     ]
+    },
+    {
+     "code": "B4",
+     "pos": 4,
+     "name": "Mechanical & motion hardware",
+     "hex": "A5A5A5",
+     "band": "Silver",
+     "access": "Monthly",
+     "notes": "Heavy: check slide rating. Silica gel against rust. Stock up to ~1.6 m lies across row 3; longer stock → wall rack (LR).",
+     "rows": 4,
+     "cols": 8,
+     "min": [
+      17.0,
+      258.0,
+      22.0
+     ],
+     "max": [
+      887.0,
+      479.0,
+      1741.5
+     ],
+     "front": [
+      887.0,
+      258.0,
+      22.0
+     ],
+     "labelAt": [
+      817.5,
+      368.5,
+      1431.5
+     ],
+     "labelSize": [
+      560,
+      137.0
+     ],
+     "cells": [
+      {
+       "cell": "1A-1B",
+       "zone": "Front",
+       "purpose": "Bearings",
+       "inv": "Bearing assortment case ×1 (608/6800/6900/F688)",
+       "sugg": "",
+       "ins": "Original case + silica gel",
+       "r": 4,
+       "r1": 4,
+       "c0": 0,
+       "c1": 1,
+       "min": [
+        588.8,
+        293.0,
+        1292.0
+       ],
+       "max": [
+        778.0,
+        479.0,
+        1702.5
+       ]
+      },
+      {
+       "cell": "1C",
+       "zone": "Front",
+       "purpose": "Pivot bearings & collars",
+       "inv": "Pendulum pivot bearings 6800ZZ ×6; shaft collars 8 mm ×10",
+       "sugg": "",
+       "ins": "Small-parts box",
+       "r": 4,
+       "r1": 4,
+       "c0": 2,
+       "c1": 2,
+       "min": [
+        588.8,
+        293.0,
+        1086.8
+       ],
+       "max": [
+        778.0,
+        479.0,
+        1292.0
+       ]
+      },
+      {
+       "cell": "1D",
+       "zone": "Front",
+       "purpose": "Couplers & motor brackets",
+       "inv": "Shaft couplers ×6 (5–8 mm); JGB37 motor brackets + couplers ×4",
+       "sugg": "",
+       "ins": "Small-parts box",
+       "r": 4,
+       "r1": 4,
+       "c0": 3,
+       "c1": 3,
+       "min": [
+        588.8,
+        293.0,
+        881.5
+       ],
+       "max": [
+        778.0,
+        479.0,
+        1086.8
+       ]
+      },
+      {
+       "cell": "1E-1F",
+       "zone": "Front",
+       "purpose": "M4–M6 & extrusion hardware",
+       "inv": "",
+       "sugg": "M4/M5/M6 screws, T-nuts, extrusion brackets",
+       "ins": "24-slot box",
+       "r": 4,
+       "r1": 4,
+       "c0": 4,
+       "c1": 5,
+       "min": [
+        588.8,
+        293.0,
+        471.0
+       ],
+       "max": [
+        778.0,
+        479.0,
+        881.5
+       ]
+      },
+      {
+       "cell": "1G-1H",
+       "zone": "Front",
+       "purpose": "Springs, O-rings, feet",
+       "inv": "",
+       "sugg": "Springs, O-rings, rubber feet",
+       "ins": "Small-parts box",
+       "r": 4,
+       "r1": 4,
+       "c0": 6,
+       "c1": 7,
+       "min": [
+        588.8,
+        293.0,
+        60.5
+       ],
+       "max": [
+        778.0,
+        479.0,
+        471.0
+       ]
+      },
+      {
+       "cell": "2A-2B",
+       "zone": "Middle",
+       "purpose": "Belts & pulleys",
+       "inv": "GT2 6 mm belt 10 m + 20T pulleys ×10",
+       "sugg": "",
+       "ins": "Belt coiled, not kinked",
+       "r": 3,
+       "r1": 3,
+       "c0": 0,
+       "c1": 1,
+       "min": [
+        399.5,
+        293.0,
+        1292.0
+       ],
+       "max": [
+        588.8,
+        479.0,
+        1702.5
+       ]
+      },
+      {
+       "cell": "2C-2D",
+       "zone": "Middle",
+       "purpose": "Wheels",
+       "inv": "Wheels 65 mm ×6",
+       "sugg": "",
+       "ins": "Bagged",
+       "r": 3,
+       "r1": 3,
+       "c0": 2,
+       "c1": 3,
+       "min": [
+        399.5,
+        293.0,
+        881.5
+       ],
+       "max": [
+        588.8,
+        479.0,
+        1292.0
+       ]
+      },
+      {
+       "cell": "2E-2H",
+       "zone": "Middle",
+       "purpose": "Linear motion parts",
+       "inv": "",
+       "sugg": "LM8UU, lead-screw nuts, short rails",
+       "ins": "Laid flat",
+       "r": 3,
+       "r1": 3,
+       "c0": 4,
+       "c1": 7,
+       "min": [
+        399.5,
+        293.0,
+        60.5
+       ],
+       "max": [
+        588.8,
+        479.0,
+        881.5
+       ]
+      },
+      {
+       "cell": "3A-3H",
+       "zone": "Middle",
+       "purpose": "Long stock ≤ 1.6 m",
+       "inv": "",
+       "sugg": "Rods, lead screws, 2020 extrusion offcuts — laid across the drawer",
+       "ins": "Full-width row",
+       "r": 2,
+       "r1": 2,
+       "c0": 0,
+       "c1": 7,
+       "min": [
+        210.2,
+        293.0,
+        60.5
+       ],
+       "max": [
+        399.5,
+        479.0,
+        1702.5
+       ]
+      },
+      {
+       "cell": "4A-4H",
+       "zone": "Back",
+       "purpose": "Plates, profiles & sheet offcuts",
+       "inv": "",
+       "sugg": "Small plates/profiles, aluminium and acrylic offcuts",
+       "ins": "Laid flat",
+       "r": 1,
+       "r1": 1,
+       "c0": 0,
+       "c1": 7,
+       "min": [
+        21.0,
+        293.0,
+        60.5
+       ],
+       "max": [
+        210.2,
+        479.0,
+        1702.5
+       ]
+      }
+     ]
+    },
+    {
+     "code": "B5",
+     "pos": 5,
+     "name": "CNC, laser & 3D-print parts",
+     "hex": "262626",
+     "band": "Black",
+     "access": "Monthly",
+     "notes": "Heaviest drawer at the bottom; spindles in the back row (closest to the slide support). Cutters in tip-protected cases.",
+     "rows": 4,
+     "cols": 8,
+     "min": [
+      17.0,
+      7.0,
+      22.0
+     ],
+     "max": [
+      887.0,
+      228.0,
+      1741.5
+     ],
+     "front": [
+      887.0,
+      7.0,
+      22.0
+     ],
+     "labelAt": [
+      817.5,
+      117.5,
+      1431.5
+     ],
+     "labelSize": [
+      560,
+      137.0
+     ],
+     "cells": [
+      {
+       "cell": "1A-1B",
+       "zone": "Front",
+       "purpose": "Cutters & engraving bits",
+       "inv": "3.175 milling cutter set; 3.175 HRC55 metal cutter (3); HRC55 taper ball knife (3); single-blade spiral pointed knife (2)",
+       "sugg": "",
+       "ins": "Tip-protected cases",
+       "r": 4,
+       "r1": 4,
+       "c0": 0,
+       "c1": 1,
+       "min": [
+        588.8,
+        42.0,
+        1292.0
+       ],
+       "max": [
+        778.0,
+        228.0,
+        1702.5
+       ]
+      },
+      {
+       "cell": "1C-1D",
+       "zone": "Front",
+       "purpose": "Collets & workholding",
+       "inv": "ER11 spindle clamp set (15 pcs)",
+       "sugg": "Spindle wrenches, spoilboard clamps",
+       "ins": "Original case",
+       "r": 4,
+       "r1": 4,
+       "c0": 2,
+       "c1": 3,
+       "min": [
+        588.8,
+        42.0,
+        881.5
+       ],
+       "max": [
+        778.0,
+        228.0,
+        1292.0
+       ]
+      },
+      {
+       "cell": "1E-1F",
+       "zone": "Front",
+       "purpose": "3D-printer spares",
+       "inv": "",
+       "sugg": "Nozzles, PTFE tube, hotend spares (filament in a dry box, not here)",
+       "ins": "Small-parts box",
+       "r": 4,
+       "r1": 4,
+       "c0": 4,
+       "c1": 5,
+       "min": [
+        588.8,
+        42.0,
+        471.0
+       ],
+       "max": [
+        778.0,
+        228.0,
+        881.5
+       ]
+      },
+      {
+       "cell": "1G-1H",
+       "zone": "Front",
+       "purpose": "Engraving materials",
+       "inv": "Keychain material pack (5); constellation material (2); visual overlay material (1)",
+       "sugg": "Small sheet offcuts",
+       "ins": "Flat",
+       "r": 4,
+       "r1": 4,
+       "c0": 6,
+       "c1": 7,
+       "min": [
+        588.8,
+        42.0,
+        60.5
+       ],
+       "max": [
+        778.0,
+        228.0,
+        471.0
+       ]
+      },
+      {
+       "cell": "2A-2D",
+       "zone": "Middle",
+       "purpose": "Laser module",
+       "inv": "10 W laser engraving kit (TTS / TTS PRO)",
+       "sugg": "Laser safety glasses",
+       "ins": "Original case",
+       "r": 3,
+       "r1": 3,
+       "c0": 0,
+       "c1": 3,
+       "min": [
+        399.5,
+        42.0,
+        881.5
+       ],
+       "max": [
+        588.8,
+        228.0,
+        1702.5
+       ]
+      },
+      {
+       "cell": "2E-2H",
+       "zone": "Middle",
+       "purpose": "CNC spares",
+       "inv": "",
+       "sugg": "Spare collets, couplers, limit switches for the machines",
+       "ins": "Small-parts box",
+       "r": 3,
+       "r1": 3,
+       "c0": 4,
+       "c1": 7,
+       "min": [
+        399.5,
+        42.0,
+        60.5
+       ],
+       "max": [
+        588.8,
+        228.0,
+        881.5
+       ]
+      },
+      {
+       "cell": "3A-3H",
+       "zone": "Middle",
+       "purpose": "Free — growth",
+       "inv": "",
+       "sugg": "",
+       "ins": "",
+       "r": 2,
+       "r1": 2,
+       "c0": 0,
+       "c1": 7,
+       "min": [
+        210.2,
+        42.0,
+        60.5
+       ],
+       "max": [
+        399.5,
+        228.0,
+        1702.5
+       ]
+      },
+      {
+       "cell": "4A-4D",
+       "zone": "Back",
+       "purpose": "Spindle 500 W",
+       "inv": "500 W spindle ×1",
+       "sugg": "",
+       "ins": "Original box",
+       "r": 1,
+       "r1": 1,
+       "c0": 0,
+       "c1": 3,
+       "min": [
+        21.0,
+        42.0,
+        881.5
+       ],
+       "max": [
+        210.2,
+        228.0,
+        1702.5
+       ]
+      },
+      {
+       "cell": "4E-4H",
+       "zone": "Back",
+       "purpose": "Spindle 800 W",
+       "inv": "800 W spindle ×1",
+       "sugg": "",
+       "ins": "Original box",
+       "r": 1,
+       "r1": 1,
+       "c0": 4,
+       "c1": 7,
+       "min": [
+        21.0,
+        42.0,
+        60.5
+       ],
+       "max": [
+        210.2,
+        228.0,
+        881.5
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "R",
+   "name": "Roller cabinet",
+   "sub": "On wheels · displays, intake, kits",
+   "drawers": [
+    {
+     "code": "R1",
+     "pos": 1,
+     "name": "Displays, SBCs & HMI panels",
+     "hex": "31859C",
+     "band": "Teal",
+     "access": "Monthly",
+     "notes": "Fragile: screens face-up on foam, never stacked more than 2. Row 6 stays partly inside the cabinet when open — boxed spares only.",
+     "rows": 6,
+     "cols": 6,
+     "min": [
+      3457.7,
+      1244.7,
+      2172.4
+     ],
+     "max": [
+      4742.3,
+      1427.0,
+      3482.4
+     ],
+     "front": [
+      3457.7,
+      1244.7,
+      2172.4
+     ],
+     "labelAt": [
+      4100.0,
+      1335.9,
+      2170.9
+     ],
+     "labelSize": [
+      440,
+      108
+     ],
+     "cells": [
+      {
+       "cell": "1A-2C",
+       "zone": "Front",
+       "purpose": "Dingchang C576 (RK3576)",
+       "inv": "",
+       "sugg": "Board + PSU + serial lead (under Ubuntu evaluation)",
+       "ins": "Foam, face-up",
+       "r": 5,
+       "r1": 6,
+       "c0": 0,
+       "c1": 2,
+       "min": [
+        4100.0,
+        1259.7,
+        2192.4
+       ],
+       "max": [
+        4725.3,
+        1427.0,
+        2616.7
+       ]
+      },
+      {
+       "cell": "1D-2F",
+       "zone": "Front",
+       "purpose": "Dingchang A568B (RK3568)",
+       "inv": "",
+       "sugg": "Board + PSU + serial lead",
+       "ins": "Foam, face-up",
+       "r": 5,
+       "r1": 6,
+       "c0": 3,
+       "c1": 5,
+       "min": [
+        3474.7,
+        1259.7,
+        2192.4
+       ],
+       "max": [
+        4100.0,
+        1427.0,
+        2616.7
+       ]
+      },
+      {
+       "cell": "3A-4C",
+       "zone": "Middle",
+       "purpose": "DWIN HMI panels",
+       "inv": "",
+       "sugg": "TC040 480×480 and other DWIN panels",
+       "ins": "Foam, face-up",
+       "r": 3,
+       "r1": 4,
+       "c0": 0,
+       "c1": 2,
+       "min": [
+        4100.0,
+        1259.7,
+        2616.7
+       ],
+       "max": [
+        4725.3,
+        1427.0,
+        3041.1
+       ]
+      },
+      {
+       "cell": "3D-4F",
+       "zone": "Middle",
+       "purpose": "SBCs",
+       "inv": "",
+       "sugg": "Raspberry Pi 5 + PSU, other SBCs",
+       "ins": "ESD bags",
+       "r": 3,
+       "r1": 4,
+       "c0": 3,
+       "c1": 5,
+       "min": [
+        3474.7,
+        1259.7,
+        2616.7
+       ],
+       "max": [
+        4100.0,
+        1427.0,
+        3041.1
+       ]
+      },
+      {
+       "cell": "5A-5C",
+       "zone": "Back",
+       "purpose": "Small displays",
+       "inv": "",
+       "sugg": "ESP32-P4 display kits, TFT/OLED/e-paper modules",
+       "ins": "ESD bags",
+       "r": 2,
+       "r1": 2,
+       "c0": 0,
+       "c1": 2,
+       "min": [
+        4100.0,
+        1259.7,
+        3041.1
+       ],
+       "max": [
+        4725.3,
+        1427.0,
+        3253.2
+       ]
+      },
+      {
+       "cell": "5D-5F",
+       "zone": "Back",
+       "purpose": "Display cables & PSUs",
+       "inv": "",
+       "sugg": "FPC/LVDS/eDP cables, 12 V panel PSUs",
+       "ins": "Velcro",
+       "r": 2,
+       "r1": 2,
+       "c0": 3,
+       "c1": 5,
+       "min": [
+        3474.7,
+        1259.7,
+        3041.1
+       ],
+       "max": [
+        4100.0,
+        1427.0,
+        3253.2
+       ]
+      },
+      {
+       "cell": "6A-6F",
+       "zone": "Back (partly hidden)",
+       "purpose": "Boxed spares (back row)",
+       "inv": "",
+       "sugg": "Boxed spare panels — row 6 is only partly exposed when open",
+       "ins": "Original boxes",
+       "r": 1,
+       "r1": 1,
+       "c0": 0,
+       "c1": 5,
+       "min": [
+        3474.7,
+        1259.7,
+        3253.2
+       ],
+       "max": [
+        4725.3,
+        1427.0,
+        3465.4
+       ]
+      }
+     ]
+    },
+    {
+     "code": "R2",
+     "pos": 2,
+     "name": "Intake, quarantine & returns",
+     "hex": "E46C6C",
+     "band": "Red/white stripe",
+     "access": "Per delivery",
+     "notes": "Wheel it to the door for deliveries. Tags: green = new intake, yellow = untested, red = faulty/RMA. Nothing stays > 7 days.",
+     "rows": 6,
+     "cols": 6,
+     "min": [
+      3457.7,
+      1005.9,
+      2192.4
+     ],
+     "max": [
+      4742.3,
+      1201.4,
+      3482.4
+     ],
+     "front": [
+      3457.7,
+      1005.9,
+      2192.4
+     ],
+     "labelAt": [
+      4100.0,
+      1103.6,
+      2190.9
+     ],
+     "labelSize": [
+      440,
+      108
+     ],
+     "cells": [
+      {
+       "cell": "1A-2C",
+       "zone": "Front",
+       "purpose": "Intake staging (green tag)",
+       "inv": "",
+       "sugg": "Unopened / uncounted shipments — e.g. the Shenzhen boxes",
+       "ins": "Open bin",
+       "r": 5,
+       "r1": 6,
+       "c0": 0,
+       "c1": 2,
+       "min": [
+        4100.0,
+        1020.9,
+        2222.4
+       ],
+       "max": [
+        4725.3,
+        1201.4,
+        2636.7
+       ]
+      },
+      {
+       "cell": "1D-2E",
+       "zone": "Front",
+       "purpose": "Untested / unknown (yellow tag)",
+       "inv": "",
+       "sugg": "",
+       "ins": "Yellow bin",
+       "r": 5,
+       "r1": 6,
+       "c0": 3,
+       "c1": 4,
+       "min": [
+        3683.1,
+        1020.9,
+        2222.4
+       ],
+       "max": [
+        4100.0,
+        1201.4,
+        2636.7
+       ]
+      },
+      {
+       "cell": "1F-2F",
+       "zone": "Front",
+       "purpose": "Faulty / RMA (red tag)",
+       "inv": "",
+       "sugg": "Locked out — never back into stock without a test note",
+       "ins": "Red bin",
+       "r": 5,
+       "r1": 6,
+       "c0": 5,
+       "c1": 5,
+       "min": [
+        3474.7,
+        1020.9,
+        2222.4
+       ],
+       "max": [
+        3683.1,
+        1201.4,
+        2636.7
+       ]
+      },
+      {
+       "cell": "3A-4C",
+       "zone": "Middle",
+       "purpose": "Counted, awaiting label + system entry",
+       "inv": "",
+       "sugg": "",
+       "ins": "Bin",
+       "r": 3,
+       "r1": 4,
+       "c0": 0,
+       "c1": 2,
+       "min": [
+        4100.0,
+        1020.9,
+        2636.7
+       ],
+       "max": [
+        4725.3,
+        1201.4,
+        3051.1
+       ]
+      },
+      {
+       "cell": "3D-4F",
+       "zone": "Middle",
+       "purpose": "Returned from borrow, awaiting check",
+       "inv": "",
+       "sugg": "",
+       "ins": "Bin",
+       "r": 3,
+       "r1": 4,
+       "c0": 3,
+       "c1": 5,
+       "min": [
+        3474.7,
+        1020.9,
+        2636.7
+       ],
+       "max": [
+        4100.0,
+        1201.4,
+        3051.1
+       ]
+      },
+      {
+       "cell": "5A-6F",
+       "zone": "Back (partly hidden)",
+       "purpose": "Large inbound boxes",
+       "inv": "",
+       "sugg": "Cartons too big for a bin (row 6 only partly exposed)",
+       "ins": "Open floor",
+       "r": 1,
+       "r1": 2,
+       "c0": 0,
+       "c1": 5,
+       "min": [
+        3474.7,
+        1020.9,
+        3051.1
+       ],
+       "max": [
+        4725.3,
+        1201.4,
+        3465.4
+       ]
+      }
+     ]
+    },
+    {
+     "code": "R3",
+     "pos": 3,
+     "name": "Project kits",
+     "hex": "92D050",
+     "band": "Lime",
+     "access": "Daily",
+     "notes": "Issued stock only: one 400 × 600 mm tote (≤ 160 mm high) per active build. Wheel to the bench. Leftovers go home when a build pauses > 30 days.",
+     "rows": 6,
+     "cols": 6,
+     "min": [
+      3457.7,
+      778.1,
+      2192.3
+     ],
+     "max": [
+      4742.3,
+      970.9,
+      3482.3
+     ],
+     "front": [
+      3457.7,
+      778.1,
+      2192.3
+     ],
+     "labelAt": [
+      4100.0,
+      874.5,
+      2190.8
+     ],
+     "labelSize": [
+      440,
+      108
+     ],
+     "cells": [
+      {
+       "cell": "1A-3B",
+       "zone": "Front",
+       "purpose": "Project kit K1",
+       "inv": "",
+       "sugg": "Assign a project code when a build starts (e.g. Furuta pendulum, balancing robot, robot arm, Open Duck)",
+       "ins": "400×600 tote",
+       "r": 4,
+       "r1": 6,
+       "c0": 0,
+       "c1": 1,
+       "min": [
+        4308.4,
+        793.1,
+        2222.3
+       ],
+       "max": [
+        4725.3,
+        970.9,
+        2843.8
+       ]
+      },
+      {
+       "cell": "1C-3D",
+       "zone": "Front",
+       "purpose": "Project kit K2",
+       "inv": "",
+       "sugg": "Assign a project code when a build starts (e.g. Furuta pendulum, balancing robot, robot arm, Open Duck)",
+       "ins": "400×600 tote",
+       "r": 4,
+       "r1": 6,
+       "c0": 2,
+       "c1": 3,
+       "min": [
+        3891.6,
+        793.1,
+        2222.3
+       ],
+       "max": [
+        4308.4,
+        970.9,
+        2843.8
+       ]
+      },
+      {
+       "cell": "1E-3F",
+       "zone": "Front",
+       "purpose": "Project kit K3",
+       "inv": "",
+       "sugg": "Assign a project code when a build starts (e.g. Furuta pendulum, balancing robot, robot arm, Open Duck)",
+       "ins": "400×600 tote",
+       "r": 4,
+       "r1": 6,
+       "c0": 4,
+       "c1": 5,
+       "min": [
+        3474.7,
+        793.1,
+        2222.3
+       ],
+       "max": [
+        3891.6,
+        970.9,
+        2843.8
+       ]
+      },
+      {
+       "cell": "4A-6B",
+       "zone": "Back (partly hidden)",
+       "purpose": "Project kit K4",
+       "inv": "",
+       "sugg": "Assign a project code when a build starts (e.g. Furuta pendulum, balancing robot, robot arm, Open Duck)",
+       "ins": "400×600 tote",
+       "r": 1,
+       "r1": 3,
+       "c0": 0,
+       "c1": 1,
+       "min": [
+        4308.4,
+        793.1,
+        2843.8
+       ],
+       "max": [
+        4725.3,
+        970.9,
+        3465.3
+       ]
+      },
+      {
+       "cell": "4C-6D",
+       "zone": "Back (partly hidden)",
+       "purpose": "Project kit K5",
+       "inv": "",
+       "sugg": "Assign a project code when a build starts (e.g. Furuta pendulum, balancing robot, robot arm, Open Duck)",
+       "ins": "400×600 tote",
+       "r": 1,
+       "r1": 3,
+       "c0": 2,
+       "c1": 3,
+       "min": [
+        3891.6,
+        793.1,
+        2843.8
+       ],
+       "max": [
+        4308.4,
+        970.9,
+        3465.3
+       ]
+      },
+      {
+       "cell": "4E-6F",
+       "zone": "Back (partly hidden)",
+       "purpose": "Project kit K6",
+       "inv": "",
+       "sugg": "Assign a project code when a build starts (e.g. Furuta pendulum, balancing robot, robot arm, Open Duck)",
+       "ins": "400×600 tote",
+       "r": 1,
+       "r1": 3,
+       "c0": 4,
+       "c1": 5,
+       "min": [
+        3474.7,
+        793.1,
+        2843.8
+       ],
+       "max": [
+        3891.6,
+        970.9,
+        3465.3
+       ]
+      }
+     ]
+    },
+    {
+     "code": "R4",
+     "pos": 4,
+     "name": "Field & demo kits",
+     "hex": "BF9000",
+     "band": "Gold",
+     "access": "Weekly",
+     "notes": "Grab-and-go kits for site visits and demos. Power banks / Li-ion stay in zone LB — pack them on the way out.",
+     "rows": 6,
+     "cols": 6,
+     "min": [
+      3457.7,
+      525.3,
+      2192.4
+     ],
+     "max": [
+      4742.3,
+      732.0,
+      3482.4
+     ],
+     "front": [
+      3457.7,
+      525.3,
+      2192.4
+     ],
+     "labelAt": [
+      4100.0,
+      628.6,
+      2190.9
+     ],
+     "labelSize": [
+      440,
+      108
+     ],
+     "cells": [
+      {
+       "cell": "1A-3C",
+       "zone": "Front",
+       "purpose": "LoRaWAN field-test kit",
+       "inv": "",
+       "sugg": "Test node, field tester, antennas, SMA adapters, laptop USB-serial",
+       "ins": "Tote",
+       "r": 4,
+       "r1": 6,
+       "c0": 0,
+       "c1": 2,
+       "min": [
+        4100.0,
+        540.3,
+        2222.4
+       ],
+       "max": [
+        4725.3,
+        732.0,
+        2843.9
+       ]
+      },
+      {
+       "cell": "1D-3F",
+       "zone": "Front",
+       "purpose": "Site install kit",
+       "inv": "",
+       "sugg": "RS-485 tester, crimpers, ferrules, cable ties, labels, spare fuses",
+       "ins": "Tote",
+       "r": 4,
+       "r1": 6,
+       "c0": 3,
+       "c1": 5,
+       "min": [
+        3474.7,
+        540.3,
+        2222.4
+       ],
+       "max": [
+        4100.0,
+        732.0,
+        2843.9
+       ]
+      },
+      {
+       "cell": "4A-6C",
+       "zone": "Back (partly hidden)",
+       "purpose": "Demo units",
+       "inv": "",
+       "sugg": "Customer demo nodes and panels",
+       "ins": "Foam",
+       "r": 1,
+       "r1": 3,
+       "c0": 0,
+       "c1": 2,
+       "min": [
+        4100.0,
+        540.3,
+        2843.9
+       ],
+       "max": [
+        4725.3,
+        732.0,
+        3465.4
+       ]
+      },
+      {
+       "cell": "4D-6F",
+       "zone": "Back (partly hidden)",
+       "purpose": "Loaner / evaluation units",
+       "inv": "",
+       "sugg": "Units out for customer evaluation (log in IMS when issued)",
+       "ins": "Foam",
+       "r": 1,
+       "r1": 3,
+       "c0": 3,
+       "c1": 5,
+       "min": [
+        3474.7,
+        540.3,
+        2843.9
+       ],
+       "max": [
+        4100.0,
+        732.0,
+        3465.4
+       ]
+      }
+     ]
+    },
+    {
+     "code": "R5",
+     "pos": 5,
+     "name": "Packaging, salvage & bulk overflow",
+     "hex": "7F7F7F",
+     "band": "Grey",
+     "access": "Monthly",
+     "notes": "Bottom of the roller: bulky and heavier items. Keep the cart's centre of gravity low.",
+     "rows": 6,
+     "cols": 6,
+     "min": [
+      3457.7,
+      277.0,
+      2192.4
+     ],
+     "max": [
+      4742.3,
+      479.2,
+      3482.4
+     ],
+     "front": [
+      3457.7,
+      277.0,
+      2192.4
+     ],
+     "labelAt": [
+      4100.0,
+      378.1,
+      2190.9
+     ],
+     "labelSize": [
+      440,
+      108
+     ],
+     "cells": [
+      {
+       "cell": "1A-3C",
+       "zone": "Front",
+       "purpose": "Packaging to keep",
+       "inv": "",
+       "sugg": "Antistatic bags and boxes kept for RMA",
+       "ins": "Bin",
+       "r": 4,
+       "r1": 6,
+       "c0": 0,
+       "c1": 2,
+       "min": [
+        4100.0,
+        292.0,
+        2222.4
+       ],
+       "max": [
+        4725.3,
+        479.2,
+        2843.9
+       ]
+      },
+      {
+       "cell": "1D-3F",
+       "zone": "Front",
+       "purpose": "Salvage & scrap",
+       "inv": "",
+       "sugg": "Salvaged parts awaiting sorting",
+       "ins": "Bin",
+       "r": 4,
+       "r1": 6,
+       "c0": 3,
+       "c1": 5,
+       "min": [
+        3474.7,
+        292.0,
+        2222.4
+       ],
+       "max": [
+        4100.0,
+        479.2,
+        2843.9
+       ]
+      },
+      {
+       "cell": "4A-6F",
+       "zone": "Back (partly hidden)",
+       "purpose": "Bulk overflow (sealed cartons)",
+       "inv": "",
+       "sugg": "Sealed cartons that refill drawer stock",
+       "ins": "Cartons",
+       "r": 1,
+       "r1": 3,
+       "c0": 0,
+       "c1": 5,
+       "min": [
+        3474.7,
+        292.0,
+        2843.9
+       ],
+       "max": [
+        4725.3,
+        479.2,
+        3465.4
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "zones": [
+  {
+   "code": "LB",
+   "name": "Lithium battery box",
+   "where": "Fire-safe LiPo bag / metal box on an open shelf",
+   "notes": "All Li-ion/LiPo cells and packs. Never in a drawer, away from heat.",
+   "cells": [
+    {
+     "cell": "1",
+     "purpose": "Lithium cells & packs",
+     "inv": "",
+     "sugg": "All Li-ion/LiPo",
+     "ins": "Fire-safe bag/box",
+     "zone": "Fire-safe box"
+    }
+   ]
+  },
+  {
+   "code": "LR",
+   "name": "Long-stock wall rack",
+   "where": "Wall rack",
+   "notes": "Rods, lead screws and extrusions longer than ~1.6 m (shorter stock lies across B4 row 3).",
+   "cells": [
+    {
+     "cell": "1",
+     "purpose": "Long stock > 1.6 m",
+     "inv": "",
+     "sugg": "Rods, lead screws, extrusions > 1.6 m",
+     "ins": "Rack",
+     "zone": "Wall rack"
+    }
+   ]
+  }
+ ]
+}

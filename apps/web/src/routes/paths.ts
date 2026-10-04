@@ -1,6 +1,8 @@
 /** Route paths in one place, so a rename is one edit and never a broken string literal. */
 export const ROUTES = {
   login: '/login',
+  /** The lab panel: full screen, no shell, read-only. Run by the kiosk on the lab's touch panel. */
+  panel: '/panel',
   changePassword: '/account/password',
   dashboard: '/',
   inventory: {
