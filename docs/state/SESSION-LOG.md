@@ -12,6 +12,37 @@ Format:
 **Next:** the single next action, specific enough to start without thinking
 ```
 
+## 2026-10-04 — Phase 11 follow-up: pull, health check, lint to zero
+
+**Did:**
+- Pulled 9 commits into `fix/k2-key-write-redaction` (fast-forward, no conflicts): the K2 redaction
+  interceptor, take throttle and daily cap, service-account create on the panel, funds-dialog flake
+  fix. Found that PRs #1–#6 are already merged into **`fix/lan-secure-context`**, the GitHub default
+  branch, so the work was moved to **`chore/lint-clean`** cut from `86de70f` instead.
+- Health check on Windows: typecheck clean, unit 25 / 257 / 478, guard 8. Lint was the standing 20.
+- Cleared all 20 lint errors; `pnpm lint` exits 0. 14 were `scripts/playwright-verify-snapshots.js`
+  (now ignored via `scripts/**/*.js` in `eslint.config.mjs`), 4 unused imports/variables in three
+  integration specs and one web test, 1 stale `eslint-disable` for a plugin that is not installed,
+  1 inline `import()` type in `packages/shared/src/contracts/requisitions.ts`.
+
+**Decisions:** ignore `scripts/**/*.js` rather than fix the script (same reasoning as `docs/**/*.js`);
+remove the `eslint-disable` rather than add `eslint-plugin-react-hooks` (no new dependency); keep the
+`createStockFixture(ctx.db)` call in `purchase-bom-quantity.int-spec.ts` and drop only the unused
+assignment, because the call seeds the stock the test needs. Recorded in DECISIONS, Phase 11.
+
+**Landmines:**
+- **Integration was NOT run.** No Docker on this machine. The three edited integration specs are
+  covered by typecheck and lint only, and the last real run (992 / 992) is at `a271479`.
+- `apps/web/src/App.tsx` and `apps/web/src/i18n/en.ts` hold an **uncommitted, unrelated local change**
+  (the bulk-import route shows "Coming soon"). It was deliberately left out of the commit: it
+  disables a feature and nobody asked for it to ship. It is still in the working tree.
+- `git switch -c <name> origin/fix/lan-secure-context` sets the upstream to the default branch. Push
+  by name, or a bare `git push` targets the wrong branch.
+- This branch's old PR (#5) was already merged, so pushing more to `fix/k2-key-write-redaction`
+  would have been orphaned. Do not.
+
+**Next:** open the PR for `chore/lint-clean`, then run `scripts/test-int-keeper.sh` on the merged tip.
+
 ## 2026-09-29 (follow-up) — Phase 11: OQ-KT10–KT12, integration doc corrections, Python client
 
 **Did:**

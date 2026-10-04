@@ -5,6 +5,19 @@
 
 ## Current position
 
+- **2026-10-04 — Phase 11 is merged on GitHub; `pnpm lint` is now 0.** PRs #1–#6 (the API-keys work,
+  take limits, service-account create on the panel, the funds-dialog flake fix, the K2 redaction
+  interceptor, review-note comments) are in **`fix/lan-secure-context`, the GitHub default branch**,
+  tip `86de70f`. It is merged, not deployed. The 20 standing lint errors were cleared on
+  **`chore/lint-clean`** (cut from `86de70f`, awaiting a PR): 14 were one throwaway script, now in
+  the ignore list beside `docs/**/*.js`; the rest were unused names, a stale `eslint-disable` and
+  one inline `import()` type (DECISIONS, Phase 11).
+  - **Verified (Windows, 2026-10-04):** typecheck clean · unit 25 / 257 / 478 · **lint exit 0** ·
+    guard 8 · built `shared/dist` has no `funds` import in `requisitions.js` (cjs or esm).
+  - **Not verified:** integration. This box had no Docker, so the last measurement stays
+    **992 / 992 at `a271479`**, which predates the K2 registry-walk and take-limit specs.
+  - **Next:** open the PR for `chore/lint-clean`; run `scripts/test-int-keeper.sh` at the merged tip.
+
 - **2026-09-30 — Integration gate moved to the keeper (`scripts/test-int-keeper.sh`).** The suite
   passes **992 / 992 (68 files)** at `a271479`. The `stock-import-lock` failure recorded below was the
   SSH tunnel, not the code (DECISIONS 2026-09-30). The measurements below stand as they were taken.

@@ -8,7 +8,8 @@
 >
 > **Maintenance rule:** see `.claude/rules/05-ai-playbook.md`. A `PostToolUse` hook
 > (`.claude/hooks/playbook-reminder.sh`) reminds Claude to update this file after every
-> meaningful edit. Last updated: 2026-09-29 (phase 11, ADR-0002: keys that act as a service
+> meaningful edit. Last updated: 2026-10-04 (lint baseline is now 0 — §16 landmines). Earlier,
+> 2026-09-29 (phase 11, ADR-0002: keys that act as a service
 > account, `POST /stock/take` — §11 config, §16 landmines, §18 notifications. Earlier,
 > 2026-09-24: CSV product import complete, parts A–L — §6 layout
 > gained the `imports` module and `test/bench/`, §16 gained the OR-compile landmine. Earlier,
@@ -1083,6 +1084,12 @@ reason the locking exists).
 
 ## 16. Landmines (each has cost a session before)
 
+- **`pnpm lint` is 0, so it is a real gate.** It used to carry 20 standing errors that everyone
+  compared against; any error now is new. `scripts/**/*.js` and `docs/**/*.js` are ignored on
+  purpose (standalone tooling). The `react-hooks` ESLint plugin is **not installed**, so an
+  `eslint-disable react-hooks/*` comment is itself a lint error ("rule definition not found").
+  `contracts/requisitions.ts` imports `RequisitionFundingSnapshot` type-only because `funds`
+  imports a value back from it — keep that import erased.
 - **A long `OR` list cannot be compiled, and it fails non-deterministically.** Kysely builds
   `eb.or([...])` into a nested binary tree and walks it by recursion, so a few thousand terms
   overflow the V8 stack **while the SQL is still being built** — Postgres never sees a statement,

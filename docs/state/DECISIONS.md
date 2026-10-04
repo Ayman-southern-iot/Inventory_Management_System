@@ -1393,3 +1393,21 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
     key-reachable route from `ApiKeyDocsService` with a key holding every scope. It fails if any
     answer carries a person's name or email, a `borrowerId` or a `requesterId`, and if a key route
     has no case.
+- 2026-10-04 — **`pnpm lint` is now 0, and 0 is the baseline.** It supersedes every "20 pre-existing
+  errors, compare against 20" entry above (and the "21 errors" one in Phase 07). Any lint error is
+  now new. Choices made to get there:
+  - **`scripts/**/*.js` is ignored in `eslint.config.mjs`**, beside `docs/**/*.js`: 14 of the 20
+    came from one throwaway Playwright script that uses `require`, prints to the console and runs
+    callbacks inside a browser page. Same reasoning as the `docs/` entry, not a new policy.
+  - **The `eslint-disable react-hooks/exhaustive-deps` comment in `SupportingDocumentCard.tsx` was
+    removed, not satisfied.** The plugin is not installed, so the comment disabled nothing and
+    itself failed lint ("rule definition not found"). Adding the plugin would be a new dependency
+    for one line. Do not add `react-hooks/*` disable comments until the plugin is installed.
+  - **`RequisitionFundingSnapshot` is now a top-of-file `import { type … }`** in
+    `contracts/requisitions.ts`, replacing an inline `import('./funds.js')` type. `funds.ts`
+    imports a value from `requisitions.ts`, so this must stay type-only; checked that the built
+    `dist/{cjs,esm}/contracts/requisitions.js` contain no `funds` reference.
+  - **`createStockFixture(ctx.db)` stays in `purchase-bom-quantity.int-spec.ts`**; only its unused
+    return assignment went. The call seeds the stock rows the spec depends on.
+  - **Remote layout:** the GitHub default branch is `fix/lan-secure-context`; there is no
+    `origin/main`. Work goes on a branch cut from it and lands by PR (#1–#6 did).
