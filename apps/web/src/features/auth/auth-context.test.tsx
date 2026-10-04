@@ -81,6 +81,37 @@ describe('AuthProvider: restoring a stored session at start-up', () => {
     expect(screen.queryByText('signed out')).not.toBeInTheDocument();
   });
 
+  it.each([503, 504])('keeps the session through a %i as well', async (status) => {
+    get.mockRejectedValue(new ApiError('INTERNAL', 'Request failed', status));
+    renderProvider();
+    await settle();
+    expect(readStoredTokens()).not.toBeNull();
+  });
+
+  it('stops asking again once the app is gone', async () => {
+    get.mockRejectedValue(unreachable());
+    const client = new QueryClient();
+    const { unmount } = render(
+      <QueryClientProvider client={client}>
+        <AuthProvider>
+          <Probe />
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+    await settle();
+    unmount();
+    await act(() => vi.advanceTimersByTimeAsync(60_000));
+    expect(get).toHaveBeenCalledTimes(1);
+  });
+
+  it('forgets a deactivated account: the server answered, and said no', async () => {
+    get.mockRejectedValue(new ApiError('ACCOUNT_DEACTIVATED', 'Account deactivated', 403));
+    renderProvider();
+    await settle();
+    expect(readStoredTokens()).toBeNull();
+    expect(screen.getByText('signed out')).toBeInTheDocument();
+  });
+
   it('still forgets the session when the server rejects it', async () => {
     get.mockRejectedValue(new ApiError('TOKEN_EXPIRED', 'Session expired', 401));
     renderProvider();

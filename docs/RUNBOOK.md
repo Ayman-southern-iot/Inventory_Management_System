@@ -993,6 +993,13 @@ If the API is healthy, the likely cause is a locked account rather than an outag
 attempts within five minutes locks that email, and it clears itself once the window passes. An
 admin can also reset the password from **Admin → Users**.
 
+**A sign-out "for security reasons" right after a network blip is expected, not an attack.** An
+outage no longer signs anyone out: the app keeps the stored session and tries again. But if the
+connection drops after the server has rotated a refresh token and before its reply arrives, the
+browser still holds the old token. Its next refresh replays it, and the server — which allows no
+grace window, on purpose — revokes the whole session as `REUSE_DETECTED`. The log line names the
+token as rotated a few seconds earlier. Sign in again; nothing else to do.
+
 ### "An approver has not been assigned" on submit
 
 Almost always **Admin → Settings → Sub-threshold approver** is empty. That is a separate setting

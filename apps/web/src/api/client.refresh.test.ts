@@ -47,6 +47,17 @@ describe('a request whose access token has expired', () => {
     expect(onSessionLost).not.toHaveBeenCalled();
   });
 
+  it('keeps the session when the API is locked for an import (its own 503)', async () => {
+    fetchMock
+      .mockResolvedValueOnce(reply(401, { code: 'TOKEN_EXPIRED', message: 'expired' }))
+      .mockResolvedValueOnce(reply(503, { code: 'SYSTEM_IMPORT_IN_PROGRESS', message: 'busy' }));
+
+    await api.get('/catalogue').catch(() => undefined);
+
+    expect(readStoredTokens()).not.toBeNull();
+    expect(onSessionLost).not.toHaveBeenCalled();
+  });
+
   it('signs out when the server refuses the refresh', async () => {
     fetchMock
       .mockResolvedValueOnce(reply(401, { code: 'TOKEN_EXPIRED', message: 'expired' }))
