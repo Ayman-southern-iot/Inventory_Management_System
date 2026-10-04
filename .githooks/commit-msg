@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Installed by `pnpm hooks:install`. Definition lives in scripts/check-commit-message.sh so the
+# hook and CI cannot drift apart.
+ROOT="$(git rev-parse --show-toplevel)"
+exec env COMMIT_MSG_ALLOW_FIXUP=1 bash "$ROOT/scripts/check-commit-message.sh" "$1"

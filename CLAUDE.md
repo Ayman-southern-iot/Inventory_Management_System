@@ -69,6 +69,7 @@ playbook as the reason a behaviour is right. The rule file carries the authority
 | Unanswered product questions | `docs/state/OPEN-QUESTIONS.md` |
 | Full design detail | `docs/reference/README.md` — index first, then **one** file |
 | Domain vocabulary and invariants | the `domain-context` skill (Claude loads it automatically) |
+| Branches, commit format, PR and push rules | `CONTRIBUTING.md` (summary: `.claude/rules/80-contributing.md`) |
 | Onboarding an assisting/debugging AI | `ASSIST.md` — how to run it, debug playbook, invariants it may not touch |
 
 `docs/reference/` is the specification. It is large on purpose and split on purpose. Open the index,
