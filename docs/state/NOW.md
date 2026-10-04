@@ -48,9 +48,8 @@ routes are still live and there is no env flag (not the `defer-feature` shape). 
 - **Every role→people query must filter `users.is_service_account = false`** (list in
   `07-data-model.md` §7.5), or a panel gets requisition stages, IM notices and picker slots.
 - **A response body that is HTML, or not `{code, message}`, came from another app**, not the API.
-  The harness binds 127.0.0.1; do not revert it.
-- **Never run two test suites at once.** One shared `db-test`.
-- **`pnpm typecheck` reads `packages/shared/dist`.** Change a contract, rebuild shared.
+- **Never run two test suites at once** (one shared `db-test`). **`pnpm typecheck` reads
+  `packages/shared/dist`:** change a contract, rebuild shared.
 - **Two compose files.** Root = demo (what the VM runs today); `infra/` = production.
 - **`test-env.int-spec` refuses an unpinned config key.** Pin every new one in `TEST_ENV`.
 - **`resetData` keeps requisitions and cannot delete a user who moved stock.** A full run leaves
@@ -62,4 +61,4 @@ routes are still live and there is no env flag (not the `defer-feature` shape). 
 `G-14` · `G-16` · `G-17` · `G-18` · `G-19` · `G-21` (borrow form 500 on an unknown project) ·
 PM 6/12/14/15 · `OQ-30` · `OQ-31` · `OQ-33` · `OQ-C` · `OQ-D` · `OQ-F` · `OQ-KT8` · `OQ-KT9`
 · **overdue notifications are unwired on purpose (`OQ-E`) — not a gap, do not "fix"**
-· 8 guard-hardcoding findings (Tailwind arbitrary values, a hex colour, a status literal)
+· 8 guard-hardcoding findings
