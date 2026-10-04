@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { paginationQuerySchema, queryBoolean } from './common.js';
 import { type SupportingDocument } from './files.js';
+// Type-only: `funds` imports a value from this file, so this must stay erased at runtime.
+import { type RequisitionFundingSnapshot } from './funds.js';
 
 /* ---------------------------------------------------------------- statuses */
 
@@ -463,10 +465,8 @@ export interface RequisitionDetail extends Requisition {
    * the figures as they stood at each transition. Powers the "Money and purchasing" stage
    * selector on the Requisition Detail page. Empty array for requisitions that pre-date
    * the migration or have not yet transitioned past submit.
-   *
-   * Imported type-only to avoid a circular import between `requisitions` and `funds`.
    */
-  fundingSnapshots: import('./funds.js').RequisitionFundingSnapshot[];
+  fundingSnapshots: RequisitionFundingSnapshot[];
 }
 
 /* -------------------------------------------------------------- delegation */
