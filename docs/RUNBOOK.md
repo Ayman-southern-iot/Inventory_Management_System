@@ -1093,10 +1093,19 @@ message: change it on a PC first. The panel never leaves `/panel` for the rest o
 **It will need signing in again** at most 14 days after the last sign-in, because a session has an
 absolute lifetime (OQ-P1). It lands on the login page, never a blank screen. Repeat step 3.
 
-**Entering the drawer plan in IMS** (OQ-P2): one zone per drawer, named exactly the drawer code
-(`A1`, `R3`, `LB`), and one compartment per cell, coded exactly as printed in the drawer (`1G-1H`).
-A part on any other shelf is listed as "Not on the drawer plan" with its IMS location. Do not reuse
-a drawer code as a zone name in another room: the panel then draws neither (OQ-P2). The data
+**Entering the drawer plan in IMS** (OQ-P2), on the Locations page — the importer only matches
+shelves, it never creates them:
+
+- **rooms** named exactly as on the plan: `Cabinet A`, `Cabinet B`, `Roller cabinet`,
+  `CTO Room — open shelves`;
+- in each, **one zone per drawer, named exactly the drawer code** (`A1`, `R3`, `LB`). IMS has no
+  zone description; the drawer's descriptive name stays on the plan;
+- in each zone, **one compartment per cell, coded exactly as printed** in the drawer (`1G-1H`).
+
+`apps/web/src/features/panel/layout/ims-import-v4.csv` is the checklist, one row per compartment.
+In a product CSV import, the `zone` column is the drawer code as well. A drawer IMS has no zone for
+is named in a warning on the panel's overview; a part on any other shelf is listed as "Not on the
+drawer plan" with its IMS location. The data
 refreshes once a minute; while the API is unreachable the panel keeps the last counts under a
 banner and retries every 10 s.
 

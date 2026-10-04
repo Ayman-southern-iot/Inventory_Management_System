@@ -311,17 +311,29 @@ As filed:
 The panel signs in through the normal login as a person-type GENERAL account (OQ-P3). Auth is
 **not** changed on this branch; the design notes are in the pull request's description.
 
-**OQ-P2 answered by Arif on 2026-10-05:** the join is **`<zone name>-<compartment code>`** and
-nothing else. IMS zones have a name and no code, so each drawer's zone is named exactly its code
-(`A1`, `LB`) and each compartment carries the cell code (`1G-1H`, `1`). The zone name must be a
-drawer code on the plan, so zone `A1-1G` with compartment `1H` cannot also claim `A1-1G-1H`.
-`features/panel/address.test.ts` resolves all 150 rows of the v4 IMS Import sheet one-to-one.
-**Follow-up for the lead (code review, 2026-10-05):** zone names are unique only *within a room*
-since migration 0033 (`storage_zones_room_name_key`), so "Main Store / A1" and "Cabinet A / A1"
-can coexist. The panel therefore draws **nothing** for a drawer code that two rooms use, rather
-than guess. Pinning the room as well (the sheet's `Room` column: "Cabinet A", "Cabinet B",
-"Roller cabinet", "CTO Room — open shelves") would remove the ambiguity instead; that adds a
-naming rule, so it is Arif's call.
+**OQ-P2 answered by Arif on 2026-10-05:** a cell is joined by **room + zone name + compartment
+code**, and nothing else:
+
+- **room** is the drawer's room as the plan names it: the cabinet ("Cabinet A", "Cabinet B",
+  "Roller cabinet") or, for the two open shelves, "CTO Room — open shelves". The names come from
+  the plan file (`features/panel/layout/drawer-plan-v4.json`), never from code. Each drawer
+  matches only in its own room, so a demo room's "A1" cannot shadow the real one: zone names are
+  unique only within a room (`storage_zones_room_name_key`, migration 0033).
+- **zone name is exactly the drawer code** (`A1`, `LB`). IMS zones have no description field
+  (`storage_zones`: `name`, `is_active`, timestamps), so the descriptive text ("Tools — debug,
+  soldering, test") stays on the plan, where the panel shows it. Storing it in IMS would need a
+  migration; not done.
+- **compartment code is the cell code as printed** (`1G-1H`). Address = `A1-1G-1H`.
+
+**Which import column fills `zone.name`: none.** The importer (`modules/imports`) only *matches*
+existing shelves by room name, zone name and compartment code (`import-lookups.ts:195`); it never
+creates a room, a zone or a compartment. Zones are created on the Locations page
+(`POST /locations/zones {name, roomId}`). In the product CSV, the `zone` column must equal that
+name, so it holds the drawer code too. The v4 sheet export (`layout/ims-import-v4.csv`) now names
+its columns after what IMS stores: `Room`, `Zone name` (the sheet's "Zone code"),
+`Compartment code`, and `Drawer description (plan only)` for the sheet's descriptive "Zone name".
+`address.test.ts` resolves all 150 rows one-to-one. The panel's overview warns, with a count,
+about any plan drawer IMS has no zone for.
 
 | ID | Status | Question | Working assumption | Blocks |
 |----|--------|----------|--------------------|--------|
