@@ -6,6 +6,7 @@ import { type Catalogue } from '@ims/shared';
 import type * as ClientModule from '@/api/client';
 import { ApiError, NETWORK_ERROR_CODE, api } from '@/api/client';
 import { t } from '@/i18n/en';
+import { PANEL_CATALOGUE_PATH } from '../api';
 import { PANEL_IDLE_RESET_MS, PANEL_SEARCH_DEBOUNCE_MS } from '../constants';
 import { PanelPage } from './PanelPage';
 
@@ -101,6 +102,20 @@ describe('PanelPage', () => {
     expect(screen.getByText(t.panel.drawerFront)).toBeInTheDocument();
   });
 
+  it('asks the API for the catalogue and nothing else, through a search and a drawer', async () => {
+    // K2: product detail would name borrowers to this session; the panel must never call it.
+    const user = userEvent.setup();
+    renderPanel();
+    await typeOnScreen(user, 'ST-LINK');
+    await user.click(await screen.findByRole('button', { name: /ST-Link V3 MINIE/ }));
+    await user.click(screen.getByRole('button', { name: /^1A-1B/ }));
+
+    expect(get).toHaveBeenCalled();
+    expect(get.mock.calls.map(([path]) => path)).toEqual(
+      get.mock.calls.map(() => PANEL_CATALOGUE_PATH),
+    );
+  });
+
   it('says there is no match and suggests a drawer code', async () => {
     const user = userEvent.setup();
     renderPanel();
@@ -122,6 +137,25 @@ describe('PanelPage', () => {
     expect(screen.queryByText(t.panel.drawerFront)).not.toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Cabinet A' })).toBeInTheDocument();
     expect(searchField()).toHaveValue('');
+
+    // The next person taps the field: the keyboard has to come back.
+    await user.click(searchField());
+    expect(screen.getByRole('group', { name: t.onScreenKeyboard.label })).toBeInTheDocument();
+  });
+
+  it('brings the keyboard back for the next person after someone typed and walked away', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderPanel();
+    await typeOnScreen(user, 'ZZ');
+    // The keys keep focus in the field, so it is still focused when the idle reset fires.
+    expect(searchField()).toHaveFocus();
+
+    await act(() => vi.advanceTimersByTimeAsync(PANEL_IDLE_RESET_MS));
+    expect(screen.queryByRole('group', { name: t.onScreenKeyboard.label })).not.toBeInTheDocument();
+
+    await user.click(searchField());
+    expect(screen.getByRole('group', { name: t.onScreenKeyboard.label })).toBeInTheDocument();
   });
 
   it('keeps the last counts under an offline banner when the API stops answering', async () => {
@@ -149,6 +183,26 @@ describe('PanelPage', () => {
     expect(screen.getByRole('region', { name: 'Cabinet A' })).toBeInTheDocument();
     await typeOnScreen(user, 'ST');
     expect(await screen.findByText(t.states.offlineTitle)).toBeInTheDocument();
+  });
+
+  it('does not call a cell empty when the catalogue has not been read', async () => {
+    get.mockRejectedValue(new ApiError(NETWORK_ERROR_CODE, 'Cannot reach the server', 0));
+    const user = userEvent.setup();
+    renderPanel();
+    await screen.findByText(t.panel.offline(10));
+
+    await user.click(document.querySelector<HTMLButtonElement>('[data-unit="A1"]')!);
+    await user.click(screen.getByRole('button', { name: /^1G-1H/ }));
+    expect(screen.queryByText(t.panel.cellEmpty)).not.toBeInTheDocument();
+    expect(screen.getByText(t.states.offlineTitle)).toBeInTheDocument();
+  });
+
+  it('still finds a drawer by its code before the catalogue is read: drawers come from the plan', async () => {
+    get.mockRejectedValue(new ApiError(NETWORK_ERROR_CODE, 'Cannot reach the server', 0));
+    const user = userEvent.setup();
+    renderPanel();
+    await typeOnScreen(user, 'A1');
+    expect(await screen.findByRole('button', { name: /A1$/ })).toBeInTheDocument();
   });
 
   it('offers a retry when the API answers with an error and nothing is cached', async () => {

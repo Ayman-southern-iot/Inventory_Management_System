@@ -43,7 +43,8 @@ export function PanelPage() {
   const catalogue = usePanelCatalogue();
 
   const index = useMemo(
-    () => buildIndex(catalogue.data?.products ?? [], panelLayout),
+    () =>
+      buildIndex(catalogue.data?.products ?? [], panelLayout, catalogue.data?.locations ?? []),
     [catalogue.data],
   );
   const result = useMemo(
@@ -56,6 +57,8 @@ export function PanelPage() {
   );
 
   const reset = useCallback(() => {
+    // Focus left in the field would swallow the next person's first tap (no focus event).
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
     setQuery('');
     setKeyboardOpen(false);
     setView(BROWSE);
@@ -85,6 +88,15 @@ export function PanelPage() {
 
   const unreachable = isUnreachable(catalogue.error);
   const unit = view.kind === 'unit' ? panelLayout.unitByCode.get(view.code) : undefined;
+  /** What to say where IMS data would be, before any has been read. */
+  const notReadyMessage =
+    catalogue.data !== undefined
+      ? null
+      : unreachable
+        ? t.states.offlineTitle
+        : catalogue.isError
+          ? t.states.errorBody
+          : t.panel.loading;
 
   let main;
   if (view.kind === 'unit' && unit !== undefined) {
@@ -96,13 +108,15 @@ export function PanelPage() {
         focusProductId={view.focusProductId}
         rowsByAddress={index.rowsByAddress}
         partCounts={partCounts}
+        notReadyMessage={notReadyMessage}
         onSelectCell={(address) => setView({ ...view, selectedAddress: address })}
         onBack={() => setView(BROWSE)}
       />
     );
   } else if (settledQuery.trim() === '') {
     main = <CabinetOverview layout={panelLayout} onOpen={openUnit} />;
-  } else if (catalogue.data !== undefined) {
+  } else if (catalogue.data !== undefined || result.drawers.length > 0) {
+    // Drawers come from the plan, so a drawer code is answered even before IMS is read.
     main = <SearchResults result={result} onOpenDrawer={openUnit} onOpenRow={openRow} />;
   } else if (catalogue.isError && !unreachable) {
     main = (
@@ -115,13 +129,14 @@ export function PanelPage() {
 
   return (
     <div data-panel-theme className="flex h-dvh flex-col overflow-hidden bg-canvas text-lg text-ink">
+      <h1 className="sr-only">{t.panel.pageTitle}</h1>
       <PanelSearchBar
         value={query}
         isKeyboardOpen={isKeyboardOpen}
         onChange={edit}
         onClear={() => edit('')}
         onToggleKeyboard={() => setKeyboardOpen((open) => !open)}
-        onFocus={() => setKeyboardOpen(true)}
+        onActivate={() => setKeyboardOpen(true)}
       />
       <PanelStatusBanner
         isUnreachable={unreachable}

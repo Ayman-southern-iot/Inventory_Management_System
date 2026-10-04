@@ -19,7 +19,17 @@ import { createStockFixture, type StockFixture } from './stock-factories';
  */
 
 /** Field names that only ever hold a person. Their presence is the leak, whatever the value. */
-const PERSON_FIELDS = ['borrowerId', 'requesterId', 'borrowerName', 'requesterName'] as const;
+const PERSON_FIELDS = [
+  'borrowerId',
+  'requesterId',
+  'borrowerName',
+  'requesterName',
+  'userId',
+  'fullName',
+  'email',
+  'performedBy',
+  'createdBy',
+] as const;
 
 describe('lab panel: the catalogue answers a GENERAL session without naming a person', () => {
   const tag = randomUUID().slice(0, 8);
@@ -49,14 +59,19 @@ describe('lab panel: the catalogue answers a GENERAL session without naming a pe
 
     const imName = `Nusrat Haque ${tag}`;
     const borrowerName = `Tahmid Karim ${tag}`;
+    const requesterName = `Farzana Islam ${tag}`;
     const im = await createUserAndLogin(ctx.db, httpClient(ctx.app), {
       roles: [Role.INVENTORY_MANAGER],
       fullName: imName,
     });
     const borrower = await createUser(ctx.db, { fullName: borrowerName });
+    const requester = await createUserAndLogin(ctx.db, httpClient(ctx.app), {
+      fullName: requesterName,
+    });
     people.push(
       { id: im.user.id, fullName: imName, email: im.user.email },
       { id: borrower.id, fullName: borrowerName, email: borrower.email },
+      { id: requester.user.id, fullName: requesterName, email: requester.user.email },
     );
 
     // The panel's own account: a person-type user holding GENERAL only.
@@ -84,6 +99,16 @@ describe('lab panel: the catalogue answers a GENERAL session without naming a pe
       expectedReturnDate: returnBy,
     });
     expect(issued.status, JSON.stringify(issued.body)).toBe(201);
+    // And a pending request from a third person, which reserves stock in their name.
+    const requested = await requester.client.post('/borrowing').send({
+      productId: fixture.productId,
+      compartmentId: fixture.compartmentA,
+      quantity: 1,
+      isReturnable: false,
+      expectedReturnDate: null,
+      purpose: null,
+    });
+    expect(requested.status, JSON.stringify(requested.body)).toBe(201);
   });
 
   afterAll(async () => {

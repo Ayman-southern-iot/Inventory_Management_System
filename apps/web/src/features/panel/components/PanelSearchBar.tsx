@@ -7,7 +7,8 @@ interface PanelSearchBarProps {
   onChange: (value: string) => void;
   onClear: () => void;
   onToggleKeyboard: () => void;
-  onFocus: () => void;
+  /** The field was touched: focus, or a tap on a field that already has focus. */
+  onActivate: () => void;
 }
 
 /**
@@ -21,7 +22,7 @@ export function PanelSearchBar({
   onChange,
   onClear,
   onToggleKeyboard,
-  onFocus,
+  onActivate,
 }: PanelSearchBarProps) {
   return (
     <div className="flex items-center gap-3 border-b border-border bg-surface px-4 py-3">
@@ -37,7 +38,9 @@ export function PanelSearchBar({
           value={value}
           placeholder={t.panel.searchPlaceholder}
           onChange={(event) => onChange(event.target.value)}
-          onFocus={onFocus}
+          onFocus={onActivate}
+          // A tap on a field that kept focus fires no focus event; the keyboard must still open.
+          onClick={onActivate}
           className="min-w-0 flex-1 bg-transparent text-2xl text-ink outline-none placeholder:text-ink-subtle"
         />
       </label>
@@ -53,9 +56,8 @@ export function PanelSearchBar({
       ) : null}
       <button
         type="button"
-        aria-pressed={isKeyboardOpen}
         onClick={onToggleKeyboard}
-        className="flex h-16 items-center gap-2 rounded-control border border-border-strong bg-surface px-4 text-xl text-ink aria-pressed:bg-brand-subtle"
+        className={`flex h-16 items-center gap-2 rounded-control border border-border-strong px-4 text-xl text-ink ${isKeyboardOpen ? 'bg-brand-subtle' : 'bg-surface'}`}
       >
         <Keyboard aria-hidden className="size-8" />
         {isKeyboardOpen ? t.panel.keyboardHide : t.panel.keyboardShow}

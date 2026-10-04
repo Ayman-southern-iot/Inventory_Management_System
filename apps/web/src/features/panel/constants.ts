@@ -10,7 +10,7 @@ export const MS_PER_SECOND = 1_000;
 /** Brief: after a minute with no touch, go back to the cabinet overview. */
 export const PANEL_IDLE_RESET_MS = 60 * MS_PER_SECOND;
 
-/** Brief: 250 ms, the same trailing debounce the inventory search uses. */
+/** Brief: 250 ms. (The inventory list's server search waits 300 ms; this one searches locally.) */
 export const PANEL_SEARCH_DEBOUNCE_MS = 250;
 
 /** Brief: while the API is unreachable, try again every 10 s. */

@@ -16,7 +16,7 @@ import { useAuth } from '../auth-context';
 import { KIOSK_LOGIN_PARAM, ROUTES } from '@/routes/paths';
 
 export function LoginPage() {
-  const { user, isRestoring, signIn } = useAuth();
+  const { user, isRestoring, signIn, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -56,14 +56,22 @@ export function LoginPage() {
     staleTime: 30_000,
   });
 
-  if (!isRestoring && user) {
-    return <Navigate to={from ?? ROUTES.dashboard} replace />;
+  // A kiosk only ever goes back to the panel: the rest of the app has borrower names a tap away.
+  // Held while a kiosk sign-in that must change its password is being signed out (onSubmit).
+  if (!isRestoring && user && !(isKiosk && user.mustChangePassword)) {
+    return <Navigate to={isKiosk ? ROUTES.panel : (from ?? ROUTES.dashboard)} replace />;
   }
 
   async function onSubmit(values: LoginInput) {
     setFormError(null);
     try {
       const signedIn = await signIn(values);
+      if (isKiosk && signedIn.mustChangePassword) {
+        // The change-password page sits inside the app shell, with no on-screen keyboard.
+        await signOut();
+        setFormError(t.auth.kioskMustChangePassword);
+        return;
+      }
       const home = isKiosk ? ROUTES.panel : ROUTES.dashboard;
       navigate(signedIn.mustChangePassword ? ROUTES.changePassword : home, { replace: true });
     } catch (error) {

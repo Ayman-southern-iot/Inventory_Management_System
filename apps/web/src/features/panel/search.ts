@@ -1,5 +1,5 @@
-import { type CatalogueProduct } from '@ims/shared';
-import { layoutAddressOf } from './address';
+import { type CatalogueLocation, type CatalogueProduct } from '@ims/shared';
+import { ambiguousUnits, layoutAddressOf } from './address';
 import { type PanelDrawer, type PanelLayout } from './layout';
 
 /** One product on one shelf: a search answer, or a line in a cell's contents. */
@@ -36,7 +36,19 @@ const byName = (a: StockRow, b: StockRow) =>
   Number(a.address === null) - Number(b.address === null) ||
   (a.address ?? a.imsLabel).localeCompare(b.address ?? b.imsLabel);
 
-export function buildIndex(products: CatalogueProduct[], layout: PanelLayout): PanelIndex {
+/**
+ * `shelves` is every shelf IMS has (the catalogue's flat `locations`), empty ones included: a
+ * drawer code two rooms share is ambiguous whether or not both hold stock today.
+ */
+export function buildIndex(
+  products: CatalogueProduct[],
+  layout: PanelLayout,
+  shelves: readonly CatalogueLocation[] = [],
+): PanelIndex {
+  const ambiguous = ambiguousUnits(
+    [...shelves, ...products.flatMap((product) => product.locations)],
+    layout,
+  );
   const rows: StockRow[] = [];
   const unshelved: StockRow[] = [];
 
@@ -50,7 +62,7 @@ export function buildIndex(products: CatalogueProduct[], layout: PanelLayout): P
       rows.push({
         ...base,
         key: `${product.id}:${location.compartmentId}`,
-        address: layoutAddressOf(location, layout),
+        address: layoutAddressOf(location, layout, ambiguous),
         imsLabel: location.label,
         quantity: location.quantity,
         available: location.available,
@@ -89,10 +101,14 @@ export function searchPanel(
   const drawers = [...layout.unitByCode.values()].filter(
     (unit) => unit.code === upper || upper.startsWith(`${unit.code}-`),
   );
+  // "A1" is a drawer, so it must not also match A10; once a hyphen is typed, "A1-1" is the start
+  // of an address and matches as typed, so results do not blink out mid-segment.
+  const isAddressStart = (address: string) =>
+    upper.includes('-') ? address.startsWith(upper) : address.startsWith(`${upper}-`);
   const matches = (row: StockRow) =>
     row.name.toLowerCase().includes(needle) ||
     row.code.toLowerCase().includes(needle) ||
-    (row.address !== null && (row.address === upper || row.address.startsWith(`${upper}-`)));
+    (row.address !== null && (row.address === upper || isAddressStart(row.address)));
 
   // Placed rows first: the panel's question is "where", and a shelf is the answer to it.
   const all = [...index.rows.filter(matches), ...index.unshelved.filter(matches)];

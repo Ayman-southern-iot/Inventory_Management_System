@@ -116,6 +116,8 @@ export const t = {
   },
 
   auth: {
+    kioskMustChangePassword:
+      'This account has to change its password first. Do that on a PC, then sign in here again.',
     signInTitle: 'Sign in',
     signInSubtitle: 'Use the account your administrator created for you.',
     email: 'Email',
@@ -1832,7 +1834,6 @@ export const t = {
     notOnPlan: 'Not on the drawer plan',
     onHand: (count: number) => `${count} on hand`,
     free: (count: number) => `${count} free`,
-    cabinetsTitle: 'Cabinets',
     openShelves: 'Open shelves',
     backToOverview: 'All cabinets',
     drawerBack: 'Back',

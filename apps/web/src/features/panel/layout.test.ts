@@ -114,6 +114,16 @@ describe('buildLayout', () => {
     expect(() => buildLayout(bad)).toThrow();
   });
 
+  it('refuses a cell that runs off its drawer rather than growing the grid', () => {
+    const past = structuredClone(minimal);
+    past.cabinets[0]!.drawers[0]!.cells[0]!.c1 = 1;
+    expect(() => buildLayout(past)).toThrow(/A1/);
+    const backwards = structuredClone(minimal);
+    backwards.cabinets[0]!.drawers[0]!.rows = 2;
+    backwards.cabinets[0]!.drawers[0]!.cells[0]!.r = 2;
+    expect(() => buildLayout(backwards)).toThrow(/A1/);
+  });
+
   it('refuses two cells with one address', () => {
     const twice = structuredClone(minimal);
     twice.cabinets[0]!.drawers[0]!.cells.push({ cell: '1A', purpose: '', r: 1, r1: 1, c0: 0, c1: 0 });

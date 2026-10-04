@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { importSheetRows } from '@/test/panel-import-sheet';
-import { layoutAddressOf } from './address';
+import { ambiguousUnits, layoutAddressOf } from './address';
 import { panelLayout } from './layout';
 
 const resolve = (zone: string, compartment: string) =>
@@ -39,6 +39,19 @@ describe('layoutAddressOf: address = <zone name>-<compartment code> (OQ-P2)', ()
   it('refuses a zone that is not a drawer code even when the string spells a real address', () => {
     // "A1-1G" + "1H" reads A1-1G-1H. Only zone "A1" may claim that cell.
     expect(resolve('A1-1G', '1H')).toBeNull();
+  });
+
+  it('resolves nothing for a drawer code that two rooms both use: it cannot say which is meant', () => {
+    // Zone names are unique only within a room (storage_zones_room_name_key, migration 0033).
+    const shelves = [
+      { room: 'Cabinet A', zone: 'A1' },
+      { room: 'Main Store', zone: 'a1 ' },
+      { room: 'Cabinet A', zone: 'A2' },
+    ];
+    const ambiguous = ambiguousUnits(shelves, panelLayout);
+    expect([...ambiguous]).toEqual(['A1']);
+    expect(layoutAddressOf({ zone: 'A1', compartment: '1G-1H' }, panelLayout, ambiguous)).toBeNull();
+    expect(layoutAddressOf({ zone: 'A2', compartment: '1A' }, panelLayout, ambiguous)).toBe('A2-1A');
   });
 
   it('does not resolve a shelf the plan does not have', () => {

@@ -12,6 +12,7 @@ interface DrawerViewProps {
   focusProductId: string | null;
   rowsByAddress: ReadonlyMap<string, StockRow[]>;
   partCounts: ReadonlyMap<string, number>;
+  notReadyMessage: string | null;
   onSelectCell: (address: string) => void;
   onBack: () => void;
 }
@@ -24,6 +25,7 @@ export function DrawerView({
   focusProductId,
   rowsByAddress,
   partCounts,
+  notReadyMessage,
   onSelectCell,
   onBack,
 }: DrawerViewProps) {
@@ -47,9 +49,9 @@ export function DrawerView({
               style={{ backgroundColor: drawer.bandColour }}
             />
           )}
-          <h1 className="min-w-0 truncate text-3xl font-bold text-ink">
+          <h2 className="min-w-0 truncate text-3xl font-bold text-ink">
             <span className="font-mono">{drawer.code}</span> · {drawer.name}
-          </h1>
+          </h2>
         </div>
         <DrawerGrid
           drawer={drawer}
@@ -64,6 +66,7 @@ export function DrawerView({
           address={selectedAddress}
           rows={selectedAddress === null ? [] : (rowsByAddress.get(selectedAddress) ?? [])}
           focusProductId={focusProductId}
+          notReadyMessage={notReadyMessage}
         />
       </aside>
     </div>

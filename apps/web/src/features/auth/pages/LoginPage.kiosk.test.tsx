@@ -12,8 +12,11 @@ import { ROUTES } from '@/routes/paths';
 import { LoginPage } from './LoginPage';
 
 const signIn = vi.fn();
+const signOut = vi.fn();
+/** Who the auth context says is signed in. Read at render time, so a test can set it first. */
+let signedIn: AuthUser | null = null;
 vi.mock('../auth-context', () => ({
-  useAuth: () => ({ user: null, isRestoring: false, signIn }),
+  useAuth: () => ({ user: signedIn, isRestoring: false, signIn, signOut }),
 }));
 // Demo accounts are off, as on the panel's production server.
 vi.mock('@/api/client', async (importOriginal) => {
@@ -71,6 +74,8 @@ async function typeOnScreen(user: ReturnType<typeof userEvent.setup>, field: HTM
 describe('LoginPage in kiosk mode', () => {
   beforeEach(() => {
     signIn.mockReset();
+    signOut.mockReset().mockResolvedValue(undefined);
+    signedIn = null;
   });
 
   it('is where a signed-out panel lands: the login page with its keyboard, not a blank screen', () => {
@@ -131,7 +136,16 @@ describe('LoginPage in kiosk mode', () => {
     expect(await screen.findByText('the panel')).toBeInTheDocument();
   });
 
-  it('still sends an account that must change its password to the change-password page', async () => {
+  it('sends a kiosk that is already signed in to the panel, not the dashboard', () => {
+    // A kiosk started on /login?kiosk=1 restores its session at every boot. The dashboard is
+    // the full app, with borrower names one tap away: never on the wall.
+    signedIn = panelUser;
+    renderLogin(`${ROUTES.login}?kiosk=1`);
+    expect(screen.getByText('the panel')).toBeInTheDocument();
+  });
+
+  it('refuses an account that must change its password, signs it out and stays on the login page', async () => {
+    // The change-password page sits inside the app shell and has no on-screen keyboard.
     const user = userEvent.setup();
     signIn.mockResolvedValue({ ...panelUser, mustChangePassword: true });
     renderLogin(`${ROUTES.login}?kiosk=1`);
@@ -140,7 +154,33 @@ describe('LoginPage in kiosk mode', () => {
     await typeOnScreen(user, screen.getByLabelText(t.auth.password), 'Panel-pw1');
     await user.click(screen.getByRole('button', { name: t.auth.signIn }));
 
+    expect(await screen.findByRole('alert')).toHaveTextContent(t.auth.kioskMustChangePassword);
+    expect(signOut).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('change password')).not.toBeInTheDocument();
+    expect(keyboard()).toBeInTheDocument();
+  });
+
+  it('sends an ordinary sign-in to the dashboard, as before kiosk mode existed', async () => {
+    const user = userEvent.setup();
+    signIn.mockResolvedValue(panelUser);
+    renderLogin(ROUTES.login);
+    await user.type(screen.getByLabelText(t.auth.email), 'someone@example.invalid');
+    await user.type(screen.getByLabelText(t.auth.password), 'Some-pw1');
+    await user.click(screen.getByRole('button', { name: t.auth.signIn }));
+    expect(await screen.findByText('the dashboard')).toBeInTheDocument();
+  });
+
+  it('still sends an ordinary visitor whose password must change to the change-password page', async () => {
+    const user = userEvent.setup();
+    signIn.mockResolvedValue({ ...panelUser, mustChangePassword: true });
+    renderLogin(ROUTES.login);
+
+    await user.type(screen.getByLabelText(t.auth.email), 'someone@example.invalid');
+    await user.type(screen.getByLabelText(t.auth.password), 'Temp-pw1');
+    await user.click(screen.getByRole('button', { name: t.auth.signIn }));
+
     expect(await screen.findByText('change password')).toBeInTheDocument();
+    expect(signOut).not.toHaveBeenCalled();
   });
 
   it('keeps the kiosk on the login page with the error when the sign-in is refused', async () => {

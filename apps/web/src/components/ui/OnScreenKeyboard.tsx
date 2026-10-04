@@ -15,6 +15,8 @@ export type KeyboardLayout = 'search' | 'text';
 const SEARCH_ROWS = ['1234567890', 'QWERTYUIOP', 'ASDFGHJKL-', 'ZXCVBNM'] as const;
 const LETTER_ROWS = ['1234567890', 'qwertyuiop', 'asdfghjkl@', 'zxcvbnm.'] as const;
 const SYMBOL_ROWS = ['1234567890', '!#$%&*()+=', '/\\?:;,\'"~`', '<>[]{}^|'] as const;
+/** Always on the text layout's bottom row: email addresses and passwords use them. */
+const TEXT_EXTRA_KEYS = ['-', '_'] as const;
 
 interface OnScreenKeyboardProps {
   layout?: KeyboardLayout;
@@ -105,12 +107,11 @@ export function OnScreenKeyboard({
             >
               {isSymbols ? t.onScreenKeyboard.lettersKey : t.onScreenKeyboard.symbolsKey}
             </Key>
-            <Key label="-" onPress={() => onKey('-')}>
-              -
-            </Key>
-            <Key label="_" onPress={() => onKey('_')}>
-              _
-            </Key>
+            {TEXT_EXTRA_KEYS.map((char) => (
+              <Key key={char} label={char} onPress={() => onKey(char)}>
+                {char}
+              </Key>
+            ))}
           </>
         ) : null}
         <Key label={t.onScreenKeyboard.space} onPress={() => onKey(' ')} wide>

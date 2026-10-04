@@ -6,10 +6,12 @@ interface CellContentsProps {
   rows: StockRow[];
   /** The part a search came for, marked in the list. */
   focusProductId: string | null;
+  /** Why IMS's side cannot be shown yet (loading, offline). An unread cell is not an empty one. */
+  notReadyMessage: string | null;
 }
 
 /** What IMS says is in one cell. Quantities only; never who has taken any of it. */
-export function CellContents({ address, rows, focusProductId }: CellContentsProps) {
+export function CellContents({ address, rows, focusProductId, notReadyMessage }: CellContentsProps) {
   if (address === null) {
     return <p className="p-4 text-lg text-ink-muted">{t.panel.pickCell}</p>;
   }
@@ -18,7 +20,9 @@ export function CellContents({ address, rows, focusProductId }: CellContentsProp
       <h2 id="panel-cell-title" className="font-mono text-4xl font-bold text-ink">
         {t.panel.cellContentsTitle(address)}
       </h2>
-      {rows.length === 0 ? (
+      {notReadyMessage !== null ? (
+        <p className="text-lg text-ink-muted">{notReadyMessage}</p>
+      ) : rows.length === 0 ? (
         <p className="text-lg text-ink-muted">{t.panel.cellEmpty}</p>
       ) : (
         <ul className="flex min-h-0 flex-col gap-2 overflow-y-auto">

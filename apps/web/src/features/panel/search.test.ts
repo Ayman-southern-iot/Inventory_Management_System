@@ -91,7 +91,24 @@ describe('searchPanel', () => {
   });
 });
 
+describe('searchPanel, partial addresses', () => {
+  it('keeps answering while an address is typed through its hyphen, as "A1-1" and "A1-1G"', () => {
+    expect(search('A1-1').rows.map((row) => row.address)).toEqual(['A1-1G-1H', 'A1-1G-1H']);
+    expect(search('A1-1').drawers.map((drawer) => drawer.code)).toEqual(['A1']);
+  });
+});
+
 describe('buildIndex', () => {
+  it('draws no shelf in a drawer whose code two rooms both use', () => {
+    const elsewhere = product('p9', 'Bench PSU', 'PS-0009', [
+      { zone: 'A1', compartment: '1A-1B', quantity: 1 },
+    ]);
+    elsewhere.locations[0]!.room = 'Main Store';
+    const ambiguous = buildIndex([...products, elsewhere], panelLayout);
+    expect(ambiguous.rows.filter((row) => row.address?.startsWith('A1-'))).toEqual([]);
+    expect(ambiguous.rows.find((row) => row.productId === 'p3')!.address).toBe('A3-1A');
+  });
+
   it('groups the rows by plan address for the cell list', () => {
     expect(index.rowsByAddress.get('A1-1G-1H')!.map((row) => row.name)).toEqual([
       'ST-Link V3 MINIE',
