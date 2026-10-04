@@ -278,6 +278,9 @@ export const t = {
     activated: 'User activated.',
     deactivated: 'User deactivated.',
     passwordReset: 'Password reset. Give the new password to the user directly.',
+    deactivateConfirmTitle: (name: string) => `Deactivate ${name}?`,
+    deactivateConfirmBody:
+      'They will not be able to sign in, and any session they have open ends. You can activate the account again later.',
     emptyTitle: 'No users match this filter',
   },
 
@@ -421,6 +424,9 @@ export const t = {
     members: 'Active members',
     created: 'Department created.',
     updated: 'Department updated.',
+    deactivateConfirmTitle: (name: string) => `Deactivate ${name}?`,
+    deactivateConfirmBody:
+      'It will no longer be offered when choosing a department. You can activate it again later.',
     emptyTitle: 'No departments yet',
     emptyBody: 'Create one before assigning users to it.',
   },
@@ -1071,6 +1077,9 @@ export const t = {
     zoneUpdated: 'Zone updated.',
     compartmentCreated: 'Compartment created.',
     compartmentUpdated: 'Compartment updated.',
+    deactivateCompartmentTitle: (code: string) => `Deactivate compartment ${code}?`,
+    deactivateCompartmentBody:
+      'Nothing new can be stored in it. Stock already there has to be moved first. You can activate it again later.',
     emptyTitle: 'No rooms yet',
     emptyBody: 'Create a room, then add zones and compartments inside it.',
     noCompartments: 'No compartments in this zone yet.',
@@ -1170,6 +1179,8 @@ export const t = {
     requested: 'Request submitted. The Inventory Manager will review it.',
     approved: 'Approved and issued.',
     rejected: 'Rejected. The reservation has been released.',
+    rejectConfirmTitle: 'Reject this request?',
+    rejectConfirmBody: 'The reservation is released and the request is closed.',
     returned: 'Return recorded.',
     reverted: 'Reverted to pending.',
     cancelled: 'Request cancelled.',
@@ -1688,6 +1699,14 @@ export const t = {
     // history / approvals
     historyHeading: 'History',
     approvalChainHeading: 'Approval chain (frozen at generation)',
+    footprintHeaders: {
+      stage: 'Stage',
+      slot: 'Slot',
+      name: 'Name',
+      designation: 'Designation',
+      actedAt: 'Acted at',
+      onBehalfOf: 'On behalf of',
+    },
   },
 
   imports: {
@@ -1796,6 +1815,9 @@ export const t = {
     DEPARTMENT_HAS_ACTIVE_USERS:
       'This department still has active users. Move them to another department before deactivating it.',
     LOCATION_HOLDS_STOCK: 'This location still holds stock. Move or issue it first, then deactivate it.',
+    USER_EMAIL_IN_USE: 'Another account already uses that email address.',
+    LAST_ADMINISTRATOR:
+      'This is the last active administrator, so that cannot be done. Make someone else an administrator first.',
     REQUISITION_INVALID_TRANSITION:
       'That is no longer possible for this requisition. Refresh to see its current stage.',
     APPROVAL_ALREADY_ACTED: 'Someone already acted on this approval. Refresh to see the outcome.',

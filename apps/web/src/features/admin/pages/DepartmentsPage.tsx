@@ -10,6 +10,7 @@ import {
   type ListDepartmentsQuery,
 } from '@ims/shared';
 import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Dialog } from '@/components/ui/Dialog';
 import { Checkbox, TextField } from '@/components/ui/Field';
 import { Badge, PageHeader, Pagination, Panel, Table } from '@/components/ui/primitives';
@@ -25,6 +26,7 @@ export function DepartmentsPage() {
   const [includeInactive, setIncludeInactive] = useState(false);
   const [editing, setEditing] = useState<Department | undefined>(undefined);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [deactivating, setDeactivating] = useState<Department | undefined>(undefined);
 
   const query = useMemo<ListDepartmentsQuery>(
     () => ({ page, limit: PAGINATION_DEFAULT_LIMIT, includeInactive }),
@@ -144,7 +146,7 @@ export function DepartmentsPage() {
                           size="sm"
                           aria-label={`${department.isActive ? t.users.deactivate : t.users.activate} ${department.name}`}
                           icon={<Power aria-hidden className="size-4" />}
-                          onClick={() => void toggleActive(department)}
+                          onClick={() => (department.isActive ? setDeactivating(department) : void toggleActive(department))}
                         />
                       </div>
                     </td>
@@ -162,6 +164,19 @@ export function DepartmentsPage() {
         </QueryBoundary>
       </Panel>
 
+      <ConfirmDialog
+        open={deactivating !== undefined}
+        title={deactivating ? t.departments.deactivateConfirmTitle(deactivating.name) : ''}
+        body={t.departments.deactivateConfirmBody}
+        confirmLabel={t.users.deactivate}
+        isPending={updateDepartment.isPending}
+        onClose={() => setDeactivating(undefined)}
+        onConfirm={() => {
+          const target = deactivating;
+          setDeactivating(undefined);
+          if (target) void toggleActive(target);
+        }}
+      />
       <Dialog
       schema={createDepartmentSchema}
         open={dialogOpen}
