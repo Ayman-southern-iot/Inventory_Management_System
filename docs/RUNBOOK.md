@@ -1068,6 +1068,31 @@ cannot lock every admin out of the admin panel:
 - You cannot deactivate your own account, or remove your own administrator role.
 - You cannot deactivate or demote the **last active administrator**.
 
+### The lab panel (`/panel`)
+
+A read-only "where is it?" screen for the lab's wall-mounted touch panel. It needs a signed-in
+account and nothing else: no API key, no setting.
+
+1. **Admin → Users:** create `lab-panel` as a **person** (not a service account) with the
+   **General** role only. Service accounts cannot sign in, and an API key must never go in a
+   browser (OQ-P3).
+2. **On a PC**, sign in as `lab-panel` once and change the password. A new account must change
+   its password at first sign-in, which the panel's own keyboard is not meant for.
+3. **On the panel**, open `https://<host>/panel`. It sends you to the login page, which shows the
+   panel's on-screen keyboard because it was opened from `/panel` (`/login?kiosk=1` does the same).
+   Sign in; it returns to `/panel`.
+4. The kiosk's Chromium profile must be **persistent**: the session lives in `localStorage`, so an
+   incognito or wiped profile signs the panel out at every boot.
+
+**It will need signing in again** at most 14 days after the last sign-in, because a session has an
+absolute lifetime (OQ-P1). It lands on the login page, never a blank screen. Repeat step 3.
+
+**Entering the drawer plan in IMS** (OQ-P2): one zone per drawer, named exactly the drawer code
+(`A1`, `R3`, `LB`), and one compartment per cell, coded exactly as printed in the drawer (`1G-1H`).
+A part on any other shelf is listed as "Not on the drawer plan" with its IMS location. The data
+refreshes once a minute; while the API is unreachable the panel keeps the last counts under a
+banner and retries every 10 s.
+
 ---
 
 ## 9. Facts worth knowing before you debug
