@@ -70,6 +70,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         {toasts.map((toast) => (
           <div
             key={toast.id}
+            // A failure is announced at once (role=alert); a success is not urgent (role=status).
+            // Inside a polite live region the failure was otherwise read only when the reader idled.
+            role={toast.tone === 'danger' ? 'alert' : 'status'}
             className={cn(
               'pointer-events-auto flex items-start gap-2 rounded-[--radius-panel] border px-3 py-2.5',
               'shadow-[--shadow-overlay]',
