@@ -1083,13 +1083,20 @@ account and nothing else: no API key, no setting.
    Sign in; it returns to `/panel`.
 4. The kiosk's Chromium profile must be **persistent**: the session lives in `localStorage`, so an
    incognito or wiped profile signs the panel out at every boot.
+5. The server the panel uses must run with `DEMO_ACCOUNTS_ENABLED` off; otherwise the login page
+   on the wall lists one-tap demo credentials. The kiosk's own hardening (DevTools, password
+   manager, allowed origins) is the panel bring-up's job; see OQ-P3.
+
+A sign-in at the panel for an account that must change its password is refused there with a
+message: change it on a PC first. The panel never leaves `/panel` for the rest of the app.
 
 **It will need signing in again** at most 14 days after the last sign-in, because a session has an
 absolute lifetime (OQ-P1). It lands on the login page, never a blank screen. Repeat step 3.
 
 **Entering the drawer plan in IMS** (OQ-P2): one zone per drawer, named exactly the drawer code
 (`A1`, `R3`, `LB`), and one compartment per cell, coded exactly as printed in the drawer (`1G-1H`).
-A part on any other shelf is listed as "Not on the drawer plan" with its IMS location. The data
+A part on any other shelf is listed as "Not on the drawer plan" with its IMS location. Do not reuse
+a drawer code as a zone name in another room: the panel then draws neither (OQ-P2). The data
 refreshes once a minute; while the API is unreachable the panel keeps the last counts under a
 banner and retries every 10 s.
 
