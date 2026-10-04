@@ -36,13 +36,21 @@ import { t } from '@/i18n/en';
 import { ProtectedRoute } from '@/routes/ProtectedRoute';
 import { ROUTES } from '@/routes/paths';
 import { DocumentTitle } from '@/lib/useDocumentTitle';
+import { importOrReloadOnce, sessionReloadGuard } from '@/lib/import-or-reload';
+
+/** sessionStorage flag: the panel's chunk failed to load and the page reloaded once for it. */
+const PANEL_CHUNK_RELOAD_FLAG = 'ims.panel.chunk-reloaded';
 
 /**
  * The lab panel is its own chunk: the kiosk loads it, nobody else does, and its drawer plan is
- * data no other screen needs. Every other page is still in the main bundle.
+ * data no other screen needs. Every other page is still in the main bundle. A kiosk can hold an
+ * old build for days, so a chunk a deploy removed reloads the page once instead of crashing.
  */
 const PanelPage = lazy(() =>
-  import('@/features/panel/pages/PanelPage').then((module) => ({ default: module.PanelPage })),
+  importOrReloadOnce(
+    () => import('@/features/panel/pages/PanelPage'),
+    sessionReloadGuard(PANEL_CHUNK_RELOAD_FLAG),
+  ).then((module) => ({ default: module.PanelPage })),
 );
 
 const RETRYABLE_ATTEMPTS = 2;
