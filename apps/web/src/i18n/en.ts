@@ -1628,6 +1628,11 @@ export const t = {
   },
 
   imports: {
+    /** Bulk import is switched off in the UI for now; the route shows this instead of the page. */
+    comingSoon: {
+      title: 'Bulk import',
+      body: 'Coming soon.',
+    },
     /** What everybody who is not running the import sees, for as long as it runs. */
     locked: {
       title: 'Updating inventory',
