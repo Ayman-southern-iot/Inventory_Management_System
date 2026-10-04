@@ -16,12 +16,14 @@ data to a key) is enforced by one global interceptor and proven by walking the r
 Service accounts can be created from the admin panel. Migration **0039**; Python client in
 `clients/python/`. Phases 00–10 and CSV import are unchanged.
 
-**Branch `chore/lint-clean`** (from `86de70f`, pushed 2026-10-04, no PR opened yet): lint 20 → **0**.
+**Branch `chore/lint-clean`** (from `86de70f`, no PR opened yet): lint 20 → **0**, and the bulk-import
+route (`/inventory/imports`) shows **"Coming soon"** instead of `ImportPage`. UI only: the import API
+routes are still live and there is no env flag (not the `defer-feature` shape). Feature code is intact.
 
 ## Next action
 
-1. **Run `scripts/test-int-keeper.sh` at the merged tip.** Nobody has measured integration since
-   `a271479`; the K2 registry-walk and take-limit specs landed after it.
+1. **Open the PR for `chore/lint-clean` and merge it.** Decide whether "Coming soon" should also close
+   the import API (a flag + server guard, per `defer-feature`) or stay UI-only.
 2. **Real client IP behind Cloudflare is IT-owned**, open, and blocks go-live (RUNBOOK §0.7). The
    app side is done: `TRUST_PROXY_HOPS` (default 1). Do not touch the VM, proxy or firewall for it.
 3. **Production must run `infra/` first** (RUNBOOK §0 item 0). The VM runs the root demo stack at
@@ -31,8 +33,9 @@ Service accounts can be created from the admin panel. Migration **0039**; Python
 ## Green as of 2026-10-04 (`chore/lint-clean`), measured on Windows
 
 - typecheck clean · unit shared 25 · api 257 · web 478 · **lint 0 (exit 0)** · guard-hardcoding **8**
-- integration **992 / 992 (68 files)** is the last measurement, at `a271479` on the keeper. **Not
-  re-run:** this Windows box had no Docker. Treat it as stale until item 1 above is done.
+- integration **1013 / 1013 (69 files)**, 0 fail, 415 s, on a local `db-test` (Docker Desktop,
+  `docker compose -f infra/docker-compose.dev.yml up -d db-test`, port 5434), at `3af754d`.
+  Baseline was 992 / 68, so +21 tests, +1 file (the K2 and take-limit specs).
 
 ## Landmines — full list in `ASSIST.md` §9
 

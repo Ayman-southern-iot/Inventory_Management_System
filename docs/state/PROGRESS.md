@@ -11,12 +11,13 @@
   tip `86de70f`. It is merged, not deployed. The 20 standing lint errors were cleared on
   **`chore/lint-clean`** (cut from `86de70f`, awaiting a PR): 14 were one throwaway script, now in
   the ignore list beside `docs/**/*.js`; the rest were unused names, a stale `eslint-disable` and
-  one inline `import()` type (DECISIONS, Phase 11).
+  one inline `import()` type (DECISIONS, Phase 11). The same branch makes `/inventory/imports` show
+  **"Coming soon"** (`t.imports.comingSoon`, `App.tsx`); UI only, import API routes still live.
   - **Verified (Windows, 2026-10-04):** typecheck clean · unit 25 / 257 / 478 · **lint exit 0** ·
-    guard 8 · built `shared/dist` has no `funds` import in `requisitions.js` (cjs or esm).
-  - **Not verified:** integration. This box had no Docker, so the last measurement stays
-    **992 / 992 at `a271479`**, which predates the K2 registry-walk and take-limit specs.
-  - **Next:** open the PR for `chore/lint-clean`; run `scripts/test-int-keeper.sh` at the merged tip.
+    guard 8 · **integration 1013 / 1013 (69 files), 0 fail, 415 s** at `3af754d` against a local
+    `db-test` (baseline 992 / 68) · built `shared/dist` has no `funds` import in `requisitions.js`.
+  - **Not verified:** the "Coming soon" page in a browser (no UI run); no test asserts it.
+  - **Next:** open the PR for `chore/lint-clean`; decide whether the import API should close too.
 
 - **2026-09-30 — Integration gate moved to the keeper (`scripts/test-int-keeper.sh`).** The suite
   passes **992 / 992 (68 files)** at `a271479`. The `stock-import-lock` failure recorded below was the

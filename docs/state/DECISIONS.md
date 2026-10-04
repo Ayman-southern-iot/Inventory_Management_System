@@ -1411,3 +1411,12 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
     return assignment went. The call seeds the stock rows the spec depends on.
   - **Remote layout:** the GitHub default branch is `fix/lan-secure-context`; there is no
     `origin/main`. Work goes on a branch cut from it and lands by PR (#1–#6 did).
+  - **Integration baseline is now 1013 pass / 0 fail, 69 files** (2026-10-04, `3af754d`, local
+    `db-test` on Docker Desktop, 415 s). It replaces 992 / 68; the +21 tests are the K2
+    registry-walk and take-limit specs. Compare against this.
+- 2026-10-04 (Ayman) — **Bulk import shows "Coming soon" in production.** `/inventory/imports`
+  renders an `EmptyState` (`t.imports.comingSoon`) instead of `ImportPage`; `features/imports`, its
+  tests and the API routes are untouched. **UI only, as requested, but not the
+  `defer-feature` shape:** no env flag, no server guard, so a user with the role can still call the
+  import endpoints, and the sidebar link still shows. Re-enable by routing the path back to
+  `ImportPage`. Whether to close the API too is open for Ayman.

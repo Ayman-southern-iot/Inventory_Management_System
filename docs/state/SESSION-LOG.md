@@ -24,6 +24,9 @@ Format:
   (now ignored via `scripts/**/*.js` in `eslint.config.mjs`), 4 unused imports/variables in three
   integration specs and one web test, 1 stale `eslint-disable` for a plugin that is not installed,
   1 inline `import()` type in `packages/shared/src/contracts/requisitions.ts`.
+- Started Docker Desktop and `infra/docker-compose.dev.yml`'s `db-test`, then ran the integration
+  suite: **1013 / 1013, 69 files, 0 fail, 415 s** (baseline 992 / 68).
+- Committed the bulk-import "Coming soon" route (`3af754d`) at the user's request, for production.
 
 **Decisions:** ignore `scripts/**/*.js` rather than fix the script (same reasoning as `docs/**/*.js`);
 remove the `eslint-disable` rather than add `eslint-plugin-react-hooks` (no new dependency); keep the
@@ -31,17 +34,17 @@ remove the `eslint-disable` rather than add `eslint-plugin-react-hooks` (no new 
 assignment, because the call seeds the stock the test needs. Recorded in DECISIONS, Phase 11.
 
 **Landmines:**
-- **Integration was NOT run.** No Docker on this machine. The three edited integration specs are
-  covered by typecheck and lint only, and the last real run (992 / 992) is at `a271479`.
-- `apps/web/src/App.tsx` and `apps/web/src/i18n/en.ts` hold an **uncommitted, unrelated local change**
-  (the bulk-import route shows "Coming soon"). It was deliberately left out of the commit: it
-  disables a feature and nobody asked for it to ship. It is still in the working tree.
+- **"Coming soon" is UI only.** The sidebar link stays and lands on an EmptyState, but the import API
+  routes still answer to a user with the role. There is no env flag and no server guard, which is
+  not the `defer-feature` shape. No test asserts the page. Not seen in a browser.
+- Starting Docker Desktop also restarted the local demo and dev compose stacks (`restart:
+  unless-stopped`); harmless, but ports 5173/5433/5434 are now in use.
 - `git switch -c <name> origin/fix/lan-secure-context` sets the upstream to the default branch. Push
   by name, or a bare `git push` targets the wrong branch.
 - This branch's old PR (#5) was already merged, so pushing more to `fix/k2-key-write-redaction`
   would have been orphaned. Do not.
 
-**Next:** open the PR for `chore/lint-clean`, then run `scripts/test-int-keeper.sh` on the merged tip.
+**Next:** open the PR for `chore/lint-clean`; decide whether the import API should close too.
 
 ## 2026-09-29 (follow-up) — Phase 11: OQ-KT10–KT12, integration doc corrections, Python client
 
