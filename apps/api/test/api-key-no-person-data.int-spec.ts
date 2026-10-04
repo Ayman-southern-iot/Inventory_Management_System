@@ -33,6 +33,7 @@ describe('K2: no API key answer carries a person, on any key-reachable route', (
   let key: HttpClient;
   let fixture: StockFixture;
   let borrowerId: string;
+  let im: Awaited<ReturnType<typeof createUserAndLogin>>;
 
   beforeAll(async () => {
     // The take is part of the walk, so it has to be switched on for this app.
@@ -46,7 +47,7 @@ describe('K2: no API key answer carries a person, on any key-reachable route', (
       roles: [Role.ADMIN],
       fullName: adminName,
     });
-    const im = await createUserAndLogin(ctx.db, httpClient(ctx.app), {
+    im = await createUserAndLogin(ctx.db, httpClient(ctx.app), {
       roles: [Role.INVENTORY_MANAGER],
       fullName: imName,
     });
@@ -126,19 +127,149 @@ describe('K2: no API key answer carries a person, on any key-reachable route', (
     expect(Object.keys(cases).sort()).toEqual(registered);
   });
 
+  /** `where` is a label for the failure message: which route, replay or refusal produced `payload`. */
+  function expectNoPerson(where: string, payload: unknown): void {
+    const body = JSON.stringify(payload);
+    for (const person of people) {
+      expect(body, `${where} names ${person.fullName}`).not.toContain(person.fullName);
+      expect(body, `${where} carries ${person.email}`).not.toContain(person.email);
+    }
+    expect(body, `${where} carries the borrower's id`).not.toContain(borrowerId);
+    for (const field of PERSON_FIELDS) {
+      expect(body, `${where} has a "${field}" field`).not.toContain(`"${field}"`);
+    }
+  }
+
   it.each(Object.keys(cases))('%s answers a key without naming a person', async (route) => {
     const response = await cases[route]!();
     expect(response.status, `${route}: ${JSON.stringify(response.body)}`).toBeGreaterThanOrEqual(200);
     expect(response.status, `${route}: ${JSON.stringify(response.body)}`).toBeLessThan(300);
+    expectNoPerson(route, response.body);
+  });
 
-    const body = JSON.stringify(response.body);
-    for (const person of people) {
-      expect(body, `${route} names ${person.fullName}`).not.toContain(person.fullName);
-      expect(body, `${route} carries ${person.email}`).not.toContain(person.email);
-    }
-    expect(body, `${route} carries the borrower's id`).not.toContain(borrowerId);
-    for (const field of PERSON_FIELDS) {
-      expect(body, `${route} has a "${field}" field`).not.toContain(`"${field}"`);
-    }
+  /**
+   * The Idempotency-Key routes. A replay is answered from the copy `IdempotencyService` stored on
+   * the first call, not by running the handler again, so it is a separate path to the client that
+   * the cases above never take. It still leaves through the controller's return value, which is
+   * what the interceptor wraps — but "still" is exactly the kind of claim this file exists to
+   * replace with a call. The stored copy is read as well: it is the one place a person could sit
+   * at rest, and a later change that stores a richer answer would otherwise leak only on replay.
+   */
+  describe('a replayed Idempotency-Key', () => {
+    const replayed: Record<string, (idem: string) => request.Test> = {
+      'POST /stock/receive': (idem) =>
+        key
+          .post('/stock/receive')
+          .set(IDEMPOTENCY_HEADER, idem)
+          .send({ productId: fixture.productId, compartmentId: fixture.compartmentA, quantity: 1 }),
+      'POST /stock/take': (idem) =>
+        key.post('/stock/take').set(IDEMPOTENCY_HEADER, idem).send({
+          productId: fixture.productId,
+          compartmentId: fixture.compartmentA,
+          quantity: 1,
+          isReturnable: false,
+        }),
+    };
+
+    it('covers every key route that takes an Idempotency-Key', () => {
+      const keyed = ctx.app
+        .get(ApiKeyDocsService, { strict: false })
+        .build()
+        .endpoints.filter((e) => e.requiresIdempotencyKey)
+        .map((e) => `${e.method} ${e.path}`)
+        .sort();
+      expect(Object.keys(replayed).sort()).toEqual(keyed);
+    });
+
+    it.each(Object.keys(replayed))('%s: the replay and the stored copy name no one', async (route) => {
+      const idem = randomUUID();
+      const first = await replayed[route]!(idem);
+      const second = await replayed[route]!(idem);
+      expect(first.status, `${route} first: ${JSON.stringify(first.body)}`).toBeLessThan(300);
+      expect(second.status, `${route} replay: ${JSON.stringify(second.body)}`).toBeLessThan(300);
+      // Same body proves it was the stored answer, not a second run of the handler.
+      expect(second.body).toEqual(first.body);
+      expectNoPerson(`${route} replay`, second.body);
+
+      const stored = await ctx.db
+        .selectFrom('idempotency_keys')
+        .select('response')
+        .where('key', '=', idem)
+        .executeTakeFirstOrThrow();
+      expectNoPerson(`${route} stored copy`, stored.response);
+    });
+  });
+
+  /**
+   * Errors never pass through an interceptor: the exception filter writes `details` and `message`
+   * straight out, so the redaction interceptor cannot protect them. Each refusal below is forced
+   * on a route a key can reach, against stock a person is holding, and has to be the 409 it is
+   * named for — a call that failed for some other reason would prove nothing.
+   */
+  describe('a refusal a key can provoke', () => {
+    const refusals: Record<string, () => Promise<request.Response>> = {
+      'POST /categories (duplicate name)': async () => {
+        const name = `K2 refusal category ${tag}`;
+        const created = await key.post('/categories').send({ name });
+        expect(created.status, JSON.stringify(created.body)).toBeLessThan(300);
+        return key.post('/categories').send({ name });
+      },
+      'POST /products (duplicate product code)': async () => {
+        const productCode = `K2-REFUSAL-${tag}`;
+        const created = await key.post('/products').send({ name: `K2 refusal ${tag}`, unit: 'pcs', productCode });
+        expect(created.status, JSON.stringify(created.body)).toBeLessThan(300);
+        return key.post('/products').send({ name: `K2 refusal again ${tag}`, unit: 'pcs', productCode });
+      },
+      'POST /locations/zones (duplicate name in the room)': async () => {
+        const body = { name: `K2 refusal zone ${tag}`, roomId: fixture.roomId };
+        const created = await key.post('/locations/zones').send(body);
+        expect(created.status, JSON.stringify(created.body)).toBeLessThan(300);
+        return key.post('/locations/zones').send(body);
+      },
+      'POST /locations/compartments (duplicate code in the zone)': async () => {
+        const body = { zoneId: fixture.zoneId, code: `K2-REFUSAL-${tag}` };
+        const created = await key.post('/locations/compartments').send(body);
+        expect(created.status, JSON.stringify(created.body)).toBeLessThan(300);
+        return key.post('/locations/compartments').send(body);
+      },
+      // A product a person is holding, asked for more than is left: `details` carries the
+      // shelf's numbers, and this is the answer that sits closest to the loan.
+      'POST /stock/take (more than is available)': async () => {
+        const held = await createStockFixture(ctx.db);
+        await ctx.app
+          .get(StockService, { strict: false })
+          .receive(
+            { productId: held.productId, compartmentId: held.compartmentA, quantity: 3 },
+            { performedBy: im.user.id, refType: 'TEST' },
+          );
+        const returnBy = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10);
+        const issued = await im.client.post('/borrowing/issue-from-stock').send({
+          borrowerId,
+          productId: held.productId,
+          compartmentId: held.compartmentA,
+          quantity: 1,
+          isReturnable: true,
+          expectedReturnDate: returnBy,
+        });
+        expect(issued.status, JSON.stringify(issued.body)).toBe(201);
+        return key.post('/stock/take').set(IDEMPOTENCY_HEADER, randomUUID()).send({
+          productId: held.productId,
+          compartmentId: held.compartmentA,
+          quantity: 5,
+          isReturnable: false,
+        });
+      },
+    };
+
+    it.each(Object.keys(refusals))('%s answers 409 and names no one', async (label) => {
+      const response = await refusals[label]!();
+      expect(response.status, `${label}: ${JSON.stringify(response.body)}`).toBe(409);
+      expectNoPerson(label, response.body);
+    });
+
+    it('the over-take refusal carries only the shelf figures in details', async () => {
+      const response = await refusals['POST /stock/take (more than is available)']!();
+      expect(response.body.details).toEqual({ available: 2, requested: 5, quarantined: 0 });
+    });
   });
 });
