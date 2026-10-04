@@ -1414,6 +1414,12 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   - **Integration baseline is now 1013 pass / 0 fail, 69 files** (2026-10-04, `3af754d`, local
     `db-test` on Docker Desktop, 415 s). It replaces 992 / 68; the +21 tests are the K2
     registry-walk and take-limit specs. Compare against this.
+- 2026-10-04 — **Browser audits run against the local demo stack with demo mode switched off by an
+  override file kept outside the repo**, never against the VM or `infra/`. Editing the compose file's
+  hardcoded `DEMO_ACCOUNTS_ENABLED: 'true'` would change a committed default (a STOP in
+  `70-assist-handoff.md`); `docker compose -f docker-compose.yml -f <override> up -d --no-deps api`
+  does not, and `--no-deps` keeps the seeding `migrate` job from running again. Procedure and
+  harness rules: skill `playwright-audit`; results: `docs/playwright_audit.md`.
 - 2026-10-04 (Ayman) — **Bulk import shows "Coming soon" in production.** `/inventory/imports`
   renders an `EmptyState` (`t.imports.comingSoon`) instead of `ImportPage`; `features/imports`, its
   tests and the API routes are untouched. **UI only, as requested, but not the

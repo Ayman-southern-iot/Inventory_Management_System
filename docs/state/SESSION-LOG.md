@@ -12,6 +12,47 @@ Format:
 **Next:** the single next action, specific enough to start without thinking
 ```
 
+## 2026-10-04 (latest) — Message and copy audit
+
+**Did:** read all of `en.ts` and the error pipeline; provoked 38 scenarios live; replayed four against
+the real server reply. Wrote `docs/message_audit.md` (M1-M11) and `scripts/playwright-audit/messages.js`.
+
+**Decisions:** report only, no app changes (the ask was a check).
+
+**Landmines:** the probe is not read-only. Scenario A6 saved `EXPENSE_THRESHOLD_BDT = 0` (the app
+accepts 0); restored to 15000 and verified through `PUT /admin/settings`. It also left a project
+named "New project" and a BOM for requisition D in the local demo database. Nothing committed.
+
+**Next:** decide on M1-M3 (a generic mapping fix in `lib/error-message.ts` plus a fuller zod error map
+would clear most of them), then commit the audit files.
+
+## 2026-10-04 (later) — Playwright role audit
+
+**Did:**
+- Built `scripts/playwright-audit/` (harness + one file per role) and ran it end to end: 104
+  operations, 0 failed, exit 0. Wrote `docs/playwright_audit.md` and the `playwright-audit` skill.
+- Turned demo mode off for the **local** demo stack only, with an override file outside the repo
+  (`api` container recreated with `--no-deps`); verified `/auth/demo-accounts` 404 and real-form
+  sign-in for all five personas.
+- Found and evidenced: stale requisition after BOM generate/void; a 403 on every requisition page for
+  non-IM roles; raw zod messages and an unmarked required Storage ID; login/rate-limit behaviour.
+
+**Decisions:** audit against the local demo stack only (never the VM or `infra/`); scripts live under
+`scripts/` (already lint-ignored); findings are recorded, not fixed, because the ask was an audit.
+
+**Landmines:**
+- Five failed logins from one address lock **every** login from it for 900 s (keyed by address, not
+  account). I locked my own client once; restarting the local `api` cleared it.
+- The local demo DB is full of `AUD-*` rows and the local `api` still runs demo-off via the override.
+- `playwright-shots/audit/` holds a screenshot of a throwaway (revoked) API-key secret; gitignored,
+  do not commit.
+- Writing role files through a shell heredoc lost regex backslashes twice (`/\s+/` became `/s+/`);
+  write them with the file tools.
+- Nothing from this audit is committed.
+
+**Next:** commit the audit and open the PR for `chore/lint-clean`; then fix F1 (one-line
+invalidation in `features/boms/api.ts`), F2, F3.
+
 ## 2026-10-04 — Phase 11 follow-up: pull, health check, lint to zero
 
 **Did:**

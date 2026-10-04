@@ -8,7 +8,7 @@
 >
 > **Maintenance rule:** see `.claude/rules/05-ai-playbook.md`. A `PostToolUse` hook
 > (`.claude/hooks/playbook-reminder.sh`) reminds Claude to update this file after every
-> meaningful edit. Last updated: 2026-10-04 (lint baseline is now 0 — §16 landmines). Earlier,
+> meaningful edit. Last updated: 2026-10-04 (lint baseline is now 0 — §16 landmines; `playwright-audit` skill — §15.1). Earlier,
 > 2026-09-29 (phase 11, ADR-0002: keys that act as a service
 > account, `POST /stock/take` — §11 config, §16 landmines, §18 notifications. Earlier,
 > 2026-09-24: CSV product import complete, parts A–L — §6 layout
@@ -1047,6 +1047,7 @@ reason the locking exists).
 | `/adr` | Record an architectural decision expensive to reverse |
 | `codemod` | Editing a file by script. Read it **before** the first splice — heredocs mangle scripts and a bad splice costs a restore |
 | `api-probe` | Verifying what the server *decides* — refusals, permissions, money arithmetic. Cheaper than clicking and it produces pasteable evidence |
+| `playwright-audit` | Before a release or go-live, or after a big UI change: drives every role through 10+ real operations in one connected story (`scripts/playwright-audit/`), local demo stack only, demo mode off. Findings in `docs/playwright_audit.md`. The browser half; `api-probe` is the server half |
 | `defer-feature` | "We'll do it next version." Switches a half-built feature off behind a config flag without deleting it or its tests |
 | `deploy` | **Before writing any deployment instruction.** There are two compose files and the wrong one ships secrets that are in the public repo |
 | `domain-context` | (auto-loaded) stock/borrowing/requisitions/BOM vocabulary |

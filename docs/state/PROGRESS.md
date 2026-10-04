@@ -5,6 +5,23 @@
 
 ## Current position
 
+- **2026-10-04 (latest) — Message and copy audit done; findings recorded, nothing changed in the app.**
+  `docs/message_audit.md`: the authored copy in `en.ts` is good; the problems are raw zod text
+  ("String must contain at least 2 character(s)", "Invalid uuid"; the error map rewrites only `min(1)`),
+  good server messages replaced by generic ones (wrong current password reads "You do not have
+  permission"), and a few internal words ("bounced", "PDF cached", "From bin"). The probe
+  (`scripts/playwright-audit/messages.js`) saved the real expense threshold as 0 once; **restored to
+  15,000 and verified**. Uncommitted.
+
+- **2026-10-04 (later) — Playwright role audit done; findings recorded, none fixed.** 104 operations
+  across General, IM, Approver and Admin in one connected story (project -> borrow -> requisitions ->
+  approvals -> BOM -> money stages -> In stock), 0 failed, against the local demo stack with demo mode
+  off. 9 findings in `docs/playwright_audit.md`; the worth-fixing three are F1 (requisition stale
+  after a BOM, `features/boms/api.ts:81-84`), F2 (403 on every requisition page for non-IM,
+  `FundsPanel.tsx:47`) and F3 (raw zod text, unmarked Storage ID). Reusable as the `playwright-audit`
+  skill (`scripts/playwright-audit/`). **Uncommitted.** Not checked: mobile, other browsers, signature
+  approval, uploads, batched BOMs, PDF/CSV content, production behind Cloudflare.
+
 - **2026-10-04 — Phase 11 is merged on GitHub; `pnpm lint` is now 0.** PRs #1–#6 (the API-keys work,
   take limits, service-account create on the panel, the funds-dialog flake fix, the K2 redaction
   interceptor, review-note comments) are in **`fix/lan-secure-context`, the GitHub default branch**,
