@@ -244,6 +244,8 @@ Every error body is `{ "code", "message", "details"? }`. Branch on `code`, never
 | 409 | `INSUFFICIENT_STOCK` | Not enough available on that shelf. Nothing changed. |
 | 404 | `NOT_FOUND` | Also returned for **an empty cell**: its row is removed at zero (OQ-KT9). On a take, read it as "cell empty". |
 | 409 | `CONFLICT` | Archived product, or the same idempotent request is still in flight. The code does not tell the two apart; see §15.10. |
+| 409 | `DUPLICATE_ZONE_NAME` | `POST /locations/zones`: that room already has a zone with that name. `details`: `{ zoneName, roomName }`. Was a bare `CONFLICT` before 2026-10-04; still 409. |
+| 409 | `DUPLICATE_COMPARTMENT_CODE` | `POST /locations/compartments`: that zone already has a compartment with that code. `details`: `{ code, zoneName }`. Was a bare `CONFLICT` before 2026-10-04; still 409. |
 | 429 | `RATE_LIMITED` | Slow down. See `Retry-After-apiKey` / `Retry-After-apiKeyAddress` (§15.7). |
 | 429 | `DIRECT_TAKE_DAILY_LIMIT_REACHED` | The service account has taken its daily allowance. `details`: `{ limit, takenToday, requested }`. |
 

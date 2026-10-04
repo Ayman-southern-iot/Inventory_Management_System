@@ -88,6 +88,18 @@ export const ErrorCode = {
   CATEGORY_NOT_TRACKABLE: 'CATEGORY_NOT_TRACKABLE',
   STOCK_RESERVED: 'STOCK_RESERVED',
 
+  // Locations and departments. Each used to be a bare CONFLICT, which the SPA can only answer with
+  // "that change conflicts with the current state" — true, and no use to the person who typed a
+  // name that is already taken (message audit M3).
+  DUPLICATE_DEPARTMENT_NAME: 'DUPLICATE_DEPARTMENT_NAME',
+  DUPLICATE_ROOM_NAME: 'DUPLICATE_ROOM_NAME',
+  DUPLICATE_ZONE_NAME: 'DUPLICATE_ZONE_NAME',
+  DUPLICATE_COMPARTMENT_CODE: 'DUPLICATE_COMPARTMENT_CODE',
+  /** Deactivating a department that still has active people in it. `details.count` says how many. */
+  DEPARTMENT_HAS_ACTIVE_USERS: 'DEPARTMENT_HAS_ACTIVE_USERS',
+  /** Deactivating a room, zone or compartment that still holds stock. `details.kind` and `.count`. */
+  LOCATION_HOLDS_STOCK: 'LOCATION_HOLDS_STOCK',
+
   // Borrowing
   BORROW_INVALID_TRANSITION: 'BORROW_INVALID_TRANSITION',
   BORROW_ALREADY_DECIDED: 'BORROW_ALREADY_DECIDED',
