@@ -3844,6 +3844,7 @@
  "zones": [
   {
    "code": "LB",
+   "room": "CTO Room — open shelves",
    "name": "Lithium battery box",
    "where": "Fire-safe LiPo bag / metal box on an open shelf",
    "notes": "All Li-ion/LiPo cells and packs. Never in a drawer, away from heat.",
@@ -3860,6 +3861,7 @@
   },
   {
    "code": "LR",
+   "room": "CTO Room — open shelves",
    "name": "Long-stock wall rack",
    "where": "Wall rack",
    "notes": "Rods, lead screws and extrusions longer than ~1.6 m (shorter stock lies across B4 row 3).",

@@ -6,6 +6,7 @@ import { type Catalogue } from '@ims/shared';
 import type * as ClientModule from '@/api/client';
 import { ApiError, NETWORK_ERROR_CODE, api } from '@/api/client';
 import { t } from '@/i18n/en';
+import { importSheetRows } from '@/test/panel-import-sheet';
 import { PANEL_CATALOGUE_PATH } from '../api';
 import { PANEL_IDLE_RESET_MS, PANEL_SEARCH_DEBOUNCE_MS } from '../constants';
 import { PanelPage } from './PanelPage';
@@ -42,8 +43,16 @@ const catalogue: Catalogue = {
     },
   ],
   categories: [],
-  locations: [],
-  counts: { products: 1, categories: 0, locations: 1 },
+  // Every shelf of the v4 sheet, entered in IMS as OQ-P2 says, so no drawer is unmatched.
+  locations: importSheetRows().map((row, index) => ({
+    compartmentId: `00000000-0000-4000-8000-${String(300 + index).padStart(12, '0')}`,
+    label: `${row.room} / ${row.zoneName} / ${row.compartmentCode}`,
+    room: row.room,
+    zone: row.zoneName,
+    compartment: row.compartmentCode,
+    storageId: `LAB-${index}`,
+  })),
+  counts: { products: 1, categories: 0, locations: 150 },
 };
 
 let client: QueryClient;
@@ -114,6 +123,23 @@ describe('PanelPage', () => {
     expect(get.mock.calls.map(([path]) => path)).toEqual(
       get.mock.calls.map(() => PANEL_CATALOGUE_PATH),
     );
+  });
+
+  it('warns, with a count, about plan drawers IMS has no zone for', async () => {
+    get.mockResolvedValue({
+      ...catalogue,
+      locations: catalogue.locations.filter((shelf) => !['A2', 'R5'].includes(shelf.zone)),
+    });
+    renderPanel();
+    const warning = await screen.findByText(t.panel.unmatchedDrawers(2, 'A2, R5'));
+    expect(warning).toBeInTheDocument();
+  });
+
+  it('shows no such warning when every drawer is set up in IMS', async () => {
+    renderPanel();
+    await vi.waitFor(() => expect(get).toHaveBeenCalled());
+    await screen.findByRole('region', { name: 'Cabinet A' });
+    expect(screen.queryByText(/no zone in IMS/)).not.toBeInTheDocument();
   });
 
   it('says there is no match and suggests a drawer code', async () => {

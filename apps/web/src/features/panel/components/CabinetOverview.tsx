@@ -1,8 +1,11 @@
 import { t } from '@/i18n/en';
 import { type PanelDrawer, type PanelLayout } from '../layout';
+import { UnmatchedDrawersNotice } from './UnmatchedDrawersNotice';
 
 interface CabinetOverviewProps {
   layout: PanelLayout;
+  /** Plan drawers IMS has no zone for; empty until the catalogue has been read. */
+  unmatched: readonly PanelDrawer[];
   onOpen: (unitCode: string) => void;
 }
 
@@ -39,30 +42,33 @@ function UnitButton({ unit, onOpen }: { unit: PanelDrawer; onOpen: (code: string
 }
 
 /** Three cabinets of five drawers, plus the open shelves, as they stand in the lab. */
-export function CabinetOverview({ layout, onOpen }: CabinetOverviewProps) {
+export function CabinetOverview({ layout, unmatched, onOpen }: CabinetOverviewProps) {
   return (
-    <div className="flex min-h-0 flex-1 gap-4 p-4">
-      {layout.cabinets.map((cabinet) => (
-        <section
-          key={cabinet.id}
-          aria-label={cabinet.name}
-          className="flex min-w-0 flex-3 flex-col gap-2"
-        >
-          <h2 className="text-2xl font-bold text-ink">{cabinet.name}</h2>
-          <p className="text-lg text-ink-muted">{cabinet.sub}</p>
-          {cabinet.drawers.map((drawer) => (
-            <UnitButton key={drawer.code} unit={drawer} onOpen={onOpen} />
-          ))}
-        </section>
-      ))}
-      {layout.shelves.length > 0 ? (
-        <section aria-label={t.panel.openShelves} className="flex min-w-0 flex-2 flex-col gap-2">
-          <h2 className="text-2xl font-bold text-ink">{t.panel.openShelves}</h2>
-          {layout.shelves.map((shelf) => (
-            <UnitButton key={shelf.code} unit={shelf} onOpen={onOpen} />
-          ))}
-        </section>
-      ) : null}
+    <div className="flex min-h-0 flex-1 flex-col gap-3 p-4">
+      <UnmatchedDrawersNotice units={unmatched} />
+      <div className="flex min-h-0 flex-1 gap-4">
+        {layout.cabinets.map((cabinet) => (
+          <section
+            key={cabinet.id}
+            aria-label={cabinet.name}
+            className="flex min-w-0 flex-3 flex-col gap-2"
+          >
+            <h2 className="text-2xl font-bold text-ink">{cabinet.name}</h2>
+            <p className="text-lg text-ink-muted">{cabinet.sub}</p>
+            {cabinet.drawers.map((drawer) => (
+              <UnitButton key={drawer.code} unit={drawer} onOpen={onOpen} />
+            ))}
+          </section>
+        ))}
+        {layout.shelves.length > 0 ? (
+          <section aria-label={t.panel.openShelves} className="flex min-w-0 flex-2 flex-col gap-2">
+            <h2 className="text-2xl font-bold text-ink">{t.panel.openShelves}</h2>
+            {layout.shelves.map((shelf) => (
+              <UnitButton key={shelf.code} unit={shelf} onOpen={onOpen} />
+            ))}
+          </section>
+        ) : null}
+      </div>
     </div>
   );
 }

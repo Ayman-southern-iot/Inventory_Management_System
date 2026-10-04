@@ -15,6 +15,7 @@ import {
 } from '../constants';
 import { useIdleReset } from '../hooks/useIdleReset';
 import { useSettledQuery } from '../hooks/useSettledQuery';
+import { unmatchedUnits } from '../address';
 import { panelLayout } from '../layout';
 import { buildIndex, searchPanel, type StockRow } from '../search';
 
@@ -43,13 +44,16 @@ export function PanelPage() {
   const catalogue = usePanelCatalogue();
 
   const index = useMemo(
-    () =>
-      buildIndex(catalogue.data?.products ?? [], panelLayout, catalogue.data?.locations ?? []),
+    () => buildIndex(catalogue.data?.products ?? [], panelLayout),
     [catalogue.data],
   );
   const result = useMemo(
     () => searchPanel(index, panelLayout, settledQuery, PANEL_MAX_RESULTS),
     [index, settledQuery],
+  );
+  const unmatched = useMemo(
+    () => (catalogue.data === undefined ? [] : unmatchedUnits(catalogue.data.locations, panelLayout)),
+    [catalogue.data],
   );
   const partCounts = useMemo(
     () => new Map([...index.rowsByAddress].map(([address, rows]) => [address, rows.length])),
@@ -114,7 +118,7 @@ export function PanelPage() {
       />
     );
   } else if (settledQuery.trim() === '') {
-    main = <CabinetOverview layout={panelLayout} onOpen={openUnit} />;
+    main = <CabinetOverview layout={panelLayout} unmatched={unmatched} onOpen={openUnit} />;
   } else if (catalogue.data !== undefined || result.drawers.length > 0) {
     // Drawers come from the plan, so a drawer code is answered even before IMS is read.
     main = <SearchResults result={result} onOpenDrawer={openUnit} onOpenRow={openRow} />;

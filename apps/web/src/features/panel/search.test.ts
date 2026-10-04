@@ -7,7 +7,7 @@ function product(
   id: string,
   name: string,
   code: string,
-  locations: Array<{ zone: string; compartment: string; quantity: number }>,
+  locations: Array<{ room?: string; zone: string; compartment: string; quantity: number }>,
 ): CatalogueProduct {
   return {
     id,
@@ -19,8 +19,8 @@ function product(
     stock: { total: 0, available: 0, inUse: 0 },
     locations: locations.map((location, index) => ({
       compartmentId: `${id}-c${index}`,
-      label: `Lab / ${location.zone} / ${location.compartment}`,
-      room: 'Lab',
+      label: `${location.room ?? 'Cabinet A'} / ${location.zone} / ${location.compartment}`,
+      room: location.room ?? 'Cabinet A',
       zone: location.zone,
       compartment: location.compartment,
       storageId: `LAB-${index}`,
@@ -34,7 +34,7 @@ const products = [
   product('p1', 'ST-Link V3 MINIE', 'TL-0001', [{ zone: 'A1', compartment: '1G-1H', quantity: 2 }]),
   product('p2', 'USB-TTL CH343', 'TL-0002', [
     { zone: 'A1', compartment: '1G-1H', quantity: 4 },
-    { zone: 'Main Store', compartment: 'Bin 7', quantity: 1 },
+    { room: 'Main Store', zone: 'Meta', compartment: 'Bin 7', quantity: 1 },
   ]),
   product('p3', 'M3 socket-head screws', 'FA-0100', [{ zone: 'A3', compartment: '1A', quantity: 350 }]),
   product('p4', 'Spare ESP32-S3', 'MC-0042', []),
@@ -57,7 +57,7 @@ describe('searchPanel', () => {
   it('lists every shelf a part is on, the ones on the plan first', () => {
     const rows = search('CH343').rows;
     expect(rows.map((row) => row.address)).toEqual(['A1-1G-1H', null]);
-    expect(rows[1]!.imsLabel).toBe('Lab / Main Store / Bin 7');
+    expect(rows[1]!.imsLabel).toBe('Main Store / Meta / Bin 7');
   });
 
   it('answers a drawer code with the drawer and everything filed in it', () => {
@@ -99,14 +99,14 @@ describe('searchPanel, partial addresses', () => {
 });
 
 describe('buildIndex', () => {
-  it('draws no shelf in a drawer whose code two rooms both use', () => {
-    const elsewhere = product('p9', 'Bench PSU', 'PS-0009', [
-      { zone: 'A1', compartment: '1A-1B', quantity: 1 },
+  it('keeps a demo room’s "A1" off the real drawer A1, and still draws the real one', () => {
+    const demo = product('p9', 'Demo PSU', 'PS-0009', [
+      { room: 'Demo room', zone: 'A1', compartment: '1A-1B', quantity: 1 },
     ]);
-    elsewhere.locations[0]!.room = 'Main Store';
-    const ambiguous = buildIndex([...products, elsewhere], panelLayout);
-    expect(ambiguous.rows.filter((row) => row.address?.startsWith('A1-'))).toEqual([]);
-    expect(ambiguous.rows.find((row) => row.productId === 'p3')!.address).toBe('A3-1A');
+    const index = buildIndex([...products, demo], panelLayout);
+    expect(index.rows.find((row) => row.productId === 'p9')!.address).toBeNull();
+    expect(index.rowsByAddress.get('A1-1A-1B')).toBeUndefined();
+    expect(index.rows.find((row) => row.productId === 'p1')!.address).toBe('A1-1G-1H');
   });
 
   it('groups the rows by plan address for the cell list', () => {

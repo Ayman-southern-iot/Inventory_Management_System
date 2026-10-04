@@ -1,5 +1,5 @@
-import { type CatalogueLocation, type CatalogueProduct } from '@ims/shared';
-import { ambiguousUnits, layoutAddressOf } from './address';
+import { type CatalogueProduct } from '@ims/shared';
+import { layoutAddressOf } from './address';
 import { type PanelDrawer, type PanelLayout } from './layout';
 
 /** One product on one shelf: a search answer, or a line in a cell's contents. */
@@ -36,19 +36,7 @@ const byName = (a: StockRow, b: StockRow) =>
   Number(a.address === null) - Number(b.address === null) ||
   (a.address ?? a.imsLabel).localeCompare(b.address ?? b.imsLabel);
 
-/**
- * `shelves` is every shelf IMS has (the catalogue's flat `locations`), empty ones included: a
- * drawer code two rooms share is ambiguous whether or not both hold stock today.
- */
-export function buildIndex(
-  products: CatalogueProduct[],
-  layout: PanelLayout,
-  shelves: readonly CatalogueLocation[] = [],
-): PanelIndex {
-  const ambiguous = ambiguousUnits(
-    [...shelves, ...products.flatMap((product) => product.locations)],
-    layout,
-  );
+export function buildIndex(products: CatalogueProduct[], layout: PanelLayout): PanelIndex {
   const rows: StockRow[] = [];
   const unshelved: StockRow[] = [];
 
@@ -62,7 +50,7 @@ export function buildIndex(
       rows.push({
         ...base,
         key: `${product.id}:${location.compartmentId}`,
-        address: layoutAddressOf(location, layout, ambiguous),
+        address: layoutAddressOf(location, layout),
         imsLabel: location.label,
         quantity: location.quantity,
         available: location.available,

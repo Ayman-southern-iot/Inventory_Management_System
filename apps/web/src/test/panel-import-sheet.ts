@@ -1,15 +1,18 @@
 import importSheet from '@/features/panel/layout/ims-import-v4.csv?raw';
 
 /**
- * The "IMS Import" sheet of Lab_Inventory_and_Drawer_Plan_v4.xlsx, exported to CSV unchanged:
- * one row per compartment, with the drawer code (`Zone code`), the cell code (`Compartment code`)
- * and the address printed on the cell (`Label / QR text`).
+ * The "IMS Import" sheet of Lab_Inventory_and_Drawer_Plan_v4.xlsx, one row per compartment,
+ * exported with its columns named after what IMS stores (OQ-P2): `Room` and `Zone name` (exactly
+ * the drawer code; the sheet called it "Zone code"), `Compartment code`, and the address printed
+ * on the cell, `Label / QR text`. The sheet's descriptive "Zone name" ("A1 · Tools — …") has no
+ * field in IMS, so it is exported as `Drawer description (plan only)`.
  */
 export interface ImportSheetRow {
-  zoneCode: string;
+  room: string;
   zoneName: string;
   compartmentCode: string;
   label: string;
+  drawerDescription: string;
 }
 
 /** RFC 4180, enough for this file: quoted fields with commas, `""` escapes, `\n` row ends. */
@@ -48,14 +51,16 @@ export function importSheetRows(): ImportSheetRow[] {
     if (index < 0) throw new Error(`IMS Import sheet: no "${name}" column`);
     return index;
   };
-  const zoneCode = column('Zone code');
+  const room = column('Room');
   const zoneName = column('Zone name');
   const compartmentCode = column('Compartment code');
   const label = column('Label / QR text');
+  const drawerDescription = column('Drawer description (plan only)');
   return rows.map((row) => ({
-    zoneCode: row[zoneCode]!,
+    room: row[room]!,
     zoneName: row[zoneName]!,
     compartmentCode: row[compartmentCode]!,
     label: row[label]!,
+    drawerDescription: row[drawerDescription]!,
   }));
 }

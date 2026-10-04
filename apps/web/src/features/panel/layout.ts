@@ -8,6 +8,10 @@ import plan from './layout/drawer-plan-v4.json';
  * grid positions come from the lab's drawer plan (`layout/drawer-plan-v4.json`, copied verbatim
  * from `Lab_Inventory_and_Drawer_Plan_v4.xlsx`), and the two are joined by the address printed on
  * the cell, e.g. `A1-1G-1H` (see `address.ts`). A new plan version is a new file, not an edit.
+ * Two deviations from the verbatim copy: the two open-shelf zones carry a `room` ("CTO Room — open
+ * shelves", from the sheet's Room column), so every drawer and shelf names the IMS room it lives in;
+ * and the `conventions` notes name the 3D renderer and model rather than the colleague who built
+ * them, since the file ships in a public bundle.
  *
  * Two row conventions meet here and are easy to cross:
  * - the cell **code** counts rows from the **front** (`1G` is the front row, next to the handle);
@@ -52,6 +56,8 @@ const drawerSchema = z.object({
 /** Open-shelf zones (lithium box, long-stock rack) have no grid: one cell, no position. */
 const shelfSchema = z.object({
   code: z.string().min(1),
+  /** The IMS room the shelf is in. Cabinets' drawers use the cabinet's name instead. */
+  room: z.string().min(1),
   name: z.string().min(1),
   cells: z.array(z.object({ cell: z.string().min(1), purpose: z.string() })).min(1),
 });
@@ -90,6 +96,8 @@ export interface PanelCell {
 
 export interface PanelDrawer {
   code: string;
+  /** The IMS room this drawer or shelf lives in: the cabinet's name, or the shelf's `room`. */
+  room: string;
   name: string;
   /** The drawer front's colour band, `#RRGGBB`. Null for an open shelf, which has none. */
   bandColour: string | null;
@@ -141,6 +149,7 @@ export function buildLayout(raw: unknown): PanelLayout {
       .sort((a, b) => a.pos - b.pos)
       .map((drawer) => ({
         code: drawer.code,
+        room: cabinet.name,
         name: drawer.name,
         bandColour: `#${drawer.hex}`,
         rows: drawer.rows,
@@ -156,6 +165,7 @@ export function buildLayout(raw: unknown): PanelLayout {
 
   const shelves: PanelDrawer[] = parsed.zones.map((zone) => ({
     code: zone.code,
+    room: zone.room,
     name: zone.name,
     bandColour: null,
     rows: 1,
