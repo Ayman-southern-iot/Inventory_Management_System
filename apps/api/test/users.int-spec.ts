@@ -136,7 +136,7 @@ describe('admin user management', () => {
       expect(response.body.code).toBe(ErrorCode.VALIDATION_FAILED);
     });
 
-    it('rejects a duplicate email with CONFLICT', async () => {
+    it('rejects a duplicate email with USER_EMAIL_IN_USE (409)', async () => {
       const admin = await actingAdmin();
       const email = uniqueEmail('duplicate');
       const first = await admin.client.post('/admin/users').send(newUserBody({ email }));
@@ -145,7 +145,7 @@ describe('admin user management', () => {
       const second = await admin.client.post('/admin/users').send(newUserBody({ email }));
 
       expect(second.status).toBe(409);
-      expect(second.body.code).toBe(ErrorCode.CONFLICT);
+      expect(second.body.code).toBe(ErrorCode.USER_EMAIL_IN_USE);
     });
 
     it('treats a differently-cased duplicate email as the same account', async () => {
@@ -193,7 +193,7 @@ describe('admin user management', () => {
         .send({ roles: [Role.GENERAL] });
 
       expect(response.status).toBe(409);
-      expect(response.body.code).toBe(ErrorCode.CONFLICT);
+      expect(response.body.code).toBe(ErrorCode.LAST_ADMINISTRATOR);
 
       // And the role really is still there — a refused request must not half-apply.
       const roles = await ctx.db
@@ -267,7 +267,7 @@ describe('admin user management', () => {
         .patch(`/admin/users/${admin.id}`)
         .send({ roles: [Role.GENERAL] });
       expect(whileSpareIsInactive.status).toBe(409);
-      expect(whileSpareIsInactive.body.code).toBe(ErrorCode.CONFLICT);
+      expect(whileSpareIsInactive.body.code).toBe(ErrorCode.LAST_ADMINISTRATOR);
     });
 
     it('lets an administrator deactivate another administrator', async () => {

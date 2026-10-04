@@ -14,6 +14,7 @@ import {
   type User,
 } from '@ims/shared';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors';
+import { DuplicateUserEmailError, LastAdministratorError } from './users.errors';
 import { RefreshRevocationReason } from '../../database/schema';
 import { PasswordService } from '../../security/password.service';
 import { AuditService } from '../audit/audit.service';
@@ -164,7 +165,7 @@ export class UsersService {
       return this.findById(id);
     } catch (error) {
       if (isPgError(error, PG_UNIQUE_VIOLATION)) {
-        throw new ConflictError('A user with that email already exists');
+        throw new DuplicateUserEmailError();
       }
       if (isPgError(error, PG_FOREIGN_KEY_VIOLATION)) {
         throw new NotFoundError('Department');
@@ -477,7 +478,7 @@ export class UsersService {
     // reason that is not true.
     const reachableWithoutTarget = target.is_active ? activeAdmins - 1 : activeAdmins;
     if (reachableWithoutTarget < 1) {
-      throw new ConflictError('This is the last active administrator and cannot be removed');
+      throw new LastAdministratorError();
     }
     if (actorId !== null && target.id === actorId) {
       throw new ForbiddenError('You cannot remove your own administrator role');

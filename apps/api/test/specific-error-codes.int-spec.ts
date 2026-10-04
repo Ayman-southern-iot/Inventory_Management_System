@@ -22,6 +22,7 @@ describe('specific conflict codes for locations and departments', () => {
   let http: HttpClient;
   let im: HttpClient;
   let admin: HttpClient;
+  let adminId: string;
 
   beforeAll(async () => {
     ctx = await createTestApp();
@@ -35,7 +36,9 @@ describe('specific conflict codes for locations and departments', () => {
     await resetData(ctx.db);
     http = httpClient(ctx.app);
     im = (await createUserAndLogin(ctx.db, http, { roles: [Role.GENERAL, Role.INVENTORY_MANAGER] })).client;
-    admin = (await createUserAndLogin(ctx.db, http, { roles: [Role.GENERAL, Role.ADMIN] })).client;
+    const signedInAdmin = await createUserAndLogin(ctx.db, http, { roles: [Role.GENERAL, Role.ADMIN] });
+    admin = signedInAdmin.client;
+    adminId = signedInAdmin.user.id;
   });
 
   const expectCode = (response: { status: number; body: unknown }, code: string) => {
@@ -125,6 +128,32 @@ describe('specific conflict codes for locations and departments', () => {
       const room = await im.patch(`/locations/rooms/${roomId}`).send({ isActive: false });
       expectCode(room, ErrorCode.LOCATION_HOLDS_STOCK);
       expect((room.body as { details: { kind: string } }).details.kind).toBe('room');
+    });
+  });
+
+  /**
+   * Message audit M3, users. A duplicate email and "the last administrator" were both a bare CONFLICT,
+   * so the user form could only say the change "clashes with something". Still 409.
+   */
+  describe('users', () => {
+    it('an email that already belongs to someone is USER_EMAIL_IN_USE', async () => {
+      const taken = `${randomUUID().slice(0, 8)}@ims.local`;
+      await createUser(ctx.db, { roles: [Role.GENERAL], email: taken });
+      const response = await admin.post('/admin/users').send({
+        email: taken,
+        fullName: 'Duplicate Person',
+        designation: 'Tester',
+        roles: [Role.GENERAL],
+        password: 'Probe-pass-1',
+      });
+      expectCode(response, ErrorCode.USER_EMAIL_IN_USE);
+    });
+
+    it('removing the last active administrator is LAST_ADMINISTRATOR', async () => {
+      // The only reachable administrator in the database is the caller, so demoting them would lock
+      // everyone out. Make that true regardless of what earlier specs left behind.
+      await ctx.db.updateTable('users').set({ is_active: false }).where('id', '!=', adminId).where('is_service_account', '=', false).execute();
+      expectCode(await admin.patch(`/admin/users/${adminId}`).send({ roles: [Role.GENERAL] }), ErrorCode.LAST_ADMINISTRATOR);
     });
   });
 });

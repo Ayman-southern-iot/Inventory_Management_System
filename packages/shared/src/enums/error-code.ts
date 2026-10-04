@@ -99,6 +99,10 @@ export const ErrorCode = {
   DEPARTMENT_HAS_ACTIVE_USERS: 'DEPARTMENT_HAS_ACTIVE_USERS',
   /** Deactivating a room, zone or compartment that still holds stock. `details.kind` and `.count`. */
   LOCATION_HOLDS_STOCK: 'LOCATION_HOLDS_STOCK',
+  /** Creating a user with an email another account already uses. */
+  USER_EMAIL_IN_USE: 'USER_EMAIL_IN_USE',
+  /** Removing the administrator role from, or deactivating, the last administrator who can sign in. */
+  LAST_ADMINISTRATOR: 'LAST_ADMINISTRATOR',
 
   // Borrowing
   BORROW_INVALID_TRANSITION: 'BORROW_INVALID_TRANSITION',
