@@ -17,6 +17,54 @@ What lets the app down:
 
 Ranked below as M1–M11; M1–M3 are the ones a user will actually notice.
 
+## Status after the fixes (branch `fix/professional-messages`)
+
+| # | Finding | Status |
+|---|---|---|
+| M1 | Wrong current password said "no permission" | **Fixed.** The change-password call maps `FORBIDDEN` to "Your current password is not correct." Client only; the server's auth behaviour is untouched. |
+| M2 | Raw zod text, "Invalid uuid", unmarked Storage ID | **Fixed.** `lib/validation-message.ts` + a widened `i18n/zod-error-map.ts` cover zod's default wording for forms and for server field issues. Add-to-inventory now marks Storage ID, name and "which product" as required, on the field. An empty email reads "Required". |
+| M3 | Specific server messages replaced by generic ones | **Fixed for the cases found,** by six new error codes (`DUPLICATE_DEPARTMENT_NAME`, `DUPLICATE_ROOM_NAME`, `DUPLICATE_ZONE_NAME`, `DUPLICATE_COMPARTMENT_CODE`, `DEPARTMENT_HAS_ACTIVE_USERS`, `LOCATION_HOLDS_STOCK`), still 409. Uploads now say "That file type is not accepted…". **Not fixed: a duplicate user email** still gets the generic conflict sentence (now clearer), because user management is on the auth STOP list; it needs the owner's go-ahead for a `USER_EMAIL_IN_USE` code. |
+| M4 | Internal words | **Fixed:** "bounce" (4 strings), "PDF cached" -> "PDF ready.", "From bin" -> "From compartment", "For revise" -> "For revision", "(s)" plurals, "un-verify", "This screen crashed". Product search placeholder now says "storage ID". |
+| M5 | Inconsistent punctuation and case | **Fixed:** ten success toasts and one error now end in a full stop; Title Case dashboard labels are sentence case; one contraction removed. "inactive / deactivated / archived": the slot-warning strings now say deactivated; the category and archived-product wording is unchanged. |
+| M6 | Destructive actions ask inconsistently | **Not changed.** Borrow reject, and deactivating a user, department or compartment, stay one click. That is a behaviour and product decision, not copy. |
+| M7 | No next step | **Fixed:** `INTERNAL`, `NETWORK` and the upload fallback now say what to do. |
+| M8 | `{placeholders}` could show literally | **Fixed:** every error that quotes a figure has a figure-free twin in `t.errorsPlain`. Covered by tests for all 12. |
+| M9 | Error toasts announced politely | **Fixed:** error toasts are `role="alert"`, success `role="status"`. |
+| M10 | Limits typed into copy | **Partly fixed:** the 5 MB attachment limit and the password minimum are now built from their constants; "within seven seconds" is gone from the audit-log empty state. The signature hint "up to 2 MB" is still a typed number. |
+| M11 | Threshold 0 accepted; BOM with no vendor | **Not changed.** Product decisions for the owner. |
+
+New tests: 42 in the web suite (humanizer, error mapper, zod map, toast) and 9 integration tests for the
+new codes (shown failing 7 of 9 without the service change). One existing test was updated on purpose:
+`zod-error-map.test.ts` asserted zod's own wording for a numeric minimum ("greater than or equal to 1"),
+which is exactly the text this change replaces; it now asserts the plain wording and still proves a
+number below its minimum is not reported as "Required".
+
+### Verified in the running app
+
+The local web and API containers were rebuilt from this branch and the same probe
+(`scripts/playwright-audit/messages.js`) was run again. Before -> after:
+
+| Action | Before | After |
+|---|---|---|
+| Wrong current password | You do not have permission to do that. | Your current password is not correct. |
+| New project, empty or 1 letter | String must contain at least 2 character(s) | Use at least 2 characters. |
+| Receive stock, nothing chosen | Invalid uuid | Choose an option. |
+| Login, empty email and password | Invalid email / Required | Required |
+| Login, email "abc" | (browser bubble only) | Enter a valid email address. |
+| Borrow, quantity 0 | Number must be greater than 0 | Enter a number greater than 0. |
+| Requisition, negative price | Number must be greater than or equal to 0 | Enter 0 or more. |
+| Settings, threshold -5 | Number must be greater than or equal to 0 | Enter 0 or more. |
+| Change password, empty | String must contain at least 4 character(s) | Use at least 4 characters. |
+| Attach a `.exe` | Upload failed. Try again. | That file type is not accepted. Attach a PNG, JPEG or PDF. |
+| Attach 6 MB | That file is too large. Maximum size is 5 MB. | That file is too large. The most you can attach is 5 MB. |
+| Duplicate department | That change conflicts with the current state. | A department with that name already exists. |
+| Duplicate room | That change conflicts with the current state. | A room with that name already exists. |
+| Duplicate user email | That change conflicts with the current state. | That could not be saved because it clashes with something that already exists or has just changed. Refresh and check, then try again. |
+
+Still generic on purpose: the duplicate user email (see M3). The Add-to-inventory Storage ID message is
+covered by component tests, not by this probe, because it needs a purchased requisition.
+Not driven by the probe: the signature upload (the profile page had no file input for that user).
+
 ## How it was checked
 
 - **Read all 1,850 lines of `en.ts`** and the error pipeline (`lib/error-message.ts`,

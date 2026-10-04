@@ -1022,6 +1022,19 @@ reason the locking exists).
 - Never swallow an error. Either handle it or let it propagate to the global filter.
 - Domain failures are typed exceptions (`InsufficientStockError`), not strings.
 - User-facing messages never leak SQL, stack traces, or internal IDs.
+- **What a person reads is chosen by `code`, from `i18n/en.ts`** (`lib/error-message.ts`). Never show
+  `error.message` for a known code: `CONFLICT` alone carries ~45 unrelated server sentences, some for
+  developers. If two different refusals share a code and the user needs to tell them apart, give the
+  case its own `ErrorCode` (`DUPLICATE_ZONE_NAME`, `LOCATION_HOLDS_STOCK`), not a client-side guess.
+- **Validation text is never zod's English.** `i18n/zod-error-map.ts` (client) and
+  `lib/validation-message.ts` (server field issues) turn "String must contain at least 2 character(s)"
+  into "Use at least 2 characters." A sentence a schema or service wrote on purpose passes through
+  untouched. Only 4 of 395 shared validators state a message, so do not rely on that.
+- A call that knows its context passes `messageForError(error, { CODE: 'copy' })` (e.g. change
+  password: `FORBIDDEN` -> "Your current password is not correct."). Copy with `{placeholders}` needs
+  a figure-free twin in `t.errorsPlain`, so braces are never shown.
+- Success toasts end in a full stop. No internal words in copy ("bounced", "cached", "bin").
+  Error toasts are `role="alert"`. Review method and findings: `docs/message_audit.md`.
 
 **Engineering judgement**
 - Prefer the boring solution. 12 users; cleverness costs more than it saves.

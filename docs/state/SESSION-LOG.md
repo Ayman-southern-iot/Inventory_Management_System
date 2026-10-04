@@ -12,7 +12,27 @@ Format:
 **Next:** the single next action, specific enough to start without thinking
 ```
 
-## 2026-10-04 (latest) — Message and copy audit
+## 2026-10-04 (latest) — Messages made professional
+
+**Did:** committed the audit work (`bf7a3cc`), cut `fix/professional-messages`, and fixed M1–M10: humanizer +
+widened zod map, `messageForError` overrides and `errorsPlain`, `role=alert` toasts, ~45 copy edits, add-to-inventory
+inline validation, six new `ErrorCode`s through API, shared, web copy and the integration doc. Rebuilt the local
+`api` and `web` containers and re-ran the probe to confirm the before/after.
+
+**Decisions:** per-code copy, own `ErrorCode` per distinguishable refusal; duplicate user email left generic (auth
+STOP list); one existing zod-map test updated on purpose. See DECISIONS 2026-10-04.
+
+**Landmines:**
+- The local `api` and `web` containers now run this branch (demo off). `docker compose up -d --build api web`
+  from the repo root restores the committed demo default; the VM is untouched.
+- Changing the code returned for a duplicate zone/compartment changes the contract for key integrators
+  (still 409; documented in `15-integration-api.md`).
+- `messages.js` no longer saves threshold 0, creates a project or generates a BOM; the first run did all three.
+- Nothing pushed.
+
+**Next:** push both branches and open PRs; then the owner decisions listed in NOW.md.
+
+## 2026-10-04 (later) — Message and copy audit
 
 **Did:** read all of `en.ts` and the error pipeline; provoked 38 scenarios live; replayed four against
 the real server reply. Wrote `docs/message_audit.md` (M1-M11) and `scripts/playwright-audit/messages.js`.

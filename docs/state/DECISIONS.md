@@ -1414,6 +1414,22 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   - **Integration baseline is now 1013 pass / 0 fail, 69 files** (2026-10-04, `3af754d`, local
     `db-test` on Docker Desktop, 415 s). It replaces 992 / 68; the +21 tests are the K2
     registry-walk and take-limit specs. Compare against this.
+- 2026-10-04 (Ayman: "fix it, all messages professional") — **User-facing messages are chosen by `code`, and where one code
+  covers refusals a person must tell apart, the case gets its own `ErrorCode`.** `CONFLICT` carries about 45
+  unrelated server sentences (some for developers: "Run pnpm db:seed"), so neither showing `error.message` nor a
+  blanket client override is safe; the first would leak internals, the second told people the wrong thing (a
+  user-form conflict can be "last active administrator"). Six codes added, still 409:
+  `DUPLICATE_DEPARTMENT_NAME`, `DUPLICATE_ROOM_NAME`, `DUPLICATE_ZONE_NAME`, `DUPLICATE_COMPARTMENT_CODE`,
+  `DEPARTMENT_HAS_ACTIVE_USERS`, `LOCATION_HOLDS_STOCK`. **Left generic on purpose:** a duplicate user email,
+  because user management is on the auth STOP list; it needs a `USER_EMAIL_IN_USE` code and the owner's go-ahead.
+  - **Validation text** is never zod's English: `i18n/zod-error-map.ts` and `lib/validation-message.ts` rewrite its
+    defaults; a sentence somebody wrote on purpose passes through. Only 4 of 395 shared validators state a message.
+  - **A call that knows its context** passes `messageForError(error, { CODE: copy })`. Used once: change password
+    maps `FORBIDDEN` to "Your current password is not correct." (client only; the server's auth behaviour is unchanged).
+  - **`{placeholders}` never show:** every templated error has a figure-free twin in `t.errorsPlain`.
+  - **Test updated on purpose:** `zod-error-map.test.ts` asserted zod's own numeric wording, which is the text this
+    replaces; it now asserts the plain wording and still proves a number below its minimum is not "Required".
+  - **Not changed:** confirmations on destructive one-click actions (M6) and threshold 0 (M11): product decisions.
 - 2026-10-04 — **Browser audits run against the local demo stack with demo mode switched off by an
   override file kept outside the repo**, never against the VM or `infra/`. Editing the compose file's
   hardcoded `DEMO_ACCOUNTS_ENABLED: 'true'` would change a committed default (a STOP in

@@ -43,11 +43,19 @@ async function scenario(page, id, role, where, trigger, fn) {
   let before = [];
   try {
     before = await visibleMessages(page);
-    await fn();
+    // A driver may return the page text it wants recorded (a 404, an empty state).
+    const seen = await fn();
     await sleep(900);
     const after = await visibleMessages(page);
     const fresh = after.filter((m) => !before.includes(m));
-    found.push({ id, role, where, trigger, messages: fresh.length ? fresh : ['(nothing new appeared)'] });
+    found.push({
+      id,
+      role,
+      where,
+      trigger,
+      messages: fresh.length ? fresh : ['(nothing new appeared)'],
+      ...(typeof seen === 'string' ? { page: seen } : {}),
+    });
   } catch (error) {
     found.push({ id, role, where, trigger, messages: [`(could not drive: ${String(error.message).split('\n')[0].slice(0, 120)})`] });
   }
@@ -93,9 +101,11 @@ async function general(audit) {
     await click(page, 'Create');
   });
   await scenario(page, 'G3', 'General', 'New project', 'Name that already exists', async () => {
-    const existing = (await page.locator('main h3, main [class*="font-medium"]').first().innerText()).split('\n')[0];
+    // A real existing project name. (Taking the first piece of text on the page once picked a button
+    // and created a project called "New project".)
+    const existing = (await page.locator('main').getByText(/^AUD-/).first().innerText()).split('\n')[0].trim();
     await click(page, 'New project');
-    await fillStable(page.getByLabel(/Project name/), existing.trim() || 'Main');
+    await fillStable(page.getByLabel(/Project name/), existing);
     await click(page, 'Create');
   });
 
@@ -163,11 +173,11 @@ async function general(audit) {
   });
   await scenario(page, 'G15', 'General', 'Unknown address', 'Open /this-page-does-not-exist', async () => {
     await page.goto(`${CONFIG.base}/this-page-does-not-exist`, { waitUntil: 'networkidle' });
-    found[found.length - 1].page = (await page.locator('main').innerText()).replace(/\s+/g, ' ').slice(0, 200);
+    return (await page.locator('main').innerText()).replace(/\s+/g, ' ').slice(0, 200);
   });
   await scenario(page, 'G16', 'General', 'No permission', 'Open /admin/users', async () => {
     await page.goto(`${CONFIG.base}/admin/users`, { waitUntil: 'networkidle' });
-    found[found.length - 1].page = (await page.locator('main').innerText()).replace(/\s+/g, ' ').slice(0, 200);
+    return (await page.locator('main').innerText()).replace(/\s+/g, ' ').slice(0, 200);
   });
   await s.context.close();
 }
@@ -235,15 +245,16 @@ async function im(audit, state) {
     await page.getByRole('button', { name: 'Pending', exact: true }).click();
   });
 
+  // Read-only: pressing Generate with the fields empty created a real BOM the first time.
   if (state && state.reqs && state.reqs.D) {
-    await scenario(page, 'I9', 'IM', 'New BOM', 'Generate with unit cost and vendor empty', async () => {
+    await scenario(page, 'I9', 'IM', 'New BOM', 'Open the builder (no Generate)', async () => {
       await page.goto(`${CONFIG.base}/boms/new?requisition=${state.reqs.D.path.split('/').pop()}`, { waitUntil: 'networkidle' });
-      await page.getByRole('button', { name: 'Generate BOM' }).click();
+      return (await page.locator('main').innerText()).replace(/\s+/g, ' ').slice(0, 200);
     });
   }
   await nav(page, '/inventory/imports');
   await scenario(page, 'I10', 'IM', 'Bulk import', 'Open the page (deferred feature)', async () => {
-    found[found.length - 1].page = (await page.locator('main').innerText()).replace(/\s+/g, ' ').slice(0, 160);
+    return (await page.locator('main').innerText()).replace(/\s+/g, ' ').slice(0, 160);
   });
   await s.context.close();
 }
@@ -289,11 +300,8 @@ async function admin(audit) {
   });
 
   await nav(page, '/admin/settings');
-  await scenario(page, 'A6', 'Admin', 'Settings', 'Expense threshold set to 0, then Save', async () => {
-    const f = page.getByLabel('Expense threshold');
-    await f.fill('0');
-    await f.locator('xpath=ancestor::*[.//button[normalize-space(.)="Save"]][1]').getByRole('button', { name: 'Save', exact: true }).first().click();
-  });
+  // Not run: the app accepts a threshold of 0 and saves it. That changes a real setting, so a probe
+  // must not do it (the first run did, and it had to be restored to 15000).
   await scenario(page, 'A7', 'Admin', 'Settings', 'Expense threshold set to a negative number, then Save', async () => {
     const f = page.getByLabel('Expense threshold');
     await f.fill('-5');

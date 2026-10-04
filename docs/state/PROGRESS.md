@@ -5,7 +5,17 @@
 
 ## Current position
 
-- **2026-10-04 (latest) — Message and copy audit done; findings recorded, nothing changed in the app.**
+- **2026-10-04 (latest) — Messages made professional: `fix/professional-messages`, local, not pushed.**
+  Fixes M1–M10 of `docs/message_audit.md`: plain validation wording (client map + server field issues), a
+  per-call override on `messageForError`, figure-free twins for templated errors, `role=alert` toasts, ~45
+  copy edits, inline required markers on the add-to-inventory form, and six new `ErrorCode`s for duplicate
+  names / in-use departments and locations (API + shared + web copy + `15-integration-api.md`).
+  - **Verified:** typecheck clean · lint 0 · unit shared 25 / api 257 / web 524 · integration **1022 / 1022
+    (70 files)** · new tests shown failing first (API spec 7 of 9, form test 4 of 4) · probe re-run in the rebuilt
+    local app confirms the before/after table in the audit.
+  - **Not fixed (owner's call):** duplicate user email wording, one-click destructive actions, threshold 0.
+
+- **2026-10-04 — Message and copy audit done; findings recorded, nothing changed in the app.**
   `docs/message_audit.md`: the authored copy in `en.ts` is good; the problems are raw zod text
   ("String must contain at least 2 character(s)", "Invalid uuid"; the error map rewrites only `min(1)`),
   good server messages replaced by generic ones (wrong current password reads "You do not have

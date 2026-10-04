@@ -13,30 +13,31 @@ old and unrelated). Tip `86de70f`. Keys bound to a **service account**, `POST /s
 throttle and daily cap), K2 enforced by one global interceptor, service accounts creatable from
 the admin panel. Migration **0039**; Python client in `clients/python/`. Phases 00–10 unchanged.
 
-**Branch `chore/lint-clean`** (from `86de70f`, no PR opened yet): lint 20 → **0**, and the bulk-import
-route (`/inventory/imports`) shows **"Coming soon"** instead of `ImportPage`. UI only: the import API
-routes are still live and there is no env flag (not the `defer-feature` shape). Feature code is intact.
-**Playwright audit done 2026-10-04** (`docs/playwright_audit.md`, skill `playwright-audit`, scripts in
-`scripts/playwright-audit/`): 104 ops over 4 roles, 0 failed, 9 findings, none fixed. The local `api`
-runs with demo mode **off** via a scratchpad override; the VM is untouched and still demo-on.
+**`chore/lint-clean`** (from `86de70f`, local only): lint 20 → **0**, bulk import shows **"Coming soon"**
+(UI only; the import API is still live, no env flag), and the Playwright audit (`docs/playwright_audit.md`,
+skill `playwright-audit`, 104 ops, 9 findings). **`fix/professional-messages`** (on top of it, local only,
+no PR): `docs/message_audit.md` M1–M10 fixed — zod wording, per-call overrides, `errorsPlain`, 6 new
+`ErrorCode`s (duplicate dept/room/zone/compartment, department in use, location holds stock), `role=alert`
+toasts. The local `api` and `web` containers run this branch with demo mode **off**; the VM is untouched.
 
 ## Next action
 
-1. **Open the PR for `chore/lint-clean` and merge it** (the audit files are not yet committed). Decide
-   whether "Coming soon" should also close the import API (flag + server guard) or stay UI-only.
-   Then the audit's F1 (stale requisition after a BOM: `features/boms/api.ts:81-84`), F2 (403 on every
-   requisition page: `FundsPanel.tsx:47`) and F3 (raw zod text, unmarked Storage ID).
+1. **Push both branches and open the PRs** (nothing is pushed). Owner decisions left open: a
+   `USER_EMAIL_IN_USE` code (user management is on the auth STOP list), confirmations on user/
+   compartment deactivation and borrow reject (M6), expense threshold of 0 (M11), and whether "Coming
+   soon" should also close the import API. Audit F1 (stale requisition after a BOM,
+   `features/boms/api.ts:81-84`) and F2 (403 on every requisition page, `FundsPanel.tsx:47`) are unfixed.
 2. **Real client IP behind Cloudflare is IT-owned**, open, and blocks go-live (RUNBOOK §0.7). The
    app side is done: `TRUST_PROXY_HOPS` (default 1). Do not touch the VM, proxy or firewall for it.
 3. **Production must run `infra/` first** (RUNBOOK §0 item 0). The VM runs the root demo stack at
    `9f4176d` (operator, 2026-09-27). The switch needs IT in the window. Waiting on Ayman:
    `IMPORT_MAX_CHANGED_SHELVES`.
 
-## Green as of 2026-10-04 (`chore/lint-clean`), measured on Windows
+## Green as of 2026-10-04 (`fix/professional-messages`), measured on Windows
 
-- typecheck clean · unit shared 25 · api 257 · web 478 · **lint 0 (exit 0)** · guard-hardcoding **8**
-- integration **1013 / 1013 (69 files)**, 415 s, local `db-test` (`docker compose -f
-  infra/docker-compose.dev.yml up -d db-test`, port 5434), at `3af754d`. Was 992 / 68.
+- typecheck clean · unit shared 25 · api 257 · web **524** · **lint 0 (exit 0)** · guard-hardcoding **8**
+- integration **1022 / 1022 (70 files)**, 289 s, local `db-test` (`docker compose -f
+  infra/docker-compose.dev.yml up -d db-test`, port 5434). Was 1013 / 69 (+9 for the new codes).
 
 ## Landmines — full list in `ASSIST.md` §9
 
