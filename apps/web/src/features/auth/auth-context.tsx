@@ -9,7 +9,8 @@ import {
 } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { type Role, type AuthUser, type LoginInput, type LoginResponse } from '@ims/shared';
-import { api, setSessionLostHandler } from '@/api/client';
+import { api, isApiUnreachable, setSessionLostHandler } from '@/api/client';
+import { webConfig } from '@/api/config';
 import {
   clearStoredTokens,
   readStoredTokens,
@@ -52,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Restore an existing session on first paint.
   useEffect(() => {
     let cancelled = false;
+    let retry: number | undefined;
 
     async function restore() {
       if (!readStoredTokens()) {
@@ -60,18 +62,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       try {
         const me = await api.get<AuthUser>('/auth/me');
-        if (!cancelled) setUser(me);
-      } catch {
+        if (cancelled) return;
+        setUser(me);
+        setIsRestoring(false);
+      } catch (error) {
+        if (cancelled) return;
+        if (isApiUnreachable(error)) {
+          // The API could not be asked, so the stored session may be perfectly good. Keep it
+          // and ask again; signing out here strands a kiosk that booted before the network.
+          retry = window.setTimeout(() => void restore(), webConfig.sessionRestoreRetryMs);
+          return;
+        }
         // The client already tried to refresh; reaching here means the session is gone.
-        if (!cancelled) forgetSession();
-      } finally {
-        if (!cancelled) setIsRestoring(false);
+        forgetSession();
+        setIsRestoring(false);
       }
     }
 
     void restore();
     return () => {
       cancelled = true;
+      window.clearTimeout(retry);
     };
   }, [forgetSession]);
 
