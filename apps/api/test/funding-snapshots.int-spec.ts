@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { Role, type RequisitionFunding } from '@ims/shared';
+import { Role } from '@ims/shared';
 import { createTestApp, httpClient, type HttpClient, type TestApp } from './app';
 import { createDepartment, createUser, login, resetData, seedSubthresholdApprover , futureDeadline} from './factories';
 
