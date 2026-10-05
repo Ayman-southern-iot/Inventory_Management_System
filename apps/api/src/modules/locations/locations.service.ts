@@ -10,7 +10,13 @@ import type {
   UpdateZoneInput,
   Zone,
 } from '@ims/shared';
-import { ConflictError, NotFoundError } from '../../common/errors';
+import { NotFoundError } from '../../common/errors';
+import {
+  DuplicateCompartmentCodeError,
+  DuplicateRoomNameError,
+  DuplicateZoneNameError,
+  LocationHoldsStockError,
+} from './locations.errors';
 import { CONFIG, type AppConfig } from '../../config';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
@@ -58,7 +64,7 @@ export class LocationsService {
       });
       return await this.requireRoom(id);
     } catch (error) {
-      if (isUniqueViolation(error)) throw new ConflictError('A room with that name already exists');
+      if (isUniqueViolation(error)) throw new DuplicateRoomNameError();
       throw error;
     }
   }
@@ -76,9 +82,7 @@ export class LocationsService {
     if (input.isActive === false) {
       const held = await this.repo.countStockInRoom(id);
       if (held > 0) {
-        throw new ConflictError(
-          `${held} compartment(s) in this room still hold stock. Move or issue it first.`,
-        );
+        throw new LocationHoldsStockError('room', held);
       }
     }
 
@@ -109,7 +113,7 @@ export class LocationsService {
         }
       });
     } catch (error) {
-      if (isUniqueViolation(error)) throw new ConflictError('A room with that name already exists');
+      if (isUniqueViolation(error)) throw new DuplicateRoomNameError();
       throw error;
     }
 
@@ -142,7 +146,7 @@ export class LocationsService {
     } catch (error) {
       // Per-room now, not global: the same zone name in a different room is legal.
       if (isUniqueViolation(error)) {
-        throw new ConflictError(`A zone called "${input.name}" already exists in ${room.name}`);
+        throw new DuplicateZoneNameError(input.name, room.name);
       }
       throw error;
     }
@@ -158,9 +162,7 @@ export class LocationsService {
     if (input.isActive === false) {
       const held = await this.repo.countStockInZone(id);
       if (held > 0) {
-        throw new ConflictError(
-          `${held} compartment(s) in this zone still hold stock. Move or issue it first.`,
-        );
+        throw new LocationHoldsStockError('zone', held);
       }
     }
 
@@ -192,7 +194,7 @@ export class LocationsService {
       });
     } catch (error) {
       if (isUniqueViolation(error)) {
-        throw new ConflictError('A zone with that name already exists in this room');
+        throw new DuplicateZoneNameError(input.name ?? '');
       }
       throw error;
     }
@@ -240,7 +242,7 @@ export class LocationsService {
       // The unique index on (zone_id, lower(btrim(code))) is the guarantee — a pre-check
       // SELECT would still let two concurrent creates through.
       if (isUniqueViolation(error)) {
-        throw new ConflictError(`Compartment "${input.code}" already exists in ${zone.name}`);
+        throw new DuplicateCompartmentCodeError(input.code, zone.name);
       }
       throw error;
     }
@@ -257,9 +259,7 @@ export class LocationsService {
     if (input.isActive === false) {
       const held = await this.repo.countStockIn(id);
       if (held > 0) {
-        throw new ConflictError(
-          `This compartment still holds ${held} product(s). Move or issue the stock first.`,
-        );
+        throw new LocationHoldsStockError('compartment', held);
       }
     }
 
@@ -291,7 +291,7 @@ export class LocationsService {
       });
     } catch (error) {
       if (isUniqueViolation(error)) {
-        throw new ConflictError('Another compartment in this zone already uses that code');
+        throw new DuplicateCompartmentCodeError(input.code ?? '');
       }
       throw error;
     }

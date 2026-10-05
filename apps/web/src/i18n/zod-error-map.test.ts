@@ -49,10 +49,30 @@ describe('the global zod error map', () => {
     expect(explicit.safeParse('').error?.issues[0]?.message).toBe('Pick at least one item');
   });
 
-  /** Numeric bounds share the `too_small` code and must keep their own wording. */
-  it('leaves a numeric lower bound alone', () => {
+  /**
+   * Numeric bounds share the `too_small` code and must not be read as an empty field. This used to
+   * assert zod's own wording ("Number must be greater than or equal to 1"); that wording is what
+   * the message audit (M2) found reaching users, so the assertion now says the same thing in plain
+   * words. The point of the test is unchanged: a number below its minimum is not "Required".
+   */
+  it('gives a numeric lower bound its own plain wording, not "Required"', () => {
     const message = z.number().min(1).safeParse(0).error?.issues[0]?.message;
     expect(message).not.toBe(t.common.required);
-    expect(message).toMatch(/greater than or equal to 1/i);
+    expect(message).toBe('Enter 1 or more.');
+  });
+
+  /** Message audit M2: the rest of zod's default English, in words a person would use. */
+  it('replaces the character count wording for a minimum above one', () => {
+    expect(z.string().min(2).safeParse('a').error?.issues[0]?.message).toBe('Use at least 2 characters.');
+  });
+
+  it('replaces "Invalid email" and "Invalid uuid"', () => {
+    expect(z.string().email().safeParse('abc').error?.issues[0]?.message).toBe('Enter a valid email address.');
+    expect(z.string().uuid().safeParse('').error?.issues[0]?.message).toBe('Choose an option.');
+  });
+
+  /** An empty email is a missing email, not a malformed one (the login page said "Invalid email"). */
+  it('reports an empty string failing a format check as Required', () => {
+    expect(z.string().email().safeParse('').error?.issues[0]?.message).toBe(t.common.required);
   });
 });

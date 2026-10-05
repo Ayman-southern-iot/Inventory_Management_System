@@ -5,6 +5,56 @@
 
 ## Current position
 
+- **2026-10-04 (final) — Audit findings and message audit fixed; verified; pushed (see SESSION-LOG).**
+  On top of the message work below: F1 stale requisition after a BOM, F2 403 on requisition pages, F6 throttler
+  text, F7 BOM approval chain (words, formatted times, headers from copy); `USER_EMAIL_IN_USE` and
+  `LAST_ADMINISTRATOR`; `ConfirmDialog` for deactivating a user, department or compartment and rejecting a borrow;
+  OQ-35 (threshold floor) and OQ-36 (BOM vendor) logged, not guessed. F9 retracted (my mistake). **Verified:**
+  typecheck · lint 0 · unit shared 25 / api 257 / web 557 · integration **1024 / 1024 (70 files)** · each new test
+  shown failing first · full 104-operation audit and the message probe re-run against rebuilt local containers.
+  Three `users.int-spec.ts` assertions updated on purpose (code `CONFLICT` -> the specific one; still 409).
+
+- **2026-10-04 (earlier) — Messages made professional: `fix/professional-messages`.**
+  Fixes M1–M10 of `docs/message_audit.md`: plain validation wording (client map + server field issues), a
+  per-call override on `messageForError`, figure-free twins for templated errors, `role=alert` toasts, ~45
+  copy edits, inline required markers on the add-to-inventory form, and six new `ErrorCode`s for duplicate
+  names / in-use departments and locations (API + shared + web copy + `15-integration-api.md`).
+  - **Verified:** typecheck clean · lint 0 · unit shared 25 / api 257 / web 524 · integration **1022 / 1022
+    (70 files)** · new tests shown failing first (API spec 7 of 9, form test 4 of 4) · probe re-run in the rebuilt
+    local app confirms the before/after table in the audit.
+  - **Not fixed (owner's call):** duplicate user email wording, one-click destructive actions, threshold 0.
+
+- **2026-10-04 — Message and copy audit done; findings recorded, nothing changed in the app.**
+  `docs/message_audit.md`: the authored copy in `en.ts` is good; the problems are raw zod text
+  ("String must contain at least 2 character(s)", "Invalid uuid"; the error map rewrites only `min(1)`),
+  good server messages replaced by generic ones (wrong current password reads "You do not have
+  permission"), and a few internal words ("bounced", "PDF cached", "From bin"). The probe
+  (`scripts/playwright-audit/messages.js`) saved the real expense threshold as 0 once; **restored to
+  15,000 and verified**. Uncommitted.
+
+- **2026-10-04 (later) — Playwright role audit done; findings recorded, none fixed.** 104 operations
+  across General, IM, Approver and Admin in one connected story (project -> borrow -> requisitions ->
+  approvals -> BOM -> money stages -> In stock), 0 failed, against the local demo stack with demo mode
+  off. 9 findings in `docs/playwright_audit.md`; the worth-fixing three are F1 (requisition stale
+  after a BOM, `features/boms/api.ts:81-84`), F2 (403 on every requisition page for non-IM,
+  `FundsPanel.tsx:47`) and F3 (raw zod text, unmarked Storage ID). Reusable as the `playwright-audit`
+  skill (`scripts/playwright-audit/`). **Uncommitted.** Not checked: mobile, other browsers, signature
+  approval, uploads, batched BOMs, PDF/CSV content, production behind Cloudflare.
+
+- **2026-10-04 — Phase 11 is merged on GitHub; `pnpm lint` is now 0.** PRs #1–#6 (the API-keys work,
+  take limits, service-account create on the panel, the funds-dialog flake fix, the K2 redaction
+  interceptor, review-note comments) are in **`fix/lan-secure-context`, the GitHub default branch**,
+  tip `86de70f`. It is merged, not deployed. The 20 standing lint errors were cleared on
+  **`chore/lint-clean`** (cut from `86de70f`, awaiting a PR): 14 were one throwaway script, now in
+  the ignore list beside `docs/**/*.js`; the rest were unused names, a stale `eslint-disable` and
+  one inline `import()` type (DECISIONS, Phase 11). The same branch makes `/inventory/imports` show
+  **"Coming soon"** (`t.imports.comingSoon`, `App.tsx`); UI only, import API routes still live.
+  - **Verified (Windows, 2026-10-04):** typecheck clean · unit 25 / 257 / 478 · **lint exit 0** ·
+    guard 8 · **integration 1013 / 1013 (69 files), 0 fail, 415 s** at `3af754d` against a local
+    `db-test` (baseline 992 / 68) · built `shared/dist` has no `funds` import in `requisitions.js`.
+  - **Not verified:** the "Coming soon" page in a browser (no UI run); no test asserts it.
+  - **Next:** open the PR for `chore/lint-clean`; decide whether the import API should close too.
+
 - **2026-09-30 — Integration gate moved to the keeper (`scripts/test-int-keeper.sh`).** The suite
   passes **992 / 992 (68 files)** at `a271479`. The `stock-import-lock` failure recorded below was the
   SSH tunnel, not the code (DECISIONS 2026-09-30). The measurements below stand as they were taken.

@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { FileText, Loader2, Trash2, Upload } from 'lucide-react';
 import type { SupportingDocument } from '@ims/shared';
 import { Button } from '@/components/ui/Button';
+import { ApiError } from '@/api/client';
 import { t } from '@/i18n/en';
+import { messageForError } from '@/lib/error-message';
 import {
   useRemoveSupportingDocument,
   useUploadOrphanSupportingDocument,
@@ -10,7 +12,18 @@ import {
 } from '../api';
 
 const ACCEPT = '.pdf,.png,.jpg,.jpeg';
-const MAX_BYTES = 5 * 1024 * 1024;
+const MAX_MB = 5;
+const MAX_BYTES = MAX_MB * 1024 * 1024;
+
+/**
+ * Why an upload failed, in the user's terms. The server refuses an unsupported file type with
+ * VALIDATION_FAILED and no field issues; everything else keeps its own copy (too large, offline).
+ * The old fixed "Upload failed. Try again." gave advice that could not work for a refused file.
+ */
+function uploadErrorMessage(error: unknown): string {
+  if (!(error instanceof ApiError)) return t.requisitions.supportingDocument.uploadFailed;
+  return messageForError(error, { VALIDATION_FAILED: t.requisitions.supportingDocument.notAccepted });
+}
 
 interface Props {
   /**
@@ -103,14 +116,13 @@ function PostSaveField({
   async function pickFile(file: File) {
     setError(null);
     if (file.size > MAX_BYTES) {
-      setError(t.requisitions.supportingDocument.tooLarge);
+      setError(t.requisitions.supportingDocument.tooLarge(MAX_MB));
       return;
     }
     try {
       await upload.mutateAsync(file);
     } catch (err) {
-      setError(t.requisitions.supportingDocument.uploadFailed);
-      void err;
+      setError(uploadErrorMessage(err));
     }
   }
 
@@ -124,8 +136,8 @@ function PostSaveField({
             setError(null);
             try {
               await remove.mutateAsync();
-            } catch {
-              setError(t.requisitions.supportingDocument.uploadFailed);
+            } catch (err) {
+              setError(uploadErrorMessage(err));
             }
           }}
           replacePending={upload.isPending}
@@ -190,15 +202,14 @@ function OrphanField({
   async function pickFile(file: File) {
     setError(null);
     if (file.size > MAX_BYTES) {
-      setError(t.requisitions.supportingDocument.tooLarge);
+      setError(t.requisitions.supportingDocument.tooLarge(MAX_MB));
       return;
     }
     try {
       const stored = await upload.mutateAsync(file);
       setPending(stored);
     } catch (err) {
-      setError(t.requisitions.supportingDocument.uploadFailed);
-      void err;
+      setError(uploadErrorMessage(err));
     }
   }
 

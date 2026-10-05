@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
+  PASSWORD_MIN_LENGTH,
   Role,
   createUserSchema,
   updateUserSchema,
@@ -196,7 +197,7 @@ export function UserFormDialog({ open, onClose, departments, editing }: Props) {
               label={t.users.password}
               type="password"
               autoComplete="new-password"
-              hint={t.auth.passwordRules}
+              hint={t.auth.passwordRules(PASSWORD_MIN_LENGTH)}
               error={errors.password?.message}
               {...form.register('password')}
             />

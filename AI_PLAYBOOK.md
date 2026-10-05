@@ -8,7 +8,8 @@
 >
 > **Maintenance rule:** see `.claude/rules/05-ai-playbook.md`. A `PostToolUse` hook
 > (`.claude/hooks/playbook-reminder.sh`) reminds Claude to update this file after every
-> meaningful edit. Last updated: 2026-09-29 (phase 11, ADR-0002: keys that act as a service
+> meaningful edit. Last updated: 2026-10-04 (lint baseline is now 0 — §16 landmines; `playwright-audit` skill — §15.1). Earlier,
+> 2026-09-29 (phase 11, ADR-0002: keys that act as a service
 > account, `POST /stock/take` — §11 config, §16 landmines, §18 notifications. Earlier,
 > 2026-09-24: CSV product import complete, parts A–L — §6 layout
 > gained the `imports` module and `test/bench/`, §16 gained the OR-compile landmine. Earlier,
@@ -1021,6 +1022,19 @@ reason the locking exists).
 - Never swallow an error. Either handle it or let it propagate to the global filter.
 - Domain failures are typed exceptions (`InsufficientStockError`), not strings.
 - User-facing messages never leak SQL, stack traces, or internal IDs.
+- **What a person reads is chosen by `code`, from `i18n/en.ts`** (`lib/error-message.ts`). Never show
+  `error.message` for a known code: `CONFLICT` alone carries ~45 unrelated server sentences, some for
+  developers. If two different refusals share a code and the user needs to tell them apart, give the
+  case its own `ErrorCode` (`DUPLICATE_ZONE_NAME`, `LOCATION_HOLDS_STOCK`), not a client-side guess.
+- **Validation text is never zod's English.** `i18n/zod-error-map.ts` (client) and
+  `lib/validation-message.ts` (server field issues) turn "String must contain at least 2 character(s)"
+  into "Use at least 2 characters." A sentence a schema or service wrote on purpose passes through
+  untouched. Only 4 of 395 shared validators state a message, so do not rely on that.
+- A call that knows its context passes `messageForError(error, { CODE: 'copy' })` (e.g. change
+  password: `FORBIDDEN` -> "Your current password is not correct."). Copy with `{placeholders}` needs
+  a figure-free twin in `t.errorsPlain`, so braces are never shown.
+- Success toasts end in a full stop. No internal words in copy ("bounced", "cached", "bin").
+  Error toasts are `role="alert"`. Review method and findings: `docs/message_audit.md`.
 
 **Engineering judgement**
 - Prefer the boring solution. 12 users; cleverness costs more than it saves.
@@ -1046,6 +1060,7 @@ reason the locking exists).
 | `/adr` | Record an architectural decision expensive to reverse |
 | `codemod` | Editing a file by script. Read it **before** the first splice — heredocs mangle scripts and a bad splice costs a restore |
 | `api-probe` | Verifying what the server *decides* — refusals, permissions, money arithmetic. Cheaper than clicking and it produces pasteable evidence |
+| `playwright-audit` | Before a release or go-live, or after a big UI change: drives every role through 10+ real operations in one connected story (`scripts/playwright-audit/`), local demo stack only, demo mode off. Findings in `docs/playwright_audit.md`. The browser half; `api-probe` is the server half |
 | `defer-feature` | "We'll do it next version." Switches a half-built feature off behind a config flag without deleting it or its tests |
 | `deploy` | **Before writing any deployment instruction.** There are two compose files and the wrong one ships secrets that are in the public repo |
 | `domain-context` | (auto-loaded) stock/borrowing/requisitions/BOM vocabulary |
@@ -1083,6 +1098,12 @@ reason the locking exists).
 
 ## 16. Landmines (each has cost a session before)
 
+- **`pnpm lint` is 0, so it is a real gate.** It used to carry 20 standing errors that everyone
+  compared against; any error now is new. `scripts/**/*.js` and `docs/**/*.js` are ignored on
+  purpose (standalone tooling). The `react-hooks` ESLint plugin is **not installed**, so an
+  `eslint-disable react-hooks/*` comment is itself a lint error ("rule definition not found").
+  `contracts/requisitions.ts` imports `RequisitionFundingSnapshot` type-only because `funds`
+  imports a value back from it — keep that import erased.
 - **A long `OR` list cannot be compiled, and it fails non-deterministically.** Kysely builds
   `eb.or([...])` into a nested binary tree and walks it by recursion, so a few thousand terms
   overflow the V8 stack **while the SQL is still being built** — Postgres never sees a statement,

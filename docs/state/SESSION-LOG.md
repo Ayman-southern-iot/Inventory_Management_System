@@ -12,6 +12,117 @@ Format:
 **Next:** the single next action, specific enough to start without thinking
 ```
 
+## 2026-10-04 (final) — Everything fixed, verified, pushed
+
+**Did:** on the owner's "fix all": F1 (BOM mutation refreshes its requisitions), F2 (`useBomForRequisition` takes
+`enabled`, `FundsPanel` passes `canAct`), F6 (throttler text), F7 (BOM chain), `USER_EMAIL_IN_USE` and
+`LAST_ADMINISTRATOR`, and `ConfirmDialog` on user/department/compartment deactivation and borrow reject, each with a
+test shown failing first. Logged OQ-35 and OQ-36 instead of guessing business rules. Retracted F9: the bell does close
+on Escape; my script had clicked it twice. Full gate green, containers rebuilt, 104-op audit and message probe re-run.
+
+**Decisions:** user-management codes done on the owner's explicit instruction (auth STOP list); three existing
+`users.int-spec.ts` assertions updated for the new codes. F4 and F5 deliberately not changed. See DECISIONS 2026-10-04.
+
+**Landmines:** the local `api` and `web` containers run this branch (demo off); `docker compose up -d --build api web`
+restores the committed default. Integrators creating zones or compartments see new codes (still 409).
+
+**Next:** open the PRs; the owner decisions in NOW.md.
+
+## 2026-10-04 (earlier) — Messages made professional
+
+**Did:** committed the audit work (`bf7a3cc`), cut `fix/professional-messages`, and fixed M1–M10: humanizer +
+widened zod map, `messageForError` overrides and `errorsPlain`, `role=alert` toasts, ~45 copy edits, add-to-inventory
+inline validation, six new `ErrorCode`s through API, shared, web copy and the integration doc. Rebuilt the local
+`api` and `web` containers and re-ran the probe to confirm the before/after.
+
+**Decisions:** per-code copy, own `ErrorCode` per distinguishable refusal; duplicate user email left generic (auth
+STOP list); one existing zod-map test updated on purpose. See DECISIONS 2026-10-04.
+
+**Landmines:**
+- The local `api` and `web` containers now run this branch (demo off). `docker compose up -d --build api web`
+  from the repo root restores the committed demo default; the VM is untouched.
+- Changing the code returned for a duplicate zone/compartment changes the contract for key integrators
+  (still 409; documented in `15-integration-api.md`).
+- `messages.js` no longer saves threshold 0, creates a project or generates a BOM; the first run did all three.
+- Nothing pushed.
+
+**Next:** push both branches and open PRs; then the owner decisions listed in NOW.md.
+
+## 2026-10-04 (later) — Message and copy audit
+
+**Did:** read all of `en.ts` and the error pipeline; provoked 38 scenarios live; replayed four against
+the real server reply. Wrote `docs/message_audit.md` (M1-M11) and `scripts/playwright-audit/messages.js`.
+
+**Decisions:** report only, no app changes (the ask was a check).
+
+**Landmines:** the probe is not read-only. Scenario A6 saved `EXPENSE_THRESHOLD_BDT = 0` (the app
+accepts 0); restored to 15000 and verified through `PUT /admin/settings`. It also left a project
+named "New project" and a BOM for requisition D in the local demo database. Nothing committed.
+
+**Next:** decide on M1-M3 (a generic mapping fix in `lib/error-message.ts` plus a fuller zod error map
+would clear most of them), then commit the audit files.
+
+## 2026-10-04 (later) — Playwright role audit
+
+**Did:**
+- Built `scripts/playwright-audit/` (harness + one file per role) and ran it end to end: 104
+  operations, 0 failed, exit 0. Wrote `docs/playwright_audit.md` and the `playwright-audit` skill.
+- Turned demo mode off for the **local** demo stack only, with an override file outside the repo
+  (`api` container recreated with `--no-deps`); verified `/auth/demo-accounts` 404 and real-form
+  sign-in for all five personas.
+- Found and evidenced: stale requisition after BOM generate/void; a 403 on every requisition page for
+  non-IM roles; raw zod messages and an unmarked required Storage ID; login/rate-limit behaviour.
+
+**Decisions:** audit against the local demo stack only (never the VM or `infra/`); scripts live under
+`scripts/` (already lint-ignored); findings are recorded, not fixed, because the ask was an audit.
+
+**Landmines:**
+- Five failed logins from one address lock **every** login from it for 900 s (keyed by address, not
+  account). I locked my own client once; restarting the local `api` cleared it.
+- The local demo DB is full of `AUD-*` rows and the local `api` still runs demo-off via the override.
+- `playwright-shots/audit/` holds a screenshot of a throwaway (revoked) API-key secret; gitignored,
+  do not commit.
+- Writing role files through a shell heredoc lost regex backslashes twice (`/\s+/` became `/s+/`);
+  write them with the file tools.
+- Nothing from this audit is committed.
+
+**Next:** commit the audit and open the PR for `chore/lint-clean`; then fix F1 (one-line
+invalidation in `features/boms/api.ts`), F2, F3.
+
+## 2026-10-04 — Phase 11 follow-up: pull, health check, lint to zero
+
+**Did:**
+- Pulled 9 commits into `fix/k2-key-write-redaction` (fast-forward, no conflicts): the K2 redaction
+  interceptor, take throttle and daily cap, service-account create on the panel, funds-dialog flake
+  fix. Found that PRs #1–#6 are already merged into **`fix/lan-secure-context`**, the GitHub default
+  branch, so the work was moved to **`chore/lint-clean`** cut from `86de70f` instead.
+- Health check on Windows: typecheck clean, unit 25 / 257 / 478, guard 8. Lint was the standing 20.
+- Cleared all 20 lint errors; `pnpm lint` exits 0. 14 were `scripts/playwright-verify-snapshots.js`
+  (now ignored via `scripts/**/*.js` in `eslint.config.mjs`), 4 unused imports/variables in three
+  integration specs and one web test, 1 stale `eslint-disable` for a plugin that is not installed,
+  1 inline `import()` type in `packages/shared/src/contracts/requisitions.ts`.
+- Started Docker Desktop and `infra/docker-compose.dev.yml`'s `db-test`, then ran the integration
+  suite: **1013 / 1013, 69 files, 0 fail, 415 s** (baseline 992 / 68).
+- Committed the bulk-import "Coming soon" route (`3af754d`) at the user's request, for production.
+
+**Decisions:** ignore `scripts/**/*.js` rather than fix the script (same reasoning as `docs/**/*.js`);
+remove the `eslint-disable` rather than add `eslint-plugin-react-hooks` (no new dependency); keep the
+`createStockFixture(ctx.db)` call in `purchase-bom-quantity.int-spec.ts` and drop only the unused
+assignment, because the call seeds the stock the test needs. Recorded in DECISIONS, Phase 11.
+
+**Landmines:**
+- **"Coming soon" is UI only.** The sidebar link stays and lands on an EmptyState, but the import API
+  routes still answer to a user with the role. There is no env flag and no server guard, which is
+  not the `defer-feature` shape. No test asserts the page. Not seen in a browser.
+- Starting Docker Desktop also restarted the local demo and dev compose stacks (`restart:
+  unless-stopped`); harmless, but ports 5173/5433/5434 are now in use.
+- `git switch -c <name> origin/fix/lan-secure-context` sets the upstream to the default branch. Push
+  by name, or a bare `git push` targets the wrong branch.
+- This branch's old PR (#5) was already merged, so pushing more to `fix/k2-key-write-redaction`
+  would have been orphaned. Do not.
+
+**Next:** open the PR for `chore/lint-clean`; decide whether the import API should close too.
+
 ## 2026-09-29 (follow-up) — Phase 11: OQ-KT10–KT12, integration doc corrections, Python client
 
 **Did:**

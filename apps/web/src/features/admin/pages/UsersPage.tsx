@@ -8,6 +8,7 @@ import {
   type User,
 } from '@ims/shared';
 import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Checkbox, TextField } from '@/components/ui/Field';
 import { Badge, Pagination, Panel, PageHeader, Table } from '@/components/ui/primitives';
 import { EmptyState, QueryBoundary, SkeletonRows } from '@/components/ui/states';
@@ -33,6 +34,7 @@ export function UsersPage() {
   const [editing, setEditing] = useState<User | undefined>(undefined);
   const [formOpen, setFormOpen] = useState(false);
   const [resettingFor, setResettingFor] = useState<User | undefined>(undefined);
+  const [deactivating, setDeactivating] = useState<User | undefined>(undefined);
 
   const query = useMemo<ListUsersQuery>(
     () => ({
@@ -170,7 +172,8 @@ export function UsersPage() {
                           size="sm"
                           aria-label={`${user.isActive ? t.users.deactivate : t.users.activate} ${user.fullName}`}
                           icon={<Power aria-hidden className="size-4" />}
-                          onClick={() => void toggleActive(user)}
+                          // Deactivating ends their access, so it asks first; activating does not.
+                          onClick={() => (user.isActive ? setDeactivating(user) : void toggleActive(user))}
                         />
                       </div>
                     </td>
@@ -188,6 +191,19 @@ export function UsersPage() {
         </QueryBoundary>
       </Panel>
 
+      <ConfirmDialog
+        open={deactivating !== undefined}
+        title={deactivating ? t.users.deactivateConfirmTitle(deactivating.fullName) : ''}
+        body={t.users.deactivateConfirmBody}
+        confirmLabel={t.users.deactivate}
+        isPending={setActive.isPending}
+        onClose={() => setDeactivating(undefined)}
+        onConfirm={() => {
+          const target = deactivating;
+          setDeactivating(undefined);
+          if (target) void toggleActive(target);
+        }}
+      />
       <UserFormDialog
         open={formOpen}
         onClose={() => setFormOpen(false)}

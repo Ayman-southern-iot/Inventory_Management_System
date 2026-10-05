@@ -48,6 +48,58 @@ export const t = {
     dash: '—',
   },
 
+  /**
+   * Plain wording for the validation messages zod writes in its own English (message audit M2).
+   * `lib/validation-message.ts` maps zod's defaults onto these; a sentence somebody wrote on purpose
+   * is never rewritten. `fields` names a field only where a message is shown without the field
+   * beside it (a toast), keyed by the last segment of the server's field path.
+   */
+  validation: {
+    fields: {
+      productCode: 'Storage ID',
+      name: 'Name',
+      fullName: 'Full name',
+      email: 'Email',
+      password: 'Password',
+      newPassword: 'New password',
+      currentPassword: 'Current password',
+      designation: 'Designation',
+      reason: 'Reason',
+      note: 'Note',
+      quantity: 'Quantity',
+      unitCost: 'Unit cost',
+      unit: 'Unit',
+      vendor: 'Vendor',
+      amount: 'Amount',
+      roomId: 'Room',
+      zoneId: 'Zone',
+      compartmentId: 'Compartment',
+      categoryId: 'Category',
+      existingProductId: 'Product',
+      expectedReturnDate: 'Expected return date',
+      approvalDeadline: 'Approval deadline',
+    },
+    named: (field: string, text: string) => `${field}: ${text}`,
+    requiredNamed: (field: string) => `${field} is required.`,
+    required: 'Required',
+    tooShort: (min: number) => (min <= 1 ? 'Required' : `Use at least ${min} characters.`),
+    tooLong: (max: number) => `Use no more than ${max} characters.`,
+    exactLength: (length: number) => `Use exactly ${length} characters.`,
+    greaterThan: (n: string) => `Enter a number greater than ${n}.`,
+    atLeast: (n: string) => `Enter ${n} or more.`,
+    lessThan: (n: string) => `Enter a number less than ${n}.`,
+    atMost: (n: string) => `Enter ${n} or less.`,
+    notANumber: 'Enter a number.',
+    invalidEmail: 'Enter a valid email address.',
+    invalidChoice: 'Choose an option.',
+    invalidEnum: 'Choose one of the available options.',
+    invalidUrl: 'Enter a valid web address.',
+    invalidDate: 'Enter a valid date.',
+    invalidGeneric: 'This value is not valid.',
+    tooFewItems: (min: number) => (min <= 1 ? 'Add at least one item.' : `Add at least ${min} items.`),
+    tooManyItems: (max: number) => `Add no more than ${max} items.`,
+  },
+
   states: {
     errorTitle: 'Something went wrong',
     errorBody: 'The request did not complete. This is usually temporary.',
@@ -58,7 +110,7 @@ export const t = {
     notFoundBody: 'That page does not exist, or you do not have access to it.',
     forbiddenTitle: 'Not allowed',
     forbiddenBody: 'Your account does not have permission to view this page.',
-    crashTitle: 'This screen crashed',
+    crashTitle: 'This screen stopped working',
     crashBody: 'Reloading usually fixes it. If it keeps happening, tell an administrator.',
     reload: 'Reload the page',
   },
@@ -82,7 +134,10 @@ export const t = {
     confirmPassword: 'Confirm new password',
     passwordMismatch: 'The two passwords do not match.',
     passwordChanged: 'Password changed.',
-    passwordRules: 'At least 4 characters.',
+    passwordRules: (min: number) => `At least ${min} characters.`,
+    // The server answers a wrong current password with FORBIDDEN; on its own that code reads as
+    // "you may not do this", which is the wrong thing to tell someone who mistyped (message audit M1).
+    currentPasswordIncorrect: 'Your current password is not correct.',
     // Dev-only block under the sign-in form (Phase 05). Never ships to production.
     // Shown only when the server has DEMO_ACCOUNTS_ENABLED on; the list is read live from the
     // database, so users added or renamed in the admin panel appear here without a redeploy.
@@ -185,10 +240,10 @@ export const t = {
      * which. Purchasing plus transportation is what left the company; anybody who wants that sum
      * can add two numbers, and nobody has to decode a label to get there.
      */
-    spendRequested: 'Total Money Requested',
-    spendApproved: 'Total Money Approved',
-    spendPurchased: 'Total Money in Purchasing',
-    spendTransportation: 'Total Transportation',
+    spendRequested: 'Total money requested',
+    spendApproved: 'Total money approved',
+    spendPurchased: 'Total money in purchasing',
+    spendTransportation: 'Total transportation',
     spendHint: 'What you asked for, what was approved, and what has actually been paid out.',
 
     /** Shown in place of a block when the person has nothing in it yet. */
@@ -223,6 +278,9 @@ export const t = {
     activated: 'User activated.',
     deactivated: 'User deactivated.',
     passwordReset: 'Password reset. Give the new password to the user directly.',
+    deactivateConfirmTitle: (name: string) => `Deactivate ${name}?`,
+    deactivateConfirmBody:
+      'They will not be able to sign in, and any session they have open ends. You can activate the account again later.',
     emptyTitle: 'No users match this filter',
   },
 
@@ -366,6 +424,9 @@ export const t = {
     members: 'Active members',
     created: 'Department created.',
     updated: 'Department updated.',
+    deactivateConfirmTitle: (name: string) => `Deactivate ${name}?`,
+    deactivateConfirmBody:
+      'It will no longer be offered when choosing a department. You can activate it again later.',
     emptyTitle: 'No departments yet',
     emptyBody: 'Create one before assigning users to it.',
   },
@@ -400,8 +461,8 @@ export const t = {
     subthresholdApproverHint:
       'Approves every requisition below the threshold. Required before sub-threshold requisitions can be submitted.',
     slotHeldByInactive:
-      'This slot points at a deactivated user. New requisitions will refuse until it is reassigned or the user is reactivated.',
-    slotHeldByInactiveWarning: 'Slot is held by an inactive user — submissions will be refused.',
+      'This slot points at a deactivated user. New requisitions cannot be submitted until it is reassigned or the user is reactivated.',
+    slotHeldByInactiveWarning: 'This slot is held by a deactivated user, so submissions are blocked.',
     /**
      * Audit log configuration. The audit recording set is an explicit allow-list rather than a
      * blacklist so turning actions back on does not silently recover history that was disabled
@@ -439,7 +500,7 @@ export const t = {
     downloadPdf: 'Export PDF',
     subtitle: 'The stock register. Every movement is recorded and cannot be edited afterwards.',
     // list
-    searchPlaceholder: 'Search by name or product code',
+    searchPlaceholder: 'Search by name or storage ID',
     newProduct: 'New product',
     editProduct: 'Edit product',
     productCode: 'Storage ID',
@@ -526,7 +587,7 @@ export const t = {
     quantity: 'Quantity',
     maxMovable: 'Most you can move',
     nothingToMove: 'There is no unreserved stock to move.',
-    reservedExcluded: '{n} unit(s) are reserved for a pending request and cannot be moved.',
+    reservedExcluded: 'Reserved stock cannot be moved. {n} here is held for a pending request.',
     adjustment: 'Adjustment',
     adjustmentHint: 'Positive adds stock, negative removes it.',
     reason: 'Reason',
@@ -581,8 +642,8 @@ export const t = {
     unverifyPurchase: 'Back to purchased',
     unverifyPurchaseHint:
       'Returns this requisition to "Purchased" so the invoice and purchase rows can be re-recorded.',
-    unverifyReason: 'Why are you un-verifying?',
-    purchaseUnverified: 'Purchase un-verified',
+    unverifyReason: 'Why are you undoing the verification?',
+    purchaseUnverified: 'Verification undone.',
     /*
      * Phase 08 — the rest of the way back. Every title names the stage being returned *to*, and
      * every hint names the exact entry being undone, because "Back" one row above a list of three
@@ -592,17 +653,17 @@ export const t = {
     undoSendToAccountsHint:
       'Takes this requisition off the Accounts queue and returns it to "BOM generated". Only possible while no money has arrived.',
     undoSendReason: 'Why are you taking it back?',
-    sendToAccountsUndone: 'Taken back from Accounts',
+    sendToAccountsUndone: 'Taken back from Accounts.',
     voidReceipt: 'Undo money received',
     voidReceiptHint:
       'Voids {amount} received on {when}. The entry is kept and marked, not deleted, and the funded total drops by that much.',
     voidReceiptReason: 'Why is this receipt being voided?',
-    receiptVoided: 'Receipt voided',
+    receiptVoided: 'Receipt voided.',
     voidPurchase: 'Undo purchase',
     voidPurchaseHint:
       'Voids the {amount} purchase from {vendor}. The entry is kept and marked, not deleted. Anything already added to inventory blocks this.',
     voidPurchaseReason: 'Why is this purchase being voided?',
-    purchaseVoided: 'Purchase voided',
+    purchaseVoided: 'Purchase voided.',
     /** Shown in place of Back at the two stages that cannot be undone. */
     noWayBack: 'Added to inventory. This cannot be undone here.',
     receiveToStock: 'Add to inventory',
@@ -611,7 +672,7 @@ export const t = {
     amount: 'Amount',
     receivedAt: 'Date received',
     reference: 'Reference',
-    referenceHint: 'Cheque number, transfer id — whatever Accounts gave you.',
+    referenceHint: 'Cheque number, transfer ID — whatever Accounts gave you.',
     vendor: 'Vendor',
     invoiceNo: 'Invoice number',
     purchasedAt: 'Date purchased',
@@ -652,6 +713,12 @@ export const t = {
     newProductTitle: 'This item is not in the catalogue yet',
     newProductHint: 'Receiving it creates the product, so it becomes searchable and borrowable.',
     productCode: 'Storage ID',
+    // Said before the click, not after it: the server refuses a new product without these, and the
+    // form used to mark neither (message audit M2).
+    productCodeRequired: 'Enter a storage ID for the new product.',
+    productNameRequired: 'Enter a name for the new product.',
+    existingProductRequired: 'Choose which product this is.',
+    invoiceNotAccepted: 'That file type is not accepted. Attach a PNG, JPEG or PDF.',
     productName: 'Product name',
     category: 'Category',
     unit: 'Unit',
@@ -802,8 +869,9 @@ export const t = {
     remove: 'Remove',
     uploadedOn: (when: string) => `Uploaded ${when}`,
     accepted: 'PNG or JPEG, up to 2 MB.',
-    uploaded: 'Signature saved',
-    removed: 'Signature removed',
+    uploaded: 'Signature saved.',
+    removed: 'Signature removed.',
+    notAccepted: 'That file type is not accepted. Upload a PNG or JPEG image.',
     preview: 'Your signature',
   },
   notifications: {
@@ -818,7 +886,7 @@ export const t = {
     /** Shown on the badge when the real number would not fit. */
     overflow: '9+',
     unreadOnly: 'Unread only',
-    loadError: 'Could not load notifications',
+    loadError: 'Could not load notifications.',
     retry: 'Try again',
   },
   auditLog: {
@@ -863,7 +931,7 @@ export const t = {
     newActivity: 'New activity available',
     returnToLatest: 'Return to latest',
     emptyTitle: 'No audit entries yet',
-    emptyBody: 'As admins perform actions, they will appear here within seven seconds.',
+    emptyBody: 'As admins perform actions, they will appear here.',
     details: {
       title: 'Audit entry',
       actor: 'Actor',
@@ -930,7 +998,7 @@ export const t = {
     itemsInStock: 'Items in stock',
     depth: 'Depth',
     depthValue: '{n} of {max}',
-    trackableSub: 'Turn off for categories you don’t count unit-by-unit.',
+    trackableSub: 'Turn off for categories that are not counted unit by unit.',
     addSubcategory: 'Add subcategory',
     addSubcategoryPlaceholder: 'e.g. Laser Modules',
     add: 'Add',
@@ -1009,6 +1077,9 @@ export const t = {
     zoneUpdated: 'Zone updated.',
     compartmentCreated: 'Compartment created.',
     compartmentUpdated: 'Compartment updated.',
+    deactivateCompartmentTitle: (code: string) => `Deactivate compartment ${code}?`,
+    deactivateCompartmentBody:
+      'Nothing new can be stored in it. Stock already there has to be moved first. You can activate it again later.',
     emptyTitle: 'No rooms yet',
     emptyBody: 'Create a room, then add zones and compartments inside it.',
     noCompartments: 'No compartments in this zone yet.',
@@ -1059,7 +1130,7 @@ export const t = {
     issueFromStockHint:
       'Records a handover that already happened. The stock leaves the shelf now and the person is notified.',
     issueTo: 'Issue to',
-    fromBin: 'From bin',
+    fromBin: 'From compartment',
     choosePerson: 'Choose a person',
     noPeopleMatch: 'Nobody matches that.',
     returns: 'Returns',
@@ -1108,6 +1179,8 @@ export const t = {
     requested: 'Request submitted. The Inventory Manager will review it.',
     approved: 'Approved and issued.',
     rejected: 'Rejected. The reservation has been released.',
+    rejectConfirmTitle: 'Reject this request?',
+    rejectConfirmBody: 'The reservation is released and the request is closed.',
     returned: 'Return recorded.',
     reverted: 'Reverted to pending.',
     cancelled: 'Request cancelled.',
@@ -1171,7 +1244,7 @@ export const t = {
     title: 'Projects',
     subtitle: 'What each project has borrowed, and what it has asked for.',
     create: 'New project',
-    created: 'Project created',
+    created: 'Project created.',
     nameLabel: 'Project name',
     createdOn: (when: string) => `Created ${when}`,
     empty: 'No projects yet.',
@@ -1189,8 +1262,8 @@ export const t = {
     reject: 'Do not accept',
     rejectReasonLabel: 'Why not?',
     rejectReasonHint: 'The person who proposed it is told, so say enough for them to understand.',
-    accepted: 'Project accepted',
-    rejected: 'Project not accepted',
+    accepted: 'Project accepted.',
+    rejected: 'Project not accepted.',
     proposedBy: 'Proposed by',
     decidedBy: 'Decided by',
     createAnyway: 'Create anyway',
@@ -1207,7 +1280,7 @@ export const t = {
     tagReturned: 'Returned',
     borrowedBy: 'Borrowed by',
     remove: 'Remove',
-    removed: 'Removed from this project',
+    removed: 'Removed from this project.',
     removeHint: 'Removes it from this project. The borrowing record itself is kept.',
     outstanding: (out: number, total: number) => `${out} of ${total} still out`,
     counts: (inUse: number, returned: number) => `${inUse} in use · ${returned} returned`,
@@ -1482,7 +1555,7 @@ export const t = {
      * replayed. Both are derived from the events log on the server — no new status enum.
      */
     statusTags: {
-      draftForRevise: 'For revise',
+      draftForRevise: 'For revision',
       draftRevised: 'Revised',
       draftForReviseHint: 'Sent back for budget revision. Edit the items and re-submit.',
       draftRevisedHint: 'Re-submitted after a send-back. Approvers will see a fresh chain.',
@@ -1500,8 +1573,9 @@ export const t = {
       pickerCta: 'Attach document',
       replace: 'Replace',
       remove: 'Remove',
-      tooLarge: 'That file is too large. Maximum size is 5 MB.',
-      uploadFailed: 'Upload failed. Try again.',
+      tooLarge: (maxMb: number) => `That file is too large. The most you can attach is ${maxMb} MB.`,
+      notAccepted: 'That file type is not accepted. Attach a PNG, JPEG or PDF.',
+      uploadFailed: 'The file could not be uploaded. Check your connection and try again.',
     },
     supportingDocumentCard: {
       label: 'Supporting document',
@@ -1564,7 +1638,7 @@ export const t = {
     voidBanner: 'Voided',
     voidedAt: 'Voided at',
     voidedBy: 'By',
-    bouncedBanner: 'Bounced — over the tolerance',
+    bouncedBanner: 'Rejected — over the budget tolerance',
 
     // generate
     pickRequisitions: 'Pick approved requisitions',
@@ -1580,7 +1654,7 @@ export const t = {
     lineQuantityLabel: 'Qty',
     lineSourceQuantityHint: 'Originally {qty} on the requisition',
     removeLineLabel: 'Drop from BOM',
-    bounceWarning: 'This BOM will bounce — its sources will return to the approver queue.',
+    bounceWarning: 'This BOM is over budget. Its requisitions will go back to the approvers.',
     generate: 'Generate BOM',
     generatedToast: 'BOM created.',
     approved: 'Approved',
@@ -1588,7 +1662,7 @@ export const t = {
     // for budget revision rather than generating a BOM that cannot be approved.
     sendBackForRevision: 'Send back for revision',
     sendBackHint:
-      'A single-line BOM cannot shrink to fit. Bounce this requisition back to the requester — they edit the budget, re-submit, and the approval chain replays.',
+      'A single-line BOM cannot be reduced to fit. Send this requisition back to the requester: they revise the budget, re-submit, and the approval chain starts again.',
     sendBackDialog: {
       title: 'Send requisition back for revision',
       body: 'The requisition will go back to the requester as a draft. They edit the budget and re-submit — you will get a fresh approval row to decide.',
@@ -1601,7 +1675,7 @@ export const t = {
     // render
     render: 'Render PDF',
     reRender: 'Re-render PDF',
-    renderToast: 'PDF cached.',
+    renderToast: 'PDF ready.',
     downloadPdf: 'Download PDF',
 
     // void
@@ -1625,9 +1699,22 @@ export const t = {
     // history / approvals
     historyHeading: 'History',
     approvalChainHeading: 'Approval chain (frozen at generation)',
+    footprintHeaders: {
+      stage: 'Stage',
+      slot: 'Slot',
+      name: 'Name',
+      designation: 'Designation',
+      actedAt: 'Acted at',
+      onBehalfOf: 'On behalf of',
+    },
   },
 
   imports: {
+    /** Bulk import is switched off in the UI for now; the route shows this instead of the page. */
+    comingSoon: {
+      title: 'Bulk import',
+      body: 'Coming soon.',
+    },
     /** What everybody who is not running the import sees, for as long as it runs. */
     locked: {
       title: 'Updating inventory',
@@ -1721,6 +1808,16 @@ export const t = {
     BORROW_INVALID_TRANSITION: 'That is no longer possible for this request. Refresh to see why.',
     BORROW_ALREADY_DECIDED: 'Someone already acted on this. Refresh to see the outcome.',
     DUPLICATE_PROJECT_NAME: 'A project with that name already exists.',
+    DUPLICATE_DEPARTMENT_NAME: 'A department with that name already exists.',
+    DUPLICATE_ROOM_NAME: 'A room with that name already exists.',
+    DUPLICATE_ZONE_NAME: 'That room already has a zone with that name.',
+    DUPLICATE_COMPARTMENT_CODE: 'That zone already has a compartment with that code.',
+    DEPARTMENT_HAS_ACTIVE_USERS:
+      'This department still has active users. Move them to another department before deactivating it.',
+    LOCATION_HOLDS_STOCK: 'This location still holds stock. Move or issue it first, then deactivate it.',
+    USER_EMAIL_IN_USE: 'Another account already uses that email address.',
+    LAST_ADMINISTRATOR:
+      'This is the last active administrator, so that cannot be done. Make someone else an administrator first.',
     REQUISITION_INVALID_TRANSITION:
       'That is no longer possible for this requisition. Refresh to see its current stage.',
     APPROVAL_ALREADY_ACTED: 'Someone already acted on this approval. Refresh to see the outcome.',
@@ -1752,7 +1849,10 @@ export const t = {
     SESSION_REVOKED: 'An administrator ended your session. Please sign in again.',
     FORBIDDEN: 'You do not have permission to do that.',
     NOT_FOUND: 'That item no longer exists.',
-    CONFLICT: 'That change conflicts with the current state.',
+    // Forty-odd unrelated refusals share this code, so the sentence has to fit all of them; the common
+    // ones (a taken name, a department or location that is still in use) have codes of their own below.
+    CONFLICT:
+      'That could not be saved because it clashes with something that already exists or has just changed. Refresh and check, then try again.',
     ACCOUNT_DEACTIVATED: 'This account has been deactivated.',
     RATE_LIMITED: 'Too many attempts. Wait a few minutes and try again.',
     // Read by an integrator in a log file, not by a user on a screen, so each one says what to
@@ -1784,11 +1884,11 @@ export const t = {
       'This stock changed while the screen was open. The figures have been refreshed — check them and try again.',
     CATEGORY_NOT_TRACKABLE: 'That category does not track stock, so it cannot hold quantities.',
     STOCK_RESERVED: 'Those units are reserved for a pending borrow and cannot be moved or removed.',
-    BOM_OVER_BUDGET: 'This BOM was over budget and bounced. Adjust the unit costs and try again.',
+    BOM_OVER_BUDGET: 'This BOM is over budget and was not accepted. Adjust the unit costs and try again.',
     // The screen names the offending requisition and the shortfall from details.overspent;
     // this is the fallback wherever only the bare message is shown.
     BOM_SPANS_MULTIPLE_REQUESTERS:
-      'A BOM covers one requester. Un-tick the requisitions that belong to someone else and generate a separate BOM for them.',
+      'A BOM covers one requester. Untick the requisitions that belong to someone else and generate a separate BOM for them.',
     // The screen names the shortfall from details; this is the fallback wherever only the
     // bare message is shown.
     PURCHASE_EXCEEDS_FUNDED:
@@ -1812,7 +1912,7 @@ export const t = {
     RETURN_EXCEEDS_UNSPENT:
       'Only {unspent} is unspent, so {attempted} cannot be returned to Accounts.',
     INVOICE_MISSING:
-      '{purchasesWithoutInvoice} purchase(s) on this requisition still have no invoice attached. Upload them before verifying.',
+      'Some purchases on this requisition ({purchasesWithoutInvoice}) still have no invoice attached. Upload them before verifying.',
     FUNDING_EXCEEDS_APPROVED:
       'Recording {attempted} would take the funding to {wouldBecome}, past the approved {approved}. Ask an approver to revise the amount first.',
     PARTIAL_FUNDING_DISABLED:
@@ -1820,15 +1920,15 @@ export const t = {
     RECEIVE_EXCEEDS_PURCHASED:
       'Only {outstanding} of "{itemName}" is still outstanding, so {attempted} cannot be received.',
     CANNOT_UNVERIFY_WITH_RETURNS:
-      'This requisition has {returnedAmount} returned to Accounts already. Un-verifying is not the right way to undo a refund — record a corrective return instead.',
+      'This requisition has {returnedAmount} returned to Accounts already. Undoing the verification is not the right way to reverse a refund — record a corrective return instead.',
     // Every reversal refusal names the step that has to be undone first. "You cannot do this" on
     // its own leaves the IM guessing, and the answer is always one specific earlier stage.
     CANNOT_UNDO_SEND_WITH_RECEIPTS:
       'Accounts has already released {funded} against this requisition. Void that receipt before taking it back off the Accounts queue.',
     CANNOT_VOID_RECEIPT_WITH_PURCHASES:
-      '{purchaseCount} purchase(s) are recorded against this money. Void those first, then the receipt.',
+      'Purchases are recorded against this money ({purchaseCount}). Void those first, then the receipt.',
     CANNOT_VOID_RECEIVED_PURCHASE:
-      '{receivedQuantity} unit(s) from this purchase are already on a shelf, so it can no longer be voided. Correct the stock instead.',
+      'Some units from this purchase ({receivedQuantity}) are already on a shelf, so it can no longer be voided. Correct the stock instead.',
     MONEY_ROW_NOT_FOUND:
       'That entry is not on this requisition, or somebody has already voided it. Reload the page to see where things stand.',
     SIGNATURE_NOT_UPLOADED:
@@ -1839,8 +1939,39 @@ export const t = {
       'You cannot approve more than the {requested} requested. Approve up to that, or send the requisition back so the requester can restate it.',
     DELEGATION_ALREADY_LIVE:
       'You already have a delegation covering part of that period. An approver can have only one delegate at a time — revoke the existing one first.',
-    INTERNAL: 'Something went wrong on the server.',
-    NETWORK: 'Cannot reach the server.',
+    INTERNAL: 'Something went wrong on our side. Try again in a moment, and tell an administrator if it keeps happening.',
+    NETWORK: 'Cannot reach the server. Check your connection and try again.',
+  },
+
+  /**
+   * The errors above that quote a figure, said without it. Used when the server did not send the
+   * figure (or sent it under another name), so a person never reads a literal "{max}" (M8).
+   */
+  errorsPlain: {
+    INSUFFICIENT_STOCK_QUARANTINED:
+      'Some of the stock at this location is in quarantine, so not all of it is available.',
+    BOM_QUANTITY_EXCEEDS_SOURCE:
+      'That quantity is more than the requisition asks for. Reduce it and try again.',
+    RETURN_EXCEEDS_UNSPENT:
+      'That is more than the unspent amount, so it cannot be returned to Accounts.',
+    INVOICE_MISSING:
+      'Some purchases on this requisition still have no invoice attached. Upload them before verifying.',
+    FUNDING_EXCEEDS_APPROVED:
+      'That would take the funding past the approved amount. Ask an approver to revise the amount first.',
+    PARTIAL_FUNDING_DISABLED:
+      'Money has to come in one payment for now. Record the full outstanding amount.',
+    RECEIVE_EXCEEDS_PURCHASED:
+      'That is more than is still outstanding for this item, so it cannot be received.',
+    CANNOT_UNVERIFY_WITH_RETURNS:
+      'Money has already been returned to Accounts on this requisition. Undoing the verification is not the right way to reverse a refund — record a corrective return instead.',
+    CANNOT_UNDO_SEND_WITH_RECEIPTS:
+      'Accounts has already released money against this requisition. Void that receipt before taking it back off the Accounts queue.',
+    CANNOT_VOID_RECEIPT_WITH_PURCHASES:
+      'Purchases are recorded against this money. Void those first, then the receipt.',
+    CANNOT_VOID_RECEIVED_PURCHASE:
+      'Some units from this purchase are already on a shelf, so it can no longer be voided. Correct the stock instead.',
+    APPROVED_EXCEEDS_REQUESTED:
+      'You cannot approve more than was requested. Approve up to that amount, or send the requisition back so the requester can restate it.',
   },
 } as const;
 

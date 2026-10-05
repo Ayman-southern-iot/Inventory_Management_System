@@ -13,6 +13,7 @@ import {
 } from '@ims/shared';
 import { z } from 'zod';
 import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Dialog } from '@/components/ui/Dialog';
 import { Checkbox, TextField } from '@/components/ui/Field';
 import { Badge, PageHeader, Panel } from '@/components/ui/primitives';
@@ -62,6 +63,7 @@ export function LocationsPage() {
   const updateCompartment = useUpdateCompartment();
 
   const [roomDialogOpen, setRoomDialogOpen] = useState(false);
+  const [deactivatingCompartment, setDeactivatingCompartment] = useState<Compartment | undefined>(undefined);
   const [editingRoom, setEditingRoom] = useState<Room | undefined>(undefined);
   /** Which room a new zone goes into, and which zone is being renamed. */
   const [zoneTarget, setZoneTarget] = useState<{ room: Room; zone?: Zone } | undefined>(undefined);
@@ -319,7 +321,11 @@ export function LocationsPage() {
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  onClick={() => void toggleCompartment(compartment)}
+                                  onClick={() =>
+                                    compartment.isActive
+                                      ? setDeactivatingCompartment(compartment)
+                                      : void toggleCompartment(compartment)
+                                  }
                                 >
                                   {compartment.isActive ? t.users.deactivate : t.users.activate}
                                 </Button>
@@ -439,6 +445,24 @@ export function LocationsPage() {
           />
         </form>
       </Dialog>
+
+      <ConfirmDialog
+        open={deactivatingCompartment !== undefined}
+        title={
+          deactivatingCompartment
+            ? t.locations.deactivateCompartmentTitle(deactivatingCompartment.code)
+            : ''
+        }
+        body={t.locations.deactivateCompartmentBody}
+        confirmLabel={t.users.deactivate}
+        isPending={updateCompartment.isPending}
+        onClose={() => setDeactivatingCompartment(undefined)}
+        onConfirm={() => {
+          const target = deactivatingCompartment;
+          setDeactivatingCompartment(undefined);
+          if (target) void toggleCompartment(target);
+        }}
+      />
     </>
   );
 }
