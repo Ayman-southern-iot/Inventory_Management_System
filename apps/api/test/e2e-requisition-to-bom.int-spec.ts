@@ -38,7 +38,6 @@ import {
   it,
 } from 'vitest';
 import {
-  ErrorCode,
   RequisitionEventType,
   RequisitionStatus,
   Role,

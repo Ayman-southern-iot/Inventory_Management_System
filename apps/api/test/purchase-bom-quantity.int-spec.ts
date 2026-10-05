@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { Role } from '@ims/shared';
 import { createTestApp, httpClient, type HttpClient, type TestApp } from './app';
 import { createDepartment, createUser, login, resetData, seedSubthresholdApprover , futureDeadline} from './factories';
-import { createStockFixture, type StockFixture } from './stock-factories';
+import { createStockFixture } from './stock-factories';
 
 /**
  * Issue 5 (operator, 2026-08-12): `recordPurchase` was writing the wire quantity straight
@@ -21,7 +21,6 @@ describe('recordPurchase — BOM quantity override', () => {
   let requester: { id: string; client: HttpClient };
   let approver: { id: string; client: HttpClient };
   let departmentId: string;
-  let fixture: StockFixture;
 
   beforeAll(async () => {
     ctx = await createTestApp();
@@ -37,7 +36,7 @@ describe('recordPurchase — BOM quantity override', () => {
     requester = await signIn([Role.GENERAL]);
     approver = await signIn([Role.GENERAL, Role.APPROVER]);
     departmentId = (await createDepartment(ctx.db)).id;
-    fixture = await createStockFixture(ctx.db);
+    await createStockFixture(ctx.db);
     await seedSubthresholdApprover(ctx, approver.id);
   });
 
