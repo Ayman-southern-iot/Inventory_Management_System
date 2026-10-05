@@ -61,7 +61,7 @@ export function SignaturePanel() {
       await upload.mutateAsync(file);
       toast.success(t.signature.uploaded);
     } catch (error) {
-      toast.error(messageForError(error));
+      toast.error(messageForError(error, { VALIDATION_FAILED: t.signature.notAccepted }));
     }
   }
 

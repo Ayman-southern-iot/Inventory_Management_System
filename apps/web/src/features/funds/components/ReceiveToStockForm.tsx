@@ -27,6 +27,12 @@ function flattenCategories(
   ]);
 }
 
+interface ProductProblems {
+  code?: string;
+  name?: string;
+  existing?: string;
+}
+
 interface LineState {
   include: boolean;
   quantity: string;
@@ -83,6 +89,13 @@ export function ReceiveToStockForm({
    * Keyed by purchase line, because each row is its own little form.
    */
   const [lineErrors, setLineErrors] = useState<Record<string, string>>({});
+  /**
+   * What a free-text line still needs before it can become a product. The server refuses a new
+   * product with no storage ID, but the form marked neither field and showed only a toast carrying
+   * the library's "String must contain at least 1 character(s)" (message audit M2). Said before the
+   * click, on the field, like the compartment above.
+   */
+  const [productErrors, setProductErrors] = useState<Record<string, ProductProblems>>({});
 
   useEffect(() => {
     const initial: Record<string, LineState> = {};
@@ -114,6 +127,12 @@ export function ReceiveToStockForm({
 
   function update(id: string, patch: Partial<LineState>) {
     setLines((previous) => ({ ...previous, [id]: { ...previous[id]!, ...patch } }));
+    // Editing a line is answering what was wrong with it.
+    setProductErrors((previous) => {
+      if (!previous[id]) return previous;
+      const { [id]: _cleared, ...rest } = previous;
+      return rest;
+    });
   }
 
   async function onSubmit() {
@@ -128,7 +147,24 @@ export function ReceiveToStockForm({
       if (!state.compartmentId) missing[line.id] = t.requisitions.fieldRequired;
     }
     setLineErrors(missing);
-    if (Object.keys(missing).length > 0) {
+
+    const unresolved: Record<string, ProductProblems> = {};
+    for (const line of selected) {
+      // A line already linked to a product has nothing to resolve.
+      if (line.productId) continue;
+      const state = lines[line.id]!;
+      const problems: ProductProblems = {};
+      if (state.resolution === 'existing') {
+        if (!state.existingProductId) problems.existing = t.funds.existingProductRequired;
+      } else {
+        if (!state.productCode.trim()) problems.code = t.funds.productCodeRequired;
+        if (!state.productName.trim()) problems.name = t.funds.productNameRequired;
+      }
+      if (Object.keys(problems).length > 0) unresolved[line.id] = problems;
+    }
+    setProductErrors(unresolved);
+
+    if (Object.keys(missing).length > 0 || Object.keys(unresolved).length > 0) {
       focusFirstInvalid();
       toast.error(t.requisitions.fixHighlighted);
       return;
@@ -276,6 +312,7 @@ export function ReceiveToStockForm({
                           {/* Ranked by the typed name, so the board they actually bought is at
                               the top rather than buried alphabetically. */}
                           <select
+                            aria-invalid={productErrors[line.id]?.existing ? true : undefined}
                             value={state.existingProductId}
                             onChange={(event) =>
                               update(line.id, { existingProductId: event.target.value })
@@ -303,16 +340,25 @@ export function ReceiveToStockForm({
                                 </option>
                               ))}
                           </select>
+                          {productErrors[line.id]?.existing ? (
+                            <p role="alert" className="text-xs text-danger">
+                              {productErrors[line.id]?.existing}
+                            </p>
+                          ) : null}
                         </label>
                       ) : (
                         <>
                       <TextField
                         label={t.funds.productCode}
+                        required
+                        error={productErrors[line.id]?.code}
                         value={state.productCode}
                         onChange={(event) => update(line.id, { productCode: event.target.value })}
                       />
                       <TextField
                         label={t.funds.productName}
+                        required
+                        error={productErrors[line.id]?.name}
                         value={state.productName}
                         onChange={(event) => update(line.id, { productName: event.target.value })}
                       />

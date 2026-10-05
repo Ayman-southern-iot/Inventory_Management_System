@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/Field';
 import { PageHeader, Pagination, Panel, Table } from '@/components/ui/primitives';
 import { EmptyState, QueryBoundary, SkeletonRows } from '@/components/ui/states';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ReasonDialog } from '@/components/ui/ReasonDialog';
 import { useToast } from '@/components/ui/Toast';
 import { t } from '@/i18n/en';
@@ -50,6 +51,7 @@ export function BorrowingPage({ mine = false }: { mine?: boolean }) {
   const [reassigning, setReassigning] = useState<BorrowRequest | undefined>(undefined);
   /** The borrow whose decision is being reverted, or null. */
   const [reverting, setReverting] = useState<string | null>(null);
+  const [rejecting, setRejecting] = useState<{ id: string; borrowNo: string } | null>(null);
 
   const debouncedSearch = useDebouncedValue(search, SEARCH_DEBOUNCE_MS);
 
@@ -225,16 +227,8 @@ export function BorrowingPage({ mine = false }: { mine?: boolean }) {
                               size="sm"
                               aria-label={`${t.borrowing.reject} ${borrow.borrowNo}`}
                               icon={<X aria-hidden className="size-4 text-danger" />}
-                              onClick={() =>
-                                void act(
-                                  () =>
-                                    decide.mutateAsync({
-                                      id: borrow.id,
-                                      input: { approve: false, note: null },
-                                    }),
-                                  t.borrowing.rejected,
-                                )
-                              }
+                              // Rejecting releases the reservation at once, so it asks first.
+                              onClick={() => setRejecting({ id: borrow.id, borrowNo: borrow.borrowNo })}
                             >
                               {t.borrowing.reject}
                             </Button>
@@ -324,6 +318,23 @@ export function BorrowingPage({ mine = false }: { mine?: boolean }) {
         onClose={() => setReassigning(undefined)}
       />
 
+      <ConfirmDialog
+        open={rejecting !== null}
+        title={t.borrowing.rejectConfirmTitle}
+        body={t.borrowing.rejectConfirmBody}
+        confirmLabel={t.borrowing.reject}
+        isPending={decide.isPending}
+        onClose={() => setRejecting(null)}
+        onConfirm={() => {
+          const target = rejecting;
+          setRejecting(null);
+          if (!target) return;
+          void act(
+            () => decide.mutateAsync({ id: target.id, input: { approve: false, note: null } }),
+            t.borrowing.rejected,
+          );
+        }}
+      />
       <ReasonDialog
         open={reverting !== null}
         title={t.borrowing.revertTitle}

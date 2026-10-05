@@ -6,7 +6,8 @@ import type {
   Paginated,
   UpdateDepartmentInput,
 } from '@ims/shared';
-import { ConflictError, NotFoundError } from '../../common/errors';
+import { NotFoundError } from '../../common/errors';
+import { DepartmentHasActiveUsersError, DuplicateDepartmentNameError } from './departments.errors';
 import { DB } from '../../database/database.module';
 import type { Db } from '../../database/create-db';
 import { AuditService } from '../audit/audit.service';
@@ -58,7 +59,7 @@ export class DepartmentsService {
       if (!created) throw new NotFoundError('Department');
       return created;
     } catch (error) {
-      if (isUniqueViolation(error)) throw new ConflictError('A department with that name exists');
+      if (isUniqueViolation(error)) throw new DuplicateDepartmentNameError();
       throw error;
     }
   }
@@ -76,9 +77,7 @@ export class DepartmentsService {
     if (input.isActive === false) {
       const activeUsers = await this.repo.countActiveUsers(id);
       if (activeUsers > 0) {
-        throw new ConflictError(
-          `Move the ${activeUsers} active user(s) out of this department before deactivating it`,
-        );
+        throw new DepartmentHasActiveUsersError(activeUsers);
       }
     }
 
@@ -113,7 +112,7 @@ export class DepartmentsService {
         }
       });
     } catch (error) {
-      if (isUniqueViolation(error)) throw new ConflictError('A department with that name exists');
+      if (isUniqueViolation(error)) throw new DuplicateDepartmentNameError();
       throw error;
     }
 
