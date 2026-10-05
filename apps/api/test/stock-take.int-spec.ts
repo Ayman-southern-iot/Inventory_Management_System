@@ -381,6 +381,10 @@ describe('POST /stock/take (ADR-0002)', () => {
     const refused = await take(client, { isReturnable: false });
     expect(refused.status).toBe(429);
     expect(refused.body.code).toBe(ErrorCode.RATE_LIMITED);
+    // The throttler's own text is its class name ("ThrottlerException: Too Many Requests"); a caller
+    // reads a sentence, not an internal (message audit finding F6).
+    expect(refused.body.message).not.toMatch(/Exception/);
+    expect(refused.body.message).toMatch(/too many requests/i);
     expect(await ledgerRowsFor(fixture.productId)).toBe(ledgerBefore);
     await assertReconciled();
   });

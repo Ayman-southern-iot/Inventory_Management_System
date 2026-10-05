@@ -44,7 +44,8 @@ export function FundsPanel({ requisition }: { requisition: RequisitionDetail }) 
    *
    * Empty when no live BOM exists, and the dialog falls back to the requisition line.
    */
-  const bom = useBomForRequisition(requisition.id);
+  // Only the IM and Admin may read it (the same people who can act), so nobody else is sent to a 403.
+  const bom = useBomForRequisition(requisition.id, { enabled: canAct });
   const bomLines = useMemo(() => {
     const map = new Map<string, { quantity: number; unitCost: number }>();
     if (!bom.data) return map;

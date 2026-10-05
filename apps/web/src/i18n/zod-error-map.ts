@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { t } from './en';
+import { humanizeValidationMessage } from '@/lib/validation-message';
 
 /**
  * D-005. Submitting an empty requisition showed "String must contain at least 1 character(s)"
@@ -16,6 +17,12 @@ import { t } from './en';
  * shared contract that the API imports too — the API renders its own messages and has no
  * business carrying the SPA's wording.
  *
+ * Message audit M2 widened it from that one case to all of zod's default wording. Of 395 validators
+ * in the shared contracts only 4 state a message, so "Use at least 2 characters." was reaching users
+ * as "String must contain at least 2 character(s)" and a cleared choice as "Invalid uuid". The
+ * defaults are rewritten by `humanizeValidationMessage`; a schema's own message still wins, because
+ * it never reaches this map.
+ *
  * Side-effecting on import by design: this must be installed before any resolver runs, and a
  * function nobody remembers to call is the same defect again.
  */
@@ -26,8 +33,17 @@ const errorMap: z.ZodErrorMap = (issue, ctx) => {
     issue.code === z.ZodIssueCode.too_small &&
     issue.type === 'string' &&
     issue.minimum === 1;
+  if (isEmptyString) return { message: t.common.required };
 
-  return { message: isEmptyString ? t.common.required : ctx.defaultError };
+  // An empty email (or web address) is a missing one, not a malformed one. A cleared choice
+  // (`uuid`) stays "Choose an option.", which says what to do.
+  const isEmptyFormatField =
+    issue.code === z.ZodIssueCode.invalid_string &&
+    (issue.validation === 'email' || issue.validation === 'url') &&
+    ctx.data === '';
+  if (isEmptyFormatField) return { message: t.common.required };
+
+  return { message: humanizeValidationMessage(ctx.defaultError) };
 };
 
 z.setErrorMap(errorMap);

@@ -1,5 +1,7 @@
 import type { ApprovalFootprint, RequisitionFootprints } from '@ims/shared';
 import { Table } from '@/components/ui/primitives';
+import { t } from '@/i18n/en';
+import { formatDateTime } from '@/lib/format';
 
 /**
  * The approval chain as captured when the BOM was generated.
@@ -14,12 +16,12 @@ export function FrozenFootprints({ source }: { source: RequisitionFootprints }) 
     <div>
       <Table
         headers={[
-          'Stage',
-          'Slot',
-          'Name',
-          'Designation',
-          'Acted at',
-          'On behalf of',
+          t.boms.footprintHeaders.stage,
+          t.boms.footprintHeaders.slot,
+          t.boms.footprintHeaders.name,
+          t.boms.footprintHeaders.designation,
+          t.boms.footprintHeaders.actedAt,
+          t.boms.footprintHeaders.onBehalfOf,
         ]}
       >
         {source.footprints.length === 0 ? (
@@ -41,17 +43,23 @@ export function FrozenFootprints({ source }: { source: RequisitionFootprints }) 
   );
 }
 
+/** The stage in words; an unrecognised one is shown as it came rather than hidden. */
+function stageLabel(stage: string): string {
+  const stages = t.requisitions.stage as Record<string, string>;
+  return Object.prototype.hasOwnProperty.call(stages, stage) ? stages[stage]! : stage;
+}
+
 function FootprintRow({ footprint }: { footprint: ApprovalFootprint }) {
   return (
     <tr>
-      <td className="px-4 py-2.5 text-sm text-ink">{footprint.stage}</td>
+      <td className="px-4 py-2.5 text-sm text-ink">{stageLabel(footprint.stage)}</td>
       <td className="px-4 py-2.5 tabular-nums text-sm text-ink-muted">
         {footprint.slot ?? '—'}
       </td>
       <td className="px-4 py-2.5 text-sm font-medium text-ink">{footprint.name}</td>
       <td className="px-4 py-2.5 text-sm text-ink-muted">{footprint.designation}</td>
       <td className="px-4 py-2.5 text-sm text-ink-muted">
-        {footprint.actedAt ?? '—'}
+        {footprint.actedAt ? formatDateTime(footprint.actedAt) : '—'}
       </td>
       <td className="px-4 py-2.5 text-sm text-ink-muted">
         {footprint.onBehalfOf ?? '—'}

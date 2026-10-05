@@ -1393,3 +1393,62 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
     key-reachable route from `ApiKeyDocsService` with a key holding every scope. It fails if any
     answer carries a person's name or email, a `borrowerId` or a `requesterId`, and if a key route
     has no case.
+- 2026-10-04 — **`pnpm lint` is now 0, and 0 is the baseline.** It supersedes every "20 pre-existing
+  errors, compare against 20" entry above (and the "21 errors" one in Phase 07). Any lint error is
+  now new. Choices made to get there:
+  - **`scripts/**/*.js` is ignored in `eslint.config.mjs`**, beside `docs/**/*.js`: 14 of the 20
+    came from one throwaway Playwright script that uses `require`, prints to the console and runs
+    callbacks inside a browser page. Same reasoning as the `docs/` entry, not a new policy.
+  - **The `eslint-disable react-hooks/exhaustive-deps` comment in `SupportingDocumentCard.tsx` was
+    removed, not satisfied.** The plugin is not installed, so the comment disabled nothing and
+    itself failed lint ("rule definition not found"). Adding the plugin would be a new dependency
+    for one line. Do not add `react-hooks/*` disable comments until the plugin is installed.
+  - **`RequisitionFundingSnapshot` is now a top-of-file `import { type … }`** in
+    `contracts/requisitions.ts`, replacing an inline `import('./funds.js')` type. `funds.ts`
+    imports a value from `requisitions.ts`, so this must stay type-only; checked that the built
+    `dist/{cjs,esm}/contracts/requisitions.js` contain no `funds` reference.
+  - **`createStockFixture(ctx.db)` stays in `purchase-bom-quantity.int-spec.ts`**; only its unused
+    return assignment went. The call seeds the stock rows the spec depends on.
+  - **Remote layout:** the GitHub default branch is `fix/lan-secure-context`; there is no
+    `origin/main`. Work goes on a branch cut from it and lands by PR (#1–#6 did).
+  - **Integration baseline is now 1013 pass / 0 fail, 69 files** (2026-10-04, `3af754d`, local
+    `db-test` on Docker Desktop, 415 s). It replaces 992 / 68; the +21 tests are the K2
+    registry-walk and take-limit specs. Compare against this.
+- 2026-10-04 (Ayman: "fix it, all messages professional") — **User-facing messages are chosen by `code`, and where one code
+  covers refusals a person must tell apart, the case gets its own `ErrorCode`.** `CONFLICT` carries about 45
+  unrelated server sentences (some for developers: "Run pnpm db:seed"), so neither showing `error.message` nor a
+  blanket client override is safe; the first would leak internals, the second told people the wrong thing (a
+  user-form conflict can be "last active administrator"). Six codes added, still 409:
+  `DUPLICATE_DEPARTMENT_NAME`, `DUPLICATE_ROOM_NAME`, `DUPLICATE_ZONE_NAME`, `DUPLICATE_COMPARTMENT_CODE`,
+  `DEPARTMENT_HAS_ACTIVE_USERS`, `LOCATION_HOLDS_STOCK`, plus `USER_EMAIL_IN_USE` and `LAST_ADMINISTRATOR` (Ayman,
+  same day: "fix all"). User management is on the auth STOP list; that instruction is the go-ahead, and the change is
+  only the code returned (still 409): sign-in, roles and the last-administrator rule are untouched.
+  - **Three existing tests updated on purpose** (`users.int-spec.ts`): they asserted `CONFLICT` for exactly those two
+    cases. Status 409 and the behaviour they check (the role is really still there) are unchanged; only the code is.
+  - **Validation text** is never zod's English: `i18n/zod-error-map.ts` and `lib/validation-message.ts` rewrite its
+    defaults; a sentence somebody wrote on purpose passes through. Only 4 of 395 shared validators state a message.
+  - **A call that knows its context** passes `messageForError(error, { CODE: copy })`. Used once: change password
+    maps `FORBIDDEN` to "Your current password is not correct." (client only; the server's auth behaviour is unchanged).
+  - **`{placeholders}` never show:** every templated error has a figure-free twin in `t.errorsPlain`.
+  - **Test updated on purpose:** `zod-error-map.test.ts` asserted zod's own numeric wording, which is the text this
+    replaces; it now asserts the plain wording and still proves a number below its minimum is not "Required".
+  - **Confirmations (M6):** one shared `ConfirmDialog`; deactivating a user, department or compartment and rejecting a
+    borrow ask first, activating does not. Rejecting still needs no reason: that would be a new requirement.
+  - **Not changed:** the minimum expense threshold and a BOM with no vendor are business rules, logged as OQ-35 and
+    OQ-36 with the current behaviour as the working assumption.
+  - **Audit findings fixed in the same pass:** F1 (BOM mutation now refreshes the requisitions on it), F2 (the live-BOM
+    lookup runs only for IM and Admin), F6 (the throttler's class name no longer leaks), F7 (BOM approval chain shows
+    words and formatted times). F4 (`/auth/demo-accounts` 404 with demo off) and F5 (per-address login lockout) are not
+    changed: the first needs a public flag on an auth endpoint, the second is working as designed. F9 was retracted.
+- 2026-10-04 — **Browser audits run against the local demo stack with demo mode switched off by an
+  override file kept outside the repo**, never against the VM or `infra/`. Editing the compose file's
+  hardcoded `DEMO_ACCOUNTS_ENABLED: 'true'` would change a committed default (a STOP in
+  `70-assist-handoff.md`); `docker compose -f docker-compose.yml -f <override> up -d --no-deps api`
+  does not, and `--no-deps` keeps the seeding `migrate` job from running again. Procedure and
+  harness rules: skill `playwright-audit`; results: `docs/playwright_audit.md`.
+- 2026-10-04 (Ayman) — **Bulk import shows "Coming soon" in production.** `/inventory/imports`
+  renders an `EmptyState` (`t.imports.comingSoon`) instead of `ImportPage`; `features/imports`, its
+  tests and the API routes are untouched. **UI only, as requested, but not the
+  `defer-feature` shape:** no env flag, no server guard, so a user with the role can still call the
+  import endpoints, and the sidebar link still shows. Re-enable by routing the path back to
+  `ImportPage`. Whether to close the API too is open for Ayman.

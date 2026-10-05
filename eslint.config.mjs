@@ -35,6 +35,9 @@ export default tseslint.config(
       // `document` is defined. Linting it with the app's config produced 35 errors that said
       // nothing about the app and buried the ones that did.
       'docs/**/*.js',
+      // Same kind of file, one-off browser-driven check scripts: `require`, console output, and
+      // callbacks that run inside a page. 14 of the 20 errors lint reported came from one of them.
+      'scripts/**/*.js',
       // The Python client's local virtualenv (`uv run` creates it). It ships third-party JS —
       // urllib3's emscripten worker — which is nobody's source here and added four errors the
       // first time the client's smoke was run.

@@ -77,7 +77,16 @@ export class AllExceptionsFilter implements ExceptionFilter {
       // inspect either.
       return {
         status,
-        body: { code: this.codeForStatus(status), message: exception.message },
+        body: {
+          code: this.codeForStatus(status),
+          // The throttler's message is its own class name ("ThrottlerException: Too Many
+          // Requests"), which tells a caller nothing and names an internal. Everything else a
+          // framework exception says is left as it is.
+          message:
+            status === HttpStatus.TOO_MANY_REQUESTS
+              ? 'Too many requests. Please wait a moment and try again.'
+              : exception.message,
+        },
       };
     }
 

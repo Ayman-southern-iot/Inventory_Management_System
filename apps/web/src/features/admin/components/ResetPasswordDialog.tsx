@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { resetPasswordSchema, type ResetPasswordInput, type User } from '@ims/shared';
+import { PASSWORD_MIN_LENGTH, resetPasswordSchema, type ResetPasswordInput, type User } from '@ims/shared';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
 import { Checkbox, TextField } from '@/components/ui/Field';
@@ -64,7 +64,7 @@ export function ResetPasswordDialog({ user, onClose }: { user?: User; onClose: (
           label={t.auth.newPassword}
           type="password"
           autoComplete="new-password"
-          hint={t.auth.passwordRules}
+          hint={t.auth.passwordRules(PASSWORD_MIN_LENGTH)}
           error={errors.newPassword?.message}
           {...form.register('newPassword')}
         />

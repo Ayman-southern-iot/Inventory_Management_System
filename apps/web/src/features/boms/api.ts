@@ -57,12 +57,14 @@ export function useBom(id: string) {
  * and submits the BOM quantity, not the original requisition quantity — see Issue 5). When
  * the data is `null`, callers fall back to the wire quantity.
  */
-export function useBomForRequisition(requisitionId: string) {
+export function useBomForRequisition(requisitionId: string, options: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: queryKeys.boms.byRequisition(requisitionId),
     queryFn: ({ signal }) =>
       api.get<BomDetail | null>(`/boms/by-requisition/${requisitionId}`, signal),
-    enabled: requisitionId.length > 0,
+    // The endpoint is IM and Admin only, so a caller who is neither passes `enabled: false` rather
+    // than collecting a 403 on every page view (audit F2).
+    enabled: requisitionId.length > 0 && (options.enabled ?? true),
     // A stale BOM can silently corrupt a purchase. Five-minute cache matches the live BOM's
     // own read path; if the IM has just edited a quantity they will refresh first.
     staleTime: 5 * 60_000,
@@ -81,6 +83,19 @@ function useBomMutation<TInput>(mutationFn: (input: TInput) => Promise<BomDetail
     onSuccess: async (result) => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.boms.lists() });
       queryClient.setQueryData(queryKeys.boms.detail(result.id), result);
+
+      // Generating or voiding a BOM moves every requisition on it between APPROVED and BOM_GENERATED.
+      // Without this the requisition page, reached in the same session, kept saying "Approved" and
+      // offered "Generate the BOM" again until a full reload (audit F1). Only the requisitions on this
+      // BOM, not everything, so a slow connection does not refetch the whole app.
+      const requisitionIds = result.sources.map((source) => source.requisitionId);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.requisitions.lists() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.boms.candidates() });
+      for (const requisitionId of requisitionIds) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.requisitions.detail(requisitionId) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.boms.byRequisition(requisitionId) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.funds.funding(requisitionId) });
+      }
     },
   });
 }

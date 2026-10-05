@@ -41,7 +41,7 @@ export function InvoiceAttachButton({
       await attach.mutateAsync({ purchaseId: purchase.id, file });
       toast.success(t.funds.invoiceAttached);
     } catch (error) {
-      toast.error(messageForError(error));
+      toast.error(messageForError(error, { VALIDATION_FAILED: t.funds.invoiceNotAccepted }));
     }
   }
 

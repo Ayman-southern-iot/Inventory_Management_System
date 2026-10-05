@@ -939,8 +939,9 @@ derivative summary with residual drift; where it and the code disagree, **the co
 - The working branch is **`fix/lan-secure-context`**, still unmerged to `main`. Whether that is
   intentional remains an open question for the lead.
 - **Test baseline: 685 integration pass / 0 fail / 0 skipped, 50 files** — green, and with nothing
-  skipped for the first time in the project's history. `pnpm lint` carries **20 pre-existing
-  errors**; compare against 20, not zero. `guard-hardcoding.sh --scan-all` reports 8.
+  skipped for the first time in the project's history. `pnpm lint` is **0** since 2026-10-04
+  (DECISIONS, Phase 11): any lint error is new, so do not compare against 20.
+  `guard-hardcoding.sh --scan-all` reports 8.
   `DECISIONS.md` holds the authoritative figures — read them there rather than trusting a number
   memorised from a rule file.
 - Recent work not in the original plan: transportation cost on the purchase that paid it (0029),

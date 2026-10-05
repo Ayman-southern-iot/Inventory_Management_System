@@ -2,7 +2,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
-import { changePasswordSchema, type LoginResponse } from '@ims/shared';
+import { PASSWORD_MIN_LENGTH, changePasswordSchema, type LoginResponse } from '@ims/shared';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/Field';
@@ -49,7 +49,9 @@ export function ChangePasswordPage() {
       toast.success(t.auth.passwordChanged);
       navigate(ROUTES.dashboard, { replace: true });
     } catch (error) {
-      toast.error(messageForError(error));
+      // The server answers a wrong current password with FORBIDDEN, which on its own reads as "you
+      // may not do this". Nothing else on this call can be forbidden to a signed-in user.
+      toast.error(messageForError(error, { FORBIDDEN: t.auth.currentPasswordIncorrect }));
     }
   }
 
@@ -87,7 +89,7 @@ export function ChangePasswordPage() {
             label={t.auth.newPassword}
             type="password"
             autoComplete="new-password"
-            hint={t.auth.passwordRules}
+            hint={t.auth.passwordRules(PASSWORD_MIN_LENGTH)}
             error={errors.newPassword?.message}
             {...form.register('newPassword')}
           />
