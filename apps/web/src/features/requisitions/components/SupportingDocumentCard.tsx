@@ -65,7 +65,7 @@ function OpenCard({
     setPending(false);
     inFlight.current?.abort();
     inFlight.current = null;
-  }, [document.fileId, document.originalName]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [document.fileId, document.originalName]);
 
   async function open() {
     if (pending) return;
