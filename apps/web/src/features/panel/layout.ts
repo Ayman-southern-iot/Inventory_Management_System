@@ -53,6 +53,24 @@ const drawerSchema = z
         });
       }
     }
+    // Two cells on one square would be drawn on top of each other, and one would be untappable.
+    const taken = new Map<string, string>();
+    for (const cell of drawer.cells) {
+      for (let row = cell.r; row <= cell.r1; row += 1) {
+        for (let col = cell.c0; col <= cell.c1; col += 1) {
+          const square = `${row}:${col}`;
+          const other = taken.get(square);
+          if (other !== undefined && other !== cell.cell) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: `Drawer plan: cells ${drawer.code}-${other} and ${drawer.code}-${cell.cell} overlap`,
+            });
+            return;
+          }
+          taken.set(square, cell.cell);
+        }
+      }
+    }
   });
 
 /** Open-shelf zones (lithium box, long-stock rack) have no grid: one cell, no position. */

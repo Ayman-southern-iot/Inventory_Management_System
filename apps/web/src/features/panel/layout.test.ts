@@ -130,6 +130,17 @@ describe('buildLayout', () => {
     expect(() => buildLayout(backwards)).toThrow(/A1/);
   });
 
+  it('refuses two cells that cover the same square of a drawer', () => {
+    const overlap = structuredClone(minimal);
+    const drawer = overlap.cabinets[0]!.drawers[0]!;
+    drawer.cols = 2;
+    drawer.cells = [
+      { cell: '1A-1B', purpose: '', r: 1, r1: 1, c0: 0, c1: 1 },
+      { cell: '1B', purpose: '', r: 1, r1: 1, c0: 1, c1: 1 },
+    ];
+    expect(() => buildLayout(overlap)).toThrow(/overlap/);
+  });
+
   it('refuses two cells with one address', () => {
     const twice = structuredClone(minimal);
     twice.cabinets[0]!.drawers[0]!.cells.push({
