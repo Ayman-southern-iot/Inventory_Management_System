@@ -47,9 +47,26 @@ describe('OnScreenKeyboard, search layout', () => {
 
   it('has every digit and every letter of the alphabet, once', () => {
     render(<Harness />);
-    for (const name of [...'0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-']) {
+    for (const name of [...'0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-./_']) {
       expect(screen.getAllByRole('button', { name })).toHaveLength(1);
     }
+  });
+});
+
+describe('OnScreenKeyboard, search layout, part numbers', () => {
+  it('types the dot, slash and underscore part numbers use', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    for (const name of [
+      ...'0.1UF',
+      t.onScreenKeyboard.space,
+      ...'LM358/N',
+      t.onScreenKeyboard.space,
+      ...'A_B',
+    ]) {
+      await user.click(key(name));
+    }
+    expect(typed()).toBe('0.1UF LM358/N A_B');
   });
 });
 

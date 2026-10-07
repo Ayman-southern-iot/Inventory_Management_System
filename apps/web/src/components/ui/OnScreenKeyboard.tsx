@@ -5,14 +5,15 @@ import { t } from '@/i18n/en';
 /**
  * A keyboard for a touch screen that has none of its own: the lab panel's kiosk.
  *
- * - `search` types what a part search needs: digits, capitals and the hyphen of an address.
+ * - `search` types what a part search needs: digits, capitals, the hyphen of an address, and the
+ *   `.` `/` `_` of part numbers such as `0.1UF` or `LM358/N`.
  * - `text` types what a sign-in needs: lower and upper case (Shift), `@` and `.` for an email,
  *   and a symbols page for a password.
  * Space is on both: part names and passwords can contain one.
  */
 export type KeyboardLayout = 'search' | 'text';
 
-const SEARCH_ROWS = ['1234567890', 'QWERTYUIOP', 'ASDFGHJKL-', 'ZXCVBNM'] as const;
+const SEARCH_ROWS = ['1234567890', 'QWERTYUIOP', 'ASDFGHJKL-', 'ZXCVBNM./_'] as const;
 const LETTER_ROWS = ['1234567890', 'qwertyuiop', 'asdfghjkl@', 'zxcvbnm.'] as const;
 const SYMBOL_ROWS = ['1234567890', '!#$%&*()+=', '/\\?:;,\'"~`', '<>[]{}^|'] as const;
 /** Always on the text layout's bottom row: email addresses and passwords use them. */
