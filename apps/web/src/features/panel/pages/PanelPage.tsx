@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { t } from '@/i18n/en';
+import { messageForError } from '@/lib/error-message';
 import { isUnreachable, usePanelCatalogue } from '../api';
 import { CabinetOverview } from '../components/CabinetOverview';
 import { DrawerView } from '../components/DrawerView';
@@ -99,7 +100,7 @@ export function PanelPage() {
       : unreachable
         ? t.states.offlineTitle
         : catalogue.isError
-          ? t.states.errorBody
+          ? messageForError(catalogue.error)
           : t.panel.loading;
 
   let main;
@@ -124,7 +125,11 @@ export function PanelPage() {
     main = <SearchResults result={result} onOpenDrawer={openUnit} onOpenRow={openRow} />;
   } else if (catalogue.isError && !unreachable) {
     main = (
-      <PanelNotice message={t.states.errorBody} onRetry={() => void catalogue.refetch()} isAlert />
+      <PanelNotice
+        message={messageForError(catalogue.error)}
+        onRetry={() => void catalogue.refetch()}
+        isAlert
+      />
     );
   } else {
     // Unreachable with nothing cached yet: the banner above says why, this says what to expect.
@@ -145,6 +150,7 @@ export function PanelPage() {
       <PanelStatusBanner
         isUnreachable={unreachable}
         hasError={catalogue.isError}
+        error={catalogue.error}
         dataUpdatedAt={catalogue.dataUpdatedAt}
       />
       <main className="flex min-h-0 flex-1 flex-col">{main}</main>

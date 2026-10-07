@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { type Catalogue } from '@ims/shared';
 import type * as ClientModule from '@/api/client';
+import { ErrorCode } from '@ims/shared';
 import { ApiError, NETWORK_ERROR_CODE, api } from '@/api/client';
 import { t } from '@/i18n/en';
 import { importSheetRows } from '@/test/panel-import-sheet';
@@ -200,6 +201,43 @@ describe('PanelPage', () => {
     expect(await screen.findByRole('button', { name: /ST-Link V3 MINIE/ })).toBeInTheDocument();
   });
 
+  it('says the server is rate-limiting in #9’s words, and keeps the last counts', async () => {
+    const user = userEvent.setup();
+    renderPanel();
+    await vi.waitFor(() => expect(get).toHaveBeenCalledTimes(1));
+
+    get.mockRejectedValue(new ApiError(ErrorCode.RATE_LIMITED, 'Too Many Requests', 429));
+    await act(() => client.refetchQueries());
+
+    const banner = await screen.findByRole('status');
+    expect(banner).toHaveTextContent(t.errors.RATE_LIMITED);
+    expect(banner).toHaveTextContent(/Showing counts from/);
+    // A 429 is the server answering, not the network failing: no offline wording.
+    expect(banner).not.toHaveTextContent(t.panel.offline(10));
+    await typeOnScreen(user, 'ST');
+    expect(await screen.findByRole('button', { name: /ST-Link V3 MINIE/ })).toBeInTheDocument();
+  });
+
+  it('says the inventory is being updated while an import holds the API', async () => {
+    renderPanel();
+    await vi.waitFor(() => expect(get).toHaveBeenCalledTimes(1));
+    get.mockRejectedValue(
+      new ApiError(ErrorCode.SYSTEM_IMPORT_IN_PROGRESS, 'Import in progress', 503),
+    );
+    await act(() => client.refetchQueries());
+    expect(await screen.findByRole('status')).toHaveTextContent(t.errors.SYSTEM_IMPORT_IN_PROGRESS);
+  });
+
+  it('names the failure in a drawer opened before any data, using the app-wide wording', async () => {
+    get.mockRejectedValue(new ApiError(ErrorCode.INTERNAL, 'boom', 500));
+    const user = userEvent.setup();
+    renderPanel();
+    await screen.findByRole('status');
+    await user.click(document.querySelector<HTMLButtonElement>('[data-unit="A1"]')!);
+    await user.click(screen.getByRole('button', { name: /^1G-1H/ }));
+    expect(screen.getAllByText(t.errors.INTERNAL).length).toBeGreaterThan(0);
+  });
+
   it('draws the map and says it cannot reach the server when offline before the first load', async () => {
     get.mockRejectedValue(new ApiError(NETWORK_ERROR_CODE, 'Cannot reach the server', 0));
     const user = userEvent.setup();
@@ -237,7 +275,8 @@ describe('PanelPage', () => {
     renderPanel();
     await typeOnScreen(user, 'ST');
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(t.states.errorBody);
+    // The app-wide wording for the code (message audit, #9), not a panel-only sentence.
+    expect(await screen.findByRole('alert')).toHaveTextContent(t.errors.INTERNAL);
     get.mockResolvedValue(catalogue);
     await user.click(screen.getByRole('button', { name: t.common.retry }));
     expect(await screen.findByRole('button', { name: /ST-Link V3 MINIE/ })).toBeInTheDocument();

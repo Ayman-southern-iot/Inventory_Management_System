@@ -1846,7 +1846,6 @@ export const t = {
     offline: (retrySeconds: number) =>
       `Cannot reach the server. Trying again every ${retrySeconds} s.`,
     offlineShowing: (time: string) => `Showing counts from ${time}.`,
-    refreshFailed: 'The latest counts could not be loaded.',
     unmatchedDrawers: (count: number, codes: string) =>
       `${count} ${count === 1 ? 'drawer has' : 'drawers have'} no zone in IMS yet, so ${count === 1 ? 'its' : 'their'} parts cannot be shown on the map: ${codes}`,
   },
