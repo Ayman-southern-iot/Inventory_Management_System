@@ -4,9 +4,16 @@ import { importOrReloadOnce, sessionReloadGuard, type ReloadGuard } from './impo
 const KEY = 'test.chunk-reloaded';
 const chunkGone = () => new TypeError('Failed to fetch dynamically imported module');
 
-/** The real sessionStorage guard, with reload replaced so the test page does not go away. */
-function guard(): ReloadGuard & { reload: ReturnType<typeof vi.fn> } {
-  return { ...sessionReloadGuard(KEY), reload: vi.fn() };
+/**
+ * The real sessionStorage guard, with reload replaced so the test page does not go away and the
+ * server probe answered by the test.
+ */
+function guard(reachable = true): ReloadGuard & { reload: ReturnType<typeof vi.fn> } {
+  return {
+    ...sessionReloadGuard(KEY),
+    reload: vi.fn(),
+    canReachServer: vi.fn().mockResolvedValue(reachable),
+  };
 }
 
 /** Resolves true if `promise` has not settled after the microtask queue drains. */
@@ -65,5 +72,38 @@ describe('importOrReloadOnce', () => {
     const g = guard();
     await expect(importOrReloadOnce(() => Promise.reject(chunkGone()), g)).rejects.toThrow();
     expect(g.reload).not.toHaveBeenCalled();
+  });
+
+  it('does not reload when the server cannot be reached: offline looks like a missing chunk', async () => {
+    // Reloading offline lands on the browser's own error page, outside the app, with no way back
+    // on a touch kiosk. Rethrowing leaves the app's error boundary and its Reload button.
+    const g = guard(false);
+    await expect(importOrReloadOnce(() => Promise.reject(chunkGone()), g)).rejects.toThrow();
+    expect(g.reload).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem(KEY)).toBeNull();
+  });
+});
+
+describe('sessionReloadGuard.canReachServer', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('asks the server for the page itself, bypassing the cache, and trusts a 2xx', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(sessionReloadGuard(KEY).canReachServer()).resolves.toBe(true);
+    expect(fetchMock).toHaveBeenCalledWith(
+      window.location.href,
+      expect.objectContaining({ method: 'HEAD', cache: 'no-store' }),
+    );
+  });
+
+  it('says no when the server answers with an error', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 503 })));
+    await expect(sessionReloadGuard(KEY).canReachServer()).resolves.toBe(false);
+  });
+
+  it('says no when the request fails outright', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
+    await expect(sessionReloadGuard(KEY).canReachServer()).resolves.toBe(false);
   });
 });
