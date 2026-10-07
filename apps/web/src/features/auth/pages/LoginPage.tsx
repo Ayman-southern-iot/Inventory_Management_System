@@ -13,7 +13,7 @@ import { t } from '@/i18n/en';
 import { messageForError } from '@/lib/error-message';
 import { formatDateTime } from '@/lib/format';
 import { useAuth } from '../auth-context';
-import { KIOSK_LOGIN_PARAM, ROUTES } from '@/routes/paths';
+import { KIOSK_LOGIN_PARAM, KIOSK_LOGIN_VALUE, ROUTES } from '@/routes/paths';
 
 export function LoginPage() {
   const { user, isRestoring, signIn, signOut } = useAuth();
@@ -29,7 +29,7 @@ export function LoginPage() {
    * goes back to the panel after sign-in. Session length is unchanged (OQ-P1).
    */
   const from = (location.state as { from?: string } | null)?.from;
-  const isKiosk = from === ROUTES.panel || searchParams.get(KIOSK_LOGIN_PARAM) === '1';
+  const isKiosk = from === ROUTES.panel || searchParams.get(KIOSK_LOGIN_PARAM) === KIOSK_LOGIN_VALUE;
 
   // The same zod schema the API validates with (rules/30-frontend.md) — written once.
   const {
@@ -160,7 +160,8 @@ export function LoginPage() {
           </Button>
         </form>
 
-        {accounts.length > 0 && demo.data ? (
+        {/* Never on the wall: one-tap credentials, admin included, for anyone passing by. */}
+        {!isKiosk && accounts.length > 0 && demo.data ? (
           <section
             aria-label={t.auth.demoAccountsTitle}
             className="mt-4 rounded-[--radius-panel] border border-border bg-surface-2 p-4 text-xs text-ink-muted"

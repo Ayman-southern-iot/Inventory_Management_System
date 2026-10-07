@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { Role, type AuthUser } from '@ims/shared';
 import type * as ClientModule from '@/api/client';
-import { ApiError } from '@/api/client';
+import { ApiError, api } from '@/api/client';
 import { t } from '@/i18n/en';
 import { ProtectedRoute } from '@/routes/ProtectedRoute';
 import { ROUTES } from '@/routes/paths';
@@ -80,6 +80,7 @@ async function typeOnScreen(
 
 describe('LoginPage in kiosk mode', () => {
   beforeEach(() => {
+    vi.mocked(api.get).mockRejectedValue(new ApiError('NOT_FOUND', 'x', 404));
     signIn.mockReset();
     signOut.mockReset().mockResolvedValue(undefined);
     signedIn = null;
@@ -111,6 +112,41 @@ describe('LoginPage in kiosk mode', () => {
   it('shows the on-screen keyboard for ?kiosk=1', () => {
     renderLogin(`${ROUTES.login}?kiosk=1`);
     expect(keyboard()).toBeInTheDocument();
+  });
+
+  it('offers no demo accounts on the kiosk, even when the server lists them', async () => {
+    const demo = {
+      password: 'demo-password',
+      accounts: [
+        { email: 'demo@example.invalid', fullName: 'Demo', designation: '', roles: [Role.ADMIN] },
+      ],
+    };
+    const answered = Promise.resolve(demo);
+    vi.mocked(api.get).mockReturnValue(answered);
+    renderLogin(`${ROUTES.login}?kiosk=1`);
+    // Let the answer arrive and render before asserting what is not there.
+    await act(async () => {
+      await answered;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(api.get).toHaveBeenCalled();
+    expect(
+      screen.queryByRole('region', { name: t.auth.demoAccountsTitle }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('still offers them to an ordinary visitor on a demo server', async () => {
+    const demo = {
+      password: 'demo-password',
+      accounts: [
+        { email: 'demo@example.invalid', fullName: 'Demo', designation: '', roles: [Role.ADMIN] },
+      ],
+    };
+    vi.mocked(api.get).mockResolvedValue(demo);
+    renderLogin(ROUTES.login);
+    expect(
+      await screen.findByRole('region', { name: t.auth.demoAccountsTitle }),
+    ).toBeInTheDocument();
   });
 
   it('shows no keyboard to an ordinary visitor', () => {

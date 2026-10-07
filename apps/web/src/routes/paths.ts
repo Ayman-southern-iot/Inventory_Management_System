@@ -3,6 +3,7 @@
  * sign-in, for a kiosk whose browser was pointed at the login page directly.
  */
 export const KIOSK_LOGIN_PARAM = 'kiosk';
+export const KIOSK_LOGIN_VALUE = '1';
 
 /** Route paths in one place, so a rename is one edit and never a broken string literal. */
 export const ROUTES = {
