@@ -14,7 +14,9 @@ import { PanelPage } from './PanelPage';
 
 vi.mock('@/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof ClientModule>();
-  return { ...actual, api: { ...actual.api, get: vi.fn() } };
+  // Every method mocked, so a write or any other call cannot slip past the read-only check.
+  const methods = ['get', 'post', 'put', 'patch', 'del', 'upload', 'blob', 'loginRequest'] as const;
+  return { ...actual, api: Object.fromEntries(methods.map((name) => [name, vi.fn()])) };
 });
 const get = vi.mocked(api.get);
 
@@ -114,6 +116,7 @@ describe('PanelPage', () => {
 
   it('asks the API for the catalogue and nothing else, through a search and a drawer', async () => {
     // K2: product detail would name borrowers to this session; the panel must never call it.
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
     const user = userEvent.setup();
     renderPanel();
     await typeOnScreen(user, 'ST-LINK');
@@ -124,6 +127,11 @@ describe('PanelPage', () => {
     expect(get.mock.calls.map(([path]) => path)).toEqual(
       get.mock.calls.map(() => PANEL_CATALOGUE_PATH),
     );
+    // Read-only: no other method of the API client, and no request around it.
+    for (const name of ['post', 'put', 'patch', 'del', 'upload', 'blob', 'loginRequest'] as const) {
+      expect(vi.mocked(api[name]), `api.${name}`).not.toHaveBeenCalled();
+    }
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it('warns, with a count, about plan drawers IMS has no zone for', async () => {
