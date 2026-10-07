@@ -43,7 +43,14 @@ export function buildIndex(products: CatalogueProduct[], layout: PanelLayout): P
   for (const product of products) {
     const base = { productId: product.id, name: product.name, code: product.code };
     if (product.locations.length === 0) {
-      unshelved.push({ ...base, key: product.id, address: null, imsLabel: '', quantity: 0, available: 0 });
+      unshelved.push({
+        ...base,
+        key: product.id,
+        address: null,
+        imsLabel: '',
+        quantity: 0,
+        available: 0,
+      });
       continue;
     }
     for (const location of product.locations) {

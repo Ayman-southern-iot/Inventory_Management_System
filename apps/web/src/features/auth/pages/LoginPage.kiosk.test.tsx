@@ -23,7 +23,10 @@ vi.mock('@/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof ClientModule>();
   return {
     ...actual,
-    api: { ...actual.api, get: vi.fn().mockRejectedValue(new actual.ApiError('NOT_FOUND', 'x', 404)) },
+    api: {
+      ...actual.api,
+      get: vi.fn().mockRejectedValue(new actual.ApiError('NOT_FOUND', 'x', 404)),
+    },
   };
 });
 vi.stubGlobal('__BUILD_TIME__', '2026-10-05T00:00:00.000Z');
@@ -58,7 +61,11 @@ function renderLogin(entry: Entry) {
 const keyboard = () => screen.queryByRole('group', { name: t.onScreenKeyboard.label });
 const key = (name: string) => screen.getByRole('button', { name });
 
-async function typeOnScreen(user: ReturnType<typeof userEvent.setup>, field: HTMLElement, text: string) {
+async function typeOnScreen(
+  user: ReturnType<typeof userEvent.setup>,
+  field: HTMLElement,
+  text: string,
+) {
   await user.click(field);
   for (const char of text) {
     if (char >= 'A' && char <= 'Z') {

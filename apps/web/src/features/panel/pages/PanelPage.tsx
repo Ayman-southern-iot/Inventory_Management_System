@@ -9,11 +9,7 @@ import { PanelNotice } from '../components/PanelNotice';
 import { PanelSearchBar } from '../components/PanelSearchBar';
 import { PanelStatusBanner } from '../components/PanelStatusBanner';
 import { SearchResults } from '../components/SearchResults';
-import {
-  PANEL_IDLE_RESET_MS,
-  PANEL_MAX_RESULTS,
-  PANEL_SEARCH_DEBOUNCE_MS,
-} from '../constants';
+import { PANEL_IDLE_RESET_MS, PANEL_MAX_RESULTS, PANEL_SEARCH_DEBOUNCE_MS } from '../constants';
 import { useIdleReset } from '../hooks/useIdleReset';
 import { useSettledQuery } from '../hooks/useSettledQuery';
 import { unmatchedUnits } from '../address';
@@ -53,7 +49,8 @@ export function PanelPage() {
     [index, settledQuery],
   );
   const unmatched = useMemo(
-    () => (catalogue.data === undefined ? [] : unmatchedUnits(catalogue.data.locations, panelLayout)),
+    () =>
+      catalogue.data === undefined ? [] : unmatchedUnits(catalogue.data.locations, panelLayout),
     [catalogue.data],
   );
   const partCounts = useMemo(
@@ -137,7 +134,10 @@ export function PanelPage() {
   }
 
   return (
-    <div data-panel-theme className="flex h-dvh flex-col overflow-hidden bg-canvas text-lg text-ink">
+    <div
+      data-panel-theme
+      className="flex h-dvh flex-col overflow-hidden bg-canvas text-lg text-ink"
+    >
       <h1 className="sr-only">{t.panel.pageTitle}</h1>
       <PanelSearchBar
         value={query}

@@ -29,29 +29,31 @@ const cellSchema = z.object({
   c1: z.number().int().min(0),
 });
 
-const drawerSchema = z.object({
-  code: z.string().min(1),
-  pos: z.number().int().min(1),
-  name: z.string().min(1),
-  /** The colour band on the physical drawer front, as six hex digits without `#`. */
-  hex: z.string().regex(/^[0-9a-f]{6}$/i),
-  band: z.string(),
-  rows: z.number().int().min(1),
-  cols: z.number().int().min(1),
-  cells: z.array(cellSchema).min(1),
-}).superRefine((drawer, ctx) => {
-  // A cell outside its drawer would make CSS grid add tracks silently and draw a wrong drawer.
-  for (const cell of drawer.cells) {
-    const inside =
-      cell.r <= cell.r1 && cell.r1 <= drawer.rows && cell.c0 <= cell.c1 && cell.c1 < drawer.cols;
-    if (!inside) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: `Drawer plan: cell ${drawer.code}-${cell.cell} lies outside its ${drawer.rows}×${drawer.cols} grid`,
-      });
+const drawerSchema = z
+  .object({
+    code: z.string().min(1),
+    pos: z.number().int().min(1),
+    name: z.string().min(1),
+    /** The colour band on the physical drawer front, as six hex digits without `#`. */
+    hex: z.string().regex(/^[0-9a-f]{6}$/i),
+    band: z.string(),
+    rows: z.number().int().min(1),
+    cols: z.number().int().min(1),
+    cells: z.array(cellSchema).min(1),
+  })
+  .superRefine((drawer, ctx) => {
+    // A cell outside its drawer would make CSS grid add tracks silently and draw a wrong drawer.
+    for (const cell of drawer.cells) {
+      const inside =
+        cell.r <= cell.r1 && cell.r1 <= drawer.rows && cell.c0 <= cell.c1 && cell.c1 < drawer.cols;
+      if (!inside) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Drawer plan: cell ${drawer.code}-${cell.cell} lies outside its ${drawer.rows}×${drawer.cols} grid`,
+        });
+      }
     }
-  }
-});
+  });
 
 /** Open-shelf zones (lithium box, long-stock rack) have no grid: one cell, no position. */
 const shelfSchema = z.object({

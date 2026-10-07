@@ -44,7 +44,10 @@ export function sessionReloadGuard(key: string): ReloadGuard {
   };
 }
 
-export async function importOrReloadOnce<T>(load: () => Promise<T>, guard: ReloadGuard): Promise<T> {
+export async function importOrReloadOnce<T>(
+  load: () => Promise<T>,
+  guard: ReloadGuard,
+): Promise<T> {
   try {
     const loaded = await load();
     guard.clear();

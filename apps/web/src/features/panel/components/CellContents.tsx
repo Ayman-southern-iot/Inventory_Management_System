@@ -11,7 +11,12 @@ interface CellContentsProps {
 }
 
 /** What IMS says is in one cell. Quantities only; never who has taken any of it. */
-export function CellContents({ address, rows, focusProductId, notReadyMessage }: CellContentsProps) {
+export function CellContents({
+  address,
+  rows,
+  focusProductId,
+  notReadyMessage,
+}: CellContentsProps) {
   if (address === null) {
     return <p className="p-4 text-lg text-ink-muted">{t.panel.pickCell}</p>;
   }

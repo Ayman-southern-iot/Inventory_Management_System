@@ -56,8 +56,14 @@ describe('row orientation', () => {
           const sameSpan = (a: number[], b: number[]) =>
             Math.min(...a) === Math.min(...b) && Math.max(...a) === Math.max(...b);
           if (
-            !sameSpan(drawnRows, corners.map((corner) => corner.frontRow)) ||
-            !sameSpan(drawnColumns, corners.map((corner) => corner.column))
+            !sameSpan(
+              drawnRows,
+              corners.map((corner) => corner.frontRow),
+            ) ||
+            !sameSpan(
+              drawnColumns,
+              corners.map((corner) => corner.column),
+            )
           ) {
             disagreements.push(cell.address);
           }
@@ -126,7 +132,14 @@ describe('buildLayout', () => {
 
   it('refuses two cells with one address', () => {
     const twice = structuredClone(minimal);
-    twice.cabinets[0]!.drawers[0]!.cells.push({ cell: '1A', purpose: '', r: 1, r1: 1, c0: 0, c1: 0 });
+    twice.cabinets[0]!.drawers[0]!.cells.push({
+      cell: '1A',
+      purpose: '',
+      r: 1,
+      r1: 1,
+      c0: 0,
+      c1: 0,
+    });
     expect(() => buildLayout(twice)).toThrow(/duplicate cell A1-1A/);
   });
 });

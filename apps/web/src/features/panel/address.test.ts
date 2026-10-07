@@ -61,7 +61,11 @@ describe('unmatchedUnits', () => {
     const shelves = importSheetRows()
       .filter((row) => !['A2', 'R5', 'LR'].includes(row.zoneName))
       .map((row) => ({ room: row.room, zone: row.zoneName }));
-    expect(unmatchedUnits(shelves, panelLayout).map((unit) => unit.code)).toEqual(['A2', 'R5', 'LR']);
+    expect(unmatchedUnits(shelves, panelLayout).map((unit) => unit.code)).toEqual([
+      'A2',
+      'R5',
+      'LR',
+    ]);
   });
 
   it('counts a drawer set up in the wrong room as unmatched', () => {

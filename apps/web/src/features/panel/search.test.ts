@@ -36,7 +36,9 @@ const products = [
     { zone: 'A1', compartment: '1G-1H', quantity: 4 },
     { room: 'Main Store', zone: 'Meta', compartment: 'Bin 7', quantity: 1 },
   ]),
-  product('p3', 'M3 socket-head screws', 'FA-0100', [{ zone: 'A3', compartment: '1A', quantity: 350 }]),
+  product('p3', 'M3 socket-head screws', 'FA-0100', [
+    { zone: 'A3', compartment: '1A', quantity: 350 },
+  ]),
   product('p4', 'Spare ESP32-S3', 'MC-0042', []),
 ];
 const index = buildIndex(products, panelLayout);
