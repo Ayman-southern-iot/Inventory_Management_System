@@ -997,8 +997,9 @@ admin can also reset the password from **Admin → Users**.
 outage no longer signs anyone out: the app keeps the stored session and tries again. But if the
 connection drops after the server has rotated a refresh token and before its reply arrives, the
 browser still holds the old token. Its next refresh replays it, and the server — which allows no
-grace window, on purpose — revokes the whole session as `REUSE_DETECTED`. The log line names the
-token as rotated a few seconds earlier. Sign in again; nothing else to do.
+grace window, on purpose — revokes the whole session as `REUSE_DETECTED`. The API log shows it as
+`Revoked refresh token replayed for user <id> (reason=ROTATED, <N>s ago)` with N a few seconds:
+the token was rotated moments before, by the same browser. Sign in again; nothing else to do.
 
 ### "An approver has not been assigned" on submit
 
