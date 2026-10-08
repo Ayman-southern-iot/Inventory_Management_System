@@ -67,6 +67,12 @@ jobs:
     name: verify
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # The unit tests, like the integration suite, run on the business calendar. At UTC the date
+    # tests cannot fail: a naive formatDate (new Date(iso) rendered locally) passes all of
+    # lib/format.date.test.ts at UTC and fails it at Asia/Dhaka, where an evening UTC timestamp
+    # is already the next day.
+    env:
+      TZ: Asia/Dhaka
     steps:
       - uses: actions/checkout@v4
         with:
