@@ -647,8 +647,8 @@ bash .claude/hooks/guard-hardcoding.sh --scan-all
 
 ```bash
 ssh -f -N -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes \
-  -L 5434:127.0.0.1:55434 -L 5433:127.0.0.1:55433 mini-keeper
-# or in ~/.ssh/config, under `Host mini-keeper`:  ServerAliveInterval 15 / ServerAliveCountMax 3
+  -L 5434:127.0.0.1:55434 -L 5433:127.0.0.1:55433 <keeper>
+# or in ~/.ssh/config, under `Host <keeper>`:  ServerAliveInterval 15 / ServerAliveCountMax 3
 ```
 
 **A live dev API on the keeper = `scripts/dev-api-keeper.sh`** (2026-10-08). It builds

@@ -140,7 +140,7 @@
   `IMS_QA_Test_Plan.xlsx`, `approving_view_template.html`, `bom_template.html`, `docs/policy/`,
   `promt.md` — OQ-33), now joined by this session's QA documents. Branch
   `fix/lan-secure-context`, **pushed — `origin` is level with local.** A demo stack is running on
-  the VM (`rndserver`) and serving the testing round.
+  the VM (`<vm>`) and serving the testing round.
   - **Next task:** none queued. Ranked candidates in `NOW.md`; the first is splitting the demo
     flag so testing gets five accounts without four invented products.
   - **Verified green:** typecheck clean · unit shared 20 / api 83 / web 318 · integration
