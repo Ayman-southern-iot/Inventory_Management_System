@@ -101,6 +101,10 @@ jobs:
     name: integration
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # The suite's own process, not only the database, must run on the business calendar:
+    # date-columns.int-spec asserts a timezone east of UTC, and a runner defaults to UTC.
+    env:
+      TZ: Asia/Dhaka
     services:
       db-test:
         image: postgres:16.4-alpine

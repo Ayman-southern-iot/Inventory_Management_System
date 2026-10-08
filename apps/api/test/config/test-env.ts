@@ -1,5 +1,6 @@
 /**
- * The environment the integration suite runs against.
+ * The environment the integration suite runs against, and the one the unit suite is pinned to
+ * (`vitest.config.ts`), so a unit spec never depends on a developer's root `.env`.
  *
  * This is the one place in `test/` that names concrete values, for the same reason
  * `src/config/` is the one place in the backend that names `process.env`
