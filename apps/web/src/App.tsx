@@ -53,6 +53,20 @@ const PanelPage = lazy(() =>
   ).then((module) => ({ default: module.PanelPage })),
 );
 
+/** sessionStorage flag: the room view's chunk failed to load and the page reloaded once for it. */
+const ROOM_CHUNK_RELOAD_FLAG = 'ims.room.chunk-reloaded';
+
+/**
+ * The 3D room view is its own chunk too, and three.js is in a further one under it, so neither
+ * the main bundle nor the panel's chunk carries it (CI's bundle budget checks this).
+ */
+const RoomPage = lazy(() =>
+  importOrReloadOnce(
+    () => import('@/features/room/pages/RoomPage'),
+    sessionReloadGuard(ROOM_CHUNK_RELOAD_FLAG),
+  ).then((module) => ({ default: module.RoomPage })),
+);
+
 const RETRYABLE_ATTEMPTS = 2;
 
 const queryClient = new QueryClient({
@@ -160,6 +174,14 @@ export function App() {
                         product before they can borrow it (task 2.7). The stock actions on
                         these pages are gated by role, and by the API regardless. */}
                       <Route path={ROUTES.inventory.products} element={<InventoryPage />} />
+                      <Route
+                        path={ROUTES.room}
+                        element={
+                          <Suspense fallback={<LoadingState />}>
+                            <RoomPage />
+                          </Suspense>
+                        }
+                      />
                       <Route
                         path={ROUTES.inventory.productPattern}
                         element={<ProductDetailPage />}
