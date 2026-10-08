@@ -24,10 +24,3 @@ export const PANEL_REFRESH_MS = 60 * MS_PER_SECOND;
 
 /** Rows a search draws before asking for a narrower query. Keeps a one-letter search cheap. */
 export const PANEL_MAX_RESULTS = 40;
-
-/**
- * Statuses that mean a proxy answered for an API that did not. Together with a network failure
- * they are "unreachable": the offline banner, not an error screen. A 503 the API itself sends
- * (`SYSTEM_IMPORT_IN_PROGRESS`) is excluded where this is used; the import lock covers it.
- */
-export const GATEWAY_FAILURE_STATUSES: ReadonlySet<number> = new Set([502, 503, 504]);

@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { ErrorCode, type Catalogue } from '@ims/shared';
-import { ApiError, NETWORK_ERROR_CODE, api } from '@/api/client';
+import { ApiError, api, isApiUnreachable } from '@/api/client';
 import { queryKeys } from '@/api/keys';
-import { GATEWAY_FAILURE_STATUSES, PANEL_OFFLINE_RETRY_MS, PANEL_REFRESH_MS } from './constants';
+import { PANEL_OFFLINE_RETRY_MS, PANEL_REFRESH_MS } from './constants';
 
 /**
  * The only path the panel calls, besides the session restore every page shares. `GET /catalogue`
@@ -12,13 +12,16 @@ import { GATEWAY_FAILURE_STATUSES, PANEL_OFFLINE_RETRY_MS, PANEL_REFRESH_MS } fr
  */
 export const PANEL_CATALOGUE_PATH = '/catalogue';
 
-/** The API did not answer at all, or a proxy answered for it. */
+/**
+ * The API did not answer at all, or a proxy answered for it: the offline banner and the 10 s
+ * retry. The app-wide rule (`isApiUnreachable`, which also keeps a session alive through an
+ * outage) with one exception: the import lock's own 503. That one has its overlay and is worded
+ * by `messageForError`, rather than being called offline.
+ */
 export function isUnreachable(error: unknown): boolean {
-  if (!(error instanceof ApiError)) return false;
-  if (error.code === NETWORK_ERROR_CODE) return true;
-  return (
-    GATEWAY_FAILURE_STATUSES.has(error.status) && error.code !== ErrorCode.SYSTEM_IMPORT_IN_PROGRESS
-  );
+  const isImportLock =
+    error instanceof ApiError && error.code === ErrorCode.SYSTEM_IMPORT_IN_PROGRESS;
+  return isApiUnreachable(error) && !isImportLock;
 }
 
 /**
