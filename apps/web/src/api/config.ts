@@ -12,4 +12,6 @@ export const webConfig = Object.freeze({
   apiBaseUrl: API_BASE_URL.replace(/\/$/, ''),
   /** Refresh this far before the access token actually expires, to absorb clock skew. */
   tokenRefreshSkewSeconds: 60,
+  /** How often a stored session is offered again while the API cannot be reached at start-up. */
+  sessionRestoreRetryMs: 10_000,
 });
