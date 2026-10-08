@@ -3,66 +3,59 @@
 > Auto-injected every session by the `SessionStart` hook. **Keep under ~60 lines.** Deeper, on
 > demand: `ASSIST.md` · `SESSION-LOG.md` · `DECISIONS.md` · `OPEN-QUESTIONS.md` · `docs/RUNBOOK.md`.
 
-**Updated:** 2026-10-04
+**Updated:** 2026-10-08 · **Arif is the only developer and the lead from 2026-10-08**: every
+decision, review and merge is his. Nothing routes to Ayman any more.
 
 ## Where the build is
 
-**Phase 11 (ADR-0002) is merged on GitHub; it is not deployed.** PRs #1–#6 landed in
-**`fix/lan-secure-context`, the GitHub default branch** (there is no `origin/main`; local `main` is
-old and unrelated). Tip `86de70f`. Keys bound to a **service account**, `POST /stock/take` (take
-throttle and daily cap), K2 enforced by one global interceptor, service accounts creatable from
-the admin panel. Migration **0039**; Python client in `clients/python/`. Phases 00–10 unchanged.
+**`main` is the PR base, green at `d3a19f6`: PRs #1–#17 merged, none open.** The GitHub *default*
+branch is still `fix/lan-secure-context`, so `gh pr create --base main`. Phases 00–11 are done.
+**Nothing new is deployed:** the VM runs the root demo stack at `9f4176d` (operator, 2026-09-27).
+Since 10-04: lint 0 + message audit (#8, #9); lab kiosk `/panel`, no person data (#12); an
+unreachable API no longer signs anyone out (#11, #15); CI on every PR to `main` (#14, #16, #17).
 
-**`chore/lint-clean`** (from `86de70f`, local only): lint 20 → **0**, bulk import shows **"Coming soon"**
-(UI only; the import API is still live, no env flag), and the Playwright audit (`docs/playwright_audit.md`,
-skill `playwright-audit`, 104 ops). **`fix/professional-messages`** (on top of it): every audit finding fixed
-except F4/F5 (`docs/playwright_audit.md`), and `docs/message_audit.md` fixed — plain zod wording, per-call
-overrides, `errorsPlain`, 8 new `ErrorCode`s (duplicate dept/room/zone/compartment/user email, in-use dept and
-location, last administrator), `ConfirmDialog` on 4 one-click destructive actions, `role=alert` toasts. The
-local `api` and `web` containers run this branch with demo mode **off**; the VM is untouched.
+## Next action — chosen by Arif on 2026-10-08, in this order
 
-## Next action
+1. **Kiosk refuses a non-GENERAL sign-in (OQ-P3).** `LoginPage` in kiosk mode (`from` = `/panel`
+   or `?kiosk=1`) refuses a sign-in whose roles are not exactly GENERAL. A client-side safeguard,
+   not a boundary. Auth surface: test shown failing first, then `security-reviewer`.
+2. **Drawer plan into IMS by a script through the API**: `features/panel/layout/ims-import-v4.csv`
+   (4 rooms, 17 zones, 150 compartments), dry run first, creates only what is missing via the
+   Locations endpoints. Keeper dev DB first, the VM after `infra/`. The importer only *matches*
+   shelves (`import-lookups.ts:195`). Until then the panel shows no cell contents.
+3. **Panel go-live, outside the repo:** Chromium lockdown (policy names unverified),
+   `DEMO_ACCOUNTS_ENABLED` off on the panel's server, the `lab-panel` account (RUNBOOK).
 
-1. **Open the PRs** for `chore/lint-clean` and `fix/professional-messages`. Open for the owner: minimum
-   expense threshold (OQ-35) and BOM vendor optional (OQ-36), whether a borrow reject needs a reason, whether
-   "Coming soon" should also close the import API, F4 (demo-accounts 404 with demo off) and F5 (login
-   lockout per address, matters once Cloudflare hides client IPs).
-2. **Real client IP behind Cloudflare is IT-owned**, open, and blocks go-live (RUNBOOK §0.7). The
-   app side is done: `TRUST_PROXY_HOPS` (default 1). Do not touch the VM, proxy or firewall for it.
-3. **Production must run `infra/` first** (RUNBOOK §0 item 0). The VM runs the root demo stack at
-   `9f4176d` (operator, 2026-09-27). The switch needs IT in the window. Waiting on Ayman:
-   `IMPORT_MAX_CHANGED_SHELVES`.
+## Green — CI on `main` @ `d3a19f6`, 2026-10-08
 
-## Green as of 2026-10-04 (`fix/professional-messages`), measured on Windows
+- typecheck · lint **0** · unit shared **25** · api **257** · web **670** · guard-hardcoding **8**
+- integration **1035 / 1035 (71 files)**, the baseline (DECISIONS 2026-10-08)
 
-- typecheck clean · unit shared 25 · api 257 · web **557** · **lint 0 (exit 0)** · guard-hardcoding **8**
-- integration **1024 / 1024 (70 files)**, 275 s, local `db-test` (`docker compose -f
-  infra/docker-compose.dev.yml up -d db-test`, port 5434). Was 1013 / 69 (+11 for the new codes).
+## Blocked — needs the operator
+
+- **Real client IP behind Cloudflare is IT-owned** and blocks go-live (RUNBOOK §0.7). The app
+  side is done (`TRUST_PROXY_HOPS`). Do not touch the VM, proxy or firewall.
+- **Production must run `infra/` first** (RUNBOOK §0 item 0); needs IT in the window. Open for
+  Arif: `IMPORT_MAX_CHANGED_SHELVES`.
+- **Owner calls open:** OQ-35, OQ-36, a reason on borrow reject, "Coming soon" closing the import API, F4, F5.
 
 ## Landmines — full list in `ASSIST.md` §9
 
-- **Postgres never runs locally on the Mac.** Integration gate = **`scripts/test-int-keeper.sh`**
-  (~90 s); `ssh -L` tunnels stall and fake timeouts. Node **22** is keg-only on the Mac.
-- **Lint is a real gate now (0): any error is new.** `eslint-plugin-react-hooks` is not installed,
-  so an `eslint-disable react-hooks/*` comment is itself an error.
-- **A branch cut from the default branch tracks `fix/lan-secure-context`.** Push by name
-  (`git push -u origin <branch>`), never a bare `git push`.
-- **Five failed logins from one address lock every login from it for 900 s** (in-memory; restart
-  the local `api` to clear). Never run negative-login tests against a real email or the VM.
-- **Every role→people query must filter `users.is_service_account = false`** (list in
-  `07-data-model.md` §7.5), or a panel gets requisition stages, IM notices and picker slots.
+- **Postgres never runs locally on the Mac.** Integration gate = **`scripts/test-int-keeper.sh`**;
+  `ssh -L` tunnels stall and fake timeouts. Node **22**, keg-only (Node 25 breaks jsdom).
+- **CI's warm pnpm cache skips puppeteer's postinstall**, so the integration job installs Chrome
+  itself (#17). Drop that step and every PDF spec returns 500.
+- **Lint is a gate (0).** No `eslint-plugin-react-hooks`, so a `react-hooks/*` disable is an error.
+- **5 failed logins from one address lock all its logins for 900 s** (restart the local `api`). Never
+  run negative-login tests against a real email or the VM.
+- **Every role→people query must filter `users.is_service_account = false`** (`07-data-model.md` §7.5).
 - **A response body that is HTML, or not `{code, message}`, came from another app**, not the API.
-- **Never run two test suites at once** (one shared `db-test`). **`pnpm typecheck` reads
-  `packages/shared/dist`:** change a contract, rebuild shared.
-- **Two compose files.** Root = demo (what the VM runs today); `infra/` = production.
-- **`test-env.int-spec` refuses an unpinned config key.** Pin every new one in `TEST_ENV`.
-- **`resetData` keeps requisitions and cannot delete a user who moved stock.** A full run leaves
-  >100 users, so anything reading "the first page of users" needs fixtures that sort first.
-- **An import locks the whole API out, and the lock lives in process memory.**
+- **Never run two test suites at once** (one `db-test`). **`pnpm typecheck` reads `packages/shared/dist`.**
+- **Two compose files:** root = demo (the VM today), `infra/` = production. **`test-env.int-spec`
+  refuses an unpinned config key.** **An import locks the whole API out** (lock in process memory).
 
 ## Open debt
 
-`G-14` · `G-16` · `G-17` · `G-18` · `G-19` · `G-21` (borrow form 500 on an unknown project) ·
-PM 6/12/14/15 · `OQ-30` · `OQ-31` · `OQ-33` · `OQ-C` · `OQ-D` · `OQ-F` · `OQ-KT8` · `OQ-KT9`
+`G-14` · `G-16` · `G-17` · `G-18` · `G-19` · `G-21` · PM 6/12/14/15 · `OQ-30` · `OQ-31` · `OQ-33` ·
+`OQ-C` · `OQ-D` · `OQ-F` · `OQ-KT8` · `OQ-KT9` · 8 guard-hardcoding findings
 · **overdue notifications are unwired on purpose (`OQ-E`) — not a gap, do not "fix"**
-· 8 guard-hardcoding findings

@@ -12,6 +12,26 @@ Format:
 **Next:** the single next action, specific enough to start without thinking
 ```
 
+## 2026-10-05 → 2026-10-08 — Lab panel, auth fix, CI; Arif becomes the sole developer
+
+**Did:** the lab kiosk page `/panel` (#12): cabinet map with the cell lit, cell contents, part search
+on an on-screen keyboard, 60 s idle reset, offline banner retrying every 10 s, light and dark, no
+person data (K2), no new runtime dependency; the kiosk login uses the same keyboard. An unreachable
+API (network error, 502/503/504) no longer signs the user out (#11), and the panel now uses that
+same helper (#15). CI is real on every PR to `main`: the unit env is pinned and the integration job
+runs on Asia/Dhaka (#14); the integration job installs puppeteer's Chrome, because a warm pnpm cache
+skips its postinstall (#17); `verify` runs on Asia/Dhaka too (#16). Claude squash-merged #15–#17 on
+Arif's "merge", each on green CI for its exact head. `main` @ `d3a19f6` is green: 1035 / 1035.
+**Decisions:** OQ-P2 (Arif, 10-05): a cell is joined by room + zone name + compartment code. Arif,
+10-08: he is the sole developer; OQ-P1 keeps 14 days; OQ-P3 `lab-panel` GENERAL, and kiosk mode
+refuses other roles; the drawer plan goes in by a script through the API. All in DECISIONS 2026-10-08.
+**Landmines:** the kiosk role refusal is not built. The drawer plan is in no IMS database, so the
+panel finds no cell contents. Nothing is deployed. The GitHub default branch is still
+`fix/lan-secure-context`. Fifteen older remote branches were left alone; whether they are merged
+was not checked.
+**Next:** branch `feat/kiosk-general-only` from `main`: `LoginPage` in kiosk mode refuses a sign-in
+whose roles are not exactly GENERAL. Test red first, then `security-reviewer`, then a PR to `main`.
+
 ## 2026-10-04 (final) — Everything fixed, verified, pushed
 
 **Did:** on the owner's "fix all": F1 (BOM mutation refreshes its requisitions), F2 (`useBomForRequisition` takes

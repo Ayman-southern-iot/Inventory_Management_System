@@ -5,6 +5,12 @@
 
 ## Current position
 
+- **2026-10-08 — `main` green at `d3a19f6`; PRs #1–#17 merged, none open (see SESSION-LOG).**
+  Lab kiosk `/panel` (#12), an unreachable API keeps the session (#11, #15), CI on every PR to `main`
+  (#14, #16, #17). **Verified, CI on `d3a19f6`:** typecheck · lint 0 · unit shared 25 / api 257 / web 670 ·
+  integration **1035 / 1035 (71 files)**; guard-hardcoding 8 (run locally). Not deployed. **Next:** kiosk
+  mode refuses a non-GENERAL sign-in (OQ-P3), then the drawer-plan script. Arif is the sole developer.
+
 - **2026-10-04 (final) — Audit findings and message audit fixed; verified; pushed (see SESSION-LOG).**
   On top of the message work below: F1 stale requisition after a BOM, F2 403 on requisition pages, F6 throttler
   text, F7 BOM approval chain (words, formatted times, headers from copy); `USER_EMAIL_IN_USE` and

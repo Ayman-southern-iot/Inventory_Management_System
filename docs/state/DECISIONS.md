@@ -1452,3 +1452,25 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   `defer-feature` shape:** no env flag, no server guard, so a user with the role can still call the
   import endpoints, and the sidebar link still shows. Re-enable by routing the path back to
   `ImportPage`. Whether to close the API too is open for Ayman.
+- 2026-10-08 (Arif) — **Arif is the only developer and the lead from today; Ayman does nothing
+  further.** Every decision, review and merge is Arif's, including items recorded above as "open
+  for Ayman". Claude merges only on Arif's explicit word, and only on green CI for the PR's exact head.
+- 2026-10-08 — **`main` is the PR base.** This supersedes the 2026-10-04 "there is no `origin/main`".
+  The GitHub default branch is still `fix/lan-secure-context`, so open PRs with `--base main`.
+- 2026-10-08 — **Integration baseline is now 1035 pass / 0 fail, 71 files** (CI on `main` @
+  `d3a19f6`: ubuntu, postgres 16.4, `TZ=Asia/Dhaka`). It replaces 1013 / 69; compare against this.
+  Unit on the same run: shared 25, api 257, web 670.
+- 2026-10-08 — **CI installs puppeteer's browser explicitly** (#17). setup-node restores the pnpm
+  store from cache, pnpm then skips puppeteer's postinstall, and a warm cache left no Chrome: every
+  PDF spec returned 500. The step does nothing when Chrome is already there. **The `verify` job runs
+  on `TZ=Asia/Dhaka` too** (#16), so unit tests run on the same calendar as the integration job.
+- 2026-10-08 (Arif) — **OQ-P1: the kiosk keeps the 14-day absolute refresh life.** No account flag,
+  no device-code flow. The IM signs the panel back in on its on-screen keyboard. No auth change.
+- 2026-10-08 (Arif) — **OQ-P3: the panel is the person-type GENERAL account `lab-panel`, and kiosk
+  mode refuses a sign-in whose roles are not exactly GENERAL.** A client-side safeguard, not a
+  boundary: it stops an admin session being left on the wall for 14 days. Not built yet.
+- 2026-10-08 (Arif) — **The v4 drawer plan goes into IMS by a script through the API**, not by hand
+  (about 171 entries, one typo breaks a cell's join) and not by extending the importer, which only
+  matches existing shelves (`import-lookups.ts:195`). Dry run first; it creates only what is missing,
+  under the same validation as the Locations page. Keeper dev DB first, the VM after `infra/`.
+  Ayman's earlier room plan is not used.
