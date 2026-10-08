@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { Compartment, Room, Zone } from '@ims/shared';
-import { matchKey, parsePlanCsv, planEntry, type PlanRow } from './plan';
+import { applyRefusal, matchKey, parsePlanCsv, planEntry, type PlanRow } from './plan';
 
 const HEADER = 'Room,Zone name,Compartment code,Label / QR text,Drawer description (plan only),Description,Active';
 const csv = (...lines: string[]) => [HEADER, ...lines].join('\r\n');
@@ -142,6 +142,18 @@ describe('planEntry', () => {
     expect(plan.inactive).toEqual(['room Cabinet A', 'zone Cabinet A / A1', 'compartment Cabinet A / A1 / 1C-1D']);
     expect(plan.rooms).toEqual(['Roller cabinet']);
     expect(plan.present).toBe(3);
+  });
+
+  it('refuses to apply while a plan location is inactive, and allows it otherwise', () => {
+    // The API creates under a retired room or zone without complaint (locations.service), and a
+    // retired one with the plan's name makes its create a 409: either way a person decides first.
+    const cabinet = room('Cabinet A');
+    cabinet.zones = [zone(cabinet, 'A1', ['1A-1B'], false)];
+    const blocked = planEntry(rows, [cabinet]);
+    expect(applyRefusal(blocked)).toBe(
+      '1 plan location(s) are inactive in IMS: reactivate them on the Locations page, or take them off the plan, then run again',
+    );
+    expect(applyRefusal(planEntry(rows, []))).toBeNull();
   });
 
   it('keys by trimmed, upper-cased text', () => {

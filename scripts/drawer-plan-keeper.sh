@@ -58,8 +58,9 @@ if [ "$(remote "docker inspect -f '{{.State.Health.Status}}' '${API_CONTAINER}' 
 fi
 
 echo "==> drawer plan ${APPLY:-(dry run)} with ${IMAGE} against ${API_CONTAINER}"
-# set -a exports the settings file's lines; only the two seed-admin values are used, on stdin.
-remote "set -a && . '${DEV_DIR}/api.env' && set +a && \
+# Sourced into the remote shell, not exported: printf is a builtin, so only the two seed-admin
+# values are read, and they reach the script on stdin, never an argv or the environment.
+remote ". '${DEV_DIR}/api.env' && \
   printf '%s\n%s\n' \"\$SEED_ADMIN_EMAIL\" \"\$SEED_ADMIN_PASSWORD\" | \
   docker run --rm -i --network '${NETWORK}' \
     -v \"\$HOME/${DEV_DIR}/Inventory_Management_System/${PLAN_FILE}:/plan.csv:ro\" \

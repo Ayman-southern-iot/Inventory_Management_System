@@ -169,5 +169,19 @@ export function planEntry(rows: readonly PlanRow[], rooms: readonly Room[]): Ent
   return plan;
 }
 
+/**
+ * Why `--apply` must not run, or null when it may. An inactive plan location blocks it: the API
+ * creates under a retired room or zone without complaint (`locations.service.ts`), and its unique
+ * names cover retired rows too (migration 0033), so the run would either write into a retired
+ * drawer or stop half-way on a 409. Reactivating or dropping it is a person's decision.
+ */
+export function applyRefusal(plan: EntryPlan): string | null {
+  if (plan.inactive.length === 0) return null;
+  return (
+    `${plan.inactive.length} plan location(s) are inactive in IMS: reactivate them on the ` +
+    'Locations page, or take them off the plan, then run again'
+  );
+}
+
 /** A room or zone lookup key, matched the way `planEntry` matches. */
 export { zoneKey };

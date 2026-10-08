@@ -12,22 +12,39 @@
  * Without --apply it changes nothing: it reports what exists and what it would create. With --apply
  * it creates only what is missing (rooms, then zones, then compartments), then reads the tree back
  * and checks every plan row is there and active. Re-running after a success creates nothing. It
- * never renames, moves or deactivates anything, and it ignores locations the plan does not name.
+ * never renames, moves, reactivates or deactivates anything, and it ignores locations the plan does
+ * not name. While any plan location is inactive in IMS it refuses --apply before writing.
  *
  * Exit codes: 0 done (or nothing to do), 1 a check or a call failed, 2 bad usage or a bad file.
  */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { z } from 'zod';
 import { Role, loginResponseSchema, roomSchema, type Room } from '@ims/shared';
-import { parsePlanCsv, planEntry, zoneKey, matchKey, type EntryPlan, type PlanRow } from './drawer-plan/plan';
+import {
+  applyRefusal,
+  matchKey,
+  parsePlanCsv,
+  planEntry,
+  zoneKey,
+  type EntryPlan,
+  type PlanRow,
+} from './drawer-plan/plan';
 
 const EXIT_FAILED = 1;
 const EXIT_USAGE = 2;
 const MS_PER_SECOND = 1000;
 /** A 429 is waited out and retried this many times before the run gives up. */
 const RATE_LIMIT_RETRIES = 5;
-/** Used when a 429 carries no Retry-After header. */
-const RATE_LIMIT_FALLBACK_WAIT_S = 10;
+/**
+ * Used when a 429 carries no Retry-After header: one whole window of the authenticated throttle
+ * tier at its default (`THROTTLE_AUTHENTICATED_TTL_SECONDS`), so a retry never lands inside the block.
+ */
+const RATE_LIMIT_FALLBACK_WAIT_S = 60;
+/**
+ * The tree with retired rows included. The endpoint hides them by default, and the plan must see
+ * them: a retired zone still owns its name (migration 0033), so creating it again is a 409.
+ */
+const ROOMS_PATH = '/locations/rooms?includeInactive=true';
 /** Roles the Locations write endpoints accept (locations.controller.ts). */
 const WRITER_ROLES: readonly Role[] = [Role.INVENTORY_MANAGER, Role.ADMIN];
 
@@ -98,7 +115,7 @@ async function call<T>(
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     if (response.status === 429 && attempt < RATE_LIMIT_RETRIES) {
-      const wait = Number(response.headers.get('retry-after')) || RATE_LIMIT_FALLBACK_WAIT_S;
+      const wait = Number(retryAfter(response.headers)) || RATE_LIMIT_FALLBACK_WAIT_S;
       console.log(`  rate limited on ${label}; waiting ${wait} s`);
       await sleep(wait);
       continue;
@@ -119,8 +136,22 @@ async function call<T>(
         envelope.success ? envelope.data.message : 'the response is not the API error shape',
       );
     }
-    return schema.parse(json);
+    const parsed = schema.safeParse(json);
+    if (!parsed.success) {
+      // A 2xx that is not the API's shape: --api most likely points at the SPA or another app.
+      throw new Error(`${label}: the response is not what the API returns. Is --api the API's base URL?`);
+    }
+    return parsed.data;
   }
+}
+
+/**
+ * The throttler names its header after the tier that blocked (`Retry-After-authenticated`), and
+ * the exception filter adds no plain one, so take whichever Retry-After header is present.
+ */
+function retryAfter(headers: Headers): string | null {
+  for (const [name, value] of headers) if (name.startsWith('retry-after')) return value;
+  return null;
 }
 
 const createdSchema = z.object({ id: z.string().uuid() }).passthrough();
@@ -158,16 +189,23 @@ async function apply(api: string, token: string, plan: EntryPlan, tree: readonly
     zoneIds.set(zoneKey(room, zone), created.id);
     console.log(`  created zone ${room} / ${zone}`);
   }
-  for (const { room, zone, code } of plan.compartments) {
-    const zoneId = zoneIds.get(zoneKey(room, zone));
-    if (zoneId === undefined) throw new Error(`no id for zone ${room} / ${zone}`);
-    await call(api, token, 'POST', '/locations/compartments', createdSchema, { zoneId, code });
+  let created = 0;
+  try {
+    for (const { room, zone, code } of plan.compartments) {
+      const zoneId = zoneIds.get(zoneKey(room, zone));
+      if (zoneId === undefined) throw new Error(`no id for zone ${room} / ${zone}`);
+      await call(api, token, 'POST', '/locations/compartments', createdSchema, { zoneId, code });
+      created += 1;
+    }
+  } finally {
+    // On a failure too, so the operator knows how far it got; a re-run picks up from there.
+    if (created > 0) console.log(`  created ${created} of ${plan.compartments.length} compartments`);
   }
-  if (plan.compartments.length > 0) console.log(`  created ${plan.compartments.length} compartments`);
 }
 
 async function main(): Promise<number> {
   const options = parseArgs(process.argv.slice(2));
+  if (!existsSync(options.file)) throw new UsageError(`${options.file}: no such file`);
   const parsed = parsePlanCsv(readFileSync(options.file, 'utf8'));
   if (parsed.errors.length > 0) {
     console.error(`${options.file}: ${parsed.errors.length} problem(s), nothing sent:`);
@@ -187,7 +225,7 @@ async function main(): Promise<number> {
   }
   console.log(`signed in as ${session.user.email} [${session.user.roles.join(', ')}] at ${options.api}`);
 
-  const tree = await call(options.api, session.accessToken, 'GET', '/locations/rooms', roomsSchema);
+  const tree = await call(options.api, session.accessToken, 'GET', ROOMS_PATH, roomsSchema);
   const plan = planEntry(parsed.rows, tree);
   report(plan, parsed.rows);
   if (!options.apply) {
@@ -195,8 +233,13 @@ async function main(): Promise<number> {
     return 0;
   }
 
+  const refusal = applyRefusal(plan);
+  if (refusal !== null) {
+    console.error(`--apply refused, nothing changed: ${refusal}`);
+    return EXIT_FAILED;
+  }
   await apply(options.api, session.accessToken, plan, tree);
-  const after = planEntry(parsed.rows, await call(options.api, session.accessToken, 'GET', '/locations/rooms', roomsSchema));
+  const after = planEntry(parsed.rows, await call(options.api, session.accessToken, 'GET', ROOMS_PATH, roomsSchema));
   const missing = after.rooms.length + after.zones.length + after.compartments.length;
   if (missing > 0 || after.inactive.length > 0) {
     console.error(`check after apply FAILED: ${missing} location(s) still missing, ${after.inactive.length} inactive`);

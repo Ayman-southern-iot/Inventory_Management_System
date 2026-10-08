@@ -1124,15 +1124,19 @@ shelves, it never creates them:
 **`apps/api/scripts/drawer-plan.ts` enters them through the API** (decided 2026-10-08). It matches
 what exists the way the panel does (trimmed, case-insensitive). Without `--apply` it changes
 nothing and prints what it would create. With `--apply` it creates only what is missing, then
-reads the tree back and checks all 150 rows are present and active. It never renames, moves or
-deactivates anything, and a re-run creates nothing. The account needs Inventory Manager or Admin;
+reads the tree back and checks all 150 rows are present and active. It never renames, moves,
+reactivates or deactivates anything, and a re-run creates nothing. If a plan room, zone or
+compartment exists but is inactive, it refuses `--apply` and names it: reactivate it on the
+Locations page, or take it off the plan, first. The account needs Inventory Manager or Admin;
 it reads the email and password as two lines on stdin.
 
 - **Dev, on the keeper:** `scripts/dev-api-keeper.sh`, then `scripts/drawer-plan-keeper.sh`
   (dry run) and `scripts/drawer-plan-keeper.sh --apply`. Run 2026-10-08 against `ims-db-dev`:
   4 rooms, 17 zones, 150 compartments created; a re-run created nothing.
-- **Production (`infra/` stack), not yet run there:** copy the plan into the `api` container,
-  then pipe the credentials in, typing the password blind:
+- **Production (`infra/` stack), not yet run there:** the running image must be built from a
+  commit that has `apps/api/scripts/drawer-plan.ts`. Copy the plan into the `api` container, then
+  pipe the credentials in from **bash** (zsh's `read -p` means something else), typing the
+  password blind:
 
   ```bash
   docker compose -f infra/docker-compose.yml cp \
