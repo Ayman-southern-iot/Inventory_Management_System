@@ -1,0 +1,140 @@
+# What a branch must pass before it is merged. The same checks the pre-push hook runs, plus the
+# ones a local machine cannot be trusted to run. Rules: CONTRIBUTING.md.
+#
+# Required on main:  commit-lint, verify.   `integration` is run on every PR but is not required
+# until it has been green on this runner at least once (see CONTRIBUTING.md section 7).
+name: CI
+
+on:
+  pull_request:
+    branches: [main, advance-inventory-management]
+  push:
+    branches: [main, advance-inventory-management]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  commit-lint:
+    name: commit-lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # A squash merge turns the PR title into the commit on main, so the title is held to the
+      # same rule as a commit. Passed through env, never interpolated into the script.
+      - name: PR title
+        if: github.event_name == 'pull_request'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: printf '%s' "$PR_TITLE" | bash scripts/check-commit-message.sh -
+
+      - name: Every commit in the change
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+        run: |
+          set -u
+          zero=0000000000000000000000000000000000000000
+          if [ "$EVENT" = "pull_request" ]; then
+            range="$PR_BASE..$PR_HEAD"
+          elif [ "$PUSH_BEFORE" = "$zero" ]; then
+            range="origin/main..$PUSH_AFTER"
+          else
+            range="$PUSH_BEFORE..$PUSH_AFTER"
+          fi
+          echo "checking $range"
+          failed=0
+          for sha in $(git rev-list --no-merges "$range"); do
+            if ! git log -1 --format=%B "$sha" | bash scripts/check-commit-message.sh -; then
+              echo "::error::commit $(git log -1 --format='%h %s' "$sha") breaks the commit-message rule"
+              failed=1
+            fi
+          done
+          exit "$failed"
+
+  verify:
+    name: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the invariants script diffs against origin/main
+
+      - uses: pnpm/action-setup@v4 # version comes from "packageManager" in package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Repo invariants
+        run: bash scripts/ci/repo-invariants.sh origin/main
+
+      # typecheck reads packages/shared/dist, so shared is built first.
+      - name: Build shared
+        run: pnpm --filter @ims/shared build
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint (must exit 0)
+        run: pnpm lint
+
+      - name: Unit tests
+        run: pnpm test
+
+  integration:
+    name: integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      db-test:
+        image: postgres:16.4-alpine
+        env:
+          POSTGRES_DB: ims_test
+          POSTGRES_USER: ims
+          POSTGRES_PASSWORD: ims_test_password
+          TZ: Asia/Dhaka
+        # 5434 is where apps/api/test/config/test-env.ts looks for it, as in infra/docker-compose.dev.yml.
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd "pg_isready -U ims -d ims_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build shared
+        run: pnpm --filter @ims/shared build
+
+      # Redirected, not streamed: the suite is long and its output is huge. The tail is the result.
+      - name: Integration suite
+        run: |
+          pnpm --filter @ims/api test:int > int.log 2>&1 && status=0 || status=$?
+          tail -40 int.log
+          exit "$status"

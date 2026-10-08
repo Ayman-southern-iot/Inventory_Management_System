@@ -8,7 +8,8 @@
 >
 > **Maintenance rule:** see `.claude/rules/05-ai-playbook.md`. A `PostToolUse` hook
 > (`.claude/hooks/playbook-reminder.sh`) reminds Claude to update this file after every
-> meaningful edit. Last updated: 2026-10-04 (lint baseline is now 0 — §16 landmines; `playwright-audit` skill — §15.1). Earlier,
+> meaningful edit. Last updated: 2026-10-05 (branch model: `main` + `advance-inventory-management`, hooks, CI — §7, §14). Earlier,
+> 2026-10-04 (lint baseline is now 0 — §16 landmines; `playwright-audit` skill — §15.1). Earlier,
 > 2026-09-29 (phase 11, ADR-0002: keys that act as a service
 > account, `POST /stock/take` — §11 config, §16 landmines, §18 notifications. Earlier,
 > 2026-09-24: CSV product import complete, parts A–L — §6 layout
@@ -622,6 +623,7 @@ pnpm db:seed              # idempotent reference data
 pnpm --filter @ims/api test:int   # integration tests (real Postgres) — host runs only, see below
 scripts/test-int-keeper.sh        # THE integration gate on the M5: runs on the keeper, no tunnel
 pnpm audit:deps           # dependency audit
+pnpm hooks:install        # once per clone: commit-msg + pre-push hooks, pull.rebase=true (CONTRIBUTING.md)
 
 # Verification suite (run via /verify):
 bash .claude/hooks/guard-hardcoding.sh --scan-all
@@ -1017,6 +1019,13 @@ reason the locking exists).
 - Conventional commits: `feat(stock): …`, `fix(approvals): …`, `chore(deps): …`.
 - One logical change per commit. Migration + the code that uses it belong together.
 - Never commit `.env`, dumps, or generated PDFs.
+- **Branches:** `main` is protected and takes pull requests only (never push to it). The team pushes to
+  `advance-inventory-management` after `git pull`; short-lived branches are `<type>/<kebab-name>`.
+  `advance-inventory-management` → `main` is a **merge commit**, feature → `main` is a squash. Never
+  `--force`, never `--no-verify`. Header ≤ 100 chars, checked by `scripts/check-commit-message.sh`
+  (hook + CI). CI also fails on a tracked `.env`, `process.env` outside `src/config/`, an edited
+  migration, or a new `.skip`/`.only` (`scripts/ci/repo-invariants.sh`). Full rules: `CONTRIBUTING.md`;
+  Claude-facing summary: `.claude/rules/80-contributing.md`. `docs/state/*` is the lead's snapshot.
 
 **Errors**
 - Never swallow an error. Either handle it or let it propagate to the global filter.

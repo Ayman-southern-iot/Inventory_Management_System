@@ -37,6 +37,23 @@ interface RequestOptions {
  */
 let refreshInFlight: Promise<AuthTokens | null> | null = null;
 
+/** `ApiError.code` when the request never got an answer: offline, DNS, refused, reset. */
+export const NETWORK_ERROR_CODE = 'NETWORK';
+
+/** A proxy answered because the API could not: down, restarting, or locked for an import. */
+const API_UNAVAILABLE_STATUSES: ReadonlySet<number> = new Set([502, 503, 504]);
+
+/**
+ * The API could not be asked. Says nothing about the session, so it must never end one: a kiosk
+ * that boots before the network, or a refresh that meets an API restart, stays signed in.
+ */
+export function isApiUnreachable(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    (error.code === NETWORK_ERROR_CODE || API_UNAVAILABLE_STATUSES.has(error.status))
+  );
+}
+
 /** Set by AuthProvider so a failed refresh can drop the app back to the login screen. */
 let onSessionLost: (() => void) | null = null;
 
@@ -111,7 +128,7 @@ async function rawRequest<T>(path: string, options: RequestOptions, accessToken:
     });
   } catch (cause) {
     if (cause instanceof DOMException && cause.name === 'AbortError') throw cause;
-    throw new ApiError('NETWORK', 'Cannot reach the server', 0);
+    throw new ApiError(NETWORK_ERROR_CODE, 'Cannot reach the server', 0);
   }
 
   if (response.status === 204) return undefined as T;
@@ -167,7 +184,10 @@ async function refreshTokens(staleAccessToken: string | null): Promise<AuthToken
       );
       writeStoredTokens(result);
       return result;
-    } catch {
+    } catch (error) {
+      // The refresh never reached the API: keep the tokens and let the caller see an outage,
+      // not a sign-out. Only an answer from the API itself ends the session.
+      if (isApiUnreachable(error)) throw error;
       clearStoredTokens();
       return null;
     }

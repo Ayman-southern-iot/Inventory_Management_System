@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# Installed by `pnpm hooks:install`. Runs before anything leaves your machine.
+#
+# 1. Never push to main. It takes changes only through a pull request.
+# 2. Branch names follow CONTRIBUTING.md section 2.
+# 3. Every commit you are about to publish passes the commit-message rule (this catches commits
+#    made before the hooks were installed, or with --no-verify).
+# 4. typecheck + lint pass. The shared branch is pushed to directly, so red code reaches
+#    everyone's next pull; this is the cheap half of the gate (tests run in CI).
+#
+# A local hook can always be skipped with --no-verify. That is why CI and branch protection
+# repeat every one of these checks on the server; this hook only saves you the round trip.
+set -u
+
+ROOT="$(git rev-parse --show-toplevel)"
+ZERO='0000000000000000000000000000000000000000'
+INTEGRATION_BRANCH='advance-inventory-management'
+BRANCH_PATTERN='^(feat|fix|docs|chore|test|refactor|perf|build|ci|hotfix)/[a-z0-9][a-z0-9._-]*$'
+
+status=0
+needs_gate=0
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  branch="${remote_ref#refs/heads/}"
+
+  # Deleting a remote branch: only protect the two long-lived ones.
+  if [ "$local_sha" = "$ZERO" ]; then
+    case "$branch" in
+      main | "$INTEGRATION_BRANCH")
+        echo "REFUSED: '$branch' is long-lived and must never be deleted." >&2
+        status=1
+        ;;
+    esac
+    continue
+  fi
+
+  case "$remote_ref" in
+    refs/heads/*) ;;
+    *) continue ;; # tags etc.
+  esac
+
+  if [ "$branch" = "main" ]; then
+    echo "REFUSED: do not push to main. Open a pull request from '$INTEGRATION_BRANCH' (or a branch named per CONTRIBUTING.md section 2)." >&2
+    status=1
+    continue
+  fi
+
+  if [ "$branch" != "$INTEGRATION_BRANCH" ] && ! [[ "$branch" =~ $BRANCH_PATTERN ]]; then
+    echo "REFUSED: branch name '$branch' is not allowed." >&2
+    echo "  Use <type>/<short-kebab-description>, type = feat fix docs chore test refactor perf build ci hotfix" >&2
+    echo "  e.g. feat/borrow-return-flow   or push to '$INTEGRATION_BRANCH'. See CONTRIBUTING.md section 2." >&2
+    status=1
+    continue
+  fi
+
+  # Commits this push would publish: new since the remote tip, or (new branch) not on any remote yet.
+  if [ "$remote_sha" = "$ZERO" ]; then
+    range=("$local_sha" --not --remotes)
+  else
+    range=("$remote_sha..$local_sha")
+  fi
+
+  while read -r sha; do
+    [ -n "$sha" ] || continue
+    if ! git log -1 --format=%B "$sha" | bash "$ROOT/scripts/check-commit-message.sh" - 2>/tmp/ims-commitmsg.$$; then
+      echo "Commit $(git log -1 --format='%h %s' "$sha") is not pushable:" >&2
+      cat /tmp/ims-commitmsg.$$ >&2
+      echo "  Fix it with: git rebase -i (reword) or git commit --amend, then push again." >&2
+      status=1
+    fi
+  done < <(git rev-list --no-merges "${range[@]}")
+  rm -f /tmp/ims-commitmsg.$$
+
+  needs_gate=1
+done
+
+[ "$status" -eq 0 ] || exit "$status"
+
+if [ "$needs_gate" -eq 1 ]; then
+  cd "$ROOT" || exit 1
+  echo "pre-push: building shared, then typecheck + lint (CI also runs the tests)..." >&2
+  # typecheck reads packages/shared/dist; a fresh clone has none, so build it rather than fail confusingly.
+  pnpm --filter @ims/shared build >/dev/null || { echo "REFUSED: shared failed to build." >&2; exit 1; }
+  pnpm typecheck || { echo "REFUSED: typecheck failed." >&2; exit 1; }
+  pnpm lint || { echo "REFUSED: lint failed (it must exit 0)." >&2; exit 1; }
+fi
+
+exit 0
