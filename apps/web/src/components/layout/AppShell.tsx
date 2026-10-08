@@ -4,6 +4,7 @@ import {
   ArrowRightLeft,
   Box,
   Boxes,
+  Cuboid,
   ChevronDown,
   ClipboardList,
   Files,
@@ -28,6 +29,7 @@ import {
 import { Role } from '@ims/shared';
 import { t } from '@/i18n/en';
 import { cn } from '@/lib/cn';
+import { DESKTOP_MEDIA, useMediaQuery } from '@/lib/useMediaQuery';
 import { useAuth } from '@/features/auth/auth-context';
 import { Button } from '@/components/ui/Button';
 import { UserIdentity } from '@/components/UserIdentity';
@@ -45,6 +47,8 @@ interface NavItem {
   badge?: boolean;
   /** Rendered alongside the label — the IM/Admin's pending borrow count. */
   borrowBadge?: boolean;
+  /** Only on a screen at least DESKTOP_MIN_WIDTH_PX wide: the page behind it needs a PC. */
+  desktopOnly?: boolean;
 }
 
 interface NavGroup {
@@ -114,6 +118,8 @@ const NAV: NavGroup[] = [
     items: [
       // No roles: browsing stock is everyone's, and it is where a borrow starts.
       { label: t.nav.inventoryProducts, to: ROUTES.inventory.products, icon: Box },
+      // Everyone's, like Inventory; hidden on a narrow screen, where `/room` only says "use a PC".
+      { label: t.nav.room, to: ROUTES.room, icon: Cuboid, desktopOnly: true },
       {
         label: t.nav.inventoryCategories,
         to: ROUTES.inventory.categories,
@@ -155,6 +161,7 @@ const NAV: NavGroup[] = [
 
 export function AppShell() {
   const { user, signOut, hasRole } = useAuth();
+  const isDesktop = useMediaQuery(DESKTOP_MEDIA);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -165,12 +172,14 @@ export function AppShell() {
       NAV.filter((group) => !group.roles || hasRole(...group.roles))
         .map((group) => ({
           ...group,
-          items: group.items.filter((item) => !item.roles || hasRole(...item.roles)),
+          items: group.items.filter(
+            (item) => (!item.roles || hasRole(...item.roles)) && (!item.desktopOnly || isDesktop),
+          ),
         }))
         // Roles live on the items now, so a group can empty out — a general user reaches none
         // of Finance. Without this it would render a heading with nothing under it.
         .filter((group) => group.items.length > 0),
-    [hasRole],
+    [hasRole, isDesktop],
   );
 
   const { pathname } = useLocation();
