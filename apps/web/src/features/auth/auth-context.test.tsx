@@ -3,17 +3,22 @@ import { act, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Role, type AuthUser } from '@ims/shared';
 import type * as ClientModule from '@/api/client';
-import { ApiError, api } from '@/api/client';
+import { ApiError, api, logoutWith } from '@/api/client';
 import { webConfig } from '@/api/config';
 import { TOKEN_STORAGE_KEY, readStoredTokens, writeStoredTokens } from '@/api/token-store';
 import { AuthProvider, useAuth } from './auth-context';
 
 vi.mock('@/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof ClientModule>();
-  return { ...actual, api: { ...actual.api, get: vi.fn(), loginRequest: vi.fn() } };
+  return {
+    ...actual,
+    api: { ...actual.api, get: vi.fn(), loginRequest: vi.fn() },
+    logoutWith: vi.fn(),
+  };
 });
 const get = vi.mocked(api.get);
 const loginRequest = vi.mocked(api.loginRequest);
+const logoutWithMock = vi.mocked(logoutWith);
 
 const someone = {
   id: '00000000-0000-4000-8000-000000000001',
@@ -28,12 +33,14 @@ const someone = {
 
 const unreachable = () => new ApiError('NETWORK', 'Cannot reach the server', 0);
 
-/** The provider's sign-in, captured so a test can sign in the way LoginPage does. */
+/** The provider's sign-in and sign-out, captured so a test can use them the way LoginPage does. */
 let signIn: ReturnType<typeof useAuth>['signIn'];
+let signOut: ReturnType<typeof useAuth>['signOut'];
 
 function Probe() {
   const auth = useAuth();
   signIn = auth.signIn;
+  signOut = auth.signOut;
   return <p>{auth.isRestoring ? 'restoring' : (auth.user?.email ?? 'signed out')}</p>;
 }
 
@@ -163,6 +170,59 @@ describe('AuthProvider: restoring a stored session at start-up', () => {
     get.mockRejectedValue(new ApiError('TOKEN_EXPIRED', 'Session expired', 401));
     renderProvider();
     await settle();
+
+    expect(readStoredTokens()).toBeNull();
+    expect(screen.getByText('signed out')).toBeInTheDocument();
+  });
+});
+
+describe('AuthProvider: signing out', () => {
+  const held = { accessToken: 'access', refreshToken: 'refresh', expiresIn: 900 };
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    get.mockReset().mockResolvedValue(someone);
+    logoutWithMock.mockReset();
+    localStorage.clear();
+    writeStoredTokens(held);
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it('removes the stored session before the logout request is answered', async () => {
+    // #19 security review: a kiosk that reloads or loses power while the logout is in flight must
+    // start signed out, not with the refused account still in localStorage.
+    const neverAnswered = new Promise<never>(() => undefined);
+    logoutWithMock.mockReturnValue(neverAnswered);
+    renderProvider();
+    await settle();
+    expect(screen.getByText(someone.email)).toBeInTheDocument();
+
+    act(() => {
+      void signOut();
+    });
+    await settle();
+
+    expect(readStoredTokens()).toBeNull();
+    expect(screen.getByText('signed out')).toBeInTheDocument();
+  });
+
+  it('still tells the server, with the tokens it held before clearing them', async () => {
+    logoutWithMock.mockResolvedValue(undefined);
+    renderProvider();
+    await settle();
+
+    await act(() => signOut());
+
+    expect(logoutWithMock).toHaveBeenCalledWith(held);
+    expect(readStoredTokens()).toBeNull();
+  });
+
+  it('stays signed out when the logout call fails', async () => {
+    logoutWithMock.mockRejectedValue(unreachable());
+    renderProvider();
+    await settle();
+
+    await act(() => signOut());
 
     expect(readStoredTokens()).toBeNull();
     expect(screen.getByText('signed out')).toBeInTheDocument();

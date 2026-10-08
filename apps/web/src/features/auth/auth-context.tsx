@@ -10,7 +10,7 @@ import {
 } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { type Role, type AuthUser, type LoginInput, type LoginResponse } from '@ims/shared';
-import { api, isApiUnreachable, setSessionLostHandler } from '@/api/client';
+import { api, isApiUnreachable, logoutWith, setSessionLostHandler } from '@/api/client';
 import { webConfig } from '@/api/config';
 import {
   clearStoredTokens,
@@ -125,12 +125,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     const stored = readStoredTokens();
+    // Cleared before the server is told, not after: if the page reloads or the power goes while
+    // the logout is in flight, the next start must find no session (#19 security review).
+    forgetSession();
+    if (!stored) return;
     try {
-      if (stored) await api.post('/auth/logout', { refreshToken: stored.refreshToken });
+      await logoutWith(stored);
     } catch {
-      // A failed logout call must still clear the client; the token expires on its own.
-    } finally {
-      forgetSession();
+      // Nothing is left on the client; a session the server did not revoke expires on its own.
     }
   }, [forgetSession]);
 
