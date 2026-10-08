@@ -8,7 +8,7 @@
 >
 > **Maintenance rule:** see `.claude/rules/05-ai-playbook.md`. A `PostToolUse` hook
 > (`.claude/hooks/playbook-reminder.sh`) reminds Claude to update this file after every
-> meaningful edit. Last updated: 2026-10-08 (dev API on the keeper, §7; kiosk login is GENERAL-only, §19). Earlier,
+> meaningful edit. Last updated: 2026-10-08 (dev API on the keeper and the drawer-plan entry script, §7; kiosk login is GENERAL-only, §19). Earlier,
 > 2026-10-05 (lab panel `/panel`, §19. Earlier the same day: branch model:
 > `main` + `advance-inventory-management`, hooks, CI — §7, §14). Earlier,
 > 2026-10-04 (lint baseline is now 0 — §16 landmines; `playwright-audit` skill — §15.1). Earlier,
@@ -625,6 +625,7 @@ pnpm db:seed              # idempotent reference data
 pnpm --filter @ims/api test:int   # integration tests (real Postgres) — host runs only, see below
 scripts/test-int-keeper.sh        # THE integration gate on the M5: runs on the keeper, no tunnel
 scripts/dev-api-keeper.sh         # the API as a container on the keeper, on ims-db-dev (below)
+scripts/drawer-plan-keeper.sh [--apply]  # drawer plan's rooms/zones/compartments into that API (RUNBOOK, lab panel)
 pnpm audit:deps           # dependency audit
 pnpm hooks:install        # once per clone: commit-msg + pre-push hooks, pull.rebase=true (CONTRIBUTING.md)
 

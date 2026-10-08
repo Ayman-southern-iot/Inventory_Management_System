@@ -1111,7 +1111,7 @@ signed out sends you to the panel's login, which refuses that account.
 **It will need signing in again** at most 14 days after the last sign-in, because a session has an
 absolute lifetime (OQ-P1). It lands on the login page, never a blank screen. Repeat step 3.
 
-**Entering the drawer plan in IMS** (OQ-P2), on the Locations page — the importer only matches
+**Entering the drawer plan in IMS** (OQ-P2) needs these locations; the importer only matches
 shelves, it never creates them:
 
 - **rooms** named exactly as on the plan: `Cabinet A`, `Cabinet B`, `Roller cabinet`,
@@ -1120,7 +1120,29 @@ shelves, it never creates them:
   zone description; the drawer's descriptive name stays on the plan;
 - in each zone, **one compartment per cell, coded exactly as printed** in the drawer (`1G-1H`).
 
-`apps/web/src/features/panel/layout/ims-import-v4.csv` is the checklist, one row per compartment.
+`apps/web/src/features/panel/layout/ims-import-v4.csv` lists them, one row per compartment, and
+**`apps/api/scripts/drawer-plan.ts` enters them through the API** (decided 2026-10-08). It matches
+what exists the way the panel does (trimmed, case-insensitive). Without `--apply` it changes
+nothing and prints what it would create. With `--apply` it creates only what is missing, then
+reads the tree back and checks all 150 rows are present and active. It never renames, moves or
+deactivates anything, and a re-run creates nothing. The account needs Inventory Manager or Admin;
+it reads the email and password as two lines on stdin.
+
+- **Dev, on the keeper:** `scripts/dev-api-keeper.sh`, then `scripts/drawer-plan-keeper.sh`
+  (dry run) and `scripts/drawer-plan-keeper.sh --apply`. Run 2026-10-08 against `ims-db-dev`:
+  4 rooms, 17 zones, 150 compartments created; a re-run created nothing.
+- **Production (`infra/` stack), not yet run there:** copy the plan into the `api` container,
+  then pipe the credentials in, typing the password blind:
+
+  ```bash
+  docker compose -f infra/docker-compose.yml cp \
+    apps/web/src/features/panel/layout/ims-import-v4.csv api:/tmp/plan.csv
+  { read -r -p 'Email: ' e; read -r -s -p 'Password: ' p; echo >&2; printf '%s\n%s\n' "$e" "$p"; } |
+    docker compose -f infra/docker-compose.yml exec -T api \
+      node dist/scripts/drawer-plan.js --file /tmp/plan.csv --api http://localhost:3000/api/v1
+  # read the dry run; then the same command again with --apply at the end
+  ```
+
 In a product CSV import, the `zone` column is the drawer code as well. A drawer IMS has no zone for
 is named in a warning on the panel's overview; a part on any other shelf is listed as "Not on the
 drawer plan" with its IMS location. The data
