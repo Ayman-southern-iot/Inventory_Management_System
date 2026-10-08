@@ -1490,16 +1490,30 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
     database is deleted.
   - **D3:** `ALLOW_DIRECT_TAKE=false` at the switch. No service account exists, so no key can take
     stock today either way.
-  - **D4:** the 65 products are exported to a CSV for the lead to mark the real ones. The rest are
-    treated as demo data.
+  - **D4:** the 65 products were exported to the lab folder for marking (65 products, 66 placements,
+    quantity 1430). The lead decided:
+    - **Keep the 6 `CTO-Electrical-*` products.** In P4, after the drawer plan is loaded, their stock
+      moves by ledger-recorded transfer: STS3215 → `B2-2A-2D`, JGB37 → `B2-2E-2F`, N20 → `B2-2G`,
+      NUCLEO-F401RE → `A2-1B`, ESP32-S3 → `A2-1A`, Pico 2 → `A2-1C`. Quantities are reported, and
+      the lead counts the physical stock.
+    - **Archive the other 59.** Their stock is zeroed first through the API with the reason
+      "go-live cleanup"; nothing is ever deleted. Then `Demo Store` and `Unassigned Room` are
+      archived, once they are empty.
   - **D5:** the pre-window Caddyfile/trusted-proxies PR routes `/api/v1/health` to the API, status
     only. Through Caddy today, `/health` returns the SPA's HTML and `/api/v1/health` is a 404.
-  - **API keys:** all 4 active keys are revoked at the switch. All are `inventory:read` with no
-    principal, created by the admin on 2026-10-05 and 2026-10-07. Two were used on 2026-10-08, so
-    whatever reads with them stops at the switch unless it gets a new key.
+  - **API keys:** all 4 active keys are `inventory:read` with no principal, created by the admin on
+    2026-10-05 and 2026-10-07. **The 2 unused keys are revoked at the switch.** The 2 used on
+    2026-10-08 are **not**: each user gets a replacement bound to a named service account, and the
+    old keys are revoked once the users have switched. Their callers cannot be found from logs:
+    Caddy has no access log and the API logs no requests (PROVEN 2026-10-08).
+  - **P6:** turn off root password login on the VM; create personal admin accounts and deactivate
+    the shared `admin@ims.local`; turn the backup wrapper on the VM into the nightly job.
 - 2026-10-08 — **Re-running the seed never resets an existing admin's password when demo mode is
   off** (read in the code, not run). The seed writes `password_hash` in only two places: for an
   existing user only inside `if (config.demo.accountsEnabled)` (`seed.ts:185-188`), and for a new
   user (`:203`). An existing admin otherwise hits `(exists, untouched)` (`:193`). In production
   with demo off, the seed list is the admin alone (`:30`, `:154-163`), and the demo products are
-  skipped (`:263`).
+  skipped (`:263`). **Nor does a production seed create or reactivate the example products**
+  (LAP, GPU, CBL, FRN): they are inserted only inside `if (demoEnabled)` (`:263-480`), with
+  `onConflict(doNothing)` (`:428`), and the seed never sets a product's `is_active`. So archiving
+  them sticks.
