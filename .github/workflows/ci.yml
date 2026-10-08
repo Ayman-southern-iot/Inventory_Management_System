@@ -139,6 +139,14 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # Puppeteer downloads its Chrome (to ~/.cache/puppeteer) in a postinstall script, and pnpm
+      # skips that script when the store is restored from the setup-node cache. A warm cache
+      # therefore left the PDF specs with no browser: HTTP 500 from every render. Running the
+      # installer explicitly fetches the version puppeteer pins; with the browser present, it
+      # does nothing.
+      - name: Install the PDF renderer's browser
+        run: node apps/api/node_modules/puppeteer/install.mjs
+
       - name: Build shared
         run: pnpm --filter @ims/shared build
 
