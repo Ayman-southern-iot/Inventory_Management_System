@@ -1147,6 +1147,25 @@ it reads the email and password as two lines on stdin.
   # read the dry run; then the same command again with --apply at the end
   ```
 
+**What goes on the printed shelf label** (checked in the code, 2026-10-08):
+
+- **For people: the plan code, `A1-1G-1H`**, which is the drawer code and then the cell code. It is
+  what the panel shows and lights, what the drawer plan and the plan's "Label / QR text" column
+  carry, and what someone reads at the cabinet.
+- **IMS has no scanning.** It has no QR or barcode reader and no lookup by label; searching the
+  inventory by shelf label is not built (OPEN-QUESTIONS, OQ-B). So no QR on the label is read by
+  anything in IMS today.
+- **The one label IMS does read is its storage ID** (`CAB-A1-1G1H-0010`, shown per compartment on
+  the Locations page). The product CSV import's optional `storage_id` column takes it
+  (`import-validator.ts`). It is generated when the compartment is created, and its serial follows
+  creation order, so **print it from the production system after the drawer plan is entered there**,
+  never from a dev database: the same cell had serial `0010` on dev and will differ elsewhere. It
+  never changes afterwards (migration 0034).
+- **The QR: not decided by IMS.** The plan's own "Label / QR text" column puts the plan code on
+  the QR as well. Nothing reads either today. If a scanner is built later, the storage ID is the
+  identifier IMS stores and imports by, and the plan code resolves through the room, zone and
+  compartment join. Which one to encode is a product decision for whoever builds the scanner.
+
 In a product CSV import, the `zone` column is the drawer code as well. A drawer IMS has no zone for
 is named in a warning on the panel's overview; a part on any other shelf is listed as "Not on the
 drawer plan" with its IMS location. The data
