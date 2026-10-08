@@ -1,0 +1,2 @@
+# Prettier reads the ignore file in its working directory only; the root .prettierignore says why.
+src/features/room/assets/scene-*.json
