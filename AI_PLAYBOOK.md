@@ -8,7 +8,7 @@
 >
 > **Maintenance rule:** see `.claude/rules/05-ai-playbook.md`. A `PostToolUse` hook
 > (`.claude/hooks/playbook-reminder.sh`) reminds Claude to update this file after every
-> meaningful edit. Last updated: 2026-10-08 (dev API on the keeper and the drawer-plan entry script, §7; kiosk login is GENERAL-only, §19). Earlier,
+> meaningful edit. Last updated: 2026-10-08 (the lead reviews and merges, Claude never merges, §14; dev API on the keeper and the drawer-plan entry script, §7; kiosk login is GENERAL-only, §19). Earlier,
 > 2026-10-05 (lab panel `/panel`, §19. Earlier the same day: branch model:
 > `main` + `advance-inventory-management`, hooks, CI — §7, §14). Earlier,
 > 2026-10-04 (lint baseline is now 0 — §16 landmines; `playwright-audit` skill — §15.1). Earlier,
@@ -1037,6 +1037,8 @@ reason the locking exists).
   (hook + CI). CI also fails on a tracked `.env`, `process.env` outside `src/config/`, an edited
   migration, or a new `.skip`/`.only` (`scripts/ci/repo-invariants.sh`). Full rules: `CONTRIBUTING.md`;
   Claude-facing summary: `.claude/rules/80-contributing.md`. `docs/state/*` is the lead's snapshot.
+- **Review and merge:** the lead, Arif, reviews every pull request and is the only one who merges.
+  Claude never merges, not even from his account, unless told "merge #N" (CODEOWNERS routes to him).
 
 **Errors**
 - Never swallow an error. Either handle it or let it propagate to the global filter.
