@@ -16,9 +16,7 @@ unreachable API no longer signs anyone out (#11, #15); CI on every PR to `main` 
 
 ## Next action — chosen by Arif on 2026-10-08, in this order
 
-1. **Kiosk refuses a non-GENERAL sign-in (OQ-P3).** `LoginPage` in kiosk mode (`from` = `/panel`
-   or `?kiosk=1`) refuses a sign-in whose roles are not exactly GENERAL. A client-side safeguard,
-   not a boundary. Auth surface: test shown failing first, then `security-reviewer`.
+1. **Done: kiosk refuses a non-GENERAL sign-in (OQ-P3)**, #19 (`513457b`). Client-side, not a boundary.
 2. **Drawer plan into IMS by a script through the API**: `features/panel/layout/ims-import-v4.csv`
    (4 rooms, 17 zones, 150 compartments), dry run first, creates only what is missing via the
    Locations endpoints. Keeper dev DB first, the VM after `infra/`. The importer only *matches*
