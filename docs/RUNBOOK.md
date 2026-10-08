@@ -9,12 +9,61 @@ If you are reading this during an incident, jump to [When something is wrong](#w
 
 ## 0. Before go-live — the checklist that must be done first
 
+### Go-live record — production runs `v1.0.0` since 2026-10-08
+
+**Production went live on the root stack plus its override, not on `infra/`.** The lead changed
+the plan on the evening of 2026-10-08, so item 0 below was not done. Wherever this section says
+`infra/.env`, production reads the root `.env` and the untracked `docker-compose.override.yml`.
+
+Times are UTC (Asia/Dhaka is UTC+6, so the later steps fall on 2026-10-09 locally). Each step was
+checked when it was done, from the go-live session's records; none was re-checked for this record.
+
+| Step | Done | What was done |
+|---|---|---|
+| 1. Merge and tag | 2026-10-08 15:36 | #20–#25 merged. Tag `v1.0.0` → `63f2fbc`; CI green on that commit. |
+| 2. Deploy | 2026-10-08 | Backup first. The running images (`a79d24c`) retagged for rollback. `v1.0.0` checked out in the existing checkout and rebuilt with the same compose files (root + override), never `-v`; no migration was pending. Smoke test: health, admin sign-in, `/panel`, counts. The admin password was reset. |
+| 3. Nightly backup | 2026-10-08 | The backup host pulls a database dump and a tar of `files` every night at 02:30 Asia/Dhaka through a forced-command key. Each dump is checked with `pg_restore -l`, each tar with `tar -tf`. 14 days kept, no alerting. First scheduled run OK at 20:30. |
+| 4a. Demo data | 2026-10-08 | Demo products zeroed through `POST /stock/adjust` (plus one dispose), then archived. Nothing deleted; the 71 earlier ledger rows unchanged. `Demo Store` archived. |
+| 4b. Drawer plan | 2026-10-08 18:46 | `drawer-plan` script applied: 4 rooms, 17 zones, 150 compartments created, 0 existing locations updated. |
+| 4b-2. CTO items | 2026-10-08 19:53 | 6 × `POST /stock/move` into the v4 cells: STS3215 `B2-2A-2D`, JGB37 `B2-2E-2F`, N20 `B2-2G`, NUCLEO-F401RE `A2-1B`, ESP32-S3 `A2-1A`, Pico 2 `A2-1C`. Ledger 138 rows, reconciliation 0/0. |
+| 4b-3. Leftovers | 2026-10-08 20:20 | `Unassigned Room` (room, 3 zones, 7 compartments) and product `1233` archived. `1233`'s only request was a consumable issue, so nothing can come back to it. Active: 6 products, 4 rooms, 17 zones, 150 compartments. |
+| 4c. `lab-panel` | 2026-10-08 20:47 | A person account with GENERAL only and no department. On a restored copy, every route was called as it: 0 admin routes and 0 `/stock/*` writes reachable; `POST /borrowing` (a reservation) reachable, which OQ-P3 accepts. |
+| 5. Kiosk | 2026-10-09 | The lab kiosk shows `/panel` signed in as `lab-panel` (reported by the lead; configured in the kiosk's own repository). |
+
+**Decided by the lead, 2026-10-08 evening:**
+
+- **No `infra/` switch and no Caddy change.** Production stays on the root stack + override,
+  published on 5173 behind NPM. Cloudflare and NPM are unchanged. PR #26 (Caddy replaced by nginx
+  behind NPM) is closed unmerged; its branch is kept.
+- **The database password rotation (item 0, step 3) is parked.**
+- **`TRUST_PROXY_HOPS=3` is deferred until NPM accepts Cloudflare only** (item 7). On the root
+  stack it is not enough by itself: the Caddyfile sets no `trusted_proxies`, and Caddy's
+  documented default (ASSUMED, not tested here) replaces an untrusted peer's `X-Forwarded-For`
+  with that peer's address. The API would then see one entry, and three hops would still return
+  NPM's address. Caddy would also have to trust NPM, which is a Caddy change for the lead to decide
+  when this item is picked up.
+
+**Left open by dropping the switch** (none of these is decided; they are the lead's to schedule):
+
+- D1 and D3 (DECISIONS 2026-10-08) rode on the switch. The override still sets
+  `ALLOW_DIRECT_TAKE='true'`. On 2026-10-08 no service account existed, so no key could take stock.
+- The two unused API keys were to be revoked "at the switch". Whether they have been is not recorded.
+- The P6 items: turn off root password login on the VM; create personal admin accounts and
+  deactivate the shared admin.
+
+**Status of the items below:** 0 not done (superseded above). 1 done: demo mode off since
+2026-10-05 through the override, and only the admin of the five seeded accounts is active. 2 done:
+`main` and `v1.0.0` are on GitHub. 5 done (step 3). 7 and 8 open. 3, 4 and 6 were not checked
+during go-live.
+
+### Before go-live, as planned
+
 Work down this list before the first real requisition. Items 0, 1, 2 and 7 are **hard
 blockers**: the system is not safe to hold real data until all four are done. Item 0 comes first,
 because until production runs `infra/`, the `.env` steps below change nothing. Item 7 belongs to
 the **IT team**, not to this repository. It blocks go-live, not a merge.
 
-### 0. Run production from `infra/` — HARD BLOCKER, before every other item
+### 0. Run production from `infra/` — NOT DONE: dropped by the lead on 2026-10-08 (see the go-live record)
 
 **Production as found on 2026-10-08** (go-live pre-flight, read-only, every line PROVEN on the VM).
 It moved on **2026-10-05**, and the rest of this section was written before that:

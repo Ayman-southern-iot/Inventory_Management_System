@@ -12,6 +12,25 @@ Format:
 **Next:** the single next action, specific enough to start without thinking
 ```
 
+## 2026-10-08 → 2026-10-09 — Go-live: production on `v1.0.0`
+
+**Did:** merged #20–#25 and tagged `v1.0.0` (`63f2fbc`, CI green: unit 25 / 270 / 685, integration
+1035 / 1035). Production rebuilt on `v1.0.0` in place: the root stack and its override, backup and
+image retag first. Nightly backup pulled to the keeper at 02:30 Asia/Dhaka, 14 days kept; the first
+scheduled run was OK. Demo data zeroed through the ledger and archived; drawer plan loaded (4 rooms,
+17 zones, 150 compartments); the 6 CTO items moved into their v4 cells; `Unassigned Room` and `1233`
+archived; `lab-panel` created and probed on a restored copy. The kiosk shows `/panel` as `lab-panel`.
+Every step with its time is in RUNBOOK §0, "Go-live record".
+**Decisions:** no `infra/` switch, no Caddy change, NPM untouched; DB password rotation parked;
+`TRUST_PROXY_HOPS=3` deferred until NPM accepts Cloudflare only; only a returnable loan blocks
+archiving a product. All in DECISIONS 2026-10-08.
+**Landmines:** production is NOT `infra/`, and RUNBOOK §1–§4 still describe `infra/`. The override
+sets `ALLOW_DIRECT_TAKE='true'`. The two unused API keys planned for revocation "at the switch" are
+not recorded as revoked. Client IPs are not real yet (§0.7), and on the root stack hops alone will
+not fix that. Backups have no alerting: a failure only shows as `FAIL` in the keeper's log.
+**Next:** Phase 12, a 3D room view at `/room` for PCs: discovery report, then the lead's call on the
+port option and on `three`.
+
 ## 2026-10-05 → 2026-10-08 — Lab panel, auth fix, CI; Arif becomes the sole developer
 
 **Did:** the lab kiosk page `/panel` (#12): cabinet map with the cell lit, cell contents, part search
