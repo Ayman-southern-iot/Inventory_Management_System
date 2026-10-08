@@ -1468,9 +1468,52 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   no device-code flow. The IM signs the panel back in on its on-screen keyboard. No auth change.
 - 2026-10-08 (Arif) — **OQ-P3: the panel is the person-type GENERAL account `lab-panel`, and kiosk
   mode refuses a sign-in whose roles are not exactly GENERAL.** A client-side safeguard, not a
-  boundary: it stops an admin session being left on the wall for 14 days. Not built yet.
+  boundary: it stops an admin session being left on the wall for 14 days. Built in #19 (`513457b`).
 - 2026-10-08 (Arif) — **The v4 drawer plan goes into IMS by a script through the API**, not by hand
   (about 171 entries, one typo breaks a cell's join) and not by extending the importer, which only
   matches existing shelves (`import-lookups.ts:195`). Dry run first; it creates only what is missing,
   under the same validation as the Locations page. Keeper dev DB first, the VM after `infra/`.
   Ayman's earlier room plan is not used.
+- 2026-10-08 (go-live P1, PROVEN read-only on the VM) — **Production moved on 2026-10-05, outside
+  any recorded change.** The root stack has run `a79d24c` since 06:30 UTC, with an untracked
+  `docker-compose.override.yml` that sets `DEMO_ACCOUNTS_ENABLED='false'` and
+  `ALLOW_DIRECT_TAKE='true'`. `0031`–`0039` were applied at 06:30:01 UTC, so all 37 migrations are
+  in and the `infra/` switch applies none. Its database password is the root file's public
+  default. RUNBOOK §0.0 is corrected to match.
+- 2026-10-08 (Arif, go-live decisions):
+  - **D1:** after the switch nothing untracked configures production. The override's settings move
+    into `infra/.env`, and the override file is kept only until the rollback window closes.
+  - **D2:** the rehearsal is restore-and-boot rather than migrate. It takes a fresh dump plus a tar
+    of `ims_files` to the keeper, times a restore into scratch (the rollback budget), reconciles
+    stock against the ledger, and boots `v1.0.0-rc1` against the copy for a smoke test. The
+    verified dump stays on the keeper (0600) until the nightly backup exists; only the scratch
+    database is deleted.
+  - **D3:** `ALLOW_DIRECT_TAKE=false` at the switch. No service account exists, so no key can take
+    stock today either way.
+  - **D4:** the 65 products were exported to the lab folder for marking (65 products, 66 placements,
+    quantity 1430). The lead decided:
+    - **Keep the 6 `CTO-Electrical-*` products.** In P4, after the drawer plan is loaded, their stock
+      moves by ledger-recorded transfer: STS3215 → `B2-2A-2D`, JGB37 → `B2-2E-2F`, N20 → `B2-2G`,
+      NUCLEO-F401RE → `A2-1B`, ESP32-S3 → `A2-1A`, Pico 2 → `A2-1C`. Quantities are reported, and
+      the lead counts the physical stock.
+    - **Archive the other 59.** Their stock is zeroed first through the API with the reason
+      "go-live cleanup"; nothing is ever deleted. Then `Demo Store` and `Unassigned Room` are
+      archived, once they are empty.
+  - **D5:** the pre-window Caddyfile/trusted-proxies PR routes `/api/v1/health` to the API, status
+    only. Through Caddy today, `/health` returns the SPA's HTML and `/api/v1/health` is a 404.
+  - **API keys:** all 4 active keys are `inventory:read` with no principal, created by the admin on
+    2026-10-05 and 2026-10-07. **The 2 unused keys are revoked at the switch.** The 2 used on
+    2026-10-08 are **not**: each user gets a replacement bound to a named service account, and the
+    old keys are revoked once the users have switched. Their callers cannot be found from logs:
+    Caddy has no access log and the API logs no requests (PROVEN 2026-10-08).
+  - **P6:** turn off root password login on the VM; create personal admin accounts and deactivate
+    the shared `admin@ims.local`; turn the backup wrapper on the VM into the nightly job.
+- 2026-10-08 — **Re-running the seed never resets an existing admin's password when demo mode is
+  off** (read in the code, not run). The seed writes `password_hash` in only two places: for an
+  existing user only inside `if (config.demo.accountsEnabled)` (`seed.ts:185-188`), and for a new
+  user (`:203`). An existing admin otherwise hits `(exists, untouched)` (`:193`). In production
+  with demo off, the seed list is the admin alone (`:30`, `:154-163`), and the demo products are
+  skipped (`:263`). **Nor does a production seed create or reactivate the example products**
+  (LAP, GPU, CBL, FRN): they are inserted only inside `if (demoEnabled)` (`:263-480`), with
+  `onConflict(doNothing)` (`:428`), and the seed never sets a product's `is_active`. So archiving
+  them sticks.

@@ -933,7 +933,7 @@ derivative summary with residual drift; where it and the code disagree, **the co
 - **Phases 00–08 are complete**, plus four QA rounds on top of them. There is no open phase file
   and nothing is queued. What remains is go-live operations, the untested upload surface, and the
   ranked candidates in `NOW.md`.
-- **It is deployed.** A demo stack runs on the VM (`rndserver`) for the testing round, and the
+- **It is deployed.** A demo stack runs on the VM (`<vm>`) for the testing round, and the
   branch is pushed. **Demo mode is on, which means there is effectively no authentication** —
   deliberate for this round, and the reason `GET /auth/demo-accounts` answers unauthenticated.
 - The working branch is **`fix/lan-secure-context`**, still unmerged to `main`. Whether that is
