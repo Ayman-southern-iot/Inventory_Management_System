@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { useQuery } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { loginSchema, type DemoAccounts, type LoginInput } from '@ims/shared';
+import { loginSchema, Role, type AuthUser, type DemoAccounts, type LoginInput } from '@ims/shared';
 import { ApiError, api } from '@/api/client';
 import { queryKeys } from '@/api/keys';
 import { Button } from '@/components/ui/Button';
@@ -14,6 +14,22 @@ import { messageForError } from '@/lib/error-message';
 import { formatDateTime } from '@/lib/format';
 import { useAuth } from '../auth-context';
 import { KIOSK_LOGIN_PARAM, KIOSK_LOGIN_VALUE, ROUTES } from '@/routes/paths';
+
+/**
+ * Why the kiosk will not keep this account signed in, or null when it may.
+ *
+ * OQ-P3: a session on the wall lasts up to 14 days (OQ-P1), so it may only be a GENERAL-only
+ * account. Checked first, so an administrator is never told to come back once the password is
+ * changed. A client-side safeguard, not a boundary: the API cannot tell which device it serves.
+ */
+function kioskRefusal(account: AuthUser): string | null {
+  const isGeneralOnly =
+    account.roles.length > 0 && account.roles.every((role) => role === Role.GENERAL);
+  if (!isGeneralOnly) return t.auth.kioskGeneralOnly;
+  // The change-password page sits inside the app shell, with no on-screen keyboard.
+  if (account.mustChangePassword) return t.auth.kioskMustChangePassword;
+  return null;
+}
 
 export function LoginPage() {
   const { user, isRestoring, signIn, signOut } = useAuth();
@@ -57,8 +73,9 @@ export function LoginPage() {
   });
 
   // A kiosk only ever goes back to the panel: the rest of the app has borrower names a tap away.
-  // Held while a kiosk sign-in that must change its password is being signed out (onSubmit).
-  if (!isRestoring && user && !(isKiosk && user.mustChangePassword)) {
+  // Held while a refused kiosk sign-in is being signed out (onSubmit). A refused session that is
+  // already signed in is not followed to the panel either, but nor is it signed out (RUNBOOK).
+  if (!isRestoring && user && !(isKiosk && kioskRefusal(user))) {
     return <Navigate to={isKiosk ? ROUTES.panel : (from ?? ROUTES.dashboard)} replace />;
   }
 
@@ -66,10 +83,10 @@ export function LoginPage() {
     setFormError(null);
     try {
       const signedIn = await signIn(values);
-      if (isKiosk && signedIn.mustChangePassword) {
-        // The change-password page sits inside the app shell, with no on-screen keyboard.
+      const refusal = isKiosk ? kioskRefusal(signedIn) : null;
+      if (refusal) {
         await signOut();
-        setFormError(t.auth.kioskMustChangePassword);
+        setFormError(refusal);
         return;
       }
       const home = isKiosk ? ROUTES.panel : ROUTES.dashboard;

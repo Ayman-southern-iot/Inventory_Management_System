@@ -8,7 +8,8 @@
 >
 > **Maintenance rule:** see `.claude/rules/05-ai-playbook.md`. A `PostToolUse` hook
 > (`.claude/hooks/playbook-reminder.sh`) reminds Claude to update this file after every
-> meaningful edit. Last updated: 2026-10-05 (lab panel `/panel`, §19. Earlier the same day: branch model:
+> meaningful edit. Last updated: 2026-10-08 (kiosk login is GENERAL-only, §19). Earlier,
+> 2026-10-05 (lab panel `/panel`, §19. Earlier the same day: branch model:
 > `main` + `advance-inventory-management`, hooks, CI — §7, §14). Earlier,
 > 2026-10-04 (lint baseline is now 0 — §16 landmines; `playwright-audit` skill — §15.1). Earlier,
 > 2026-09-29 (phase 11, ADR-0002: keys that act as a service
@@ -1392,7 +1393,8 @@ does not serve.
 | **Admin** | Projects (same detach permission as IM) · Users · Roles & Approvers · Departments · Settings · Audit log · **API keys** (issue/disable/revoke, generated integration docs) |
 
 A **lab panel** at `/panel` sits outside the role table: any signed-in account may open it, and the
-lab's wall kiosk runs it as the GENERAL account `lab-panel`. Full screen, no shell, read-only: a
+lab's wall kiosk runs it as the GENERAL account `lab-panel`; the kiosk login refuses any account
+with another role (client-side, not a boundary). Full screen, no shell, read-only: a
 cabinet map and a part search fed by `GET /catalogue`, never showing who holds anything
 (OQ-P1, OQ-P2, OQ-P3). Code: `apps/web/src/features/panel/`; the drawer
 plan is static data there, lazy-loaded as its own chunk.
