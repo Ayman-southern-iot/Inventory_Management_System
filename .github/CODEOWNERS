@@ -2,28 +2,28 @@
 # Add a teammate to a line to widen the review pool. Whether an approval is *required* is set in
 # branch protection (scripts/github/protect-branches.sh), not here.
 
-*                                       @Ayman-southern-iot
+*                                       @rnd-southerniot
 
 # Money and stock integrity: the invariants this system exists to protect.
-/apps/api/src/modules/stock/            @Ayman-southern-iot
-/apps/api/src/database/migrations/      @Ayman-southern-iot
-/apps/api/src/config/                   @Ayman-southern-iot
+/apps/api/src/modules/stock/            @rnd-southerniot
+/apps/api/src/database/migrations/      @rnd-southerniot
+/apps/api/src/config/                   @rnd-southerniot
 
 # Auth, roles, permissions, uploads: always a second pair of eyes.
-/apps/api/src/modules/auth/             @Ayman-southern-iot
-/apps/api/src/modules/files/            @Ayman-southern-iot
-/apps/api/src/modules/users/            @Ayman-southern-iot
-/apps/api/src/modules/api-keys/         @Ayman-southern-iot
+/apps/api/src/modules/auth/             @rnd-southerniot
+/apps/api/src/modules/files/            @rnd-southerniot
+/apps/api/src/modules/users/            @rnd-southerniot
+/apps/api/src/modules/api-keys/         @rnd-southerniot
 
 # The rules themselves, and what ships.
-/.claude/                               @Ayman-southern-iot
-/.github/                               @Ayman-southern-iot
-/.githooks/                             @Ayman-southern-iot
-/scripts/                               @Ayman-southern-iot
-/infra/                                 @Ayman-southern-iot
-/docker-compose.yml                     @Ayman-southern-iot
-/CLAUDE.md                              @Ayman-southern-iot
-/CONTRIBUTING.md                        @Ayman-southern-iot
+/.claude/                               @rnd-southerniot
+/.github/                               @rnd-southerniot
+/.githooks/                             @rnd-southerniot
+/scripts/                               @rnd-southerniot
+/infra/                                 @rnd-southerniot
+/docker-compose.yml                     @rnd-southerniot
+/CLAUDE.md                              @rnd-southerniot
+/CONTRIBUTING.md                        @rnd-southerniot
 
 # The lead's cold-start snapshot; developers do not edit it (CONTRIBUTING.md section 8).
-/docs/state/                            @Ayman-southern-iot
+/docs/state/                            @rnd-southerniot

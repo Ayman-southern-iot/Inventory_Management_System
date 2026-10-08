@@ -6,6 +6,8 @@ Several developers push here, each with their own Claude Code. The human-readabl
 ## Branches
 
 - **Never push to `main`.** It takes pull requests only. `.claude/settings.json` denies it.
+- **Never merge a pull request**, not even from the lead's account, unless the lead says
+  "merge #N" for that one. The lead, Arif, reviews and merges.
 - The team's branch is `advance-inventory-management`: `git pull` it first, then push to it.
   Never `--force`, never delete it.
 - Other branches are `<type>/<kebab-name>`, type = feat fix docs chore test refactor perf build ci hotfix.

@@ -31,12 +31,13 @@ if it leaves `NOW.md` stale, it has actively misled the next one.
 **The `NOW.md` contract:** one snapshot, rewritten whole, **under ~60 lines**. It is injected into
 every session, so every line is a recurring cost. Growth is the failure mode — prune it.
 
-## Output is reviewed by a second engineer
+## Output is reviewed by the lead
 
-Output from any task is pasted to an assisting engineer (**Zai**) who has no shell, git, database
-or browser — only the characters you print. Follow `.claude/rules/70-assist-handoff.md`: one block
-per issue, verbatim evidence inline, `R`/`D` tags, red run before green, `NOTCHECKED` never empty.
-If it is not in the block, it did not happen.
+The lead, **Arif**, reviews every pull request and is the only one who merges. **Claude never
+merges**, not even from his account, unless he says "merge #N" for that pull request. Write output
+so it can be reviewed from the characters you print alone. Follow `.claude/rules/70-assist-handoff.md`:
+one block per issue, verbatim evidence inline, `R`/`D` tags, red run before green, `NOTCHECKED` never
+empty. If it is not in the block, it did not happen.
 
 Every reported behaviour is classified `REQUIRED §n` / `DERIVED A-n·G-n·OQ-n` / `NO-BASIS` before
 it is fixed. Most of this build is an elaboration of a thin requirements document, not a statement
