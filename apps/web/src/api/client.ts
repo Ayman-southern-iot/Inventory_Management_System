@@ -35,7 +35,14 @@ interface RequestOptions {
  * this, six parallel queries expiring together fire six refreshes, five of which present an
  * already-rotated token and trip the server's reuse detection — logging the user out.
  */
-let refreshInFlight: Promise<AuthTokens | null> | null = null;
+/**
+ * The session a refresh was for ended while it was in flight: the user signed out, or someone
+ * else signed in. Not a lost session — nobody is signed out because of it — and nothing is
+ * written, or the ended session would come back onto the device (#19 security review).
+ */
+const SESSION_SUPERSEDED = Symbol('session superseded');
+
+let refreshInFlight: Promise<AuthTokens | null | typeof SESSION_SUPERSEDED> | null = null;
 
 /** `ApiError.code` when the request never got an answer: offline, DNS, refused, reset. */
 export const NETWORK_ERROR_CODE = 'NETWORK';
@@ -168,7 +175,9 @@ async function withCrossTabLock<T>(run: () => Promise<T>): Promise<T> {
   return navigator.locks.request(REFRESH_LOCK, run);
 }
 
-async function refreshTokens(staleAccessToken: string | null): Promise<AuthTokens | null> {
+async function refreshTokens(
+  staleAccessToken: string | null,
+): Promise<AuthTokens | null | typeof SESSION_SUPERSEDED> {
   return withCrossTabLock(async () => {
     // Re-read inside the lock. If another tab refreshed while this one waited, the stored
     // token is already fresh — using it directly avoids a second, pointless rotation.
@@ -182,16 +191,29 @@ async function refreshTokens(staleAccessToken: string | null): Promise<AuthToken
         { method: 'POST', body: { refreshToken: stored.refreshToken }, anonymous: true },
         null,
       );
+      // Storage holding anything else now means a sign-out or a sign-in happened meanwhile. Where
+      // the browser has no Web Locks (a plain-HTTP LAN page), another tab's concurrent rotation
+      // lands here too; that costs one failed request, never a session on the wrong account.
+      if (readStoredTokens()?.refreshToken !== stored.refreshToken) return SESSION_SUPERSEDED;
       writeStoredTokens(result);
       return result;
     } catch (error) {
       // The refresh never reached the API: keep the tokens and let the caller see an outage,
       // not a sign-out. Only an answer from the API itself ends the session.
       if (isApiUnreachable(error)) throw error;
+      // The same check as on success: a refusal for the old session must not end a new one.
+      if (readStoredTokens()?.refreshToken !== stored.refreshToken) return SESSION_SUPERSEDED;
       clearStoredTokens();
       return null;
     }
   });
+}
+
+/** A 401 that a refresh can fix. A detected token reuse cannot: the server revoked the family. */
+function isExpiredAccessToken(error: unknown): boolean {
+  return (
+    error instanceof ApiError && error.status === 401 && error.code !== ErrorCode.TOKEN_REUSE_DETECTED
+  );
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -200,24 +222,45 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   try {
     return await rawRequest<T>(path, options, stored?.accessToken ?? null);
   } catch (error) {
-    const isExpired =
-      error instanceof ApiError &&
-      error.status === 401 &&
-      !options.anonymous &&
-      error.code !== ErrorCode.TOKEN_REUSE_DETECTED;
-
-    if (!isExpired) throw error;
+    if (!isExpiredAccessToken(error) || options.anonymous) throw error;
 
     refreshInFlight ??= refreshTokens(stored?.accessToken ?? null).finally(() => {
       refreshInFlight = null;
     });
     const refreshed = await refreshInFlight;
 
+    if (refreshed === SESSION_SUPERSEDED) throw error;
     if (!refreshed) {
       onSessionLost?.();
       throw error;
     }
     return rawRequest<T>(path, options, refreshed.accessToken);
+  }
+}
+
+/**
+ * Sign-out with tokens the caller has already taken out of storage (auth-context `signOut`), so a
+ * reload or a power cut while this is in flight cannot leave the session on the device. It never
+ * writes storage: an expired access token is refreshed here, in memory, only so the server can
+ * still revoke the session. Any other refusal is thrown for the caller to ignore.
+ */
+export async function logoutWith(tokens: AuthTokens): Promise<void> {
+  const logout = (held: AuthTokens) =>
+    rawRequest<void>(
+      '/auth/logout',
+      { method: 'POST', body: { refreshToken: held.refreshToken } },
+      held.accessToken,
+    );
+  try {
+    await logout(tokens);
+  } catch (error) {
+    if (!isExpiredAccessToken(error)) throw error;
+    const fresh = await rawRequest<AuthTokens>(
+      '/auth/refresh',
+      { method: 'POST', body: { refreshToken: tokens.refreshToken }, anonymous: true },
+      null,
+    );
+    await logout(fresh);
   }
 }
 

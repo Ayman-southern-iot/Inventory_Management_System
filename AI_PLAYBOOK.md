@@ -8,7 +8,7 @@
 >
 > **Maintenance rule:** see `.claude/rules/05-ai-playbook.md`. A `PostToolUse` hook
 > (`.claude/hooks/playbook-reminder.sh`) reminds Claude to update this file after every
-> meaningful edit. Last updated: 2026-10-08 (kiosk login is GENERAL-only, §19). Earlier,
+> meaningful edit. Last updated: 2026-10-08 (dev API on the keeper and the drawer-plan entry script, §7; kiosk login is GENERAL-only, §19). Earlier,
 > 2026-10-05 (lab panel `/panel`, §19. Earlier the same day: branch model:
 > `main` + `advance-inventory-management`, hooks, CI — §7, §14). Earlier,
 > 2026-10-04 (lint baseline is now 0 — §16 landmines; `playwright-audit` skill — §15.1). Earlier,
@@ -624,6 +624,8 @@ pnpm db:make <name>       # generate empty migration
 pnpm db:seed              # idempotent reference data
 pnpm --filter @ims/api test:int   # integration tests (real Postgres) — host runs only, see below
 scripts/test-int-keeper.sh        # THE integration gate on the M5: runs on the keeper, no tunnel
+scripts/dev-api-keeper.sh         # the API as a container on the keeper, on ims-db-dev (below)
+scripts/drawer-plan-keeper.sh [--apply]  # drawer plan's rooms/zones/compartments into that API (RUNBOOK, lab panel)
 pnpm audit:deps           # dependency audit
 pnpm hooks:install        # once per clone: commit-msg + pre-push hooks, pull.rebase=true (CONTRIBUTING.md)
 
@@ -648,6 +650,13 @@ ssh -f -N -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ExitOnForwardFai
   -L 5434:127.0.0.1:55434 -L 5433:127.0.0.1:55433 <keeper>
 # or in ~/.ssh/config, under `Host <keeper>`:  ServerAliveInterval 15 / ServerAliveCountMax 3
 ```
+
+**A live dev API on the keeper = `scripts/dev-api-keeper.sh`** (2026-10-08). It builds
+`apps/api/Dockerfile` there and migrates and seeds `ims-db-dev` (development mode, so with the demo
+data). It then runs `ims-api-dev` on the Docker network `ims-dev`, published on the keeper's
+loopback (`127.0.0.1:3010`) only. Secrets and the seed admin's password are generated on the
+keeper into `~/ims-dev/api.env` (0600) and never printed. **`ims-db-dev` is tmpfs:** a restart of
+that container or of the keeper empties it, and re-running the script is the recovery.
 
 **Ports:** API **3000**, web **5173**, dev Postgres **5433**, test Postgres **5434**. Ports
 5432 and 5430 were already occupied on the build machine by unrelated stacks; the compose

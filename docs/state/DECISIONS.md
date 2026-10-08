@@ -1468,7 +1468,7 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   no device-code flow. The IM signs the panel back in on its on-screen keyboard. No auth change.
 - 2026-10-08 (Arif) — **OQ-P3: the panel is the person-type GENERAL account `lab-panel`, and kiosk
   mode refuses a sign-in whose roles are not exactly GENERAL.** A client-side safeguard, not a
-  boundary: it stops an admin session being left on the wall for 14 days. Not built yet.
+  boundary: it stops an admin session being left on the wall for 14 days. Built in #19 (`513457b`).
 - 2026-10-08 (Arif) — **The v4 drawer plan goes into IMS by a script through the API**, not by hand
   (about 171 entries, one typo breaks a cell's join) and not by extending the importer, which only
   matches existing shelves (`import-lookups.ts:195`). Dry run first; it creates only what is missing,

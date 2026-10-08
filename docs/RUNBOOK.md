@@ -1132,7 +1132,7 @@ signed out sends you to the panel's login, which refuses that account.
 **It will need signing in again** at most 14 days after the last sign-in, because a session has an
 absolute lifetime (OQ-P1). It lands on the login page, never a blank screen. Repeat step 3.
 
-**Entering the drawer plan in IMS** (OQ-P2), on the Locations page — the importer only matches
+**Entering the drawer plan in IMS** (OQ-P2) needs these locations; the importer only matches
 shelves, it never creates them:
 
 - **rooms** named exactly as on the plan: `Cabinet A`, `Cabinet B`, `Roller cabinet`,
@@ -1141,7 +1141,52 @@ shelves, it never creates them:
   zone description; the drawer's descriptive name stays on the plan;
 - in each zone, **one compartment per cell, coded exactly as printed** in the drawer (`1G-1H`).
 
-`apps/web/src/features/panel/layout/ims-import-v4.csv` is the checklist, one row per compartment.
+`apps/web/src/features/panel/layout/ims-import-v4.csv` lists them, one row per compartment, and
+**`apps/api/scripts/drawer-plan.ts` enters them through the API** (decided 2026-10-08). It matches
+what exists the way the panel does (trimmed, case-insensitive). Without `--apply` it changes
+nothing and prints what it would create. With `--apply` it creates only what is missing, then
+reads the tree back and checks all 150 rows are present and active. It never renames, moves,
+reactivates or deactivates anything, and a re-run creates nothing. If a plan room, zone or
+compartment exists but is inactive, it refuses `--apply` and names it: reactivate it on the
+Locations page, or take it off the plan, first. The account needs Inventory Manager or Admin;
+it reads the email and password as two lines on stdin.
+
+- **Dev, on the keeper:** `scripts/dev-api-keeper.sh`, then `scripts/drawer-plan-keeper.sh`
+  (dry run) and `scripts/drawer-plan-keeper.sh --apply`. Run 2026-10-08 against `ims-db-dev`:
+  4 rooms, 17 zones, 150 compartments created; a re-run created nothing.
+- **Production (`infra/` stack), not yet run there:** the running image must be built from a
+  commit that has `apps/api/scripts/drawer-plan.ts`. Copy the plan into the `api` container, then
+  pipe the credentials in from **bash** (zsh's `read -p` means something else), typing the
+  password blind:
+
+  ```bash
+  docker compose -f infra/docker-compose.yml cp \
+    apps/web/src/features/panel/layout/ims-import-v4.csv api:/tmp/plan.csv
+  { read -r -p 'Email: ' e; read -r -s -p 'Password: ' p; echo >&2; printf '%s\n%s\n' "$e" "$p"; } |
+    docker compose -f infra/docker-compose.yml exec -T api \
+      node dist/scripts/drawer-plan.js --file /tmp/plan.csv --api http://localhost:3000/api/v1
+  # read the dry run; then the same command again with --apply at the end
+  ```
+
+**What goes on the printed shelf label** (checked in the code, 2026-10-08):
+
+- **For people: the plan code, `A1-1G-1H`**, which is the drawer code and then the cell code. It is
+  what the panel shows and lights, what the drawer plan and the plan's "Label / QR text" column
+  carry, and what someone reads at the cabinet.
+- **IMS has no scanning.** It has no QR or barcode reader and no lookup by label; searching the
+  inventory by shelf label is not built (OPEN-QUESTIONS, OQ-B). So no QR on the label is read by
+  anything in IMS today.
+- **The one label IMS does read is its storage ID** (`CAB-A1-1G1H-0010`, shown per compartment on
+  the Locations page). The product CSV import's optional `storage_id` column takes it
+  (`import-validator.ts`). It is generated when the compartment is created, and its serial follows
+  creation order, so **print it from the production system after the drawer plan is entered there**,
+  never from a dev database: the same cell had serial `0010` on dev and will differ elsewhere. It
+  never changes afterwards (migration 0034).
+- **The QR: not decided by IMS.** The plan's own "Label / QR text" column puts the plan code on
+  the QR as well. Nothing reads either today. If a scanner is built later, the storage ID is the
+  identifier IMS stores and imports by, and the plan code resolves through the room, zone and
+  compartment join. Which one to encode is a product decision for whoever builds the scanner.
+
 In a product CSV import, the `zone` column is the drawer code as well. A drawer IMS has no zone for
 is named in a warning on the panel's overview; a part on any other shelf is listed as "Not on the
 drawer plan" with its IMS location. The data
