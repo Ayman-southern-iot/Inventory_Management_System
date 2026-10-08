@@ -16,6 +16,8 @@
 #   5. Runs migrations and the seed in a one-shot container, as the root compose's `migrate` job does.
 #   6. Replaces the API container, published on the keeper's loopback only, and waits until Docker
 #      reports it healthy.
+#   7. Removes older dev images, keeping the newest few and always the one the API runs: each commit
+#      builds a new image of about 1.5 GB, and the keeper's disk is shared.
 #
 # The dev database keeps its data on tmpfs: restarting that container, or the keeper, empties it.
 # Step 5 rebuilds the schema and the seed admin, so re-running this script is the recovery. Anything
@@ -37,6 +39,7 @@
 #   IMS_DEV_SEED_ADMIN_EMAIL  the first ADMIN the seed creates                     [admin@ims.local]
 #   IMS_DEV_TZ                business time zone of the API process                [Asia/Dhaka]
 #   IMS_DEV_HEALTH_TIMEOUT_S  how long to wait for /health after starting          [90]
+#   IMS_DEV_KEEP_IMAGES       how many ims-api:dev-* images to keep                [2]
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -49,6 +52,7 @@ API_PORT="${IMS_DEV_API_PORT:-3010}"
 SEED_ADMIN_EMAIL="${IMS_DEV_SEED_ADMIN_EMAIL:-admin@ims.local}"
 BUSINESS_TZ="${IMS_DEV_TZ:-Asia/Dhaka}"
 HEALTH_TIMEOUT_S="${IMS_DEV_HEALTH_TIMEOUT_S:-90}"
+KEEP_IMAGES="${IMS_DEV_KEEP_IMAGES:-2}"
 SSH_OPTS="-o BatchMode=yes -o ConnectTimeout=10"
 # Ports inside the network, not configuration: the API's own default (config.schema.ts, API_PORT)
 # and the postgres image's.
@@ -62,6 +66,9 @@ remote() {
   ssh $SSH_OPTS "$SSH_HOST" "$@"
 }
 
+case "$KEEP_IMAGES" in
+  '' | *[!0-9]* | 0) echo "FATAL: IMS_DEV_KEEP_IMAGES must be a whole number of at least 1." >&2; exit 2 ;;
+esac
 if ! remote true 2>/dev/null; then
   echo "FATAL: cannot reach ${SSH_HOST} over ssh. Check the WireGuard tunnel first." >&2
   exit 2
@@ -73,7 +80,9 @@ fi
 
 SHA="$(git -C "$REPO_ROOT" rev-parse --short HEAD)"
 DIRTY="$(git -C "$REPO_ROOT" status --porcelain | wc -l | tr -d ' ')"
-IMAGE="ims-api:dev-${SHA}"
+IMAGE_REPO="ims-api"
+DEV_TAG_PREFIX="dev-"
+IMAGE="${IMAGE_REPO}:${DEV_TAG_PREFIX}${SHA}"
 SRC_DIR="${DEV_DIR}/Inventory_Management_System"
 SETTINGS_FILE="${DEV_DIR}/api.env"
 DB_ENV_FILE="${DEV_DIR}/db.env"
@@ -155,3 +164,16 @@ until [ "$(remote "docker inspect -f '{{.State.Health.Status}}' '${API_CONTAINER
   sleep 3
 done
 echo "==> ${API_CONTAINER} is healthy: ${IMAGE}, http://127.0.0.1:${API_PORT} on ${SSH_HOST}"
+
+# ------------------------------------------------------------------------------ 7. prune
+# Newest first by creation time; the image the API container runs is never removed, even when an
+# older commit was deployed after newer ones were built. A failed removal only warns: the API is
+# already up, and the next run tries again.
+IN_USE="$(remote "docker inspect -f '{{.Config.Image}}' '${API_CONTAINER}'")"
+STALE="$(remote "docker images --filter 'reference=${IMAGE_REPO}:${DEV_TAG_PREFIX}*' \
+  --format '{{.CreatedAt}}|{{.Repository}}:{{.Tag}}'" \
+  | sort -r | tail -n +$((KEEP_IMAGES + 1)) | cut -d'|' -f2 | grep -vxF "$IN_USE" | tr '\n' ' ' || true)"
+if [ -n "${STALE// /}" ]; then
+  echo "==> Removing older dev images, keeping the newest ${KEEP_IMAGES}: ${STALE}"
+  remote "docker rmi ${STALE}" >/dev/null || echo "WARN: could not remove every older image; the next run retries." >&2
+fi
