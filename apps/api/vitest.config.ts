@@ -10,7 +10,8 @@ export default defineConfig({
     // valid, and fails on a bare CI runner. The same pinned values the integration suite uses.
     env: TEST_ENV,
     // Unit specs only. Integration specs need a live Postgres and run via vitest.integration.config.
-    include: ['src/**/*.spec.ts'],
+    // scripts/ holds the pure halves of operator scripts (scripts/drawer-plan/plan.ts).
+    include: ['src/**/*.spec.ts', 'scripts/**/*.spec.ts'],
     exclude: ['**/node_modules/**', '**/dist/**'],
   },
 });
