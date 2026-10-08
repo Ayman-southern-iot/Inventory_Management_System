@@ -16,7 +16,32 @@ the **IT team**, not to this repository. It blocks go-live, not a merge.
 
 ### 0. Run production from `infra/` — HARD BLOCKER, before every other item
 
-**Why.** On 2026-09-27 the operator found the VM running the **root** `docker-compose.yml`. That
+**Production as found on 2026-10-08** (go-live pre-flight, read-only, every line PROVEN on the VM).
+It moved on **2026-10-05**, and the rest of this section was written before that:
+
+- It runs commit **`a79d24c`** (#10), not `9f4176d`. The root stack was rebuilt and restarted at
+  06:30 UTC that day, from the root `docker-compose.yml` **plus an untracked
+  `docker-compose.override.yml`**. The override is excluded through `.git/info/exclude`. It sets
+  `DEMO_ACCOUNTS_ENABLED='false'` and `ALLOW_DIRECT_TAKE='true'` for `migrate` and `api`.
+  **Demo mode has been off since then.** `GET /api/v1/auth/demo-accounts` answers 404.
+- **Migrations `0031`–`0039` were applied then**, at 06:30:01 UTC (`kysely_migration`). All 37
+  migration files are applied (`0020` and `0021` never existed). **The switch to `infra/` at any
+  later commit applies no migration.** That simplifies steps 2b, 6 and 8 below.
+- The root `.env` sets only the three secrets. The database password is **the root file's public
+  default**: it was accepted over the password-checked network path, and a wrong-password control
+  was rejected. Rotating it (step 3, A) is required.
+- No backup is scheduled (no cron, no timer). The only good dump on the VM was taken by hand at
+  2026-10-05 06:27 UTC, before those migrations.
+
+Decided by the lead on 2026-10-08:
+
+- **After the switch there is no untracked config.** The override's settings go into `infra/.env`,
+  with **`ALLOW_DIRECT_TAKE=false`**.
+- **Step 2b's rehearsal is a restore-and-boot rehearsal,** not a migration rehearsal.
+- **The verified dump stays on the keeper** (`~/backups/ims-golive/`, 0600) as the current backup
+  until the nightly backup job exists. Only the scratch database is deleted.
+
+**Why** (history; the facts above supersede it where they differ). On 2026-09-27 the operator found the VM running the **root** `docker-compose.yml`. That
 file is the demo stack. It ran from `/root/ims/Inventory_Management_System` at commit `9f4176d`,
 as containers `ims-api-1`, `ims-web-1`, `ims-db-1` and `ims-proxy-1`, with the proxy publishing
 `0.0.0.0:5173->80`. This comes from the operator's inspection and was not re-checked here.
@@ -76,7 +101,7 @@ Then record these numbers. Step 7 compares against them.
 
 ```bash
 Q() { docker compose exec -T db psql -U ims -d "${DB:-ims}" -Atc "$1"; }   # use step 1's user and database if not ims
-Q "select max(name) from kysely_migration"      # 0030_approver_count_may_be_zero at 9f4176d
+Q "select max(name) from kysely_migration"      # 0039_api_key_service_accounts since 2026-10-05
 Q "select count(*) from products"
 Q "select sp.compartment_id, sp.quantity, sp.reserved_qty from stock_placements sp
    join products p on p.id = sp.product_id where p.product_code = '<a code you know>' order by 1"
@@ -128,15 +153,26 @@ The drill passes when all of these hold:
 Then `docker compose exec -T db dropdb -U ims ims_drill`. **Nothing else starts until the drill
 passes.**
 
-#### Step 2b — Rehearse the migrations on a copy
+#### Step 2b — Rehearse on a copy
 
-Step 6 applies nine migrations to live data that no test has seen. Rehearse them first on the
-**keeper** (`docker --context keeper`, `ssh mini-keeper`), against a copy of the VM's database.
-**The switch does not happen until the rehearsal passes.**
+**Since 2026-10-05 there is no migration to rehearse** (top of this section). The rehearsal (lead,
+2026-10-08) has four parts:
 
-**The dump holds staff names and email addresses.** It lives on the keeper only. It is never
-committed and never copied anywhere else, and it is deleted when the rehearsal ends (item 6
-below).
+1. A fresh `pg_dump -Fc` and a tar of `ims_files`, sent to the keeper.
+2. A restore into a scratch database, **timed**. That time is the rollback budget for the switch.
+3. A check that stock totals still match the ledger.
+4. The release image booted against the restored copy and smoke-tested: `/health`, an admin
+   sign-in, `/panel` loading, and catalogue counts that match.
+
+The commands below still serve for the restore and the boot. Item 3's `migrate` step now applies
+nothing; it only runs the seed. Run the rehearsal on the **keeper** (`docker --context keeper`,
+`ssh <keeper>`), against a copy of the VM's database. **The switch does not happen until the
+rehearsal passes.**
+
+**The dump may hold staff names and email addresses.** It lives on the keeper only and is never
+committed or copied anywhere else. The verified dump is **kept** under `~/backups/ims-golive/`
+(0600) as the current backup until the nightly job exists. Only the scratch database is deleted
+when the rehearsal ends.
 
 1. **Dump on the VM and copy the dump straight to the keeper.** `pg_dump` is read-only. Step 2's
    dump will do if nothing has been written since.
@@ -145,8 +181,8 @@ below).
    # On the VM, from /root/ims/Inventory_Management_System (step 2's command):
    docker compose exec -T db pg_dump -U ims -d ims -Fc > ~/ims-switch/ims-db-$STAMP.dump
    # From the workstation: VM -> keeper; -3 streams it through without storing it here.
-   ssh mini-keeper 'mkdir -p -m 700 ~/ims-rehearsal'
-   scp -3 root@<vm>:~/ims-switch/ims-db-$STAMP.dump mini-keeper:ims-rehearsal/ims.dump
+   ssh <keeper> 'mkdir -p -m 700 ~/ims-rehearsal'
+   scp -3 root@<vm>:~/ims-switch/ims-db-$STAMP.dump <keeper>:ims-rehearsal/ims.dump
    ```
 
 2. **Restore it into a throwaway database, and record the "before" numbers.** The database lives
@@ -157,7 +193,7 @@ below).
    docker --context keeper run -d --name ims-rehearsal-db --network ims-rehearsal \
      --tmpfs /var/lib/postgresql/data -e POSTGRES_USER=ims -e POSTGRES_DB=ims \
      -e POSTGRES_PASSWORD=<throwaway> postgres:16.4-alpine
-   ssh mini-keeper 'docker cp ~/ims-rehearsal/ims.dump ims-rehearsal-db:/tmp/ims.dump'
+   ssh <keeper> 'docker cp ~/ims-rehearsal/ims.dump ims-rehearsal-db:/tmp/ims.dump'
    docker --context keeper exec ims-rehearsal-db pg_restore -U ims -d ims --no-owner /tmp/ims.dump
    R() { docker --context keeper exec ims-rehearsal-db psql -U ims -d ims -Atc "$1"; }
    R "select max(name) from kysely_migration"                        # 0030_approver_count_may_be_zero
@@ -175,7 +211,7 @@ below).
    # filled as in step 4 with:
    #   POSTGRES_HOST=ims-rehearsal-db, POSTGRES_PASSWORD=<throwaway>, throwaway secrets,
    #   SEED_ADMIN_EMAIL=<the VM's admin>, DEMO_ACCOUNTS_ENABLED=false, ALLOW_DIRECT_TAKE=true
-   ssh mini-keeper 'cd ~/ims-rehearsal && docker run --rm --network ims-rehearsal \
+   ssh <keeper> 'cd ~/ims-rehearsal && docker run --rm --network ims-rehearsal \
      --env-file rehearsal.env ims-api:rehearsal sh -c "npm run migration:run && npm run seed:run"'
    ```
 
@@ -185,9 +221,9 @@ below).
    so reach the keeper through a tunnel.
 
    ```bash
-   ssh mini-keeper 'cd ~/ims-rehearsal && docker run -d --name ims-rehearsal-api \
+   ssh <keeper> 'cd ~/ims-rehearsal && docker run -d --name ims-rehearsal-api \
      --network ims-rehearsal --env-file rehearsal.env -p 127.0.0.1:3900:3000 ims-api:rehearsal'
-   ssh -f -N -L 3900:127.0.0.1:3900 mini-keeper
+   ssh -f -N -L 3900:127.0.0.1:3900 <keeper>
    cd clients/python && IMS_BASE_URL=http://127.0.0.1:3900 IMS_SMOKE_ADMIN_EMAIL=<the VM's admin> \
      IMS_SMOKE_ADMIN_PASSWORD=<its password on the VM> uv run python smoke_client.py
    ```
@@ -244,7 +280,7 @@ below).
    docker --context keeper rm -f ims-rehearsal-api ims-rehearsal-db   # tmpfs: the copy goes with it
    docker --context keeper network rm ims-rehearsal
    docker --context keeper image rm ims-api:rehearsal
-   ssh mini-keeper 'rm -rf ~/ims-rehearsal'                          # the dump and the env file
+   ssh <keeper> 'rm -rf ~/ims-rehearsal'                          # the dump and the env file
    ```
 
    Also close the 3900 tunnel. The dump in `~/ims-switch` on the VM stays: it is step 2's backup.
@@ -252,8 +288,8 @@ below).
 #### Step 3 — Carry the database password over
 
 The Postgres image reads `POSTGRES_PASSWORD` only when it creates an empty cluster. `ims_pgdata`
-keeps the password it was created with. That is probably the root file's public default, unless
-the root `.env` set one when the volume was first made. If `infra/.env` holds any other value,
+keeps the password it was created with. On the VM that is **the root file's public default**
+(PROVEN 2026-10-08, see the top of this section). If `infra/.env` holds any other value,
 `migrate` and `api` fail with `password authentication failed for user "ims"`, while `db` still
 reports healthy. Its healthcheck is `pg_isready`, which does not log in.
 
@@ -267,8 +303,7 @@ reports healthy. Its healthcheck is `pg_isready`, which does not log in.
   It prompts twice. `\password` sends `ALTER USER ims PASSWORD …` with the value already hashed,
   so the plaintext never reaches shell history or the server log. No old password is needed:
   this image trusts local-socket connections. That is PROVEN on `postgres:16.4-alpine`
-  (`local all all trust` in `pg_hba.conf` on our test server) and ASSUMED to be the same on the
-  VM. If psql asks for a password anyway, it wants the current one. Put the same new value in
+  (`local all all trust` in `pg_hba.conf` on our test server) and on the VM (2026-10-08). If psql asks for a password anyway, it wants the current one. Put the same new value in
   `infra/.env` as `POSTGRES_PASSWORD`.
 - **B. Reuse.** Set `POSTGRES_PASSWORD` in `infra/.env` to exactly the value the cluster has now.
 
@@ -296,7 +331,8 @@ openssl rand -hex 32    # three times: JWT_ACCESS_SECRET, JWT_REFRESH_SECRET, PD
 | `SEED_ADMIN_PASSWORD` | A strong value | Used only if that address does not exist yet. |
 | `PDF_MARGIN_TOP_MM` | `20`, unless BOMs print on letterhead (§0.6) | The example says 45; the running stack uses 20. |
 | `TRUST_PROXY_HOPS` | As agreed with IT (§0.7) | |
-| `ALLOW_DIRECT_TAKE`, `DIRECT_TAKE_MAX_QTY`, `DIRECT_TAKE_DAILY_UNITS_PER_ACCOUNT`, `API_KEY_WRITE_MAX_LIFETIME_DAYS`, `THROTTLE_APIKEY_*`, `THROTTLE_TAKE_*` | As in §0.8 | None of these is in the example. |
+| `ALLOW_DIRECT_TAKE` | **`false`** at the switch (lead, 2026-10-08) | The override has it `true` today. No service account exists, so no key can take stock either way. |
+| `DIRECT_TAKE_MAX_QTY`, `DIRECT_TAKE_DAILY_UNITS_PER_ACCOUNT`, `API_KEY_WRITE_MAX_LIFETIME_DAYS`, `THROTTLE_APIKEY_*`, `THROTTLE_TAKE_*` | As in §0.8 | None of these is in the example. |
 | `IMS_DOMAIN` | From IT, step 5 | |
 | `REGISTRY`, `IMS_TAG` | `local` unless images are published to a registry; any tag | `local` makes `deploy.sh` build the app images on the host (step 6). |
 
@@ -308,7 +344,7 @@ The exceptions are demo mode and the new secrets, above, and `MONITOR_BACKUP_DIR
 #### Step 5 — The published port changes from 5173 to 80/443 (IT's part, §0.7)
 
 The root stack publishes 5173 (`docker-compose.yml:170-171`). `infra/` publishes 80 and 443
-(`infra/docker-compose.yml:101-103`). Whatever forwards traffic to `rndserver:5173` today stops
+(`infra/docker-compose.yml:101-103`). Whatever forwards traffic to `<vm>:5173` today stops
 reaching IMS at the switch. IT decides which of two setups to use:
 
 - **Caddy terminates TLS itself.** Set `IMS_DOMAIN` to the public hostname. Caddy then obtains
@@ -369,21 +405,11 @@ docker compose logs migrate | tail -20
 ```
 
 `migrate` runs `migration:run` and then `seed:run` before `api` starts
-(`infra/docker-compose.yml:40-58`, `:68-70`). `9f4176d`'s last migration is `0030`. Deploying this
-branch therefore applies nine:
-
-- `0031_project_proposals`
-- `0032_borrow_custody`
-- `0033_storage_rooms`
-- `0034_compartment_storage_id`
-- `0035_category_taxonomy`
-- `0036_product_code_sequence`
-- `0037_api_keys`
-- `0038_import_jobs`
-- `0039_api_key_service_accounts`
-
-The `down` of `0033` and of `0035` refuses in some data states, so undoing these is a restore,
-not a rollback migration.
+(`infra/docker-compose.yml:40-58`, `:68-70`). **It applies no migration:** production already runs
+all 37, and `0031`–`0039` were applied on 2026-10-05. The seed then leaves the existing admin
+untouched, because with demo mode off it writes a password only when it creates an account
+(`apps/api/scripts/seed.ts:181-193`, `:203`). `SEED_ADMIN_EMAIL` must therefore stay the
+existing admin's address.
 
 #### Step 7 — Verify
 
@@ -410,21 +436,16 @@ cd /root/ims/Inventory_Management_System/infra && docker compose down   # never 
 cd .. && docker compose up -d                                           # the root stack; the same volumes reattach
 ```
 
-The switch itself changes nothing in the database, but two things in step 6 do:
+The switch applies no migration (step 6), and the root stack's code (`a79d24c`) knows all 37. So
+rolling back is: stop `infra/`, then start the root stack **with its override**. Only path A
+(the new password) has to be carried back. A restore is needed only if data written after the
+switch has to be undone. Then use the final dump that step 6 took with step 2's commands. The
+`down` of `0033` and `0035` can refuse in some data states, so it is never the way back.
 
-- `migrate` applies `0031`–`0039` on the first `up`;
-- path A changes the password.
-
-**Once migrations have run, rolling back means restoring the step 2 dump.** Use the final copy
-that step 6 took with step 2's commands: the earlier one misses anything written since. There is
-no migration rollback to fall back on, because the `down` of `0033` and `0035` can refuse:
-
-- `0033` refuses once any zone name exists in more than one room;
-- `0035` refuses once any product has no category.
-
-The code at `9f4176d` also does not know `0031`–`0039`, and its own `migrate` runs on every start.
-It is ASSUMED to refuse a database carrying migrations it does not know; Kysely's migrator checks
-for this, but it has not been tested here. Restore first, then start the root stack.
+**Keep `docker-compose.override.yml` in the root folder until the rollback window has closed.**
+`docker compose up -d` merges it automatically, and it is the only thing keeping demo mode off in
+the root stack. The root file hard-codes `DEMO_ACCOUNTS_ENABLED: 'true'`. Delete the override once
+`infra/` is final (§0, step 9), because nothing untracked should configure production.
 `infra/restore.sh` does the restore. Its rename path has never been run on the VM
 (`BACKUP-DRILL.md`, "What this drill did not prove").
 

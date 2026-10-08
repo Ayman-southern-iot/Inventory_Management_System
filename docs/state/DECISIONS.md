@@ -1474,3 +1474,32 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   matches existing shelves (`import-lookups.ts:195`). Dry run first; it creates only what is missing,
   under the same validation as the Locations page. Keeper dev DB first, the VM after `infra/`.
   Ayman's earlier room plan is not used.
+- 2026-10-08 (go-live P1, PROVEN read-only on the VM) — **Production moved on 2026-10-05, outside
+  any recorded change.** The root stack has run `a79d24c` since 06:30 UTC, with an untracked
+  `docker-compose.override.yml` that sets `DEMO_ACCOUNTS_ENABLED='false'` and
+  `ALLOW_DIRECT_TAKE='true'`. `0031`–`0039` were applied at 06:30:01 UTC, so all 37 migrations are
+  in and the `infra/` switch applies none. Its database password is the root file's public
+  default. RUNBOOK §0.0 is corrected to match.
+- 2026-10-08 (Arif, go-live decisions):
+  - **D1:** after the switch nothing untracked configures production. The override's settings move
+    into `infra/.env`, and the override file is kept only until the rollback window closes.
+  - **D2:** the rehearsal is restore-and-boot rather than migrate. It takes a fresh dump plus a tar
+    of `ims_files` to the keeper, times a restore into scratch (the rollback budget), reconciles
+    stock against the ledger, and boots `v1.0.0-rc1` against the copy for a smoke test. The
+    verified dump stays on the keeper (0600) until the nightly backup exists; only the scratch
+    database is deleted.
+  - **D3:** `ALLOW_DIRECT_TAKE=false` at the switch. No service account exists, so no key can take
+    stock today either way.
+  - **D4:** the 65 products are exported to a CSV for the lead to mark the real ones. The rest are
+    treated as demo data.
+  - **D5:** the pre-window Caddyfile/trusted-proxies PR routes `/api/v1/health` to the API, status
+    only. Through Caddy today, `/health` returns the SPA's HTML and `/api/v1/health` is a 404.
+  - **API keys:** all 4 active keys are revoked at the switch. All are `inventory:read` with no
+    principal, created by the admin on 2026-10-05 and 2026-10-07. Two were used on 2026-10-08, so
+    whatever reads with them stops at the switch unless it gets a new key.
+- 2026-10-08 — **Re-running the seed never resets an existing admin's password when demo mode is
+  off** (read in the code, not run). The seed writes `password_hash` in only two places: for an
+  existing user only inside `if (config.demo.accountsEnabled)` (`seed.ts:185-188`), and for a new
+  user (`:203`). An existing admin otherwise hits `(exists, untouched)` (`:193`). In production
+  with demo off, the seed list is the admin alone (`:30`, `:154-163`), and the demo products are
+  skipped (`:263`).
