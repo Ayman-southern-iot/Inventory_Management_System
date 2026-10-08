@@ -10,6 +10,8 @@ export const ROUTES = {
   login: '/login',
   /** The lab panel: full screen, no shell, read-only. Run by the kiosk on the lab's touch panel. */
   panel: '/panel',
+  /** The 3D room view: PCs only, never the kiosk. `?cell=` focuses a cell (features/room). */
+  room: '/room',
   changePassword: '/account/password',
   dashboard: '/',
   inventory: {
