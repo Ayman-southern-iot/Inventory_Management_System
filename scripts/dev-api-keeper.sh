@@ -14,7 +14,8 @@
 #      random seed-admin password. The values are generated on the keeper and never printed. The
 #      database credentials are copied from the database container's own environment on each run.
 #   5. Runs migrations and the seed in a one-shot container, as the root compose's `migrate` job does.
-#   6. Replaces the API container, published on the keeper's loopback only, and waits for /health.
+#   6. Replaces the API container, published on the keeper's loopback only, and waits until Docker
+#      reports it healthy.
 #
 # The dev database keeps its data on tmpfs: restarting that container, or the keeper, empties it.
 # Step 5 rebuilds the schema and the seed admin, so re-running this script is the recovery. Anything
@@ -142,8 +143,10 @@ remote "docker rm -f '${API_CONTAINER}' >/dev/null 2>&1 || true"
 remote "docker run -d --name '${API_CONTAINER}' --restart unless-stopped --network '${NETWORK}' \
   ${RUN_ENV} -p '127.0.0.1:${API_PORT}:${CONTAINER_PORT}' '${IMAGE}' >/dev/null"
 
+# Docker's own health status, not a probe of /health: it is what drawer-plan-keeper.sh checks, so
+# once this returns that check passes too. The image's HEALTHCHECK polls /health every 15 s.
 deadline=$((SECONDS + HEALTH_TIMEOUT_S))
-until remote "curl -fsS 'http://127.0.0.1:${API_PORT}/health' >/dev/null 2>&1"; do
+until [ "$(remote "docker inspect -f '{{.State.Health.Status}}' '${API_CONTAINER}'")" = "healthy" ]; do
   if [ "$SECONDS" -ge "$deadline" ]; then
     echo "FATAL: ${API_CONTAINER} did not answer /health within ${HEALTH_TIMEOUT_S} s. Its last log lines:" >&2
     remote "docker logs --tail 30 '${API_CONTAINER}'" >&2
