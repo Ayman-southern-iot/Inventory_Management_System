@@ -116,6 +116,8 @@ export const t = {
   },
 
   auth: {
+    kioskGeneralOnly:
+      'Only the panel’s own account can sign in on this page. Other accounts sign in from the app’s main login page.',
     kioskMustChangePassword:
       'This account has to change its password first. Do that on a PC, then sign in here again.',
     signInTitle: 'Sign in',

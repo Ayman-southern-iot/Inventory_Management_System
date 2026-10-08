@@ -1096,7 +1096,17 @@ account and nothing else: no API key, no setting.
    manager, allowed origins) is the panel bring-up's job; see OQ-P3.
 
 A sign-in at the panel for an account that must change its password is refused there with a
-message: change it on a PC first. The panel never leaves `/panel` for the rest of the app.
+message: change it on a PC first. So is a sign-in by **any account holding a role besides General**
+(OQ-P3): an administrator's session would otherwise stay on the wall for up to 14 days. That check
+runs in the browser; it is a safeguard, not access control. The panel never leaves `/panel` for the
+rest of the app.
+
+The check runs **only at the panel's own login** (opened from `/panel`, or `/login?kiosk=1`) and
+**only at sign-in**: a session already on the panel is never re-checked, and `/panel` itself admits
+any signed-in account. So sign the panel in only that way, from a signed-out profile. If any other
+account was ever signed in on the device, clear the kiosk profile's site data first. To open
+`/panel` on a PC with another account, sign in at `/login` first, then open `/panel`; arriving
+signed out sends you to the panel's login, which refuses that account.
 
 **It will need signing in again** at most 14 days after the last sign-in, because a session has an
 absolute lifetime (OQ-P1). It lands on the login page, never a blank screen. Repeat step 3.

@@ -203,6 +203,62 @@ describe('LoginPage in kiosk mode', () => {
     expect(keyboard()).toBeInTheDocument();
   });
 
+  // OQ-P3: a session on the wall lasts up to 14 days (OQ-P1), so it may only be a GENERAL-only one.
+  it.each([
+    ['an administrator', [Role.GENERAL, Role.ADMIN]],
+    ['an inventory manager', [Role.GENERAL, Role.INVENTORY_MANAGER]],
+    ['an approver', [Role.GENERAL, Role.APPROVER]],
+  ])('refuses %s on the kiosk, signs it out and stays on the login page', async (_who, roles) => {
+    const user = userEvent.setup();
+    signIn.mockResolvedValue({ ...panelUser, roles });
+    renderLogin({ pathname: ROUTES.login, state: { from: ROUTES.panel } });
+
+    await user.type(screen.getByLabelText(t.auth.email), 'someone@example.invalid');
+    await user.type(screen.getByLabelText(t.auth.password), 'Some-pw1');
+    await user.click(screen.getByRole('button', { name: t.auth.signIn }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(t.auth.kioskGeneralOnly);
+    expect(signOut).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('the panel')).not.toBeInTheDocument();
+    expect(keyboard()).toBeInTheDocument();
+  });
+
+  it('gives the role refusal, not the password one, to an administrator whose password must change', async () => {
+    // "Change it on a PC, then sign in here again" would invite the administrator back to the wall.
+    const user = userEvent.setup();
+    signIn.mockResolvedValue({ ...panelUser, roles: [Role.GENERAL, Role.ADMIN], mustChangePassword: true });
+    renderLogin(`${ROUTES.login}?kiosk=1`);
+
+    await user.type(screen.getByLabelText(t.auth.email), 'someone@example.invalid');
+    await user.type(screen.getByLabelText(t.auth.password), 'Temp-pw1');
+    await user.click(screen.getByRole('button', { name: t.auth.signIn }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(t.auth.kioskGeneralOnly);
+    expect(signOut).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not send an already signed-in administrator from the kiosk login to the panel', () => {
+    // The real context sets the user before onSubmit can sign it out; going to the panel then
+    // would lose the refusal. A session already signed in is not followed to the panel either.
+    signedIn = { ...panelUser, roles: [Role.GENERAL, Role.ADMIN] } as AuthUser;
+    renderLogin(`${ROUTES.login}?kiosk=1`);
+    expect(screen.queryByText('the panel')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: t.auth.signIn })).toBeInTheDocument();
+  });
+
+  it('still lets an administrator sign in on a PC and reach the dashboard', async () => {
+    const user = userEvent.setup();
+    signIn.mockResolvedValue({ ...panelUser, roles: [Role.GENERAL, Role.ADMIN] });
+    renderLogin(ROUTES.login);
+
+    await user.type(screen.getByLabelText(t.auth.email), 'someone@example.invalid');
+    await user.type(screen.getByLabelText(t.auth.password), 'Some-pw1');
+    await user.click(screen.getByRole('button', { name: t.auth.signIn }));
+
+    expect(await screen.findByText('the dashboard')).toBeInTheDocument();
+    expect(signOut).not.toHaveBeenCalled();
+  });
+
   it('sends an ordinary sign-in to the dashboard, as before kiosk mode existed', async () => {
     const user = userEvent.setup();
     signIn.mockResolvedValue(panelUser);
