@@ -29,7 +29,7 @@ const rawSchema = z.object({
   API_PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   API_GLOBAL_PREFIX: z.string().default('api/v1'),
 
-  // Comma-separated. In production the SPA is same-origin behind Caddy, so this is
+  // Comma-separated. In production the SPA is same-origin behind the stack's nginx, so this is
   // normally empty there and only populated for the Vite dev server.
   CORS_ALLOWED_ORIGINS: z.string().default(''),
 

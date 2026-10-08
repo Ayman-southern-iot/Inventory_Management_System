@@ -1,3 +1,6 @@
+# Used ONLY by the root (demo) docker-compose.yml, which mounts this file. That stack is the rollback
+# for the switch to infra/ (RUNBOOK §0, step 8). infra/ itself has no Caddy since 2026-10-08: its
+# proxy is nginx/ims.conf.template, behind Cloudflare and Nginx Proxy Manager.
 {$IMS_DOMAIN} {
 	encode gzip
 

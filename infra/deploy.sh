@@ -39,7 +39,7 @@ if [ "${1:-}" != "" ]; then
   sed -i "s/^IMS_TAG=.*/IMS_TAG=$1/" .env
 fi
 
-# 3. Pull code (compose file, Caddyfile) and images
+# 3. Pull code (compose file, nginx template) and images
 echo "==> Pulling"
 git pull --ff-only
 if [ "$REGISTRY_IN_ENV" != "local" ]; then

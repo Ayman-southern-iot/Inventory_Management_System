@@ -1,0 +1,23 @@
+# Re-applies firewall/ims-docker-user.sh at every boot and whenever Docker restarts: rules in
+# DOCKER-USER live in the kernel only and are gone after a reboot.
+#
+# Install on the VM (RUNBOOK §0, step 5). The paths are the checkout on the VM; change both if it
+# moves:
+#   cp infra/firewall/ims-docker-user.service /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now ims-docker-user.service
+# Undo:
+#   systemctl disable --now ims-docker-user.service && rm /etc/systemd/system/ims-docker-user.service
+[Unit]
+Description=IMS: only Nginx Proxy Manager may reach the stack's published port
+After=docker.service
+Requires=docker.service
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/root/ims/Inventory_Management_System/infra/firewall/ims-docker-user.sh
+ExecStop=/root/ims/Inventory_Management_System/infra/firewall/ims-docker-user.sh --remove
+
+[Install]
+WantedBy=multi-user.target

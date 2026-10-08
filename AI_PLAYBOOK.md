@@ -8,7 +8,7 @@
 >
 > **Maintenance rule:** see `.claude/rules/05-ai-playbook.md`. A `PostToolUse` hook
 > (`.claude/hooks/playbook-reminder.sh`) reminds Claude to update this file after every
-> meaningful edit. Last updated: 2026-10-08 (kiosk login is GENERAL-only, §19). Earlier,
+> meaningful edit. Last updated: 2026-10-08 (no Caddy in infra/: nginx behind NPM, §0, §4.3, §6, §21; kiosk login is GENERAL-only, §19). Earlier,
 > 2026-10-05 (lab panel `/panel`, §19. Earlier the same day: branch model:
 > `main` + `advance-inventory-management`, hooks, CI — §7, §14). Earlier,
 > 2026-10-04 (lint baseline is now 0 — §16 landmines; `playwright-audit` skill — §15.1). Earlier,
@@ -74,7 +74,7 @@ Internal **procurement + inventory + BOM** system for **Southern IoT** (Dhaka, *
 - **web** — React + Vite + TypeScript + TanStack Query + Tailwind + shadcn/ui. State-only
   socket (pushes **invalidation signals**, not data).
 - **shared** (`packages/shared`) — dual CJS+ESM build, zod contracts + enums + settings registry.
-- **Infra** — single VM, Docker Compose, Caddy in front. No Redis, no queue server — at 12
+- **Infra** — single VM, Docker Compose, the stack's own nginx behind Cloudflare and NPM. No Redis, no queue server — at 12
   users, `node-cron` and an in-process PDF renderer are the whole job layer.
 - **PDF** — headless Chromium (Puppeteer) rendering HTML templates against the company pad as
   a background layer. Lives in a separate container with `mem_limit: 1g` so a render that
@@ -274,10 +274,10 @@ auto-generated API).
 ### 4.3 Deployment — single VM, Docker Compose
 
 ```
-                    Internet / LAN
-                          │  :443
+        Internet → Cloudflare → NPM (TLS, CF-only access list)
+                          │  plain HTTP, LAN IP : IMS_HTTP_PORT (NPM only, DOCKER-USER)
                   ┌───────▼────────┐
-                  │  proxy (Caddy) │  automatic TLS
+                  │  proxy (nginx) │  routing, JSON access log
                   └───┬────────┬───┘
              /api/*   │        │   /*
              /socket  │        │
@@ -575,7 +575,7 @@ their own DRAFT. The rule is deliberately narrow — it is reference material fo
 │       └── BACKUP-DRILL.md       backup/restore drill record
 ├── plan/
 │   └── PHASE-00..06-*.md         each phase: tasks with exit criteria (all done)
-├── infra/                        docker-compose, Caddyfile, deploy/backup/restore scripts
+├── infra/                        docker-compose, nginx template, firewall unit, logrotate, deploy/backup/restore scripts
 ├── apps/
 │   ├── api/                      NestJS backend
 │   │   └── src/
@@ -1468,7 +1468,10 @@ Single VM, Docker Compose. `infra/`:
 infra/
   docker-compose.yml     db · migrate · api · web · proxy
   docker-compose.dev.yml dev-only ports
-  Caddyfile              TLS + routing
+  nginx/ims.conf.template the stack's proxy: routing, /api/v1/health, JSON access log
+  firewall/              DOCKER-USER rule + systemd unit: only NPM reaches the port
+  logrotate/ims-proxy    access log, daily, 14 days
+  Caddyfile              the ROOT (demo) stack's proxy only: kept for rollback
   .env.example           copy to .env on the VM, never commit
   deploy.sh              backup → pull → migrate → up -d → health check
   backup.sh              pg_dump + files tarball, 30-day retention
@@ -1494,7 +1497,7 @@ works too — `deploy.sh` just adds the backup and the guard rails.
 | `migrate` | The API image, run once | Applies migrations, then exits. `api` waits for it. |
 | `api` | NestJS backend | Health at `/health`. Uploads and PDFs in the `files` volume. |
 | `web` | The React SPA | Static files. |
-| `proxy` | Caddy | Owns ports 80/443 and gets the TLS certificate automatically. |
+| `proxy` | nginx | Plain HTTP on `IMS_LISTEN_IP:IMS_HTTP_PORT` for NPM only; TLS ends at Cloudflare and NPM (RUNBOOK §0.7). |
 
 **Two volumes matter, and they are the whole system:**
 - **`pgdata`** — the database. Losing it is losing everything.

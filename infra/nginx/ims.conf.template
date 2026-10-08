@@ -1,0 +1,99 @@
+# The stack's own reverse proxy (it replaced Caddy on 2026-10-08). TLS ends upstream:
+#
+#   client → Cloudflare → the company's Nginx Proxy Manager (NPM) → this nginx → api / web
+#
+# NPM forwards plain HTTP to this server on the VM's LAN address (IMS_LISTEN_IP:IMS_HTTP_PORT in
+# infra/.env). Only NPM may reach that port, which infra/firewall/ims-docker-user.sh enforces. If
+# anything else could, it would choose its own client address by sending X-Forwarded-For.
+#
+# Each proxy appends the address it received the request from to X-Forwarded-For, so the API, with
+# this nginx as its peer, sees "client, cloudflare-edge, npm". TRUST_PROXY_HOPS=3 makes `req.ip`
+# the client (RUNBOOK §0.7).
+#
+# The official nginx image renders this file with envsubst at start-up, into conf.d/default.conf.
+# Only defined environment variables are replaced (IMS_PROXY_*), so nginx's own $variables are
+# left alone.
+
+# One JSON object per request. The path is `$uri`, without the query string, so signed PDF links
+# and their tokens never reach a log. `cf_connecting_ip` is the client as Cloudflare saw it;
+# `x_forwarded_for` is the chain as it arrived here, before this proxy appends NPM.
+log_format ims_json escape=json
+  '{"time":"$time_iso8601",'
+  '"remote_addr":"$remote_addr",'
+  '"cf_connecting_ip":"$http_cf_connecting_ip",'
+  '"x_forwarded_for":"$http_x_forwarded_for",'
+  '"method":"$request_method",'
+  '"path":"$uri",'
+  '"status":$status,'
+  '"duration_s":$request_time,'
+  '"bytes_sent":$body_bytes_sent,'
+  '"user_agent":"$http_user_agent"}';
+
+# NPM says https in X-Forwarded-Proto; keep what it sent, and say what this hop used when absent.
+map $http_x_forwarded_proto $ims_forwarded_proto {
+  default $http_x_forwarded_proto;
+  ''      $scheme;
+}
+
+map $http_upgrade $ims_connection_upgrade {
+  default upgrade;
+  ''      close;
+}
+
+server {
+  listen 80;
+  server_name _;
+  server_tokens off;
+
+  access_log /var/log/ims-proxy/access.log ims_json;
+
+  # Above the API's largest upload (UPLOAD_MAX_DOCUMENT_BYTES) plus the multipart envelope. NPM in
+  # front must allow at least as much, or it refuses the upload before it gets here.
+  client_max_body_size ${IMS_PROXY_MAX_BODY};
+  # A BOM PDF render or an import apply can outlast nginx's 60 s default.
+  proxy_read_timeout ${IMS_PROXY_READ_TIMEOUT};
+  proxy_send_timeout ${IMS_PROXY_READ_TIMEOUT};
+
+  # Uptime checks: the API's health as a status code and nothing else. 204 when the API's own
+  # /health answers 2xx; 500 when it answers anything else or does not answer within the timeouts.
+  # Not `return 204`: `return` runs in the rewrite phase, before auth_request's access phase, so the
+  # check would never happen and the endpoint would always report healthy. try_files runs after it.
+  location = /api/v1/health {
+    access_log off;
+    auth_request /_ims_api_health;
+    try_files /__ims_status_only__ =204;
+  }
+
+  location = /_ims_api_health {
+    internal;
+    proxy_pass http://api:3000/health;
+    proxy_pass_request_body off;
+    proxy_set_header Content-Length "";
+    proxy_connect_timeout 2s;
+    proxy_read_timeout 5s;
+  }
+
+  location /api/ {
+    proxy_pass http://api:3000;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $ims_forwarded_proto;
+  }
+
+  location /socket.io/ {
+    proxy_pass http://api:3000;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $ims_connection_upgrade;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $ims_forwarded_proto;
+  }
+
+  location / {
+    proxy_pass http://web:80;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $ims_forwarded_proto;
+  }
+}

@@ -1,7 +1,7 @@
 # Operator runbook
 
 Everything needed to run this system without having read the code. One VM, Docker Compose,
-Caddy in front. Twelve users. Currency BDT, timezone Asia/Dhaka.
+Cloudflare and Nginx Proxy Manager in front. Twelve users. Currency BDT, timezone Asia/Dhaka.
 
 If you are reading this during an incident, jump to [When something is wrong](#when-something-is-wrong).
 
@@ -330,10 +330,13 @@ openssl rand -hex 32    # three times: JWT_ACCESS_SECRET, JWT_REFRESH_SECRET, PD
 | **`SEED_ADMIN_EMAIL`** | **The existing admin's address** (`admin@ims.local` unless the root `.env` set another) | `migrate` re-runs the seed on every start. An address that does not exist creates a **second** admin with `SEED_ADMIN_PASSWORD`. |
 | `SEED_ADMIN_PASSWORD` | A strong value | Used only if that address does not exist yet. |
 | `PDF_MARGIN_TOP_MM` | `20`, unless BOMs print on letterhead (§0.6) | The example says 45; the running stack uses 20. |
-| `TRUST_PROXY_HOPS` | As agreed with IT (§0.7) | |
+| `TRUST_PROXY_HOPS` | **`3`**: Cloudflare, NPM and the stack's nginx (§0.7) | Tested on a restored copy on 2026-10-08: the audit log recorded the client, not a forged entry. |
 | `ALLOW_DIRECT_TAKE` | **`false`** at the switch (lead, 2026-10-08) | The override has it `true` today. No service account exists, so no key can take stock either way. |
 | `DIRECT_TAKE_MAX_QTY`, `DIRECT_TAKE_DAILY_UNITS_PER_ACCOUNT`, `API_KEY_WRITE_MAX_LIFETIME_DAYS`, `THROTTLE_APIKEY_*`, `THROTTLE_TAKE_*` | As in §0.8 | None of these is in the example. |
-| `IMS_DOMAIN` | From IT, step 5 | |
+| `IMS_LISTEN_IP` | The VM's LAN address | The stack's nginx is published on this address only, never `0.0.0.0` (step 5). |
+| `IMS_HTTP_PORT` | `8180` | The port NPM forwards to (step 5). |
+| `NPM_SOURCE_IP` | NPM's address as the VM sees it | Read only by `infra/firewall/ims-docker-user.sh`, the one source allowed to reach the port. |
+| (`IMS_DOMAIN`) | Not used by `infra/` any more | TLS ends at Cloudflare and NPM; only the root stack's Caddy still reads it. |
 | `REGISTRY`, `IMS_TAG` | `local` unless images are published to a registry; any tag | `local` makes `deploy.sh` build the app images on the host (step 6). |
 
 The comparison found nothing else in the example that differs from what the stack runs today.
@@ -341,28 +344,57 @@ The exceptions are demo mode and the new secrets, above, and `MONITOR_BACKUP_DIR
 `infra/` mounts on purpose. The comparison assumed the root `.env` overrides nothing. Step 1's
 `grep` shows whether it does. Carry over any value it sets.
 
-#### Step 5 — The published port changes from 5173 to 80/443 (IT's part, §0.7)
+#### Step 5 — NPM's forward port moves from 5173 to the stack's nginx (§0.7)
 
-The root stack publishes 5173 (`docker-compose.yml:170-171`). `infra/` publishes 80 and 443
-(`infra/docker-compose.yml:101-103`). Whatever forwards traffic to `<vm>:5173` today stops
-reaching IMS at the switch. IT decides which of two setups to use:
+The root stack publishes Caddy on `0.0.0.0:5173`. `infra/` has no Caddy. Its own nginx (`proxy`,
+`infra/nginx/ims.conf.template`) serves plain HTTP on **`IMS_LISTEN_IP:IMS_HTTP_PORT`** (`8180`),
+bound to the VM's LAN address only. TLS ends at Cloudflare and at the company's Nginx Proxy Manager
+(NPM), which forwards to that port. Whatever forwards to `<vm>:5173` today stops reaching IMS at
+the switch. The chain and why `TRUST_PROXY_HOPS=3` are in §0.7.
 
-- **Caddy terminates TLS itself.** Set `IMS_DOMAIN` to the public hostname. Caddy then obtains
-  its own certificate.
-- **Caddy sits behind IT's proxy on plain HTTP.** Set `IMS_DOMAIN=:80`. The Caddyfile is
-  templated on `{$IMS_DOMAIN}`, so no Caddyfile edit is needed; the root stack does exactly
-  this. The note in `infra/.env.example:16-17` says to edit the Caddyfile instead; setting the
-  variable is enough.
+**Before the window, on the VM** (as root, from `/root/ims/Inventory_Management_System`). These
+touch nothing that runs today. The firewall rule filters the new port only, and nothing listens on
+it yet:
 
-**Before the window, IT tells us three things:**
+```bash
+install -m 644 infra/logrotate/ims-proxy /etc/logrotate.d/ims-proxy   # daily, 14 days
+cp infra/firewall/ims-docker-user.service /etc/systemd/system/
+systemctl daemon-reload && systemctl enable --now ims-docker-user.service
+iptables -S DOCKER-USER; iptables -S IMS-ORIGIN   # one jump for IMS_LISTEN_IP:IMS_HTTP_PORT; RETURN for NPM, DROP for the rest
+```
 
-1. the upstream address and port their proxy will forward to;
-2. which `IMS_DOMAIN` form to use;
-3. the hop count for `TRUST_PROXY_HOPS`.
+The service runs `infra/firewall/ims-docker-user.sh`, which reads `infra/.env`, so step 4 comes
+first. Undo it with `systemctl disable --now ims-docker-user.service`; its stop action removes the
+chain and its jump. Docker's iptables backend on the VM was not checked before this was written.
+If `iptables -S DOCKER-USER` fails, stop and say so.
 
-§0.7's security condition applies to whichever port `infra/` publishes. **The switch happens only
-with IT present, in an agreed window.** Between step 6's `down` and IT repointing, IMS is
-unreachable.
+**In the window, after step 6's `up`,** change the NPM proxy host for `ims.siot.solutions`:
+
+| Field | Value |
+|---|---|
+| Scheme | `http` |
+| Forward hostname / IP | `IMS_LISTEN_IP` |
+| Forward port | `IMS_HTTP_PORT` (`8180`) |
+| Websockets support | on |
+| Block common exploits | on |
+| Cache assets | off |
+| SSL tab | unchanged |
+| Advanced | `client_max_body_size 12m;` `proxy_read_timeout 300s;` `proxy_send_timeout 300s;` |
+
+Three things must **not** go in NPM's Advanced field:
+
+- **No `real_ip_header` or `set_real_ip_from`.** NPM must pass `X-Forwarded-For` on with the
+  address it received the request from appended, which is its default. The hop count depends on
+  it.
+- **No smaller `client_max_body_size`.** Uploads go up to `UPLOAD_MAX_DOCUMENT_BYTES` (10 MB), and
+  NPM refuses a larger body before IMS sees it.
+- **No header rewriting for `X-Forwarded-For`.** It breaks the count in the same way.
+
+**NPM's access list for this host allows only Cloudflare's IP ranges** (IT, §0.7). Without it,
+anyone who finds the public IP can reach the origin without Cloudflare.
+
+**The switch happens with IT present, in an agreed window.** Between step 6's `down` and NPM's
+change, IMS is unreachable.
 
 #### Step 6 — The switch
 
@@ -428,6 +460,13 @@ Use `printenv` with names, not `env`: `env` prints every secret to the screen an
   prove step 4's storage and browser paths.
 - A sign-in works.
 - Both reconciliation queries print 0.
+- From the VM: `curl -s -o /dev/null -w '%{http_code}\n' http://<IMS_LISTEN_IP>:<IMS_HTTP_PORT>/api/v1/health`
+  prints `204`. `ss -ltn | grep ':5173 '` prints nothing.
+- From a LAN machine that is **not** NPM, the same `curl` gets no answer. `DOCKER-USER` drops it.
+- §0.7's acceptance tests (a)–(d) pass. (b) is the forged `X-Forwarded-For`. (d) is a direct
+  request to the public IP, which must get 403.
+- `tail -2 /var/log/ims-proxy/access.log` shows JSON lines with `cf_connecting_ip` set for traffic
+  that came through Cloudflare.
 
 #### Step 8 — Roll back
 
@@ -449,7 +488,7 @@ the root stack. The root file hard-codes `DEMO_ACCOUNTS_ENABLED: 'true'`. Delete
 `infra/restore.sh` does the restore. Its rename path has never been run on the VM
 (`BACKUP-DRILL.md`, "What this drill did not prove").
 
-After path A, put the new password in the root `.env`. IT points traffic back at 5173.
+After path A, put the new password in the root `.env`. NPM's forward port goes back to 5173.
 
 #### Step 9 — After the switch
 
@@ -588,53 +627,56 @@ Until that is running, the database has the same single point of failure as the 
 `PDF_MARGIN_TOP_MM` is 20, which suits plain white A4 and fits five items to a page. If BOMs are
 printed on a pre-printed letterhead pad instead, raise it to the height of the printed area.
 
-### 7. Real client IP behind Cloudflare — IT handoff — HARD BLOCKER for go-live
+### 7. Real client IP behind Cloudflare — HARD BLOCKER for go-live
 
-**Owner:** IT team. **Status:** open. **Blocks:** go-live. It does **not** block merging the code.
+**Owner:** IT (the lead, since 2026-10-08). **Blocks:** go-live, not merging code.
 
-This section says what the application needs. How the proxy chain meets it is IT's decision.
+**The chain** (the lead, 2026-10-08): client → Cloudflare (proxied record) → the company's public IP →
+router port-forward → **Nginx Proxy Manager** (TLS) → **the stack's own nginx** (`proxy`,
+`infra/nginx/ims.conf.template`, plain HTTP on `IMS_LISTEN_IP:IMS_HTTP_PORT`) → `api`. There is
+nothing else in between, and no Caddy in `infra/`.
 
-**Problem.** `https://ims.siot.solutions` has Cloudflare in front and Caddy behind (Arif,
-2026-09-29). Behind a proxy chain, every client can appear to the API as one address: a Cloudflare
-edge or a proxy. The API keeps its limits per client address. That covers the sign-in backoff and
-every rate-limit tier except the per-key one: `auth`, `loginBurst`, `public`, `authenticated` and
-`apiKeyAddress`. It also records that address in the audit log (the IP column of Admin → Audit
-log). If everyone shares one address, one person's failed sign-ins throttle the whole company,
-the key-address limit is shared by every panel, and the audit log cannot tell users apart. This
-follows from how the API reads the address. It has **not** been observed on the real chain:
-the VM runs an older build on the demo stack (item 0), and nobody has checked what address the
-API sees there.
+**Why it matters.** The API keeps its limits per client address: the sign-in backoff, and every
+rate-limit tier except the per-key one (`auth`, `loginBurst`, `public`, `authenticated`,
+`apiKeyAddress`). It also writes that address into the audit log. If every caller looks like one
+proxy, one person's failed sign-ins throttle the whole company, and the audit log cannot tell
+users apart.
 
-**Requirement.** The API must see each caller's real public IP.
+**How the API reads the address.** Only from `X-Forwarded-For`. It does not read
+`CF-Connecting-IP`, `X-Real-IP` or `Forwarded`. It trusts `TRUST_PROXY_HOPS` hops, counting
+entries from the right; the peer that connects to the API is hop 1.
 
-**Security condition.** Only the proxy directly in front of Caddy may reach the port Caddy
-publishes: **5173** on the root stack today, **80/443** once item 0 is done. If anything else can
-reach it, it can send its own `CF-Connecting-IP` or `X-Forwarded-For` and choose
-any address it likes. That bypasses every per-address limit above and writes a false IP into the
-audit log.
+- Each proxy appends the address it received the request from. Cloudflare appends the client, NPM
+  appends the Cloudflare edge, and the stack's nginx appends NPM.
+- So the API receives `…, client, cloudflare-edge, npm`, and **`TRUST_PROXY_HOPS=3`** picks the
+  client.
+- Anything a caller writes into the header lands to the *left* of the client entry, so it is
+  never picked.
+- **PROVEN on 2026-10-08,** on a restored copy behind the new nginx, with the chain's headers
+  replayed. For `X-Forwarded-For: 192.0.2.77, 198.51.100.10, 203.0.113.5` (a forged entry, the
+  client, the edge), the audit log recorded `198.51.100.10`.
+- **Not yet observed on the real chain;** that is test (c) below.
+- The stack's nginx also logs `CF-Connecting-IP`, the raw `X-Forwarded-For`, user agent, path,
+  status and duration as JSON to `/var/log/ims-proxy/access.log`. It is rotated daily and kept
+  14 days (`infra/logrotate/ims-proxy`). The query string is never logged.
 
-**What the application expects to receive.**
+**Security conditions.** Both must hold, or a caller can choose the address the API records:
 
-- **The header it reads is `X-Forwarded-For`, and only that.** The API does not read
-  `CF-Connecting-IP`, `X-Real-IP` or `Forwarded`.
-- **It trusts `TRUST_PROXY_HOPS` proxy hops, default `1`.** The peer that connects to the API is
-  hop 1. The API takes the client address from the `X-Forwarded-For` it receives, counting that
-  many entries from the right. With `1` it takes the rightmost entry; with `2`, the one before it.
-  If the header has fewer entries than that, it takes the leftmost one. So the real public IP must
-  arrive at that position, and every entry to its right must have been added by a proxy IT
-  controls.
-- **Changing the hop count is configuration, not code.** Set `TRUST_PROXY_HOPS` in the API's
-  environment and recreate `api`. That is `infra/.env` for the production stack; the root
-  `docker-compose.yml` passes the value through as well. It accepts 0–10. A blank value stops the
-  API from booting rather than being read as 0. **IT tells the app owner the value its chain
-  needs.**
+1. **Only Cloudflare reaches NPM for this host.** NPM's access list allows only Cloudflare's IP
+   ranges. Then the client entry was really written by Cloudflare.
+2. **Only NPM reaches the stack's port.** It is bound to the LAN address, and
+   `infra/firewall/ims-docker-user.sh` drops every other source in `DOCKER-USER` (§0, step 5).
 
-**Acceptance tests.** IT runs these after its change, once `TRUST_PROXY_HOPS` matches the chain.
-Tests (a) and (c) go through `https://ims.siot.solutions` from outside the office network. Use an
-email that is not an account, so that no real user's sign-in backoff is touched.
+**Changing the hop count is configuration, not code.** Set `TRUST_PROXY_HOPS` in `infra/.env` and
+recreate `api`. It accepts 0–10, and a blank value stops the API from booting rather than being
+read as 0. If a hop is added or removed in front, this number changes with it.
+
+**Acceptance tests,** after the switch. Tests (a) and (c) go through `https://ims.siot.solutions`
+from outside the office network. Use an email that is not an account, so no real user's sign-in
+backoff is touched.
 
 a) **Two public IPs land in two buckets.** From two machines with different public IPs, send one
-   failed sign-in each, at least a minute after any earlier attempt from either machine:
+   failed sign-in each, at least a minute after any earlier attempt from either:
 
    ```bash
    curl -s -D - -o /dev/null -X POST https://ims.siot.solutions/api/v1/auth/login \
@@ -643,43 +685,43 @@ a) **Two public IPs land in two buckets.** From two machines with different publ
      | grep -i x-ratelimit-remaining-auth
    ```
 
-   **Pass:** both machines print the same `X-RateLimit-Remaining-auth` value, so each has its own
-   bucket. **Fail:** the second machine's value is lower than the first's, so they share one.
+   **Pass:** both print the same `X-RateLimit-Remaining-auth`, because each has its own bucket.
 
-b) **A forged header sent straight to the origin is refused or ignored.** From a machine that is
-   *not* the proxy in front of Caddy, try the origin directly:
+b) **A forged header is ignored.** Repeat (a)'s request through the public hostname, with
+   `-H 'X-Forwarded-For: 192.0.2.77'` and the email `it-forge@example.com`. **Pass:** the Admin →
+   Audit log row for `it-forge@example.com` shows the machine's real public IP, not `192.0.2.77`.
+   Also, from a LAN machine that is not NPM,
+   `curl -m 5 http://<IMS_LISTEN_IP>:<IMS_HTTP_PORT>/api/v1/health` gets **no answer**.
+
+c) **The audit log records the real client IP.** Sign in from a machine whose public IP you know,
+   or send (a)'s failed sign-in. The `auth.login.success` or `auth.login.failure` row shows that
+   IP, and `/var/log/ims-proxy/access.log` shows the same address as `cf_connecting_ip`.
+
+d) **The origin refuses traffic that did not come through Cloudflare.** Call the public IP
+   directly with the right Host, so the request reaches NPM without Cloudflare:
 
    ```bash
-   curl -m 5 -s -D - -o /dev/null -X POST http://<origin-host>:<published-port>/api/v1/auth/login \
-     -H 'Content-Type: application/json' \
-     -H 'CF-Connecting-IP: 192.0.2.77' -H 'X-Forwarded-For: 192.0.2.77' \
-     -d '{"email":"it-forge@example.com","password":"NotThePassword123"}'
+   curl -sk -o /dev/null -w '%{http_code}\n' --resolve ims.siot.solutions:443:<origin-public-ip> \
+     https://ims.siot.solutions/
    ```
 
-   **Pass:** there is no answer (refused), or the Admin → Audit log row for `it-forge@example.com`
-   shows an IP other than `192.0.2.77` (ignored). **Fail:** that row shows `192.0.2.77`.
+   **Pass:** `403`, from NPM's access list. Anything else means the origin can be reached
+   around Cloudflare.
 
-c) **The audit log records the real client IP for a sign-in.** From a machine whose public IP you
-   know, sign in at `https://ims.siot.solutions`, or send the failed sign-in from (a). In Admin →
-   Audit log, the `auth.login.success` or `auth.login.failure` row shows that machine's public IP.
-   Then repeat the request with `-H 'X-Forwarded-For: 192.0.2.77'` added. The row must still show
-   the real IP, because a hop count set too high lets a caller choose its own address.
-
-**To close this item,** IT reports the hop count its chain uses and the result of (a), (b) and (c).
-The app owner sets `TRUST_PROXY_HOPS` if it is not `1`, and ticks this item.
+**To close this item,** record the date and the results of (a)–(d).
 
 ### 8. Before any system uses an API key
 
 A key is a bearer credential: whoever reads it off the network can use it until it is revoked.
 Do all three of these before issuing a key to the lab panel, the voice assistant or a script.
 
-1. **Key clients call `https://ims.siot.solutions`, never an IP or port 5173.** That is the
-   canonical HTTPS hostname, with Cloudflare in front and Caddy behind (Arif, 2026-09-29). Its DNS
-   answered with Cloudflare addresses on 2026-09-29.
+1. **Key clients call `https://ims.siot.solutions`, never an IP or a port.** That is the
+   canonical HTTPS hostname, behind Cloudflare and NPM (§0.7). Its DNS answered with Cloudflare
+   addresses on 2026-09-29 and on 2026-10-08.
 2. **§0.7 is closed, including its security condition.** The per-address key limit
-   (`apiKeyAddress`) only works once the API sees real client addresses. The demo stack
-   (`docker-compose.yml`) publishes its Caddy on host port 5173 over **plain HTTP**, so a client
-   that can reach 5173 directly sends its key in cleartext.
+   (`apiKeyAddress`) only works once the API sees real client addresses. The stack's own port is
+   **plain HTTP** on the LAN, so a client that reached it directly would send its key in
+   cleartext. That is one more reason only NPM may reach it.
 3. **Demo mode is off, and §0.1 is done** (seeded passwords reset, keys and service accounts
    created under demo revoked). Until then every key is refused with
    `403 API_KEYS_DISABLED_IN_DEMO`.
@@ -709,7 +751,7 @@ Five containers, defined in `infra/docker-compose.yml`:
 | `migrate` | The API image, run once | Applies migrations, then exits. `api` waits for it to succeed. |
 | `api` | NestJS backend | Health at `/health`. Uploads and PDFs in the `files` volume. |
 | `web` | The React SPA | Static files. |
-| `proxy` | Caddy | Owns ports 80/443 and gets the TLS certificate automatically. |
+| `proxy` | nginx | Plain HTTP on `IMS_LISTEN_IP:IMS_HTTP_PORT`, for NPM only (§0.7). Routes `/api/*` and `/socket.io/*` to `api`, the rest to `web`. `/api/v1/health` is the API's health as a status code. JSON access log in `/var/log/ims-proxy`. |
 
 Two volumes matter, and they are the whole system:
 
@@ -740,8 +782,9 @@ openssl rand -hex 32      # PDF_SIGNING_SECRET
 openssl rand -hex 32      # POSTGRES_PASSWORD
 ```
 
-Also set `IMS_DOMAIN` to the real hostname (Caddy uses it to request the certificate, so DNS
-must already point at this VM), and `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`.
+Also set `IMS_LISTEN_IP`, `IMS_HTTP_PORT` and `NPM_SOURCE_IP`, then install the firewall unit and
+the logrotate file (§0, step 5). Set `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` as well. TLS is
+NPM's job, in front.
 
 Then:
 
@@ -1002,8 +1045,8 @@ dynamic range instead — change `5173:80` in `docker-compose.yml` — but every
 the `WEB_PUBLIC_URL` in `.env` change with it, so prefer reclaiming the port.
 ### Nobody can sign in
 
-Check the API is actually up. Caddy only proxies `/api/*` to the backend, so `/health` is not
-reachable from outside — ask the container:
+Check the API is actually up. From outside, `/api/v1/health` answers `204` (healthy) or `500`.
+The API's own `/health` is not routed, so ask the container for the detail:
 
 ```bash
 docker compose ps                                             # api should say (healthy)

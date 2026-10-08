@@ -92,21 +92,29 @@ services:
       api:
         condition: service_healthy
 
-  # TLS + reverse proxy. Caddy gets certificates automatically if IMS_DOMAIN
-  # is a real hostname; use a bare host:port in the Caddyfile for LAN-only.
+  # The stack's own reverse proxy: plain HTTP on the VM's LAN address, for the company's Nginx
+  # Proxy Manager only. TLS ends at Cloudflare and NPM in front (RUNBOOK §0.7). Routing, the JSON
+  # access log and the health endpoint are in nginx/ims.conf.template.
+  # firewall/ims-docker-user.sh keeps every other source off the port. The published address and
+  # port have no default: a stack that would bind somewhere unintended refuses to start instead.
   proxy:
     <<: *logging
-    image: caddy:2-alpine
+    image: nginx:1.27-alpine
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
+      - "${IMS_LISTEN_IP:?set IMS_LISTEN_IP in infra/.env}:${IMS_HTTP_PORT:?set IMS_HTTP_PORT in infra/.env}:80"
     environment:
-      IMS_DOMAIN: ${IMS_DOMAIN}
+      IMS_PROXY_MAX_BODY: ${IMS_PROXY_MAX_BODY:-12m}
+      IMS_PROXY_READ_TIMEOUT: ${IMS_PROXY_READ_TIMEOUT:-300s}
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data                         # holds the TLS certs — keep it
-      - caddy_config:/config
+      - ./nginx/ims.conf.template:/etc/nginx/templates/default.conf.template:ro
+      # On the host, so logrotate/ims-proxy can rotate it daily and keep 14 days.
+      - ${IMS_PROXY_LOG_DIR:-/var/log/ims-proxy}:/var/log/ims-proxy
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1/api/v1/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
     depends_on:
       - web
       - api
@@ -114,5 +122,5 @@ services:
 volumes:
   pgdata:          # ← your database. Losing this is losing everything.
   files:           # ← generated PDFs
-  caddy_data:
-  caddy_config:
+  # ims_caddy_data and ims_caddy_config stay on disk: the root stack still uses them, and it is the
+  # rollback (RUNBOOK §0, step 8). Nothing here mounts them any more.

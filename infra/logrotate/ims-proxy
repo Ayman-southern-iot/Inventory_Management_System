@@ -1,0 +1,20 @@
+# Rotation for the stack's nginx access log (nginx/ims.conf.template): daily, 14 days kept.
+# The log directory is IMS_PROXY_LOG_DIR in infra/.env, /var/log/ims-proxy by default; change the
+# path below if that is changed.
+#
+# Install on the VM:  install -m 644 infra/logrotate/ims-proxy /etc/logrotate.d/ims-proxy
+# Check it:           logrotate --debug /etc/logrotate.d/ims-proxy
+#
+# copytruncate, because nginx in the container keeps the file open; the cost is that a line written
+# during the copy can be lost, which a request log can afford.
+/var/log/ims-proxy/*.log {
+    daily
+    rotate 14
+    maxage 14
+    dateext
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}
