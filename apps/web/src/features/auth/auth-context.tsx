@@ -4,12 +4,14 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { type Role, type AuthUser, type LoginInput, type LoginResponse } from '@ims/shared';
-import { api, setSessionLostHandler } from '@/api/client';
+import { api, isApiUnreachable, setSessionLostHandler } from '@/api/client';
+import { webConfig } from '@/api/config';
 import {
   clearStoredTokens,
   readStoredTokens,
@@ -35,13 +37,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isRestoring, setIsRestoring] = useState(true);
   const queryClient = useQueryClient();
+  /** The start-up retry waiting to ask `/auth/me` again while the API was unreachable. */
+  const restoreRetry = useRef<number | undefined>(undefined);
+
+  /**
+   * The start-up restore is over, whoever ended it: an answer from the API, a sign-in, a
+   * session adopted after a password change, or a sign-out. Cancels a pending retry, which
+   * otherwise kept `isRestoring` true (and LoginPage from redirecting) until it fired.
+   */
+  const endRestore = useCallback(() => {
+    window.clearTimeout(restoreRetry.current);
+    restoreRetry.current = undefined;
+    setIsRestoring(false);
+  }, []);
 
   const forgetSession = useCallback(() => {
     clearStoredTokens();
     setUser(null);
     // Otherwise the next user to sign in on this machine sees the previous user's cached lists.
     queryClient.clear();
-  }, [queryClient]);
+    endRestore();
+  }, [queryClient, endRestore]);
 
   // A refresh that fails anywhere in the app drops straight back to the login screen.
   useEffect(() => {
@@ -54,26 +70,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     async function restore() {
+      restoreRetry.current = undefined;
       if (!readStoredTokens()) {
-        if (!cancelled) setIsRestoring(false);
+        if (!cancelled) endRestore();
         return;
       }
       try {
         const me = await api.get<AuthUser>('/auth/me');
-        if (!cancelled) setUser(me);
-      } catch {
+        if (cancelled) return;
+        setUser(me);
+        endRestore();
+      } catch (error) {
+        if (cancelled) return;
+        if (isApiUnreachable(error)) {
+          // The API could not be asked, so the stored session may be perfectly good. Keep it
+          // and ask again; signing out here strands a kiosk that booted before the network.
+          restoreRetry.current = window.setTimeout(
+            () => void restore(),
+            webConfig.sessionRestoreRetryMs,
+          );
+          return;
+        }
         // The client already tried to refresh; reaching here means the session is gone.
-        if (!cancelled) forgetSession();
-      } finally {
-        if (!cancelled) setIsRestoring(false);
+        forgetSession();
       }
     }
 
     void restore();
     return () => {
       cancelled = true;
+      window.clearTimeout(restoreRetry.current);
     };
-  }, [forgetSession]);
+  }, [forgetSession, endRestore]);
 
   // Signing out in one tab signs out the others.
   useEffect(() => {
@@ -89,9 +117,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const response = await api.loginRequest<LoginResponse>('/auth/login', input);
       writeStoredTokens(response);
       setUser(response.user);
+      endRestore();
       return response.user;
     },
-    [],
+    [endRestore],
   );
 
   const signOut = useCallback(async () => {
@@ -110,10 +139,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(me);
   }, []);
 
-  const adoptSession = useCallback((session: LoginResponse) => {
-    writeStoredTokens(session);
-    setUser(session.user);
-  }, []);
+  const adoptSession = useCallback(
+    (session: LoginResponse) => {
+      writeStoredTokens(session);
+      setUser(session.user);
+      endRestore();
+    },
+    [endRestore],
+  );
 
   const hasRole = useCallback(
     (...roles: Role[]) => roles.some((role) => user?.roles.includes(role) ?? false),
