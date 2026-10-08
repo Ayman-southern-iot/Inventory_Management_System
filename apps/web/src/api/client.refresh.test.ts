@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, api, setSessionLostHandler } from './client';
-import { readStoredTokens, writeStoredTokens } from './token-store';
+import { clearStoredTokens, readStoredTokens, writeStoredTokens } from './token-store';
 
 /** A JSON response as the API would send it. */
 const reply = (status: number, body: unknown) =>
@@ -81,4 +81,70 @@ describe('a request whose access token has expired', () => {
     await expect(api.get('/catalogue')).resolves.toEqual({ ok: true });
     expect(readStoredTokens()?.accessToken).toBe('fresh');
   });
+
+  // A refresh still in flight when storage changes under it must not write: the session it
+  // belonged to has ended (#19 security review, the sign-out ordering fix).
+  function refreshAnsweredLater() {
+    let answer: (response: Response) => void = () => undefined;
+    fetchMock
+      .mockResolvedValueOnce(reply(401, { code: 'TOKEN_EXPIRED', message: 'expired' }))
+      .mockImplementationOnce(
+        () =>
+          new Promise<Response>((resolve) => {
+            answer = resolve;
+          }),
+      );
+    const request = api.get('/catalogue').catch((caught: unknown) => caught);
+    const answerRefresh = () =>
+      answer(reply(200, { accessToken: 'fresh', refreshToken: 'refresh-2', expiresIn: 900, user: {} }));
+    return { request, answerRefresh };
+  }
+
+  it('does not put the tokens back when the user signed out while the refresh was in flight', async () => {
+    const { request, answerRefresh } = refreshAnsweredLater();
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    clearStoredTokens();
+    answerRefresh();
+
+    const error = await request;
+
+    expect((error as ApiError).code).toBe('TOKEN_EXPIRED');
+    expect(readStoredTokens()).toBeNull();
+    expect(onSessionLost).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not overwrite a session that signed in while the refresh was in flight', async () => {
+    const { request, answerRefresh } = refreshAnsweredLater();
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    writeStoredTokens({ accessToken: 'next-user', refreshToken: 'next-refresh', expiresIn: 900 });
+    answerRefresh();
+
+    await request;
+
+    expect(readStoredTokens()?.accessToken).toBe('next-user');
+    expect(onSessionLost).not.toHaveBeenCalled();
+  });
+
+  it('does not end a session that signed in while a refused refresh was in flight', async () => {
+    let answer: (response: Response) => void = () => undefined;
+    fetchMock
+      .mockResolvedValueOnce(reply(401, { code: 'TOKEN_EXPIRED', message: 'expired' }))
+      .mockImplementationOnce(
+        () =>
+          new Promise<Response>((resolve) => {
+            answer = resolve;
+          }),
+      );
+    const request = api.get('/catalogue').catch((caught: unknown) => caught);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    writeStoredTokens({ accessToken: 'next-user', refreshToken: 'next-refresh', expiresIn: 900 });
+    answer(reply(401, { code: 'TOKEN_REVOKED', message: 'revoked' }));
+
+    await request;
+
+    expect(readStoredTokens()?.accessToken).toBe('next-user');
+    expect(onSessionLost).not.toHaveBeenCalled();
+  });
 });
+
