@@ -2,30 +2,42 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useQuery } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { loginSchema, type DemoAccounts, type LoginInput } from '@ims/shared';
 import { ApiError, api } from '@/api/client';
 import { queryKeys } from '@/api/keys';
 import { Button } from '@/components/ui/Button';
+import { OnScreenKeyboard } from '@/components/ui/OnScreenKeyboard';
 import { TextField } from '@/components/ui/Field';
 import { t } from '@/i18n/en';
 import { messageForError } from '@/lib/error-message';
 import { formatDateTime } from '@/lib/format';
 import { useAuth } from '../auth-context';
-import { ROUTES } from '@/routes/paths';
+import { KIOSK_LOGIN_PARAM, KIOSK_LOGIN_VALUE, ROUTES } from '@/routes/paths';
 
 export function LoginPage() {
-  const { user, isRestoring, signIn } = useAuth();
+  const { user, isRestoring, signIn, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const [formError, setFormError] = useState<string | null>(null);
+  const [activeField, setActiveField] = useState<keyof LoginInput>('email');
+
+  /**
+   * Kiosk mode: the lab panel has no keyboard. Reached from `/panel` (the router sends a signed-out
+   * panel here with `from`) or with `?kiosk=1`, the page brings the panel's on-screen keyboard and
+   * goes back to the panel after sign-in. Session length is unchanged (OQ-P1).
+   */
+  const from = (location.state as { from?: string } | null)?.from;
+  const isKiosk = from === ROUTES.panel || searchParams.get(KIOSK_LOGIN_PARAM) === KIOSK_LOGIN_VALUE;
 
   // The same zod schema the API validates with (rules/30-frontend.md) — written once.
   const {
     register,
     handleSubmit,
     setValue,
-    formState: { errors, isSubmitting },
+    getValues,
+    formState: { errors, isSubmitting, isSubmitted },
   } = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: '', password: '' },
@@ -44,18 +56,24 @@ export function LoginPage() {
     staleTime: 30_000,
   });
 
-  if (!isRestoring && user) {
-    const from = (location.state as { from?: string } | null)?.from ?? ROUTES.dashboard;
-    return <Navigate to={from} replace />;
+  // A kiosk only ever goes back to the panel: the rest of the app has borrower names a tap away.
+  // Held while a kiosk sign-in that must change its password is being signed out (onSubmit).
+  if (!isRestoring && user && !(isKiosk && user.mustChangePassword)) {
+    return <Navigate to={isKiosk ? ROUTES.panel : (from ?? ROUTES.dashboard)} replace />;
   }
 
   async function onSubmit(values: LoginInput) {
     setFormError(null);
     try {
       const signedIn = await signIn(values);
-      navigate(signedIn.mustChangePassword ? ROUTES.changePassword : ROUTES.dashboard, {
-        replace: true,
-      });
+      if (isKiosk && signedIn.mustChangePassword) {
+        // The change-password page sits inside the app shell, with no on-screen keyboard.
+        await signOut();
+        setFormError(t.auth.kioskMustChangePassword);
+        return;
+      }
+      const home = isKiosk ? ROUTES.panel : ROUTES.dashboard;
+      navigate(signedIn.mustChangePassword ? ROUTES.changePassword : home, { replace: true });
     } catch (error) {
       setFormError(
         error instanceof ApiError ? messageForError(error) : t.errors.INTERNAL,
@@ -70,12 +88,23 @@ export function LoginPage() {
     setFormError(null);
   }
 
+  /** The on-screen keyboard types into whichever field last had focus. */
+  function typeOnScreen(next: (current: string) => string) {
+    setValue(activeField, next(getValues(activeField)), {
+      shouldDirty: true,
+      shouldValidate: isSubmitted,
+    });
+  }
+
   const accounts = demo.data?.accounts ?? [];
 
   return (
-    <main className="flex min-h-dvh items-center justify-center bg-canvas px-4 py-10">
+    <main
+      className={`flex min-h-dvh flex-col items-center bg-canvas ${isKiosk ? 'pt-6' : 'justify-center px-4 py-10'}`}
+    >
       <div className="w-full max-w-sm">
-        <div className="mb-6 text-center">
+        {/* On the panel the keyboard needs the room; the logo is the first thing to give. */}
+        <div className={isKiosk ? 'hidden' : 'mb-6 text-center'}>
           <img
             src="/southern-iot-logo.png"
             alt={t.app.name}
@@ -111,6 +140,8 @@ export function LoginPage() {
             type="email"
             autoComplete="username"
             autoFocus
+            inputMode={isKiosk ? 'none' : undefined}
+            onFocus={() => setActiveField('email')}
             error={errors.email?.message}
             {...register('email')}
           />
@@ -118,6 +149,8 @@ export function LoginPage() {
             label={t.auth.password}
             type="password"
             autoComplete="current-password"
+            inputMode={isKiosk ? 'none' : undefined}
+            onFocus={() => setActiveField('password')}
             error={errors.password?.message}
             {...register('password')}
           />
@@ -127,7 +160,8 @@ export function LoginPage() {
           </Button>
         </form>
 
-        {accounts.length > 0 && demo.data ? (
+        {/* Never on the wall: one-tap credentials, admin included, for anyone passing by. */}
+        {!isKiosk && accounts.length > 0 && demo.data ? (
           <section
             aria-label={t.auth.demoAccountsTitle}
             className="mt-4 rounded-[--radius-panel] border border-border bg-surface-2 p-4 text-xs text-ink-muted"
@@ -181,6 +215,16 @@ export function LoginPage() {
           {t.auth.lastUpdated}: {formatDateTime(__BUILD_TIME__)}
         </p>
       </div>
+      {isKiosk ? (
+        <div className="mt-auto w-full">
+          <OnScreenKeyboard
+            layout="text"
+            onKey={(text) => typeOnScreen((current) => current + text)}
+            onBackspace={() => typeOnScreen((current) => current.slice(0, -1))}
+            onClear={() => typeOnScreen(() => '')}
+          />
+        </div>
+      ) : null}
     </main>
   );
 }

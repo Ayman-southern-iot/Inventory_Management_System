@@ -116,6 +116,8 @@ export const t = {
   },
 
   auth: {
+    kioskMustChangePassword:
+      'This account has to change its password first. Do that on a PC, then sign in here again.',
     signInTitle: 'Sign in',
     signInSubtitle: 'Use the account your administrator created for you.',
     email: 'Email',
@@ -1801,6 +1803,51 @@ export const t = {
       doNotClose:
         'You can close this page — the import keeps going, and this screen picks it back up.',
     },
+  },
+
+  /** `components/ui/OnScreenKeyboard`: for a touch screen with no keyboard of its own. */
+  onScreenKeyboard: {
+    label: 'On-screen keyboard',
+    backspace: 'Delete',
+    clear: 'Clear',
+    space: 'Space',
+    shift: 'Shift',
+    symbols: 'Symbols',
+    symbolsKey: '#+=',
+    letters: 'Letters',
+    lettersKey: 'ABC',
+  },
+
+  /** The lab panel (`/panel`): a read-only "where is it?" screen on a wall-mounted touch panel. */
+  panel: {
+    pageTitle: 'Where is it?',
+    searchLabel: 'Search for a part',
+    resultsLabel: 'Search results',
+    searchPlaceholder: 'Part name, part number or drawer code',
+    clearSearch: 'Clear search',
+    keyboardShow: 'Keyboard',
+    keyboardHide: 'Hide keyboard',
+    noMatch: 'No match — try a part number or a drawer code like A3',
+    moreResults: (count: number) => `${count} more — type more to narrow it down`,
+    drawerResult: 'Drawer',
+    notOnShelf: 'Not on any shelf',
+    notOnPlan: 'Not on the drawer plan',
+    onHand: (count: number) => `${count} on hand`,
+    free: (count: number) => `${count} free`,
+    openShelves: 'Open shelves',
+    backToOverview: 'All cabinets',
+    drawerBack: 'Back',
+    drawerFront: 'Front · handle',
+    partsInCell: (count: number) => `${count} part${count === 1 ? '' : 's'}`,
+    cellContentsTitle: (address: string) => `In ${address}`,
+    cellEmpty: 'Nothing is recorded in this cell.',
+    pickCell: 'Tap a cell to see what is in it.',
+    loading: 'Loading the catalogue…',
+    offline: (retrySeconds: number) =>
+      `Cannot reach the server. Trying again every ${retrySeconds} s.`,
+    offlineShowing: (time: string) => `Showing counts from ${time}.`,
+    unmatchedDrawers: (count: number, codes: string) =>
+      `${count} ${count === 1 ? 'drawer has' : 'drawers have'} no zone in IMS yet, so ${count === 1 ? 'its' : 'their'} parts cannot be shown on the map: ${codes}`,
   },
 
   errors: {

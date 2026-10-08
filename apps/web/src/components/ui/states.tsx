@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { AlertTriangle, Inbox, Loader2, ShieldOff } from 'lucide-react';
 import { t } from '@/i18n/en';
-import { ApiError } from '@/api/client';
+import { ApiError, NETWORK_ERROR_CODE } from '@/api/client';
 import { Button } from './Button';
 import { cn } from '@/lib/cn';
 
@@ -66,7 +66,7 @@ export function EmptyState({
 export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
   const apiError = error instanceof ApiError ? error : null;
   const isForbidden = apiError?.status === 403;
-  const isNetwork = apiError?.code === 'NETWORK';
+  const isNetwork = apiError?.code === NETWORK_ERROR_CODE;
 
   const title = isForbidden
     ? t.states.forbiddenTitle

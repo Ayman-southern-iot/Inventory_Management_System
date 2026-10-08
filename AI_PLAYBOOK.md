@@ -8,7 +8,8 @@
 >
 > **Maintenance rule:** see `.claude/rules/05-ai-playbook.md`. A `PostToolUse` hook
 > (`.claude/hooks/playbook-reminder.sh`) reminds Claude to update this file after every
-> meaningful edit. Last updated: 2026-10-05 (branch model: `main` + `advance-inventory-management`, hooks, CI — §7, §14). Earlier,
+> meaningful edit. Last updated: 2026-10-05 (lab panel `/panel`, §19. Earlier the same day: branch model:
+> `main` + `advance-inventory-management`, hooks, CI — §7, §14). Earlier,
 > 2026-10-04 (lint baseline is now 0 — §16 landmines; `playwright-audit` skill — §15.1). Earlier,
 > 2026-09-29 (phase 11, ADR-0002: keys that act as a service
 > account, `POST /stock/take` — §11 config, §16 landmines, §18 notifications. Earlier,
@@ -1389,6 +1390,12 @@ does not serve.
 | **Inventory Manager** | Inventory (full CRUD, categories, zones/compartments, moves) · Projects (may detach a borrow from project attribution; borrow + stock history remain) · Pending Approvals ⁽ᵇᵃᵈᵍᵉ⁾ · Accepted Approvals · Product Borrowing Approvals · BOM workspace · Funds & Purchases · + all General screens |
 | **Approver** | Projects → Project Detail · Pending Approvals ⁽ᵇᵃᵈᵍᵉ⁾ · Accepted Approvals (sees **supporting document card** on the requisition detail page when the requester attached one) · Delegate settings · + all General screens |
 | **Admin** | Projects (same detach permission as IM) · Users · Roles & Approvers · Departments · Settings · Audit log · **API keys** (issue/disable/revoke, generated integration docs) |
+
+A **lab panel** at `/panel` sits outside the role table: any signed-in account may open it, and the
+lab's wall kiosk runs it as the GENERAL account `lab-panel`. Full screen, no shell, read-only: a
+cabinet map and a part search fed by `GET /catalogue`, never showing who holds anything
+(OQ-P1, OQ-P2, OQ-P3). Code: `apps/web/src/features/panel/`; the drawer
+plan is static data there, lazy-loaded as its own chunk.
 
 For the **per-screen click-by-click walkthrough**, open `docs/reference/05-user-flows.md`.
 That file is intentionally not inlined here because (a) it is 227 lines and changes when

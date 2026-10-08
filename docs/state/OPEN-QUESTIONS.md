@@ -305,3 +305,38 @@ As filed:
 | OQ-KT5 | ✅ | **Ledger `ref_type` for a take: `BORROW` or a new `TAKE`?** `ref_type` is free `text` (`0006_inventory_core.ts:181`), not an enum, so a new value needs no migration. `stock-reconciliation.job.ts` and `modules/reports` never read it. The cost of `TAKE` is elsewhere: a take's returns are written as `BORROW` against the same `ref_id`, so one loan would carry two ref types. | `BORROW`. The route and the declared `channel` go in the audit metadata; a key-made take is also marked by `audit_log.api_key_id`. | Nothing |
 | OQ-KT6 | ✅ | **`borrow:read` reverses K2 and pre-empts OQ-G1. Whose call is that?** Ayman kept borrowing out of key reach because it names employees (K2). The stock ledger was left out because it names the actor on every row (OQ-G1, still open). The brief puts both `GET /borrowing` and `GET /stock/ledger` into `borrow:read`. It also needs a bound service account, since `GET /borrowing` reads `@CurrentUser`, and a service account holding IM would see **everyone's** borrows. | **Not built until answered.** Both routes stay key-denied, and the other four new scopes ship. | `borrow:read` |
 | OQ-KT7 | ✅ | **Is any client already written against `X-API-Key`?** The brief asked for that header. The shipped scheme is `Authorization: Bearer ims_…`, plus `?api_key=` for GETs, which was Ayman's choice, and the rate limiter, log redaction and generated usage page all key off it. If a panel or voice firmware already sends `X-API-Key`, accepting it as an alias is cheap, but it opens a third way in. | Bearer only. `?api_key=` is refused on every non-GET. | Nothing |
+
+## Lab panel `/panel` (filed 2026-10-05, `feat/panel-page`)
+
+The panel signs in through the normal login as a person-type GENERAL account (OQ-P3). Auth is
+**not** changed on this branch; the design notes are in the pull request's description.
+
+**OQ-P2 answered by Arif on 2026-10-05:** a cell is joined by **room + zone name + compartment
+code**, and nothing else:
+
+- **room** is the drawer's room as the plan names it: the cabinet ("Cabinet A", "Cabinet B",
+  "Roller cabinet") or, for the two open shelves, "CTO Room — open shelves". The names come from
+  the plan file (`features/panel/layout/drawer-plan-v4.json`), never from code. Each drawer
+  matches only in its own room, so a demo room's "A1" cannot shadow the real one: zone names are
+  unique only within a room (`storage_zones_room_name_key`, migration 0033).
+- **zone name is exactly the drawer code** (`A1`, `LB`). IMS zones have no description field
+  (`storage_zones`: `name`, `is_active`, timestamps), so the descriptive text ("Tools — debug,
+  soldering, test") stays on the plan, where the panel shows it. Storing it in IMS would need a
+  migration; not done.
+- **compartment code is the cell code as printed** (`1G-1H`). Address = `A1-1G-1H`.
+
+**Which import column fills `zone.name`: none.** The importer (`modules/imports`) only *matches*
+existing shelves by room name, zone name and compartment code (`import-lookups.ts:195`); it never
+creates a room, a zone or a compartment. Zones are created on the Locations page
+(`POST /locations/zones {name, roomId}`). In the product CSV, the `zone` column must equal that
+name, so it holds the drawer code too. The v4 sheet export (`layout/ims-import-v4.csv`) now names
+its columns after what IMS stores: `Room`, `Zone name` (the sheet's "Zone code"),
+`Compartment code`, and `Drawer description (plan only)` for the sheet's descriptive "Zone name".
+`address.test.ts` resolves all 150 rows one-to-one. The panel's overview warns, with a count,
+about any plan drawer IMS has no zone for.
+
+| ID | Status | Question | Working assumption | Blocks |
+|----|--------|----------|--------------------|--------|
+| OQ-P1 | open (Ayman) | **How long may the kiosk's session last?** From the code, with what a test proves marked: (1) the access token lives 15 min (`JWT_ACCESS_TTL_SECONDS`=900) and is refreshed silently; (2) the refresh family has an **absolute** life of 14 days (`JWT_REFRESH_TTL_SECONDS`), not sliding: rotation inherits the family's expiry (`auth.service.ts:181-189`, proven by `session-enforcement.int-spec.ts:161`). So the panel is signed out at most 14 days after its last sign-in, whatever its use, and lands on `/login` with `/panel` as the return path. (3) A new account starts with `mustChangePassword` (users contract, default `true`), so the first sign-in is done on a PC. Options: (a) a longer refresh TTL for a panel-only role or account flag; (b) a device login flow: the panel shows a code, an IM approves it from their own session; (c) sessions scoped to the panel's IP with a long TTL. Separately, a panel that boots while the API is unreachable must not lose its session: that is a defect, fixed on its own branch (`fix/auth-network-not-logout`), not part of this question. | Session length unchanged. The login page opened from `/panel` (or with `?kiosk=1`) shows the panel's on-screen keyboard, so signing back in every ≤14 days needs no USB keyboard. | Nothing |
+| OQ-P2 | ✅ | **How will the lab enter the v4 drawer plan into IMS?** IMS has no address field: a compartment is a `code` unique within its zone, under a zone that has a name and no code, and its printed label is the server-generated `storageId`, not the plan's `A1-1G-1H`. The plan's "IMS Import" sheet is a location list, not the product CSV the importer reads (`import-format.ts:42`). | Answered above. | — |
+| OQ-P3 | open (Ayman) | **May the panel be a person-type account, `lab-panel`, role GENERAL?** A service account cannot hold a session (`auth.service.ts`, `requireActiveUser`) and an API key must never sit in a browser, so a person-type account is the only way in without changing auth. Side effects: it shows in people pickers, since it is not a service account; its session could raise requisitions and borrow through the API, though the panel offers neither; its tokens sit in the kiosk's `localStorage`, where anyone with the device's devtools could take them; and anyone at the kiosk can sign in there with **any** account, which then stays on the wall for up to 14 days. Security review on the branch (2026-10-05) proposed, without changing auth: (1) in kiosk mode, refuse a sign-in whose roles are not exactly GENERAL (a client-side safeguard, not a boundary; not built, it is a behaviour rule); (2) Chromium managed policies on the kiosk to disable DevTools and the password manager and allow only the IMS origin — names to be checked against the panel's Chromium, **not verified**; (3) the `lab-panel` password held by the IM only; (4) `DEMO_ACCOUNTS_ENABLED` off on the panel's server, or the login page offers one-tap demo credentials, admin included. | Yes, as an assumption pending Ayman's review. Provisioning is in the RUNBOOK. | Panel go-live, not merge |

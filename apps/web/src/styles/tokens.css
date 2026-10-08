@@ -131,3 +131,39 @@
     }
   }
 }
+
+/*
+ * The lab panel's dark scheme (`/panel`, features/panel). The rest of the app is light only
+ * (index.html declares `color-scheme: light`); the panel follows the device instead, because a
+ * wall screen in a dim lab is read from across the room. Same token names, darker values, scoped
+ * to the panel's root so no other screen changes. Tailwind's utilities read these variables, so
+ * a component written against the tokens needs nothing extra to work in both.
+ */
+@media (prefers-color-scheme: dark) {
+  [data-panel-theme] {
+    color-scheme: dark;
+
+    --color-canvas: oklch(17% 0.01 258);
+    --color-surface: oklch(22% 0.012 258);
+    --color-surface-muted: oklch(26% 0.012 258);
+    --color-border: oklch(34% 0.012 258);
+    --color-border-strong: oklch(46% 0.014 258);
+    --color-ink: oklch(96% 0.005 258);
+    --color-ink-muted: oklch(80% 0.01 258);
+    --color-ink-subtle: oklch(68% 0.012 258);
+
+    --color-brand: oklch(72% 0.14 258);
+    --color-brand-hover: oklch(78% 0.13 258);
+    --color-brand-subtle: oklch(32% 0.07 258);
+    --color-on-brand: oklch(16% 0.02 258);
+
+    --color-success: oklch(74% 0.14 152);
+    --color-success-subtle: oklch(30% 0.06 152);
+    --color-pending: oklch(80% 0.13 80);
+    --color-pending-subtle: oklch(31% 0.06 80);
+    --color-danger: oklch(72% 0.16 27);
+    --color-danger-subtle: oklch(31% 0.07 27);
+    --color-info: oklch(74% 0.11 232);
+    --color-info-subtle: oklch(30% 0.05 232);
+  }
+}

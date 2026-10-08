@@ -7,4 +7,9 @@
 | **Approver** | Pending Approvals ⁽ᵇᵃᵈᵍᵉ⁾ · Accepted Approvals · Delegate settings · + all General screens |
 | **Admin** | Users · Roles & Approvers · Departments · Settings · Audit log |
 
+A **lab panel** at `/panel` sits outside the role table: any signed-in account may open it, and the
+lab's wall kiosk runs it as the GENERAL account `lab-panel`. Full screen, no shell, read-only: a
+cabinet map and a part search fed by `GET /catalogue`, never showing who holds anything
+(OQ-P1, OQ-P2, OQ-P3).
+
 ---

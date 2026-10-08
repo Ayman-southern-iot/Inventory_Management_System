@@ -1,0 +1,151 @@
+Room,Zone name,Compartment code,Label / QR text,Drawer description (plan only),Description,Active
+Cabinet A,A1,1A-1B,A1-1A-1B,"A1 · Tools — debug, soldering, test",Soldering — daily,TRUE
+Cabinet A,A1,1C-1D,A1-1C-1D,"A1 · Tools — debug, soldering, test",Hand tools,TRUE
+Cabinet A,A1,1E-1F,A1-1E-1F,"A1 · Tools — debug, soldering, test",Meters & leads,TRUE
+Cabinet A,A1,1G-1H,A1-1G-1H,"A1 · Tools — debug, soldering, test",Debug & programming adapters,TRUE
+Cabinet A,A1,2A-2B,A1-2A-2B,"A1 · Tools — debug, soldering, test",Crimping,TRUE
+Cabinet A,A1,2C-2D,A1-2C-2D,"A1 · Tools — debug, soldering, test",Bench cables,TRUE
+Cabinet A,A1,2E-2F,A1-2E-2F,"A1 · Tools — debug, soldering, test",Power test leads,TRUE
+Cabinet A,A1,2G-2H,A1-2G-2H,"A1 · Tools — debug, soldering, test",Measuring & inspection,TRUE
+Cabinet A,A1,3A-3D,A1-3A-3D,"A1 · Tools — debug, soldering, test",Logic analyser & probes,TRUE
+Cabinet A,A1,3E-3F,A1-3E-3F,"A1 · Tools — debug, soldering, test",Rework,TRUE
+Cabinet A,A1,3G-3H,A1-3G-3H,"A1 · Tools — debug, soldering, test",ESD & bench consumables,TRUE
+Cabinet A,A1,4A-4D,A1-4A-4D,"A1 · Tools — debug, soldering, test",Programming fixtures,TRUE
+Cabinet A,A1,4E-4H,A1-4E-4H,"A1 · Tools — debug, soldering, test",Tool spares,TRUE
+Cabinet A,A2,1A,A2-1A,A2 · Controllers & programming boards,ESP32-S3 dev boards,TRUE
+Cabinet A,A2,1B,A2-1B,A2 · Controllers & programming boards,STM32 Nucleo,TRUE
+Cabinet A,A2,1C,A2-1C,A2 · Controllers & programming boards,RP2350,TRUE
+Cabinet A,A2,1D,A2-1D,A2 · Controllers & programming boards,STM32 Black Pill,TRUE
+Cabinet A,A2,1E,A2-1E,A2 · Controllers & programming boards,ESP32 bare modules,TRUE
+Cabinet A,A2,1F,A2-1F,A2 · Controllers & programming boards,Other ESP32 dev kits,TRUE
+Cabinet A,A2,1G,A2-1G,A2 · Controllers & programming boards,Arduino-class boards,TRUE
+Cabinet A,A2,1H,A2-1H,A2 · Controllers & programming boards,Other MCU boards,TRUE
+Cabinet A,A2,2A-2B,A2-2A-2B,A2 · Controllers & programming boards,Breakouts & bridges,TRUE
+Cabinet A,A2,2C-2D,A2-2C-2D,A2 · Controllers & programming boards,Shields & expansion boards,TRUE
+Cabinet A,A2,2E-2H,A2-2E-2H,A2 · Controllers & programming boards,Free — growth,TRUE
+Cabinet A,A2,3A-3D,A2-3A-3D,A2 · Controllers & programming boards,Sealed spares — ESP32 family (FIFO),TRUE
+Cabinet A,A2,3E-3H,A2-3E-3H,A2 · Controllers & programming boards,Sealed spares — STM32 / RP (FIFO),TRUE
+Cabinet A,A2,4A-4H,A2-4A-4H,A2 · Controllers & programming boards,Free — growth,TRUE
+Cabinet A,A3,1A,A3-1A,A3 · Connectors & most-used fasteners,M3 fasteners — most used,TRUE
+Cabinet A,A3,1B,A3-1B,A3 · Connectors & most-used fasteners,M2 / M2.5 fasteners,TRUE
+Cabinet A,A3,1C,A3-1C,A3 · Connectors & most-used fasteners,Standoffs & inserts,TRUE
+Cabinet A,A3,1D,A3-1D,A3 · Connectors & most-used fasteners,JST & Dupont,TRUE
+Cabinet A,A3,1E,A3-1E,A3 · Connectors & most-used fasteners,Power connectors,TRUE
+Cabinet A,A3,1F,A3-1F,A3 · Connectors & most-used fasteners,Barrel & terminal blocks,TRUE
+Cabinet A,A3,1G,A3-1G,A3 · Connectors & most-used fasteners,Headers & sockets,TRUE
+Cabinet A,A3,1H,A3-1H,A3 · Connectors & most-used fasteners,Heat-shrink & wiring hardware,TRUE
+Cabinet A,A3,2A-2B,A3-2A-2B,A3 · Connectors & most-used fasteners,Industrial connectors,TRUE
+Cabinet A,A3,2C-2D,A3-2C-2D,A3 · Connectors & most-used fasteners,Board-to-wire kits,TRUE
+Cabinet A,A3,2E-2F,A3-2E-2F,A3 · Connectors & most-used fasteners,Jumper wires,TRUE
+Cabinet A,A3,2G-2H,A3-2G-2H,A3 · Connectors & most-used fasteners,Crimp terminals & ferrules,TRUE
+Cabinet A,A3,3A-3D,A3-3A-3D,A3 · Connectors & most-used fasteners,Refill — fasteners (sealed),TRUE
+Cabinet A,A3,3E-3H,A3-3E-3H,A3 · Connectors & most-used fasteners,Refill — connectors (sealed),TRUE
+Cabinet A,A3,4A-4H,A3-4A-4H,A3 · Connectors & most-used fasteners,Free — growth,TRUE
+Cabinet A,A4,1A,A4-1A,A4 · Sensors & feedback,Angle encoders + magnets (paired),TRUE
+Cabinet A,A4,1B,A4-1B,A4 · Sensors & feedback,Current sense,TRUE
+Cabinet A,A4,1C,A4-1C,A4 · Sensors & feedback,Limit / homing,TRUE
+Cabinet A,A4,1D,A4-1D,A4 · Sensors & feedback,IMU / motion,TRUE
+Cabinet A,A4,1E,A4-1E,A4 · Sensors & feedback,Distance & presence,TRUE
+Cabinet A,A4,1F,A4-1F,A4 · Sensors & feedback,Environmental,TRUE
+Cabinet A,A4,1G,A4-1G,A4 · Sensors & feedback,Hall & current modules,TRUE
+Cabinet A,A4,1H,A4-1H,A4 · Sensors & feedback,Cameras / vision,TRUE
+Cabinet A,A4,2A-2B,A4-2A-2B,A4 · Sensors & feedback,Flow,TRUE
+Cabinet A,A4,2C-2F,A4-2C-2F,A4 · Sensors & feedback,RS-485 / Modbus sensor samples,TRUE
+Cabinet A,A4,2G-2H,A4-2G-2H,A4 · Sensors & feedback,Load & strain,TRUE
+Cabinet A,A4,3A-3D,A4-3A-3D,A4 · Sensors & feedback,Sensor spares (sealed),TRUE
+Cabinet A,A4,3E-3H,A4-3E-3H,A4 · Sensors & feedback,Free — growth,TRUE
+Cabinet A,A4,4A-4H,A4-4A-4H,A4 · Sensors & feedback,Free — growth,TRUE
+Cabinet A,A5,1A-1B,A5-1A-1B,"A5 · Passives, semiconductors & prototyping",Capacitors — SMD & MLCC,TRUE
+Cabinet A,A5,1C-1D,A5-1C-1D,"A5 · Passives, semiconductors & prototyping",THT passives,TRUE
+Cabinet A,A5,1E,A5-1E,"A5 · Passives, semiconductors & prototyping",Protection & diodes,TRUE
+Cabinet A,A5,1F,A5-1F,"A5 · Passives, semiconductors & prototyping",Transistors & MOSFETs,TRUE
+Cabinet A,A5,1G,A5-1G,"A5 · Passives, semiconductors & prototyping",EMI,TRUE
+Cabinet A,A5,1H,A5-1H,"A5 · Passives, semiconductors & prototyping","Regulators, crystals, LEDs",TRUE
+Cabinet A,A5,2A-2B,A5-2A-2B,"A5 · Passives, semiconductors & prototyping",Prototyping boards,TRUE
+Cabinet A,A5,2C-2D,A5-2C-2D,"A5 · Passives, semiconductors & prototyping",Breadboards,TRUE
+Cabinet A,A5,2E-2H,A5-2E-2H,"A5 · Passives, semiconductors & prototyping",Wire spools,TRUE
+Cabinet A,A5,3A-3D,A5-3A-3D,"A5 · Passives, semiconductors & prototyping",ICs & tubes (dry storage),TRUE
+Cabinet A,A5,3E-3H,A5-3E-3H,"A5 · Passives, semiconductors & prototyping",Reels (dry storage),TRUE
+Cabinet A,A5,4A-4D,A5-4A-4D,"A5 · Passives, semiconductors & prototyping",Component sample books,TRUE
+Cabinet A,A5,4E-4H,A5-4E-4H,"A5 · Passives, semiconductors & prototyping",Free — growth,TRUE
+Cabinet B,B1,1A,B1-1A,"B1 · Comms, LoRaWAN & RF",CAN transceivers,TRUE
+Cabinet B,B1,1B,B1-1B,"B1 · Comms, LoRaWAN & RF",RS-485 transceivers,TRUE
+Cabinet B,B1,1C-1D,B1-1C-1D,"B1 · Comms, LoRaWAN & RF",LoRa modules,TRUE
+Cabinet B,B1,1E,B1-1E,"B1 · Comms, LoRaWAN & RF",Wi-Fi / BLE / cellular,TRUE
+Cabinet B,B1,1F,B1-1F,"B1 · Comms, LoRaWAN & RF",Ethernet,TRUE
+Cabinet B,B1,1G-1H,B1-1G-1H,"B1 · Comms, LoRaWAN & RF",Antennas & RF adapters,TRUE
+Cabinet B,B1,2A-2D,B1-2A-2D,"B1 · Comms, LoRaWAN & RF",LoRaWAN nodes & field-test devices,TRUE
+Cabinet B,B1,2E-2H,B1-2E-2H,"B1 · Comms, LoRaWAN & RF",Gateways & concentrators,TRUE
+Cabinet B,B1,3A-3D,B1-3A-3D,"B1 · Comms, LoRaWAN & RF",RF test accessories,TRUE
+Cabinet B,B1,3E-3H,B1-3E-3H,"B1 · Comms, LoRaWAN & RF",Free — growth,TRUE
+Cabinet B,B1,4A-4H,B1-4A-4H,"B1 · Comms, LoRaWAN & RF",Free — growth,TRUE
+Cabinet B,B2,1A-1B,B2-1A-1B,B2 · Motion — motor drivers & motors,Brushed servo drives,TRUE
+Cabinet B,B2,1C,B2-1C,B2 · Motion — motor drivers & motors,H-bridge modules,TRUE
+Cabinet B,B2,1D,B2-1D,B2 · Motion — motor drivers & motors,Stepper & bus drivers,TRUE
+Cabinet B,B2,1E-1F,B2-1E-1F,B2 · Motion — motor drivers & motors,BLDC / FOC drivers,TRUE
+Cabinet B,B2,1G-1H,B2-1G-1H,B2 · Motion — motor drivers & motors,Motor & encoder cables,TRUE
+Cabinet B,B2,2A-2D,B2-2A-2D,B2 · Motion — motor drivers & motors,Serial bus servos,TRUE
+Cabinet B,B2,2E-2F,B2-2E-2F,B2 · Motion — motor drivers & motors,Geared DC + encoder,TRUE
+Cabinet B,B2,2G,B2-2G,B2 · Motion — motor drivers & motors,Micro gearmotors,TRUE
+Cabinet B,B2,2H,B2-2H,B2 · Motion — motor drivers & motors,Hobby servos,TRUE
+Cabinet B,B2,3A-3D,B2-3A-3D,B2 · Motion — motor drivers & motors,Steppers,TRUE
+Cabinet B,B2,3E-3F,B2-3E-3F,B2 · Motion — motor drivers & motors,BLDC / gimbal motors,TRUE
+Cabinet B,B2,3G-3H,B2-3G-3H,B2 · Motion — motor drivers & motors,"Fans, pumps, solenoids",TRUE
+Cabinet B,B2,4A-4H,B2-4A-4H,B2 · Motion — motor drivers & motors,Free — large motors,TRUE
+Cabinet B,B3,1A-1B,B3-1A-1B,B3 · Power & safety,Emergency stops & switching,TRUE
+Cabinet B,B3,1C-1D,B3-1C-1D,B3 · Power & safety,Fuses,TRUE
+Cabinet B,B3,1E-1F,B3-1E-1F,B3 · Power & safety,Power modules,TRUE
+Cabinet B,B3,1G-1H,B3-1G-1H,B3 · Power & safety,Bulk capacitors,TRUE
+Cabinet B,B3,2A-2B,B3-2A-2B,B3 · Power & safety,Charger,TRUE
+Cabinet B,B3,2C-2D,B3-2C-2D,B3 · Power & safety,Regen / braking,TRUE
+Cabinet B,B3,2E-2H,B3-2E-2H,B3 · Power & safety,Power supplies & mains,TRUE
+Cabinet B,B3,3A-3D,B3-3A-3D,B3 · Power & safety,DIN-rail & panel parts,TRUE
+Cabinet B,B3,3E-3H,B3-3E-3H,B3 · Power & safety,Heavy wire & lugs,TRUE
+Cabinet B,B3,4A-4H,B3-4A-4H,B3 · Power & safety,Free — growth,TRUE
+Cabinet B,B4,1A-1B,B4-1A-1B,B4 · Mechanical & motion hardware,Bearings,TRUE
+Cabinet B,B4,1C,B4-1C,B4 · Mechanical & motion hardware,Pivot bearings & collars,TRUE
+Cabinet B,B4,1D,B4-1D,B4 · Mechanical & motion hardware,Couplers & motor brackets,TRUE
+Cabinet B,B4,1E-1F,B4-1E-1F,B4 · Mechanical & motion hardware,M4–M6 & extrusion hardware,TRUE
+Cabinet B,B4,1G-1H,B4-1G-1H,B4 · Mechanical & motion hardware,"Springs, O-rings, feet",TRUE
+Cabinet B,B4,2A-2B,B4-2A-2B,B4 · Mechanical & motion hardware,Belts & pulleys,TRUE
+Cabinet B,B4,2C-2D,B4-2C-2D,B4 · Mechanical & motion hardware,Wheels,TRUE
+Cabinet B,B4,2E-2H,B4-2E-2H,B4 · Mechanical & motion hardware,Linear motion parts,TRUE
+Cabinet B,B4,3A-3H,B4-3A-3H,B4 · Mechanical & motion hardware,Long stock ≤ 1.6 m,TRUE
+Cabinet B,B4,4A-4H,B4-4A-4H,B4 · Mechanical & motion hardware,"Plates, profiles & sheet offcuts",TRUE
+Cabinet B,B5,1A-1B,B5-1A-1B,"B5 · CNC, laser & 3D-print parts",Cutters & engraving bits,TRUE
+Cabinet B,B5,1C-1D,B5-1C-1D,"B5 · CNC, laser & 3D-print parts",Collets & workholding,TRUE
+Cabinet B,B5,1E-1F,B5-1E-1F,"B5 · CNC, laser & 3D-print parts",3D-printer spares,TRUE
+Cabinet B,B5,1G-1H,B5-1G-1H,"B5 · CNC, laser & 3D-print parts",Engraving materials,TRUE
+Cabinet B,B5,2A-2D,B5-2A-2D,"B5 · CNC, laser & 3D-print parts",Laser module,TRUE
+Cabinet B,B5,2E-2H,B5-2E-2H,"B5 · CNC, laser & 3D-print parts",CNC spares,TRUE
+Cabinet B,B5,3A-3H,B5-3A-3H,"B5 · CNC, laser & 3D-print parts",Free — growth,TRUE
+Cabinet B,B5,4A-4D,B5-4A-4D,"B5 · CNC, laser & 3D-print parts",Spindle 500 W,TRUE
+Cabinet B,B5,4E-4H,B5-4E-4H,"B5 · CNC, laser & 3D-print parts",Spindle 800 W,TRUE
+Roller cabinet,R1,1A-2C,R1-1A-2C,"R1 · Displays, SBCs & HMI panels",Dingchang C576 (RK3576),TRUE
+Roller cabinet,R1,1D-2F,R1-1D-2F,"R1 · Displays, SBCs & HMI panels",Dingchang A568B (RK3568),TRUE
+Roller cabinet,R1,3A-4C,R1-3A-4C,"R1 · Displays, SBCs & HMI panels",DWIN HMI panels,TRUE
+Roller cabinet,R1,3D-4F,R1-3D-4F,"R1 · Displays, SBCs & HMI panels",SBCs,TRUE
+Roller cabinet,R1,5A-5C,R1-5A-5C,"R1 · Displays, SBCs & HMI panels",Small displays,TRUE
+Roller cabinet,R1,5D-5F,R1-5D-5F,"R1 · Displays, SBCs & HMI panels",Display cables & PSUs,TRUE
+Roller cabinet,R1,6A-6F,R1-6A-6F,"R1 · Displays, SBCs & HMI panels",Boxed spares (back row),TRUE
+Roller cabinet,R2,1A-2C,R2-1A-2C,"R2 · Intake, quarantine & returns",Intake staging (green tag),TRUE
+Roller cabinet,R2,1D-2E,R2-1D-2E,"R2 · Intake, quarantine & returns",Untested / unknown (yellow tag),TRUE
+Roller cabinet,R2,1F-2F,R2-1F-2F,"R2 · Intake, quarantine & returns",Faulty / RMA (red tag),TRUE
+Roller cabinet,R2,3A-4C,R2-3A-4C,"R2 · Intake, quarantine & returns","Counted, awaiting label + system entry",TRUE
+Roller cabinet,R2,3D-4F,R2-3D-4F,"R2 · Intake, quarantine & returns","Returned from borrow, awaiting check",TRUE
+Roller cabinet,R2,5A-6F,R2-5A-6F,"R2 · Intake, quarantine & returns",Large inbound boxes,TRUE
+Roller cabinet,R3,1A-3B,R3-1A-3B,R3 · Project kits,Project kit K1,TRUE
+Roller cabinet,R3,1C-3D,R3-1C-3D,R3 · Project kits,Project kit K2,TRUE
+Roller cabinet,R3,1E-3F,R3-1E-3F,R3 · Project kits,Project kit K3,TRUE
+Roller cabinet,R3,4A-6B,R3-4A-6B,R3 · Project kits,Project kit K4,TRUE
+Roller cabinet,R3,4C-6D,R3-4C-6D,R3 · Project kits,Project kit K5,TRUE
+Roller cabinet,R3,4E-6F,R3-4E-6F,R3 · Project kits,Project kit K6,TRUE
+Roller cabinet,R4,1A-3C,R4-1A-3C,R4 · Field & demo kits,LoRaWAN field-test kit,TRUE
+Roller cabinet,R4,1D-3F,R4-1D-3F,R4 · Field & demo kits,Site install kit,TRUE
+Roller cabinet,R4,4A-6C,R4-4A-6C,R4 · Field & demo kits,Demo units,TRUE
+Roller cabinet,R4,4D-6F,R4-4D-6F,R4 · Field & demo kits,Loaner / evaluation units,TRUE
+Roller cabinet,R5,1A-3C,R5-1A-3C,"R5 · Packaging, salvage & bulk overflow",Packaging to keep,TRUE
+Roller cabinet,R5,1D-3F,R5-1D-3F,"R5 · Packaging, salvage & bulk overflow",Salvage & scrap,TRUE
+Roller cabinet,R5,4A-6F,R5-4A-6F,"R5 · Packaging, salvage & bulk overflow",Bulk overflow (sealed cartons),TRUE
+CTO Room — open shelves,LB,1,LB-1,LB · Lithium battery box,Lithium cells & packs,TRUE
+CTO Room — open shelves,LR,1,LR-1,LR · Long-stock wall rack,Long stock > 1.6 m,TRUE
