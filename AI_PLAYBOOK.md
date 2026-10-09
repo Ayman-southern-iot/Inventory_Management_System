@@ -8,7 +8,7 @@
 >
 > **Maintenance rule:** see `.claude/rules/05-ai-playbook.md`. A `PostToolUse` hook
 > (`.claude/hooks/playbook-reminder.sh`) reminds Claude to update this file after every
-> meaningful edit. Last updated: 2026-10-09 (3D room view `/room`, §19; bundle budget and room scripts, §7). 2026-10-08 (the lead reviews and merges, Claude never merges, §14; dev API on the keeper and the drawer-plan entry script, §7; kiosk login is GENERAL-only, §19). Earlier,
+> meaningful edit. Last updated: 2026-10-09 (3D room view `/room`, §19; bundle budget and room scripts, §7; production runs the root stack + override, §16). 2026-10-08 (the lead reviews and merges, Claude never merges, §14; dev API on the keeper and the drawer-plan entry script, §7; kiosk login is GENERAL-only, §19). Earlier,
 > 2026-10-05 (lab panel `/panel`, §19. Earlier the same day: branch model:
 > `main` + `advance-inventory-management`, hooks, CI — §7, §14). Earlier,
 > 2026-10-04 (lint baseline is now 0 — §16 landmines; `playwright-audit` skill — §15.1). Earlier,
@@ -1255,6 +1255,8 @@ reason the locking exists).
   reads a gitignored `infra/.env`. A stack running with no `.env` is the demo stack, whatever
   anyone intended. **Read the `deploy` skill before writing any deployment instruction** — one
   session produced a full set of confident, wrong ones by not reading the compose header.
+  **Production today is the root stack plus an untracked `docker-compose.override.yml`** (demo
+  off), by the lead's decision on 2026-10-08; `infra/` is not in use (RUNBOOK §0, go-live record).
 - **Windows reserves TCP port blocks at boot**, and 5173 / 5433 / 5434 can all land inside one.
   The proxy then fails to bind with *"forbidden by its access permissions"* while nothing is
   listening, and the integration suite dies on `ECONNREFUSED :5434`. It looks like a broken app
