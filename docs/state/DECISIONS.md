@@ -1524,3 +1524,26 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   record). D1, D3, the "at the switch" key revocations and P6 are left undated, not cancelled.
 - 2026-10-08 (the lead) — **Only a returnable loan (`is_returnable = true`) blocks archiving a
   product.** A consumable issue is final, so `1233` was archived with its issued request in place.
+- 2026-10-09 (the lead, Phase 12, #28) — **The 3D room view `/room`.**
+  - Option A: a React port on `three@0.186.1` (plus `@types/three@0.186.0`), pinned exact; no fonts
+    loaded at runtime.
+  - A CI bundle budget: what `/panel` loads may grow at most 2 KB gz, and the main chunk at most
+    5 KB gz, over main @ `63f2fbc` built on Linux; no three.js module may be in what `/panel` loads.
+  - A menu link for every role, shown at 1024 px and wider only.
+  - Count badges on the drawer fronts; cells solid or dimmed once their drawer is open.
+  - The browser check is local-only for now.
+- 2026-10-09 (the lead) — **`AppShell.groups.test.tsx` stays as it is**: it pins the narrow sidebar.
+  The PC sidebar, with the room link, is pinned by `AppShell.room.test.tsx` at 1366 px.
+- 2026-10-09 (the lead) — **K2 targets the shared kiosk and API keys, not a person's own session.**
+  `/room` stays inside the app shell, so on a signed-in user's own PC it shows what every shell
+  page shows: their own name, and the notification list, which can name other people.
+  - `/room`'s own data stays name-free: `GET /catalogue` and a text-free scene file.
+  - `/panel`, run by the shared kiosk account, keeps no shell and no person data.
+- 2026-10-09 (the lead) — **The room's scene geometry may be public.**
+  `apps/web/src/features/room/assets/scene-v4.json` holds the walls, desk and cabinet positions in
+  millimetres. It has no text and no names (`asset.test.ts`). It is in this public repository and
+  served from `/assets/` without sign-in, like every file of the web app.
+- 2026-10-09 (the lead) — **Office-PC performance is measured after release**, on a real PC with
+  integrated graphics, in Chrome and Firefox. A low-quality toggle (no shadows, no selection light)
+  is added only if that measurement needs it. Before release, it measured 60 fps at 4× CPU throttle,
+  but on the M5's own GPU, which the throttle does not slow.
