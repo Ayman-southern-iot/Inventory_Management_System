@@ -36,10 +36,10 @@ stays in the shell; public scene geometry accepted; office-PC performance tested
 - On the first push the bundle budget's baselines came from macOS. CI's Linux build is about
   500–600 B larger, so the baselines are now Linux figures.
 - three r186 needs `needsUpdate` when a material's `transparent` flips, or fades never show.
-- The kiosk can still open `/room` by URL until dc-a568b blocks it.
+- The kiosk blocks `/room` once dc-a568b PR #13 merges (the lead verified it on 2026-10-09: `/room` blocked, `/panel` OK).
 
-**Next:** dc-a568b, `/room` on the kiosk's URL blocklist. Then the office-PC performance test. On
-2026-10-16, ask the lead before removing `ims-api:v1.0.0` and `ims-web:v1.0.0` from the VM.
+**Next:** the office-PC performance test of `/room`. On 2026-10-16, ask the lead before removing
+`ims-api:v1.0.0` and `ims-web:v1.0.0` from the VM.
 
 ## 2026-10-08 → 2026-10-09 — Go-live: production on `v1.0.0`
 

@@ -21,8 +21,8 @@
 
 ## Next action
 
-1. **dc-a568b:** add `/room` to the kiosk's URL blocklist (`lab-panel` could open it by URL).
-2. `/room` on an integrated-GPU office PC, Chrome + Firefox (DECISIONS 2026-10-09). Releases: RUNBOOK §3.
+1. **Next:** `/room` on an integrated-GPU office PC, Chrome + Firefox (DECISIONS 2026-10-09). Releases: RUNBOOK §3.
+2. **Done:** kiosk URL blocklist for `/room`, dc-a568b PR #13 (the lead verified 2026-10-09: `/room` blocked, `/panel` OK); awaiting merge.
 3. **2026-10-16:** the VM's rollback tags `ims-api:v1.0.0` / `ims-web:v1.0.0` may go. **Ask the lead first.**
 
 ## Green — CI on `main` @ `b915126`, 2026-10-09
