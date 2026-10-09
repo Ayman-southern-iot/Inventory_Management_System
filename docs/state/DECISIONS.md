@@ -1517,3 +1517,10 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   (LAP, GPU, CBL, FRN): they are inserted only inside `if (demoEnabled)` (`:263-480`), with
   `onConflict(doNothing)` (`:428`), and the seed never sets a product's `is_active`. So archiving
   them sticks.
+- 2026-10-08 evening (the lead, go-live plan change) — **Production stays on the root stack + its
+  override; no `infra/` switch, no Caddy change, Cloudflare and NPM untouched.** PR #26 closed
+  unmerged. **The database password rotation is parked.** **`TRUST_PROXY_HOPS=3` waits until NPM
+  accepts Cloudflare only**; on the root stack Caddy must then also trust NPM (RUNBOOK §0, go-live
+  record). D1, D3, the "at the switch" key revocations and P6 are left undated, not cancelled.
+- 2026-10-08 (the lead) — **Only a returnable loan (`is_returnable = true`) blocks archiving a
+  product.** A consumable issue is final, so `1233` was archived with its issued request in place.

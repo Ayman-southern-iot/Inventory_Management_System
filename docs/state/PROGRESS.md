@@ -5,6 +5,12 @@
 
 ## Current position
 
+- **2026-10-09 — Production runs `v1.0.0` (`63f2fbc`, CI green) since 2026-10-08 (see SESSION-LOG).**
+  Root stack + override, not `infra/`; drawer plan loaded, 6 CTO items placed, nightly keeper backup,
+  `lab-panel` on the kiosk. Every step is in RUNBOOK §0, "Go-live record". **Verified, CI on `63f2fbc`:**
+  unit shared 25 / api 270 / web 685 · integration **1035 / 1035 (71 files)**; guard-hardcoding 8 (local).
+  **Next:** Phase 12, a 3D room view at `/room` for PCs (discovery first).
+
 - **2026-10-08 — `main` green at `d3a19f6`; PRs #1–#17 merged, none open (see SESSION-LOG).**
   Lab kiosk `/panel` (#12), an unreachable API keeps the session (#11, #15), CI on every PR to `main`
   (#14, #16, #17). **Verified, CI on `d3a19f6`:** typecheck · lint 0 · unit shared 25 / api 257 / web 670 ·
