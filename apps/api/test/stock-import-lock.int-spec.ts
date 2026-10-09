@@ -60,7 +60,10 @@ describe('lockPlacementsForImport at scale', () => {
     for (let index = 0; index < count; index += 1) {
       shelves.push({
         productId: await createProduct(ctx.db, { categoryId }),
-        compartmentId: await createCompartment(ctx.db, zoneId),
+        // A distinct code per shelf. The factory's default is 6 random hex characters, and
+        // codes are unique within a zone: 637 random ones in one zone collide in about 1 run in
+        // 80 by the birthday bound (CI run 37887508264, `storage_compartments_zone_code_key`).
+        compartmentId: await createCompartment(ctx.db, zoneId, String(index)),
         creating: true,
       });
     }
