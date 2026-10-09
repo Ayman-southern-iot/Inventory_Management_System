@@ -5,6 +5,12 @@
 
 ## Current position
 
+- **2026-10-09 — Phase 12 done: `/room` released as `v1.1.0` (`b915126`), PC check passed (see SESSION-LOG).**
+  A 3D view of the CTO room for PCs, with live stock, search, `?cell=` links and a CI bundle budget
+  (#28). Release record and procedure: RUNBOOK §0 and §3. **Verified, CI on `b915126`:** unit shared
+  25 / api 270 / web 730 · integration **1035 / 1035 (71 files)** · bundle budget ok; guard-hardcoding 8.
+  **Next:** the kiosk blocklist for `/room` (dc-a568b), the office-PC performance test.
+
 - **2026-10-09 — Production runs `v1.0.0` (`63f2fbc`, CI green) since 2026-10-08 (see SESSION-LOG).**
   Root stack + override, not `infra/`; drawer plan loaded, 6 CTO items placed, nightly keeper backup,
   `lab-panel` on the kiosk. Every step is in RUNBOOK §0, "Go-live record". **Verified, CI on `63f2fbc`:**

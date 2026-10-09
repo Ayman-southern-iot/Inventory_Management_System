@@ -1547,3 +1547,6 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
   integrated graphics, in Chrome and Firefox. A low-quality toggle (no shadows, no selection light)
   is added only if that measurement needs it. Before release, it measured 60 fps at 4× CPU throttle,
   but on the M5's own GPU, which the throttle does not slow.
+- 2026-10-09 (the lead) — **`v1.1.0` is released and passed the PC check.** The rollback tags
+  `ims-api:v1.0.0` and `ims-web:v1.0.0` stay on the VM for a week, until 2026-10-16. Whoever removes
+  them tells the lead first.

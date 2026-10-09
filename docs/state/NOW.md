@@ -10,7 +10,7 @@
 **`main` @ `b915126` = tag `v1.1.0`, CI green. PRs #1–#28 merged, #26 closed unmerged.** The GitHub
 *default* branch is still `fix/lan-secure-context`, so `gh pr create --base main`. Phases 00–12 done.
 
-**Production runs `v1.1.0` since 2026-10-09 04:37Z** (`v1.0.0` from 2026-10-08; RUNBOOK §0 record):
+**Production runs `v1.1.0` since 2026-10-09 04:37Z, PC check passed** (RUNBOOK §0 record):
 
 - the **root** compose stack plus its untracked `docker-compose.override.yml` (demo off, direct
   take on), **not `infra/`**. Ingress unchanged: Cloudflare → NPM → the stack's Caddy;
@@ -21,9 +21,9 @@
 
 ## Next action
 
-1. **The lead's PC check of `/room` and the kiosk's `/panel`** after the `v1.1.0` release (pending).
-2. **dc-a568b:** add `/room` to the kiosk's URL blocklist (`lab-panel` could open it by URL).
-3. `/room` on an integrated-GPU office PC, Chrome + Firefox (DECISIONS 2026-10-09). Releases: RUNBOOK §3.
+1. **dc-a568b:** add `/room` to the kiosk's URL blocklist (`lab-panel` could open it by URL).
+2. `/room` on an integrated-GPU office PC, Chrome + Firefox (DECISIONS 2026-10-09). Releases: RUNBOOK §3.
+3. **2026-10-16:** the VM's rollback tags `ims-api:v1.0.0` / `ims-web:v1.0.0` may go. **Ask the lead first.**
 
 ## Green — CI on `main` @ `b915126`, 2026-10-09
 

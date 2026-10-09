@@ -12,6 +12,35 @@ Format:
 **Next:** the single next action, specific enough to start without thinking
 ```
 
+## 2026-10-09 — Phase 12: the 3D room view `/room`, released as `v1.1.0`
+
+**Did:**
+- #27 (the go-live record) and #28 (`/room`) merged as `e2ffb5e` and `b915126`.
+- `/room` is a React port of the 3D renderer on `three@0.186.1`, inside the shell, for PCs:
+  - live stock from `GET /catalogue` through the panel's join and search;
+  - count badges on drawer fronts, and solid or dimmed cells;
+  - `?cell=` links; light and dark themes.
+- A CI bundle budget keeps three.js out of `/panel`. Tag `v1.1.0` was rehearsed on a restored backup
+  on the keeper, then released to production on the lead's go.
+- The lead's PC check passed: searching "STS3215" lit `B2-2A-2D`, and `?cell=A2-1A` focused correctly.
+
+**Decisions:** Option A; `three` pinned exact; the bundle budget (+2 KB gz for `/panel`, +5 KB for
+main); a menu link for every role on wide screens; K2 targets the kiosk and API keys, so `/room`
+stays in the shell; public scene geometry accepted; office-PC performance tested after release; the
+`:v1.0.0` tags kept a week. All in DECISIONS 2026-10-09.
+
+**Landmines:**
+- The first release run stopped at the migrate gate. My gate read `tail -5` of the migrate log, and
+  the `migrate` service runs the seed after the migrations. The corrected gate (RUNBOOK §3) greps the
+  whole log and checks the exit code; never `tail`.
+- On the first push the bundle budget's baselines came from macOS. CI's Linux build is about
+  500–600 B larger, so the baselines are now Linux figures.
+- three r186 needs `needsUpdate` when a material's `transparent` flips, or fades never show.
+- The kiosk can still open `/room` by URL until dc-a568b blocks it.
+
+**Next:** dc-a568b, `/room` on the kiosk's URL blocklist. Then the office-PC performance test. On
+2026-10-16, ask the lead before removing `ims-api:v1.0.0` and `ims-web:v1.0.0` from the VM.
+
 ## 2026-10-08 → 2026-10-09 — Go-live: production on `v1.0.0`
 
 **Did:** merged #20–#25 and tagged `v1.0.0` (`63f2fbc`, CI green: unit 25 / 270 / 685, integration

@@ -34,7 +34,7 @@ checked when it was done, from the go-live session's records; none was re-checke
 
 | Release | Done (UTC) | Record |
 |---|---|---|
-| `v1.1.0` (`b915126`): 3D room view `/room` | 2026-10-09 04:27–04:38 | Backup `ims-release-v1.1.0/` (db 251,663 B, `pg_restore -l` ok; files 10). Rollback tags `ims-api:v1.0.0` = `d52af42aecd6`, `ims-web:v1.0.0` = `e14478b76198`. Built and up with 49 GB free; api healthy. The migrate gate first failed: it read `tail -5`, which held only the seed's lines. Re-checked over the whole log, it found "Nothing to do" with exit 0, a PASS with the gate corrected. Smoke: health ok, demo-accounts 404, 6 / 138 / 0 / 0 unchanged, `/panel` and `/room` 200, scene file gzip with `max-age=31536000, immutable`. |
+| `v1.1.0` (`b915126`): 3D room view `/room` | 2026-10-09 04:27–04:38 | Backup `ims-release-v1.1.0/` (db 251,663 B, `pg_restore -l` ok; files 10). Rollback tags `ims-api:v1.0.0` = `d52af42aecd6`, `ims-web:v1.0.0` = `e14478b76198`. Built and up with 49 GB free; api healthy. The migrate gate first failed: it read `tail -5`, which held only the seed's lines. Re-checked over the whole log, it found "Nothing to do" with exit 0, a PASS with the gate corrected. Smoke: health ok, demo-accounts 404, 6 / 138 / 0 / 0 unchanged, `/panel` and `/room` 200, scene file gzip with `max-age=31536000, immutable`. The lead's PC check passed: searching "STS3215" lit `B2-2A-2D`, and `?cell=A2-1A` focused correctly. **Done.** The `:v1.0.0` tags are kept until 2026-10-16; the lead is told before they are removed. |
 
 **Decided by the lead, 2026-10-08 evening:**
 
