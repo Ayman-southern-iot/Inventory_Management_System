@@ -179,6 +179,7 @@ export const t = {
     inventoryLocations: 'Locations',
     inventoryImports: 'Bulk import',
     boms: 'Bills of Materials',
+    room: 'Room view',
   },
 
   roles: {
@@ -1850,6 +1851,35 @@ export const t = {
     offlineShowing: (time: string) => `Showing counts from ${time}.`,
     unmatchedDrawers: (count: number, codes: string) =>
       `${count} ${count === 1 ? 'drawer has' : 'drawers have'} no zone in IMS yet, so ${count === 1 ? 'its' : 'their'} parts cannot be shown on the map: ${codes}`,
+  },
+
+  /** The 3D room view (`/room`): the CTO room's cabinets with live stock, on a PC. */
+  room: {
+    pageTitle: 'Room view',
+    narrowTitle: 'Open this on a PC',
+    narrowBody: (minWidthPx: number) =>
+      `The 3D room needs a screen at least ${minWidthPx} pixels wide. On this screen, use Inventory to find a part.`,
+    searchLabel: 'Find a part, drawer or cell',
+    searchPlaceholder: 'Part name, part number, drawer or cell  ( / )',
+    resultsLabel: 'Search results',
+    resetView: 'Reset view',
+    canvasLabel:
+      'The CTO room in 3D. Drag to turn, scroll to zoom, right-drag to pan. Click a drawer to open it.',
+    loadingScene: 'Loading the 3D room…',
+    sceneFailed: 'The 3D room could not be loaded.',
+    noWebgl: 'This browser cannot draw the 3D room. Use Inventory to find a part.',
+    cabinetOnWheels: (name: string) => `${name} · on wheels`,
+    idle: 'Search for a part, or click a drawer to open it.',
+    drawerTitle: (code: string, name: string) => `${code} · ${name}`,
+    drawerCells: 'Cells with parts',
+    drawerEmpty: 'Nothing is recorded in this drawer.',
+    openShelf: 'An open shelf: not in the 3D model.',
+    unknownCell: (value: string) => `There is no cell ${value} on the drawer plan.`,
+    planCode: 'Plan code',
+    storageId: 'Storage ID',
+    close: 'Close',
+    unmatchedShelves: (count: number) =>
+      `${count} ${count === 1 ? 'shelf in IMS is' : 'shelves in IMS are'} not on the drawer plan, so not shown here.`,
   },
 
   errors: {

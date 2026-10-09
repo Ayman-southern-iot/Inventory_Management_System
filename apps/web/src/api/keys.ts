@@ -80,6 +80,10 @@ export const queryKeys = {
   catalogue: {
     all: () => ['catalogue'] as const,
   },
+  /** The 3D room's scene asset: a static file, read once per page load. */
+  room: {
+    scene: () => ['room', 'scene'] as const,
+  },
   ledger: {
     all: () => ['ledger'] as const,
     list: (query: ListLedgerQuery) => ['ledger', 'list', query] as const,

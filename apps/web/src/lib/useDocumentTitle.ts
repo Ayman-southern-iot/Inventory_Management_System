@@ -15,6 +15,7 @@ import { ROUTES } from '@/routes/paths';
 const TITLES: ReadonlyArray<readonly [string, string]> = [
   [ROUTES.login, t.auth.signInTitle],
   [ROUTES.panel, t.panel.pageTitle],
+  [ROUTES.room, t.room.pageTitle],
   [ROUTES.changePassword, t.auth.changePasswordTitle],
   [ROUTES.account.profile, t.nav.account],
 

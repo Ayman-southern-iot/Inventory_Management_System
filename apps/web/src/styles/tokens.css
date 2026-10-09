@@ -138,9 +138,12 @@
  * wall screen in a dim lab is read from across the room. Same token names, darker values, scoped
  * to the panel's root so no other screen changes. Tailwind's utilities read these variables, so
  * a component written against the tokens needs nothing extra to work in both.
+ * The 3D room view (`/room`, features/room) opts into the same set for its own area: a 3D model
+ * reads better on a dark ground in a dark room, and its scene colours are read from these tokens.
  */
 @media (prefers-color-scheme: dark) {
-  [data-panel-theme] {
+  [data-panel-theme],
+  [data-room-theme] {
     color-scheme: dark;
 
     --color-canvas: oklch(17% 0.01 258);

@@ -1,0 +1,16 @@
+{
+  "$comment": "Read by scripts/check-bundle-budget.mjs in CI. Baselines are gzip level 9 of a production build of main @ 63f2fbc (v1.0.0, before /room), built on Linux as CI builds: node 22.13 + pnpm 9.15.4 from a clean install. The same code builds about 500-600 B smaller on macOS, so a local run understates growth; CI's figure is the one that counts. Raise a baseline only in the PR that grows the bundle on purpose, and say why there.",
+  "gzipLevel": 9,
+  "main": {
+    "$comment": "The entry chunk and its static imports: what every page, the kiosk's included, downloads first.",
+    "baselineGzipBytes": 219823,
+    "allowanceBytes": 5000
+  },
+  "panel": {
+    "$comment": "Everything /panel loads: the main JS plus the panel page's chunk and its static imports.",
+    "entry": "src/features/panel/pages/PanelPage.tsx",
+    "baselineGzipBytes": 236198,
+    "allowanceBytes": 2000,
+    "forbiddenPackages": ["three"]
+  }
+}

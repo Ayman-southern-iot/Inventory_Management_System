@@ -103,6 +103,11 @@ jobs:
       - name: Unit tests
         run: pnpm test
 
+      # The kiosk's /panel must not grow with the 3D room view, and must never load three.js.
+      # Builds the web app in memory; budgets and baselines are in apps/web/bundle-budget.json.
+      - name: Bundle budget
+        run: pnpm --filter @ims/web check:bundle
+
   integration:
     name: integration
     runs-on: ubuntu-latest
