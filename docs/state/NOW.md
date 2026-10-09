@@ -7,10 +7,10 @@
 
 ## Where the build is
 
-**`main` @ `63f2fbc` = tag `v1.0.0`, CI green. PRs #1–#25 merged, #26 closed unmerged.** The GitHub
-*default* branch is still `fix/lan-secure-context`, so `gh pr create --base main`. Phases 00–11 done.
+**`main` @ `b915126` = tag `v1.1.0`, CI green. PRs #1–#28 merged, #26 closed unmerged.** The GitHub
+*default* branch is still `fix/lan-secure-context`, so `gh pr create --base main`. Phases 00–12 done.
 
-**Production has run `v1.0.0` since 2026-10-08** (record: RUNBOOK §0, "Go-live record"):
+**Production runs `v1.1.0` since 2026-10-09 04:37Z** (`v1.0.0` from 2026-10-08; RUNBOOK §0 record):
 
 - the **root** compose stack plus its untracked `docker-compose.override.yml` (demo off, direct
   take on), **not `infra/`**. Ingress unchanged: Cloudflare → NPM → the stack's Caddy;
@@ -21,14 +21,13 @@
 
 ## Next action
 
-1. **Phase 12: a 3D room view at `/room`, for PCs only.** Discovery first; the lead then picks the
-   port option and approves `three`. Branch `feat/room-3d`. The kiosk never loads `/room`, and
-   the `/panel` chunk must not grow.
-2. Release `v1.1.0` by the `v1.0.0` pattern (RUNBOOK §0 go-live record), on the lead's separate go.
+1. **The lead's PC check of `/room` and the kiosk's `/panel`** after the `v1.1.0` release (pending).
+2. **dc-a568b:** add `/room` to the kiosk's URL blocklist (`lab-panel` could open it by URL).
+3. `/room` on an integrated-GPU office PC, Chrome + Firefox (DECISIONS 2026-10-09). Releases: RUNBOOK §3.
 
-## Green — CI on `main` @ `63f2fbc`, 2026-10-08
+## Green — CI on `main` @ `b915126`, 2026-10-09
 
-- typecheck · lint **0** · unit shared **25** · api **270** · web **685** · guard-hardcoding **8**
+- typecheck · lint **0** · unit shared **25** · api **270** · web **730** · guard-hardcoding **8** · bundle budget ok
 - integration **1035 / 1035 (71 files)**, the baseline (DECISIONS 2026-10-08)
 
 ## Blocked — needs the operator
@@ -42,6 +41,7 @@
 ## Landmines — full list in `ASSIST.md` §9
 
 - **Production is the root stack + override, not `infra/`.** RUNBOOK §1–§4 still describe `infra/`.
+- **Never `tail` the migrate log:** the seed prints last. Grep the whole log and check the exit code.
 - **Postgres never runs locally on the Mac.** Integration gate = **`scripts/test-int-keeper.sh`**;
   `ssh -L` tunnels stall and fake timeouts. Node **22**, keg-only (Node 25 breaks jsdom).
 - **CI's warm pnpm cache skips puppeteer's postinstall**; the integration job installs Chrome (#17).
