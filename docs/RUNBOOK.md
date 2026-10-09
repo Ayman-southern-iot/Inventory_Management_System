@@ -30,6 +30,12 @@ checked when it was done, from the go-live session's records; none was re-checke
 | 4c. `lab-panel` | 2026-10-08 20:47 | A person account with GENERAL only and no department. On a restored copy, every route was called as it: 0 admin routes and 0 `/stock/*` writes reachable; `POST /borrowing` (a reservation) reachable, which OQ-P3 accepts. |
 | 5. Kiosk | 2026-10-09 | The lab kiosk shows `/panel` signed in as `lab-panel` (reported by the lead; configured in the kiosk's own repository). |
 
+**Releases since go-live** (procedure: §3, "Production today"):
+
+| Release | Done (UTC) | Record |
+|---|---|---|
+| `v1.1.0` (`b915126`): 3D room view `/room` | 2026-10-09 04:27–04:38 | Backup `ims-release-v1.1.0/` (db 251,663 B, `pg_restore -l` ok; files 10). Rollback tags `ims-api:v1.0.0` = `d52af42aecd6`, `ims-web:v1.0.0` = `e14478b76198`. Built and up with 49 GB free; api healthy. The migrate gate first failed: it read `tail -5`, which held only the seed's lines. Re-checked over the whole log, it found "Nothing to do" with exit 0, a PASS with the gate corrected. Smoke: health ok, demo-accounts 404, 6 / 138 / 0 / 0 unchanged, `/panel` and `/room` 200, scene file gzip with `max-age=31536000, immutable`. The lead's PC check passed: searching "STS3215" lit `B2-2A-2D`, and `?cell=A2-1A` focused correctly. **Done.** The `:v1.0.0` tags are kept until 2026-10-16; the lead is told before they are removed. |
+
 **Decided by the lead, 2026-10-08 evening:**
 
 - **No `infra/` switch and no Caddy change.** Production stays on the root stack + override,
@@ -450,7 +456,8 @@ docker compose up -d db                 # reattaches ims_pgdata
 ./backup.sh                             # works now: infra/.env exists and db is up
 docker compose build
 docker compose up -d --remove-orphans   # migrate runs to completion first, then api starts
-docker compose logs migrate | tail -20
+docker compose logs --no-log-prefix migrate | grep -n 'Nothing to do'   # the WHOLE log; see the gate in §3
+docker inspect -f '{{.State.ExitCode}}' ims-migrate-1                   # must print 0
 ```
 
 `migrate` runs `migration:run` and then `seed:run` before `api` starts
@@ -849,6 +856,83 @@ so treat a failed deploy as an outage and go to [rollback](#4-rollback).
 Migrations run in their own container before the API starts. If a migration fails, the `api`
 service never starts, which is deliberate: a backend running against a half-migrated schema is
 worse than one that is down.
+
+### Production today: a release on the root stack plus its override
+
+Production runs the root `docker-compose.yml` plus its untracked `docker-compose.override.yml`
+(§0, go-live record), not `infra/`, so `deploy.sh` above does not apply. A release is this
+sequence. It was first run for `v1.1.0` on 2026-10-09, after a full rehearsal on a restored backup.
+- Steps 0, 2, 3 and 4 run as root, in one shell, in `/root/ims/Inventory_Management_System`.
+- Step 1 runs on the backup host.
+- Stop at the first failed gate. Roll back on your own judgement only if the API is still not
+  healthy 5 minutes after `up -d`; any other failure waits for the lead.
+
+```bash
+DC() { docker compose -f docker-compose.yml -f docker-compose.override.yml "$@"; }
+Q()  { DC exec -T db psql -U ims -d ims -Atc "$1" </dev/null; }   # </dev/null on every exec
+```
+
+**0. Record.**
+- Note `git log -1`, `git describe --tags`, `docker ps`, and that the running api was started with
+  the override (the `com.docker.compose.project.config_files` label).
+- Record the active product count, the ledger row count, both reconciliation queries from §0
+  step 1, and the applied migrations, to `/root/ims-<tag>-before.txt`.
+- **Gate:** both reconciliation counts are 0.
+
+**1. Back up** (backup host):
+```bash
+IMS_BACKUP_DIR=$HOME/backups/ims-release-<tag> ~/ims-backup/ims-backup-pull.sh
+tail -1 ~/backups/ims-release-<tag>/backup.log
+```
+**Gate:** the line reads `OK db=…B (pg_restore -l ok) … files=…B (… files)`. The release directory
+is its own, so the nightly 14-day pruning never removes it.
+
+**2. Retag the running images** for a rollback with no rebuild. Take the IDs from the containers,
+not from `:local`:
+```bash
+docker tag "$(docker inspect -f '{{.Image}}' ims-api-1)" ims-api:<previous tag>
+docker tag "$(docker inspect -f '{{.Image}}' ims-web-1)" ims-web:<previous tag>
+```
+- **Gate:** `:<previous tag>`, `:local` and the running container have the same image ID, for api
+  and for web.
+- Then `df -h /` and `docker system df`. **Stop under 5 GB free.**
+
+**3. Deploy.**
+```bash
+git fetch --tags
+git rev-parse '<tag>^{commit}'                                       # the commit you reviewed
+git diff --name-only <previous tag> <tag> -- apps/api/src/database/migrations   # what migrate will apply
+git checkout <tag>
+DC build
+DC up -d                                                             # never -v, never down
+```
+- **Gate:** api healthy (`docker inspect -f '{{.State.Health.Status}}' ims-api-1`), and the web
+  container runs the newly built `ims-web:local`.
+- **Migrate gate:** the whole log, and the exit code.
+  ```bash
+  DC logs --no-log-prefix migrate </dev/null | grep -n 'Nothing to do'   # or the migrations listed above
+  docker inspect -f '{{.State.ExitCode}}' ims-migrate-1                  # must be 0
+  ```
+  **Never `tail` the migrate log.** The `migrate` service runs the seed after the migrations, so the
+  last lines are always the seed's. On 2026-10-09 a `tail -5` hid "Nothing to do" and stopped a
+  good release.
+
+**4. Smoke test.**
+- `DC exec -T api wget -qO- http://localhost:3000/health` answers `{"status":"ok","database":"up"}`.
+- `/api/v1/auth/demo-accounts` answers 404.
+- The step 0 counts are unchanged (`diff` against the before-file).
+- `/panel` and `/room` answer 200.
+- The scene file (`DC exec -T web ls /usr/share/nginx/html/assets | grep scene-v4`) is served with
+  `Content-Encoding: gzip` and `Cache-Control: public, max-age=31536000, immutable`.
+- Then the lead checks `/room` and the kiosk's `/panel` on a PC.
+
+**5. Roll back** (no rebuild; no database restore unless the release ran a migration):
+```bash
+git checkout <previous tag>
+docker tag ims-api:<previous tag> ims-api:local
+docker tag ims-web:<previous tag> ims-web:local
+DC up -d --no-build
+```
 
 ---
 
