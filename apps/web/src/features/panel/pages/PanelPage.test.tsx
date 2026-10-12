@@ -8,8 +8,13 @@ import { ErrorCode } from '@ims/shared';
 import { ApiError, NETWORK_ERROR_CODE, api } from '@/api/client';
 import { t } from '@/i18n/en';
 import { importSheetRows } from '@/test/panel-import-sheet';
+import { LOCATE_PATH } from '@/features/locate/api';
 import { PANEL_CATALOGUE_PATH } from '../api';
-import { PANEL_IDLE_RESET_MS, PANEL_SEARCH_DEBOUNCE_MS } from '../constants';
+import {
+  PANEL_IDLE_RESET_MS,
+  PANEL_LOCATE_SETTLE_MS,
+  PANEL_SEARCH_DEBOUNCE_MS,
+} from '../constants';
 import { PanelPage } from './PanelPage';
 
 vi.mock('@/api/client', async (importOriginal) => {
@@ -114,7 +119,7 @@ describe('PanelPage', () => {
     expect(screen.getByText(t.panel.drawerFront)).toBeInTheDocument();
   });
 
-  it('asks the API for the catalogue and nothing else, through a search and a drawer', async () => {
+  it('reads only the catalogue and posts only the locate signal, through a search and a drawer', async () => {
     // K2: product detail would name borrowers to this session; the panel must never call it.
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
     const user = userEvent.setup();
@@ -127,11 +132,79 @@ describe('PanelPage', () => {
     expect(get.mock.calls.map(([path]) => path)).toEqual(
       get.mock.calls.map(() => PANEL_CATALOGUE_PATH),
     );
-    // Read-only: no other method of the API client, and no request around it.
-    for (const name of ['post', 'put', 'patch', 'del', 'upload', 'blob', 'loginRequest'] as const) {
+    // Read-only, except the locate signal: no POST but `/locate`, no other method of the API
+    // client, and no request around it.
+    const otherPosts = vi
+      .mocked(api.post)
+      .mock.calls.map(([path]) => path)
+      .filter((path) => path !== LOCATE_PATH);
+    expect(otherPosts, 'api.post to anything but /locate').toEqual([]);
+    for (const name of ['put', 'patch', 'del', 'upload', 'blob', 'loginRequest'] as const) {
       expect(vi.mocked(api[name]), `api.${name}`).not.toHaveBeenCalled();
     }
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  /* Drawer lights (Phase 13): the panel tells the cabinet where a part is. */
+
+  const locatePosts = () => vi.mocked(api.post).mock.calls.filter(([path]) => path === LOCATE_PATH);
+  const STLINK_ID = '00000000-0000-4000-8000-000000000101';
+
+  it('lights the drawer of a search that rests for a second, once', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    vi.mocked(api.post).mockClear();
+    renderPanel();
+
+    await typeOnScreen(user, 'ST-LINK');
+    await act(() => vi.advanceTimersByTimeAsync(PANEL_LOCATE_SETTLE_MS * 2));
+    // One locate for the settled search — not one per tap on the keyboard.
+    expect(locatePosts()).toEqual([[LOCATE_PATH, { productIds: [STLINK_ID] }]]);
+  });
+
+  it('lights the drawer of a tapped part, and not again when the search then rests', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderPanel();
+
+    await typeOnScreen(user, 'ST-LINK');
+    await act(() => vi.advanceTimersByTimeAsync(PANEL_SEARCH_DEBOUNCE_MS));
+    const result = await screen.findByRole('button', { name: /ST-Link V3 MINIE/ });
+    vi.mocked(api.post).mockClear();
+    await user.click(result);
+    expect(locatePosts()).toEqual([[LOCATE_PATH, { productIds: [STLINK_ID] }]]);
+
+    // The drawer is open: the settled search must not replace the tapped part's light.
+    await act(() => vi.advanceTimersByTimeAsync(PANEL_LOCATE_SETTLE_MS * 2));
+    expect(locatePosts()).toHaveLength(1);
+  });
+
+  it('does not light the results again when coming Back from a tapped part', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    vi.mocked(api.post).mockClear();
+    renderPanel();
+
+    await typeOnScreen(user, 'ST-LINK');
+    await act(() => vi.advanceTimersByTimeAsync(PANEL_LOCATE_SETTLE_MS * 2));
+    await user.click(await screen.findByRole('button', { name: /ST-Link V3 MINIE/ }));
+    expect(locatePosts()).toHaveLength(2); // the settled search, then the tap
+
+    await user.click(screen.getByRole('button', { name: t.panel.backToOverview }));
+    await act(() => vi.advanceTimersByTimeAsync(PANEL_LOCATE_SETTLE_MS * 2));
+    expect(screen.getByRole('button', { name: /ST-Link V3 MINIE/ })).toBeInTheDocument();
+    expect(locatePosts()).toHaveLength(2);
+  });
+
+  it('lights nothing for a search with no match', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    vi.mocked(api.post).mockClear();
+    renderPanel();
+
+    await typeOnScreen(user, 'ZZ');
+    await act(() => vi.advanceTimersByTimeAsync(PANEL_LOCATE_SETTLE_MS * 2));
+    expect(locatePosts()).toEqual([]);
   });
 
   it('warns, with a count, about plan drawers IMS has no zone for', async () => {
