@@ -67,11 +67,40 @@ route table to prove this for every route (`apps/api/test/api-key-writes.int-spe
 | `locations:write` | `POST /locations/zones`, `POST /locations/compartments` |
 | `stock:receive` | `POST /stock/receive` |
 | `stock:take` | `POST /stock/take` — only while `ALLOW_DIRECT_TAKE=true` |
+| `locate:read` | `GET /locate/next`, `GET /locate/latest` |
+| `locate:write` | `POST /locate` |
 
 There is **no** scope for borrowing lists or the stock ledger. Both name employees, and Ayman's
 K2 keeps them out of key reach (OQ-KT6). For the same reason, `GET /products/:id` returns an
 **empty `activeBorrows`** to a key. How much is out still shows in the placements. Scopes narrow
 what a key can do; the route's own role check still applies on top.
+
+**Drawer lights (`locate:*`, Phase 13).** A search reports up to five product ids with
+`POST /locate` (`{"productIds": [...]}`, answered `202 {"seq": n}`, or `{"seq": null}` when none of
+them is on a shelf). The API turns them into one event and the cabinet's light controller picks it
+up by long-polling `GET /locate/next?after=<last seq>&wait=<seconds>`:
+
+```jsonc
+{ "seq": 1760256000412, "ts": "2026-10-12T08:00:00.412Z", "ttlMs": 15000,
+  "drawers": [{ "zone": "B2", "room": "Cabinet B", "state": "green", "cells": ["2A-2D"] }] }
+```
+
+- **green**: some of a product is available in that drawer; **red**: it lives there but none is
+  available (out of stock, on loan, reserved or quarantined). One light per drawer; green wins.
+  A product that ran out is shown red at the cell its stock last left, from the ledger. One never
+  stocked, or archived, lights nothing.
+- **No product, no person** (K2): an event names drawers, cells and a colour only.
+- `next` answers at once when an event is waiting, otherwise holds the request up to `wait`
+  seconds (`LOCATE_MAX_WAIT_SECONDS`, 25 by default) and answers `204`. Omit `after` on start-up.
+  An `after` older than the API still holds gets the newest event. **An expired event is never
+  returned**, so a light coming back online does not replay an old search.
+- `seq` starts from the API's boot time and only grows, so keeping the last `seq` is safe across
+  restarts. Nothing is persisted.
+- `locate:read` is read-only, like `inventory:read`: no service account, may never expire.
+  `locate:write` follows the write-key rules: a service account and an expiry.
+- `POST /locate` is limited per key (and per signed-in user), 30 a minute by default
+  (`THROTTLE_LOCATE_LIMIT`). Back off on `429` and on the import lockout's `503`; both carry
+  `Retry-After`.
 
 **`catalog:write` creates and edits, but never archives.** A key that sends `isActive` in
 `PATCH /products/:id` or `PATCH /categories/:id` gets `403 API_KEY_SCOPE_DENIED`, whether the

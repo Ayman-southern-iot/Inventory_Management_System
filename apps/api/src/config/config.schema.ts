@@ -112,6 +112,14 @@ const rawSchema = z.object({
   THROTTLE_TAKE_LIMIT: z.coerce.number().int().min(1).max(100_000).default(10),
   THROTTLE_TAKE_TTL_SECONDS: durationSecondsSchema.default(60),
   /**
+   * `POST /locate`'s own window (Phase 13, decided 2026-10-12), counted per signed-in user and per
+   * key — not per address, because until the real client address reaches the API (RUNBOOK §0.7)
+   * every browser arrives from the same proxy, and a per-address ceiling would be one shared by
+   * everybody. Each locate lights the cabinet, so a stuck client must not keep it flashing.
+   */
+  THROTTLE_LOCATE_LIMIT: z.coerce.number().int().min(1).max(100_000).default(30),
+  THROTTLE_LOCATE_TTL_SECONDS: durationSecondsSchema.default(60),
+  /**
    * How stale `api_keys.last_used_at` may be before the next request refreshes it. Without a
    * floor this is one UPDATE per read on an otherwise read-only path. Zero means always.
    */
@@ -155,6 +163,19 @@ const rawSchema = z.object({
    * that says it cannot be served. Raise it when the catalogue genuinely outgrows it.
    */
   CATALOGUE_MAX_PRODUCTS: z.coerce.number().int().min(1).max(100_000).default(5_000),
+
+  // --- Drawer lights (Phase 13) ------------------------------------------------
+  /** How long the cabinet keeps a drawer lit for one locate. Also the age past which an event is never handed out. */
+  LOCATE_EVENT_TTL_SECONDS: z.coerce.number().int().min(1).max(600).default(15),
+  /**
+   * The longest `GET /locate/next` holds a request open. Every hop in front of the API must allow
+   * longer than this — Cloudflare cuts a response off at 100 s, hence the ceiling.
+   */
+  LOCATE_MAX_WAIT_SECONDS: z.coerce.number().int().min(1).max(90).default(25),
+  /** Open long-polls at once. Each is a held socket; past this a poll is refused with a 429. */
+  LOCATE_MAX_WAITERS: z.coerce.number().int().min(1).max(1_000).default(32),
+  /** Events kept in memory for a light that fell behind. Nothing is persisted. */
+  LOCATE_RING_SIZE: z.coerce.number().int().min(1).max(10_000).default(64),
 
   // --- CSV product import (importing_data.md) ----------------------------------
   /**
@@ -592,6 +613,7 @@ export interface AppConfig {
     readonly authenticated: { readonly limit: number; readonly ttlSeconds: number };
     readonly apiKey: { readonly limit: number; readonly ttlSeconds: number };
     readonly take: { readonly limit: number; readonly ttlSeconds: number };
+    readonly locate: { readonly limit: number; readonly ttlSeconds: number };
     readonly loginBurst: { readonly limit: number; readonly ttlSeconds: number };
   };
   readonly apiKeys: {
@@ -605,6 +627,13 @@ export interface AppConfig {
     readonly dailyUnitsPerAccount: number;
   };
   readonly catalogue: { readonly maxProducts: number };
+  /** Drawer lights (Phase 13). */
+  readonly locate: {
+    readonly eventTtlSeconds: number;
+    readonly maxWaitSeconds: number;
+    readonly maxWaiters: number;
+    readonly ringSize: number;
+  };
   readonly imports: {
     readonly maxRows: number;
     readonly maxFileBytes: number;
@@ -756,6 +785,10 @@ export function buildConfig(source: Record<string, string | undefined>): AppConf
         limit: env.THROTTLE_TAKE_LIMIT,
         ttlSeconds: env.THROTTLE_TAKE_TTL_SECONDS,
       }),
+      locate: Object.freeze({
+        limit: env.THROTTLE_LOCATE_LIMIT,
+        ttlSeconds: env.THROTTLE_LOCATE_TTL_SECONDS,
+      }),
       loginBurst: Object.freeze({
         limit: env.LOGIN_BURST_LIMIT,
         ttlSeconds: env.LOGIN_BURST_TTL_SECONDS,
@@ -772,6 +805,12 @@ export function buildConfig(source: Record<string, string | undefined>): AppConf
     }),
     catalogue: Object.freeze({
       maxProducts: env.CATALOGUE_MAX_PRODUCTS,
+    }),
+    locate: Object.freeze({
+      eventTtlSeconds: env.LOCATE_EVENT_TTL_SECONDS,
+      maxWaitSeconds: env.LOCATE_MAX_WAIT_SECONDS,
+      maxWaiters: env.LOCATE_MAX_WAITERS,
+      ringSize: env.LOCATE_RING_SIZE,
     }),
     imports: Object.freeze({
       maxRows: env.IMPORT_MAX_ROWS,

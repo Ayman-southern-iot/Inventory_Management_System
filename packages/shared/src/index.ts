@@ -20,3 +20,4 @@ export * from './contracts/api-keys.js';
 export * from './contracts/stock-take.js';
 export * from './contracts/catalogue.js';
 export * from './contracts/imports.js';
+export * from './contracts/locate.js';

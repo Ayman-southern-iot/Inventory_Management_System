@@ -28,6 +28,7 @@ import { HealthController } from './modules/health/health.controller';
 import { ApiKeysModule } from './modules/api-keys/api-keys.module';
 import { KeyResponseRedactionInterceptor } from './modules/api-keys/key-response-redaction.interceptor';
 import { CatalogueModule } from './modules/catalogue/catalogue.module';
+import { LocateModule } from './modules/locate/locate.module';
 import { ImportsModule } from './modules/imports/imports.module';
 import { apiKeyTracker, isApiKeyRequest } from './common/throttling';
 
@@ -105,6 +106,7 @@ const throttlerOptions = [
     ApiKeysModule,
     CatalogueModule,
     ImportsModule,
+    LocateModule,
     AuthModule,
     UsersModule,
     DepartmentsModule,

@@ -809,6 +809,9 @@ describe('API keys that act (ADR-0002)', () => {
           'GET /categories',
           'GET /locations',
           'GET /locations/rooms',
+          // Drawer lights, Phase 13: locate:read waits for events, locate:write reports a search.
+          'GET /locate/latest',
+          'GET /locate/next',
           'GET /products',
           'GET /products/:id',
           'PATCH /categories/:id',
@@ -816,6 +819,7 @@ describe('API keys that act (ADR-0002)', () => {
           'POST /categories',
           'POST /locations/compartments',
           'POST /locations/zones',
+          'POST /locate',
           'POST /products',
           'POST /stock/receive',
           'POST /stock/take',
