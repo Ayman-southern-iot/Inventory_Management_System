@@ -146,6 +146,29 @@ describe('LocateFeed', () => {
     expect(feed.waiting).toBe(0);
   });
 
+  it('refuses a caller past its own share of waits, and not another caller', async () => {
+    const feed = feedWith({ maxWaitersPerCaller: 2 });
+    void feed.next(undefined, 5, undefined, 'apikey:a');
+    void feed.next(undefined, 5, undefined, 'apikey:a');
+    await expect(feed.next(undefined, 5, undefined, 'apikey:a')).rejects.toBeInstanceOf(
+      RateLimitedError,
+    );
+    void feed.next(undefined, 5, undefined, 'apikey:b');
+    expect(feed.waitingFor('apikey:a')).toBe(2);
+    expect(feed.waitingFor('apikey:b')).toBe(1);
+    feed.onModuleDestroy();
+  });
+
+  it('gives a caller its share back once one of its waits ends', async () => {
+    const feed = feedWith({ maxWaitersPerCaller: 1 });
+    const first = feed.next(undefined, 2, undefined, 'user:u');
+    await vi.advanceTimersByTimeAsync(2_000);
+    await expect(first).resolves.toBeNull();
+    void feed.next(undefined, 2, undefined, 'user:u');
+    expect(feed.waitingFor('user:u')).toBe(1);
+    feed.onModuleDestroy();
+  });
+
   it('frees the slot when the client goes away', async () => {
     const feed = feedWith();
     const gone = new AbortController();

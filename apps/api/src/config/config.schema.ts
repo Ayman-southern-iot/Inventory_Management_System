@@ -174,6 +174,11 @@ const rawSchema = z.object({
   LOCATE_MAX_WAIT_SECONDS: z.coerce.number().int().min(1).max(90).default(25),
   /** Open long-polls at once. Each is a held socket; past this a poll is refused with a 429. */
   LOCATE_MAX_WAITERS: z.coerce.number().int().min(1).max(1_000).default(32),
+  /**
+   * Open long-polls per caller — per key, or per signed-in user (decided 2026-10-12). A light
+   * needs one; without this, one caller could hold every slot and starve the cabinet.
+   */
+  LOCATE_MAX_WAITERS_PER_CALLER: z.coerce.number().int().min(1).max(1_000).default(2),
   /** Events kept in memory for a light that fell behind. Nothing is persisted. */
   LOCATE_RING_SIZE: z.coerce.number().int().min(1).max(10_000).default(64),
 
@@ -191,6 +196,12 @@ const rawSchema = z.object({
    * Better to say ten minutes and take five.
    */
   IMPORT_LOCKOUT_PADDING_MINUTES: z.coerce.number().int().min(0).max(120).default(10),
+  /**
+   * The longest `Retry-After` the lockout's 503 sends (decided 2026-10-12). Without a cap it counts
+   * down to the padded estimate, so a client that obeys it — the drawer lights — could stay away
+   * for the whole padding after an import that finished early.
+   */
+  IMPORT_LOCKOUT_RETRY_AFTER_MAX_SECONDS: z.coerce.number().int().min(1).max(3_600).default(60),
   /**
    * How stale `import_jobs.heartbeat_at` may get before the job is presumed dead and the
    * system-wide lockout is released. This is the number standing between one hung import and
@@ -632,12 +643,14 @@ export interface AppConfig {
     readonly eventTtlSeconds: number;
     readonly maxWaitSeconds: number;
     readonly maxWaiters: number;
+    readonly maxWaitersPerCaller: number;
     readonly ringSize: number;
   };
   readonly imports: {
     readonly maxRows: number;
     readonly maxFileBytes: number;
     readonly lockoutPaddingMinutes: number;
+    readonly lockoutRetryAfterMaxSeconds: number;
     readonly heartbeatTimeoutSeconds: number;
     readonly snapshotRetentionDays: number;
     readonly fuzzyMatchMaxNewNames: number;
@@ -810,12 +823,14 @@ export function buildConfig(source: Record<string, string | undefined>): AppConf
       eventTtlSeconds: env.LOCATE_EVENT_TTL_SECONDS,
       maxWaitSeconds: env.LOCATE_MAX_WAIT_SECONDS,
       maxWaiters: env.LOCATE_MAX_WAITERS,
+      maxWaitersPerCaller: env.LOCATE_MAX_WAITERS_PER_CALLER,
       ringSize: env.LOCATE_RING_SIZE,
     }),
     imports: Object.freeze({
       maxRows: env.IMPORT_MAX_ROWS,
       maxFileBytes: env.IMPORT_MAX_FILE_BYTES,
       lockoutPaddingMinutes: env.IMPORT_LOCKOUT_PADDING_MINUTES,
+      lockoutRetryAfterMaxSeconds: env.IMPORT_LOCKOUT_RETRY_AFTER_MAX_SECONDS,
       heartbeatTimeoutSeconds: env.IMPORT_HEARTBEAT_TIMEOUT_SECONDS,
       snapshotRetentionDays: env.IMPORT_SNAPSHOT_RETENTION_DAYS,
       fuzzyMatchMaxNewNames: env.IMPORT_FUZZY_MATCH_MAX_NEW_NAMES,

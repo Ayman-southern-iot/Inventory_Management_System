@@ -101,6 +101,15 @@ up by long-polling `GET /locate/next?after=<last seq>&wait=<seconds>`:
 - `POST /locate` is limited per key (and per signed-in user), 30 a minute by default
   (`THROTTLE_LOCATE_LIMIT`). Back off on `429` and on the import lockout's `503`; both carry
   `Retry-After`.
+- At most two open polls per key or per signed-in user (`LOCATE_MAX_WAITERS_PER_CALLER`), and 32
+  in all; past either, `429` with `Retry-After: 1`. A light needs one.
+- The import lockout's `Retry-After` is the time to its estimated end, at most 60 s
+  (`IMPORT_LOCKOUT_RETRY_AFTER_MAX_SECONDS`), so a light is back soon after an import that
+  finishes early.
+- **Who can read the feed.** It shows which cells are being searched, as it happens; read beside
+  the catalogue, that narrows to products — never to who searched. So `locate:read` is issued only
+  to the cabinet's light controllers, one key per board so either can be revoked on its own, and
+  an event carries no names.
 
 **`catalog:write` creates and edits, but never archives.** A key that sends `isActive` in
 `PATCH /products/:id` or `PATCH /categories/:id` gets `403 API_KEY_SCOPE_DENIED`, whether the
