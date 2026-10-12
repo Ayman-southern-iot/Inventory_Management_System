@@ -1550,3 +1550,27 @@ the MEDIUM and LOW findings that were worth acting on rather than carrying forwa
 - 2026-10-09 (the lead) — **`v1.1.0` is released and passed the PC check.** The rollback tags
   `ims-api:v1.0.0` and `ims-web:v1.0.0` stay on the VM for a week, until 2026-10-16. Whoever removes
   them tells the lead first.
+- 2026-10-12 (the lead, Phase 13, #34 and #35) — **Drawer lights: a search lights its drawer.**
+  - The API is the hub. The web search, `/panel` and API keys `POST /locate`; the cabinet's light
+    controllers long-poll `GET /locate/next`. Green: some available; red: it lives there but none
+    is; nothing when it has no cell.
+  - **Red for a product that ran out comes from the ledger**, not a new column: the newest outbound
+    row, by id, names the cell its stock last left (`StockService` deletes a placement at zero).
+    Never stocked, or archived, lights nothing.
+  - **Two scopes.** `locate:read` is read-only, like `inventory:read` (0041 re-creates 0039's CHECKs).
+    `locate:write` follows the write-key rules: a service account and an expiry.
+  - **Migrations split into 0040 (labels) and 0041 (CHECKs).** All pending migrations run in one
+    transaction, so 0041 compares scopes as text, never using the new label as an enum constant.
+  - **Limits:** 30 locates a minute per signed-in user and per key; 32 open polls in all and **2
+    per caller** (#35); events live 15 s, an expired one is never returned; `seq` starts at the
+    boot time. The import 503 carries `Retry-After`, **capped at 60 s** (#35).
+  - **Clients:** `/inventory` posts after 800 ms when the server total is 1–5; `/panel` on a tap,
+    and after 1000 ms for 1–5 distinct parts. The panel's read-only test allows `POST /locate`
+    and nothing else.
+  - **Search privacy accepted:** the feed shows which cells are searched, as it happens. So
+    `locate:read` goes only to the two light boards, one key each (`drawer-lights-a`, `-b`), and
+    an event carries no names (integration doc §15.4).
+  - **The P4 key is issued for 180 days**; the production write-key limit
+    (`API_KEY_WRITE_MAX_LIFETIME_DAYS`) stays as it is.
+  - **`/panel` bundle headroom is 67 B**; it is re-baselined on the next panel change, not now.
+- 2026-10-12 — **Integration baseline: 1065 / 1065 (72 files)** at `e760422`, on the keeper.
