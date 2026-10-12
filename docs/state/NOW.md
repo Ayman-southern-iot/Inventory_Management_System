@@ -7,11 +7,10 @@
 
 ## Where the build is
 
-**`main` @ `e760422`, CI green. PRs #1–#35 merged, #26 closed unmerged.** Phase 13 (drawer lights)
-is merged but **not released**. The GitHub *default* branch is still `fix/lan-secure-context`, so
-`gh pr create --base main`. Phases 00–13 done.
+**`main` @ `660661e` = tag `v1.2.0`, CI green. PRs #1–#36 merged, #26 closed unmerged.** The GitHub
+*default* branch is still `fix/lan-secure-context`, so `gh pr create --base main`. Phases 00–13 done.
 
-**Production runs `v1.1.0` since 2026-10-09 04:37Z** (RUNBOOK §0 record):
+**Production runs `v1.2.0` (drawer lights) since 2026-10-12 11:36Z** (RUNBOOK §0 record):
 
 - the **root** compose stack plus its untracked `docker-compose.override.yml` (demo off, direct
   take on), **not `infra/`**. Ingress unchanged: Cloudflare → NPM → the stack's Caddy;
@@ -22,14 +21,14 @@ is merged but **not released**. The GitHub *default* branch is still `fix/lan-se
 
 ## Next action
 
-1. **Release `v1.2.0`** (Phase 13, migrations 0040–0041): plan ready, **production writes only on
-   the lead's "go release"** (RUNBOOK §3). Rollback = the old image on the new schema.
-2. **The lead's keys after release:** `drawer-lights-a`, `drawer-lights-b` (`locate:read`),
-   `voice-p4-v2` (`inventory:read` + `locate:write`, service account, 180 days).
+1. **The lead checks** the `/inventory` search (`POST /locate` 202) and the kiosk `/panel`.
+2. **Keys:** `drawer-lights-a` (`locate:read`) is live. `voice-p4-v2` is being re-issued with
+   exactly `inventory:read` + `locate:write`; then revoke the old `voice-p4` key. `drawer-lights-b`
+   is not created yet. Rollback, if ever: RUNBOOK §3 step 5, **`--no-deps api web proxy`** only.
 3. **Open:** `/room` on an integrated-GPU office PC; dc-a568b PR #13 (kiosk blocklist) to merge.
-4. **2026-10-16:** the VM's `:v1.0.0` rollback tags may go. **Ask the lead first.**
+4. **2026-10-16:** the VM's `:v1.0.0` tags may go (`:v1.1.0` is the rollback now). **Ask the lead first.**
 
-## Green — `main` @ `e760422`, 2026-10-12
+## Green — `main` @ `660661e`, 2026-10-12
 
 - typecheck · lint **0** · unit shared **25** · api **301** · web **743** · guard-hardcoding **9** · integration
   **1065 / 1065 (72 files)**, the baseline · `/panel` bundle **67 B** under its limit: re-baseline next time
