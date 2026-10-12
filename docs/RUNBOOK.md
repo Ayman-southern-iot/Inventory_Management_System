@@ -926,13 +926,24 @@ DC up -d                                                             # never -v,
   `Content-Encoding: gzip` and `Cache-Control: public, max-age=31536000, immutable`.
 - Then the lead checks `/room` and the kiosk's `/panel` on a PC.
 
-**5. Roll back** (no rebuild; no database restore unless the release ran a migration):
+**5. Roll back** (no rebuild, no database restore):
 ```bash
 git checkout <previous tag>
 docker tag ims-api:<previous tag> ims-api:local
 docker tag ims-web:<previous tag> ims-web:local
-DC up -d --no-build
+DC up -d --no-build --no-deps api web proxy      # never a plain `up -d` after a migration
 ```
+- **Why `--no-deps`.** A plain `up -d` starts `migrate` first, on the old image. If the release ran a
+  migration, the old migrator refuses the database ("corrupted migrations: previously executed
+  migration … is missing"), exits 1, and compose then leaves `api`, `web` and `proxy` down: an
+  outage. Proven on the keeper on 2026-10-12, `v1.1.0` over a database at 0041.
+- **The old image on the new schema works when the migrations only add.** The same proof: `v1.1.0`'s
+  `api` and `web` on a database at 0041 started healthy, signed in, served `/catalogue` with the
+  data unchanged, listed a `locate:read` key on the API-keys page, and `/panel` found its part in a
+  browser. Check that a release's migrations only add before relying on this.
+- **To roll forward again,** rebuild or retag the release's own images first (`:local` now points
+  at the old ones, so a plain `up -d` in the new tree runs the old code). Retag them as `:<tag>`
+  right after a release, as step 2 does for the previous one.
 
 ---
 
@@ -962,8 +973,10 @@ is kept.** Verify the system before dropping it:
 docker compose exec db psql -U ims -d postgres -c "DROP DATABASE ims_old;"
 ```
 
-Rolling back to a tag *older than a migration that already ran* is not supported — the old code
-does not know about the new schema. Restore the database first, then deploy the old tag.
+Rolling back to a tag *older than a migration that already ran*: if the migration only added
+things, the old image runs on the new schema (proven for `v1.1.0` on 0041, 2026-10-12), started with
+`--no-deps` so the old `migrate` never runs (§3 step 5). If it changed or removed anything, restore
+the database first, then deploy the old tag.
 
 ---
 
