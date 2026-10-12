@@ -8,7 +8,7 @@
 >
 > **Maintenance rule:** see `.claude/rules/05-ai-playbook.md`. A `PostToolUse` hook
 > (`.claude/hooks/playbook-reminder.sh`) reminds Claude to update this file after every
-> meaningful edit. Last updated: 2026-10-09 (3D room view `/room`, §19; bundle budget and room scripts, §7; production runs the root stack + override, §16). 2026-10-08 (the lead reviews and merges, Claude never merges, §14; dev API on the keeper and the drawer-plan entry script, §7; kiosk login is GENERAL-only, §19). Earlier,
+> meaningful edit. Last updated: 2026-10-12 (drawer lights: the `locate` module and its scopes, §6/§11/§19; locate e2e script, §7; one-transaction migrations, §16). 2026-10-09 (3D room view `/room`, §19; bundle budget and room scripts, §7; production runs the root stack + override, §16). 2026-10-08 (the lead reviews and merges, Claude never merges, §14; dev API on the keeper and the drawer-plan entry script, §7; kiosk login is GENERAL-only, §19). Earlier,
 > 2026-10-05 (lab panel `/panel`, §19. Earlier the same day: branch model:
 > `main` + `advance-inventory-management`, hooks, CI — §7, §14). Earlier,
 > 2026-10-04 (lint baseline is now 0 — §16 landmines; `playwright-audit` skill — §15.1). Earlier,
@@ -585,7 +585,7 @@ their own DRAFT. The rule is deliberately narrow — it is reference material fo
 │   │       ├── common/           shared filters, decorators, guards, pipes
 │   │       ├── security/         hashing, throttling, sanitisation
 │   │       └── modules/          api-keys, audit, auth, boms, borrowing, categories,
-│   │                             departments, files, funds, health, imports,
+│   │                             departments, files, funds, health, imports, locate,
 │   │                             locations, maintenance, notifications, pdf, products,
 │   │                             projects, reports, requisitions, settings, stock, users
 │   │       └── test/             int specs (*.int-spec.ts), and bench/ — benchmarks run
@@ -629,6 +629,7 @@ scripts/drawer-plan-keeper.sh [--apply]  # drawer plan's rooms/zones/compartment
 pnpm --filter @ims/web check:bundle      # CI: main JS and /panel JS within budget, no three.js in /panel (apps/web/bundle-budget.json)
 node scripts/room-scene/extract-scene.mjs <renderer.html>  # regenerate /room's scene asset (scripts/room-scene/README.md)
 node scripts/room-e2e/room-e2e.mjs --admin-email <e>       # local-only browser check of /room; admin password on stdin
+node scripts/locate-e2e/locate-e2e.mjs --admin-email <e>   # local-only browser check of the drawer-light signal (/inventory, /panel); admin password on stdin
 pnpm audit:deps           # dependency audit
 pnpm hooks:install        # once per clone: commit-msg + pre-push hooks, pull.rebase=true (CONTRIBUTING.md)
 
@@ -940,6 +941,15 @@ from "an admin switched it off": the latter stays off across every restart (`DEC
   (`BorrowingRepository.unitsTakenTodayLocked`), so concurrent takes cannot overspend it. Over it:
   `429 DIRECT_TAKE_DAILY_LIMIT_REACHED`.
 
+**Drawer lights** (Phase 13, 2026-10-12) add six config keys, all pinned in `TEST_ENV`:
+`THROTTLE_LOCATE_LIMIT` / `THROTTLE_LOCATE_TTL_SECONDS` (30 / 60; `POST /locate` per signed-in
+user and per key, counted in the handler by `CallerWindow`, not by the global throttler, which
+cannot see who is calling), `LOCATE_EVENT_TTL_SECONDS` (15), `LOCATE_MAX_WAIT_SECONDS` (25, at
+most 90: Cloudflare cuts a response at 100 s), `LOCATE_MAX_WAITERS` (32) and `LOCATE_RING_SIZE`
+(64). Two scopes: `locate:read` is read-only like `inventory:read` (migration 0041 re-creates
+0039's CHECKs to say so), `locate:write` follows the write-key rules. Contract and wire format:
+`packages/shared/src/contracts/locate.ts` and integration doc §15.4.
+
 There is **no** `API_KEYS_ENABLED`. Production with `DEMO_ACCOUNTS_ENABLED=true` refuses every key,
 and refuses issuing keys and service accounts, with `API_KEYS_DISABLED_IN_DEMO`.
 
@@ -1123,6 +1133,14 @@ reason the locking exists).
 
 ## 16. Landmines (each has cost a session before)
 
+- **Every pending migration runs in ONE transaction** (Kysely 0.27.5, `migrator.js`:
+  `db.transaction().execute(run)`), so splitting a migration into two files does not give the
+  second its own transaction. An enum label added by `ALTER TYPE … ADD VALUE` cannot be *used*
+  until that transaction commits — production's single `migrate` run would fail. 0041 compares
+  scopes as text for exactly this reason (2026-10-12).
+- **The drawer-light feed is process memory**, like the import lock: `LocateFeed` (ring + waiting
+  long-polls) and `CallerWindow` (the per-caller locate limit). Correct while the API is one
+  process; the day it is two, both need a shared store.
 - **`pnpm lint` is 0, so it is a real gate.** It used to carry 20 standing errors that everyone
   compared against; any error now is new. `scripts/**/*.js` and `docs/**/*.js` are ignored on
   purpose (standalone tooling). The `react-hooks` ESLint plugin is **not installed**, so an
@@ -1410,7 +1428,9 @@ does not serve.
 
 A **lab panel** at `/panel` sits outside the role table: any signed-in account may open it, and the
 lab's wall kiosk runs it as the GENERAL account `lab-panel`; the kiosk login refuses any account
-with another role (client-side, not a boundary). Full screen, no shell, read-only: a
+with another role (client-side, not a boundary). Full screen, no shell, read-only except the
+**locate signal** (`POST /locate` on a tap, and after a search rests 1 s with 1–5 parts; the
+inventory list does the same after 800 ms; `features/locate/`): a
 cabinet map and a part search fed by `GET /catalogue`, never showing who holds anything
 (OQ-P1, OQ-P2, OQ-P3). Code: `apps/web/src/features/panel/`; the drawer
 plan is static data there, lazy-loaded as its own chunk.
