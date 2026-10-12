@@ -1,7 +1,13 @@
 import { useMemo, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { PAGINATION_DEFAULT_LIMIT, Role, type ListProductsQuery, type Product } from '@ims/shared';
+import {
+  LOCATE_MAX_PRODUCTS,
+  PAGINATION_DEFAULT_LIMIT,
+  Role,
+  type ListProductsQuery,
+  type Product,
+} from '@ims/shared';
 import { Button } from '@/components/ui/Button';
 import { Checkbox, TextField } from '@/components/ui/Field';
 import { Badge, PageHeader, Pagination, Panel, Table } from '@/components/ui/primitives';
@@ -10,8 +16,9 @@ import { useAuth } from '@/features/auth/auth-context';
 import { t } from '@/i18n/en';
 import { ROUTES } from '@/routes/paths';
 import { useCategoryTree, useProducts, useUncategorizedCount } from '../api';
-import { SEARCH_DEBOUNCE_MS } from '../constants';
+import { LOCATE_SETTLE_MS, SEARCH_DEBOUNCE_MS } from '../constants';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { useLocateSettledResult } from '@/features/locate/hooks/useLocateSettledResult';
 import { ProductFormDialog } from '../components/ProductFormDialog';
 import {
   CATEGORY_ALL,
@@ -61,6 +68,23 @@ export function InventoryPage() {
   );
 
   const products = useProducts(query);
+  /*
+   * The drawer lights (Phase 13): once a search has rested and its own result is on screen —
+   * not the previous page kept as a placeholder — light the drawers of its matches. More than
+   * LOCATE_MAX_PRODUCTS is too broad to light, so it posts nothing.
+   */
+  const locateSearch = useDebouncedValue(search, LOCATE_SETTLE_MS).trim();
+  const shown = products.data;
+  const settledIds =
+    locateSearch !== '' &&
+    locateSearch === debouncedSearch.trim() &&
+    shown !== undefined &&
+    !products.isPlaceholderData &&
+    shown.total <= LOCATE_MAX_PRODUCTS &&
+    shown.items.length === shown.total
+      ? shown.items.map((product) => product.id)
+      : null;
+  useLocateSettledResult(settledIds === null ? null : locateSearch, settledIds);
   const categories = useCategoryTree();
   // Drives the badge on the tree filter's pinned Uncategorized row.
   const uncategorizedCount = useUncategorizedCount();

@@ -9,7 +9,13 @@ import { PanelNotice } from '../components/PanelNotice';
 import { PanelSearchBar } from '../components/PanelSearchBar';
 import { PanelStatusBanner } from '../components/PanelStatusBanner';
 import { SearchResults } from '../components/SearchResults';
-import { PANEL_IDLE_RESET_MS, PANEL_MAX_RESULTS, PANEL_SEARCH_DEBOUNCE_MS } from '../constants';
+import { useLocateSettledResult } from '@/features/locate/hooks/useLocateSettledResult';
+import {
+  PANEL_IDLE_RESET_MS,
+  PANEL_LOCATE_SETTLE_MS,
+  PANEL_MAX_RESULTS,
+  PANEL_SEARCH_DEBOUNCE_MS,
+} from '../constants';
 import { useIdleReset } from '../hooks/useIdleReset';
 import { useSettledQuery } from '../hooks/useSettledQuery';
 import { unmatchedUnits } from '../address';
@@ -30,8 +36,9 @@ type View =
 const BROWSE: View = { kind: 'browse' };
 
 /**
- * `/panel`: "where is X?" on the lab's wall panel. Read-only by design — there is no control on
- * this screen that changes stock — and it never shows who holds anything (K2).
+ * `/panel`: "where is X?" on the lab's wall panel. Read-only, except the locate signal — there is
+ * no control on this screen that changes stock; it only tells the drawer lights where a part is —
+ * and it never shows who holds anything (K2).
  */
 export function PanelPage() {
   const [query, setQuery] = useState('');
@@ -47,6 +54,18 @@ export function PanelPage() {
   const result = useMemo(
     () => searchPanel(index, panelLayout, settledQuery, PANEL_MAX_RESULTS),
     [index, settledQuery],
+  );
+  // The drawer lights (Phase 13): a search that rests on its results lights the drawers its parts
+  // are in — unless it ran past the rows the panel draws, which makes it too broad to judge. Only
+  // while the results are on screen: a tapped part has already lit its own drawer, and neither a
+  // broader locate a moment later nor coming Back to the same results may replace it.
+  const locateQuery = useSettledQuery(query, PANEL_LOCATE_SETTLE_MS);
+  const isLocateSettled =
+    locateQuery.trim() !== '' && locateQuery === settledQuery && result.hiddenCount === 0;
+  const locate = useLocateSettledResult(
+    isLocateSettled ? locateQuery.trim() : null,
+    isLocateSettled ? result.rows.map((row) => row.productId) : null,
+    view.kind === 'browse',
   );
   const unmatched = useMemo(
     () =>
@@ -78,6 +97,7 @@ export function PanelPage() {
   const openRow = (row: StockRow) => {
     const found = row.address === null ? undefined : panelLayout.cellByAddress.get(row.address);
     if (found === undefined) return;
+    locate.mutate([row.productId]);
     setKeyboardOpen(false);
     setView({
       kind: 'unit',

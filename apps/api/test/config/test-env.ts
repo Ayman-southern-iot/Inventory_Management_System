@@ -77,6 +77,9 @@ export const TEST_ENV: Record<string, string> = {
   // The take route's own window (Arif 2026-10-01): stock-take.int-spec makes the eleventh call.
   THROTTLE_TAKE_LIMIT: '10',
   THROTTLE_TAKE_TTL_SECONDS: '60',
+  // locate.int-spec posts one past this from a session and from a key.
+  THROTTLE_LOCATE_LIMIT: '30',
+  THROTTLE_LOCATE_TTL_SECONDS: '60',
   // Zero, so the integration suite sees `last_used_at` move on every call. In production the
   // interval is what stops a busy integration writing once per read.
   API_KEY_TOUCH_INTERVAL_SECONDS: '0',
@@ -88,6 +91,11 @@ export const TEST_ENV: Record<string, string> = {
   // stock-take.int-spec takes the whole allowance, then the unit past it.
   DIRECT_TAKE_DAILY_UNITS_PER_ACCOUNT: '100',
   CATALOGUE_MAX_PRODUCTS: '5000',
+  // The production defaults. locate.int-spec holds polls for a second or two by passing `wait`.
+  LOCATE_EVENT_TTL_SECONDS: '15',
+  LOCATE_MAX_WAIT_SECONDS: '25',
+  LOCATE_MAX_WAITERS: '32',
+  LOCATE_RING_SIZE: '64',
   IMPORT_MAX_ROWS: '5000',
   IMPORT_MAX_FILE_BYTES: '5242880',
   IMPORT_LOCKOUT_PADDING_MINUTES: '10',

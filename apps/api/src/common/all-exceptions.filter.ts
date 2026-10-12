@@ -8,8 +8,9 @@ import {
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { ErrorCode, type ApiErrorBody } from '@ims/shared';
-import { DomainError, RateLimitedError } from './errors';
+import { DomainError, RateLimitedError, SystemImportInProgressError } from './errors';
 import { redactUrl } from './redact-url';
+import { MS_PER_SECOND } from './time';
 
 /**
  * The single place an error becomes an HTTP response. Every response is `{ code, message }`,
@@ -63,7 +64,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
       const retryAfterSeconds =
         exception instanceof RateLimitedError
           ? this.retryAfterFromDetails(payload.details)
-          : undefined;
+          : exception instanceof SystemImportInProgressError
+            ? this.retryAfterFromFinish(payload.details)
+            : undefined;
       return { status: exception.getStatus(), body, retryAfterSeconds };
     }
 
@@ -144,6 +147,20 @@ export class AllExceptionsFilter implements ExceptionFilter {
     return typeof value === 'number' && Number.isFinite(value) && value >= 0
       ? value
       : undefined;
+  }
+
+  /**
+   * The import lockout's 503 says when to come back (Phase 13, decided 2026-10-12): a client
+   * with no screen to show — the drawer lights — needs the header to back off, where the SPA
+   * reads `estimatedFinishAt` itself. Seconds until that estimate, at least one; no header when
+   * there is no estimate, by the same rule as above.
+   */
+  private retryAfterFromFinish(details: unknown): number | undefined {
+    if (!details || typeof details !== 'object') return undefined;
+    const value = (details as { estimatedFinishAt?: unknown }).estimatedFinishAt;
+    const finishAt = typeof value === 'string' ? Date.parse(value) : Number.NaN;
+    if (!Number.isFinite(finishAt)) return undefined;
+    return Math.max(1, Math.ceil((finishAt - Date.now()) / MS_PER_SECOND));
   }
 
   private codeForStatus(status: number): string {

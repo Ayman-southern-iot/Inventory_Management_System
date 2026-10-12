@@ -4,8 +4,8 @@ import { Badge } from '@/components/ui/primitives';
 import { t } from '@/i18n/en';
 
 /**
- * A `Record` over the enum rather than a list, so a sixth scope added to the shared contract
- * fails the build here until somebody has written down what it means.
+ * A `Record` over the enum rather than a list, so a scope added to the shared contract fails the
+ * build here until somebody has written down what it means.
  */
 const SCOPE_COPY: Record<ApiKeyScope, { label: string; hint: string }> = {
   [ApiKeyScope.INVENTORY_READ]: {
@@ -28,9 +28,17 @@ const SCOPE_COPY: Record<ApiKeyScope, { label: string; hint: string }> = {
     label: t.apiKeys.scopeStockTake,
     hint: t.apiKeys.scopeStockTakeHint,
   },
+  [ApiKeyScope.LOCATE_READ]: {
+    label: t.apiKeys.scopeLocateRead,
+    hint: t.apiKeys.scopeLocateReadHint,
+  },
+  [ApiKeyScope.LOCATE_WRITE]: {
+    label: t.apiKeys.scopeLocateWrite,
+    hint: t.apiKeys.scopeLocateWriteHint,
+  },
 };
 
-/** Contract order: the read scope first, then the four that change data. */
+/** Contract order: inventory first, then the four catalogue and stock writes, then the drawer lights. */
 const SCOPES = Object.values(ApiKeyScope);
 
 interface ApiKeyScopeFieldsProps {

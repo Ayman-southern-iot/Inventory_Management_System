@@ -319,11 +319,17 @@ describe('API keys', () => {
       // Widened 2026-09-29: yes, we meant to. ADR-0002 (accepted by Arif) opens the seven write
       // routes below to keys bound to a service account. `POST /stock/take` is absent because
       // this app runs with ALLOW_DIRECT_TAKE off, and a switched-off route is not advertised.
+      //
+      // Widened 2026-10-12: yes, we meant to. The drawer lights (Phase 13) open `POST /locate` to
+      // locate:write and the two `/locate` reads to locate:read.
       expect(paths).toEqual([
         '/catalogue',
         '/categories',
         '/categories',
         '/categories/:id',
+        '/locate',
+        '/locate/latest',
+        '/locate/next',
         '/locations',
         '/locations/compartments',
         '/locations/rooms',

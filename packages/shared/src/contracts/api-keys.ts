@@ -31,6 +31,17 @@ export const ApiKeyScope = {
   STOCK_RECEIVE: 'stock:receive',
   /** Take stock off a shelf in one call (`POST /stock/take`). */
   STOCK_TAKE: 'stock:take',
+  /**
+   * Wait for the next drawer-light event (`GET /locate/next`, migrations 0040–0041). Read-only:
+   * the event names drawers, cells and a colour, never a product or a person.
+   */
+  LOCATE_READ: 'locate:read',
+  /**
+   * Ask the drawer lights to show where products are (`POST /locate`). It changes no data, but
+   * it is a POST that every waiting light acts on, so it is held to the write-key rules: a
+   * service account and an expiry.
+   */
+  LOCATE_WRITE: 'locate:write',
 } as const;
 export type ApiKeyScope = (typeof ApiKeyScope)[keyof typeof ApiKeyScope];
 
@@ -39,9 +50,13 @@ export const apiKeyScopeSchema = z.nativeEnum(ApiKeyScope);
 /**
  * The scopes that cannot change anything. A key holding only these needs no service account and
  * may live forever (K6); a key holding anything else needs both a service account and an expiry.
- * Mirrored by the two CHECKs in migration 0039, which is the guarantee — this is the explanation.
+ * Mirrored by the two CHECKs from migration 0039, re-created by 0041 to admit `locate:read`; they
+ * are the guarantee — this is the explanation.
  */
-export const READ_ONLY_API_KEY_SCOPES: readonly ApiKeyScope[] = [ApiKeyScope.INVENTORY_READ];
+export const READ_ONLY_API_KEY_SCOPES: readonly ApiKeyScope[] = [
+  ApiKeyScope.INVENTORY_READ,
+  ApiKeyScope.LOCATE_READ,
+];
 
 export const isReadOnlyApiKeyScope = (scope: ApiKeyScope): boolean =>
   READ_ONLY_API_KEY_SCOPES.includes(scope);

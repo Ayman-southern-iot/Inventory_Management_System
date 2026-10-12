@@ -116,6 +116,10 @@ describe('K2: no API key answer carries a person, on any key-reachable route', (
         quantity: 1,
         isReturnable: false,
       }),
+    // Drawer lights (Phase 13). `wait=0` so the walk never holds a request open.
+    'POST /locate': () => key.post('/locate').send({ productIds: [fixture.productId] }),
+    'GET /locate/next': () => key.get('/locate/next?wait=0'),
+    'GET /locate/latest': () => key.get('/locate/latest'),
   };
 
   it('has a case for every key-reachable route, and none that is not one', () => {

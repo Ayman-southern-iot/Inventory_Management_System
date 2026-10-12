@@ -312,6 +312,12 @@ export const t = {
     scopeStockReceiveHint: 'Record goods arriving onto a shelf.',
     scopeStockTake: 'Take stock',
     scopeStockTakeHint: 'Take items off a shelf in one call. The service account becomes the holder.',
+    scopeLocateRead: 'Drawer lights, watch',
+    scopeLocateReadHint:
+      'For the cabinet lights: wait for which drawers to light, and in which colour. No products, no people.',
+    scopeLocateWrite: 'Drawer lights, signal',
+    scopeLocateWriteHint:
+      'Light the drawers that hold the products a search found. It acts on the cabinet, so it needs a service account and an expiry.',
     writeScopeNotice:
       'A key that can change data acts as a service account, and everything it does is recorded against that account. It must expire within {n} days.',
     serviceAccount: 'Acts as service account',

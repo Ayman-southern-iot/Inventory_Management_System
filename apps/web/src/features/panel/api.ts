@@ -5,7 +5,9 @@ import { queryKeys } from '@/api/keys';
 import { PANEL_OFFLINE_RETRY_MS, PANEL_REFRESH_MS } from './constants';
 
 /**
- * The only path the panel calls, besides the session restore every page shares. `GET /catalogue`
+ * The only path the panel reads, besides the session restore every page shares. Read-only, except
+ * the locate signal: the panel also posts `POST /locate` to light the drawers (features/locate).
+ * `GET /catalogue`
  * carries no person data by construction (contracts/catalogue.ts, "No names, ever"), which is why
  * it and not `GET /products/:id` feeds the panel: product detail answers a session with
  * `activeBorrows`, borrower names included. `panel-no-person-data.int-spec.ts` pins this path.
