@@ -579,6 +579,127 @@ describe('migrations', () => {
     });
   });
 
+  describe('0040–0041 — the drawer-light scopes', () => {
+    const BEFORE = '0039_api_key_service_accounts';
+
+    async function account(email: string, isServiceAccount = false): Promise<string> {
+      const row = await sql<{ id: string }>`
+        INSERT INTO users (email, password_hash, full_name, designation, is_service_account)
+        VALUES (${email}, 'x', ${email}, 'Test', ${isServiceAccount})
+        RETURNING id
+      `.execute(db);
+      return row.rows[0]!.id;
+    }
+
+    /** A key row straight into the table, so the CHECKs are what accepts or refuses it. */
+    const insertKey = (
+      prefix: string,
+      scopes: string[],
+      creator: string,
+      boundTo: string | null,
+      expires: boolean,
+    ) => sql`
+      INSERT INTO api_keys (name, key_prefix, token_hash, scopes, created_by, service_user_id, expires_at)
+      VALUES ('k', ${prefix}, ${`h-${prefix}`}, ${scopes}::text[]::api_key_scope[], ${creator},
+              ${boundTo}, ${expires ? sql`now() + interval '1 day'` : null})
+    `.execute(db);
+
+    async function enumLabels(): Promise<string> {
+      const row = await sql<{ r: string }>`SELECT enum_range(NULL::api_key_scope)::text AS r`.execute(db);
+      return row.rows[0]!.r;
+    }
+
+    async function checkDefinitions(): Promise<string[]> {
+      const rows = await sql<{ def: string }>`
+        SELECT conname || ': ' || pg_get_constraintdef(oid) AS def FROM pg_constraint
+        WHERE conrelid = 'api_keys'::regclass AND conname LIKE 'api_keys_write_scope_needs_%'
+        ORDER BY conname
+      `.execute(db);
+      return rows.rows.map((row) => row.def);
+    }
+
+    async function isApplied(name: string): Promise<boolean> {
+      const row = await sql<{ n: string }>`
+        SELECT count(*) AS n FROM kysely_migration WHERE name = ${name}
+      `.execute(db);
+      return Number(row.rows[0]!.n) === 1;
+    }
+
+    /*
+     * The migrator applies every pending migration in one transaction, so 0041 runs in the
+     * transaction that added `locate:read`. Postgres refuses to use a label there; this proves
+     * 0041 never does.
+     */
+    it('applies both in one run from 0039, and treats locate:read as read-only', async () => {
+      await migrateToNamed(db, BEFORE);
+      await migrateUp(db);
+      expect(await enumLabels()).toBe(
+        '{inventory:read,catalog:write,locations:write,stock:receive,stock:take,locate:read,locate:write}',
+      );
+
+      const creator = await account('creator.0041@ims.test');
+      const panel = await account('panel.0041@ims.test', true);
+      // The light controller's key: read-only, so no account and no expiry are needed.
+      await insertKey('ims_0041read', ['locate:read'], creator, null, false);
+      await insertKey('ims_0041both', ['inventory:read', 'locate:read'], creator, null, false);
+      // locate:write is a write scope: both are required, alone or beside a read scope. Each
+      // refusal is checked by constraint name, so the right CHECK is proven to be the one refusing.
+      const NEEDS_ACCOUNT = /api_keys_write_scope_needs_service_account/;
+      const NEEDS_EXPIRY = /api_keys_write_scope_needs_expiry/;
+      await expect(insertKey('ims_0041noac', ['locate:write'], creator, null, true)).rejects.toThrow(
+        NEEDS_ACCOUNT,
+      );
+      await expect(insertKey('ims_0041noex', ['locate:write'], creator, panel, false)).rejects.toThrow(
+        NEEDS_EXPIRY,
+      );
+      await expect(
+        insertKey('ims_0041mixd', ['locate:read', 'locate:write'], creator, null, true),
+      ).rejects.toThrow(NEEDS_ACCOUNT);
+      // locate:read beside an older write scope does not make the key read-only.
+      await expect(
+        insertKey('ims_0041take', ['locate:read', 'stock:take'], creator, null, true),
+      ).rejects.toThrow(NEEDS_ACCOUNT);
+      await insertKey('ims_0041good', ['inventory:read', 'locate:write'], creator, panel, true);
+    });
+
+    it('rolls back to exactly what 0039 left, and applies again', async () => {
+      await migrateToNamed(db, BEFORE);
+      const labelsAt0039 = await enumLabels();
+      const checksAt0039 = await checkDefinitions();
+
+      await migrateUp(db);
+      expect(await checkDefinitions()).not.toEqual(checksAt0039);
+      const creator = await account('creator.0040@ims.test');
+      await insertKey('ims_0040keep', ['inventory:read'], creator, null, false);
+
+      await migrateToNamed(db, BEFORE);
+      expect(await enumLabels()).toBe(labelsAt0039);
+      expect(await checkDefinitions()).toEqual(checksAt0039);
+      expect(await isApplied('0040_locate_scopes')).toBe(false);
+
+      await migrateUp(db);
+      expect(await isApplied('0041_locate_read_is_read_only')).toBe(true);
+    });
+
+    it('refuses to roll back 0041 while a locate:read key has no account or no expiry', async () => {
+      await migrateUp(db);
+      const creator = await account('creator.0041r@ims.test');
+      await insertKey('ims_0041held', ['locate:read'], creator, null, false);
+      await expect(migrateToNamed(db, BEFORE)).rejects.toThrow(/Refusing to roll back 0041/);
+      expect(await isApplied('0041_locate_read_is_read_only')).toBe(true);
+    });
+
+    it('refuses to roll back 0040 while any key holds a locate scope', async () => {
+      await migrateUp(db);
+      const creator = await account('creator.0040r@ims.test');
+      const panel = await account('panel.0040r@ims.test', true);
+      // Bound and expiring, so 0041's guard lets it pass and 0040's is the one that refuses.
+      await insertKey('ims_0040held', ['locate:write'], creator, panel, true);
+      await expect(migrateToNamed(db, BEFORE)).rejects.toThrow(/Refusing to roll back 0040/);
+      expect(await isApplied('0040_locate_scopes')).toBe(true);
+    });
+  });
+
   it('allows only one company-wide row per approver slot', async () => {
     await migrateUp(db);
     await sql`INSERT INTO approver_slots (department_id, slot_no) VALUES (NULL, 1)`.execute(db);

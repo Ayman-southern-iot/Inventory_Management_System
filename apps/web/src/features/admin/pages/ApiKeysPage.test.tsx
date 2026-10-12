@@ -424,7 +424,7 @@ describe('ApiKeysPage', () => {
         .map((option) => (option as HTMLOptionElement).value);
     }
 
-    it('offers all five scopes, and marks the four that change data', async () => {
+    it('offers all seven scopes, and marks the five that change data', async () => {
       await openCreate();
 
       for (const label of [
@@ -433,12 +433,14 @@ describe('ApiKeysPage', () => {
         t.apiKeys.scopeLocationsWrite,
         t.apiKeys.scopeStockReceive,
         t.apiKeys.scopeStockTake,
+        t.apiKeys.scopeLocateRead,
+        t.apiKeys.scopeLocateWrite,
       ]) {
         expect(screen.getByRole('checkbox', { name: new RegExp(label) })).toBeInTheDocument();
       }
       expect(
         screen.getAllByRole('checkbox', { name: new RegExp(t.apiKeys.scopeChangesData) }),
-      ).toHaveLength(4);
+      ).toHaveLength(5);
       expect(
         screen.getByRole('checkbox', { name: new RegExp(t.apiKeys.scopeInventoryRead) }),
       ).toBeChecked();
