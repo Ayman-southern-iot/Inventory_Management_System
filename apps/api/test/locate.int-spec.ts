@@ -225,6 +225,33 @@ describe('drawer lights (locate)', () => {
       expect(wokenAt - answeredAt).toBeLessThan(200);
     });
 
+    it('refuses a key a third open poll with a short Retry-After, and still parks another key', async () => {
+      const lightA = await readOnlyKey([ApiKeyScope.LOCATE_READ]);
+      const lightB = await readOnlyKey([ApiKeyScope.LOCATE_READ]);
+      const share = Number(TEST_ENV.LOCATE_MAX_WAITERS_PER_CALLER);
+      const from = head();
+      const parked = Array.from({ length: share }, () =>
+        lightA.get(`/locate/next?after=${from}&wait=20`).then((response) => response.status),
+      );
+      await vi.waitFor(() => expect(feed.waiting).toBe(share));
+
+      const refused = await lightA.get(`/locate/next?after=${from}&wait=20`);
+      expect(refused.status).toBe(429);
+      expect(refused.body.code).toBe(ErrorCode.RATE_LIMITED);
+      expect(Number(refused.headers['retry-after'])).toBeLessThan(
+        Number(TEST_ENV.LOCATE_EVENT_TTL_SECONDS),
+      );
+
+      const other = lightB.get(`/locate/next?after=${from}&wait=20`).then((response) => response.status);
+      await vi.waitFor(() => expect(feed.waiting).toBe(share + 1));
+
+      // A locate wakes every parked poll, which is how this test lets them go.
+      await general.post('/locate').send({ productIds: [await stocked(cellA.id, 1)] });
+      await expect(Promise.all([...parked, other])).resolves.toEqual(
+        Array.from({ length: share + 1 }, () => 200),
+      );
+    });
+
     it('frees the waiting slot when the light disconnects', async () => {
       const light = await readOnlyKey([ApiKeyScope.LOCATE_READ]);
       const request = light.get(`/locate/next?after=${head()}&wait=20`);
@@ -452,6 +479,15 @@ describe('drawer lights (locate)', () => {
         .executeTakeFirstOrThrow();
       lock.engage(job.id, new Date(Date.now() + 10 * 60 * 1000));
     }
+
+    it('caps the Retry-After, however long the import is expected to take', async () => {
+      await engageLock(); // estimated ten minutes out
+      const response = await general.post('/locate').send({ productIds: [randomUUID()] });
+      expect(response.status).toBe(503);
+      expect(Number(response.headers['retry-after'])).toBe(
+        Number(TEST_ENV.IMPORT_LOCKOUT_RETRY_AFTER_MAX_SECONDS),
+      );
+    });
 
     it('refuses /locate and /locate/next with 503 and a Retry-After the light can back off by', async () => {
       const light = await readOnlyKey([ApiKeyScope.LOCATE_READ]);

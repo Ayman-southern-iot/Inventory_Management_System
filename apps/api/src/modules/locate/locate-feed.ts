@@ -13,6 +13,8 @@ const RETRY_WHEN_FULL_SECONDS = 1;
 
 interface Waiter {
   after: number | undefined;
+  /** The per-caller bucket it counts against; undefined only for a caller inside the API. */
+  caller: string | undefined;
   settle: (event: LocateEvent | null) => void;
 }
 
@@ -73,11 +75,16 @@ export class LocateFeed implements OnModuleDestroy {
    * The event a light that has acted on `after` should act on next, waiting up to `waitSeconds`
    * (capped at `LOCATE_MAX_WAIT_SECONDS`) for one to be published. Null when none arrives in time
    * or `signal` aborts — the client went away, or the API is shutting down.
+   *
+   * `caller` is who is waiting — per key or per signed-in user, as the controller names it — and
+   * no caller may hold more than `LOCATE_MAX_WAITERS_PER_CALLER` waits at once, so one cannot take
+   * every slot and starve the lights (decided 2026-10-12). Every HTTP poll passes one.
    */
   async next(
     requestedAfter: number | undefined,
     waitSeconds: number | undefined,
     signal?: AbortSignal,
+    caller?: string,
   ): Promise<LocateEvent | null> {
     const after =
       requestedAfter !== undefined && requestedAfter > this.lastSeq ? undefined : requestedAfter;
@@ -89,14 +96,19 @@ export class LocateFeed implements OnModuleDestroy {
     // Shutting down: a light that re-polls on the shutdown answer must not be parked again.
     if (waitMs === 0 || signal?.aborted || this.isClosed) return null;
 
-    // Each waiter is a held socket. A full house is a capacity answer.
+    // Each waiter is a held socket. A full house, or a caller already holding its share, is a
+    // capacity answer.
     if (this.waiters.size >= this.config.locate.maxWaiters) {
+      throw new RateLimitedError(RETRY_WHEN_FULL_SECONDS);
+    }
+    if (caller !== undefined && this.waitingFor(caller) >= this.config.locate.maxWaitersPerCaller) {
       throw new RateLimitedError(RETRY_WHEN_FULL_SECONDS);
     }
 
     return new Promise<LocateEvent | null>((resolve) => {
       const waiter: Waiter = {
         after,
+        caller,
         settle: (event) => {
           clearTimeout(timer);
           signal?.removeEventListener('abort', onAbort);
@@ -114,6 +126,13 @@ export class LocateFeed implements OnModuleDestroy {
   /** Open long-polls right now. */
   get waiting(): number {
     return this.waiters.size;
+  }
+
+  /** Open long-polls held by one caller. */
+  waitingFor(caller: string): number {
+    let count = 0;
+    for (const waiter of this.waiters) if (waiter.caller === caller) count += 1;
+    return count;
   }
 
   /** Release every held request at once, so a shutdown is not kept waiting on them. */

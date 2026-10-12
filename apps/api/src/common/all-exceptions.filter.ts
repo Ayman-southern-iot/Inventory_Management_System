@@ -11,6 +11,7 @@ import { ErrorCode, type ApiErrorBody } from '@ims/shared';
 import { DomainError, RateLimitedError, SystemImportInProgressError } from './errors';
 import { redactUrl } from './redact-url';
 import { MS_PER_SECOND } from './time';
+import { config } from '../config';
 
 /**
  * The single place an error becomes an HTTP response. Every response is `{ code, message }`,
@@ -152,15 +153,18 @@ export class AllExceptionsFilter implements ExceptionFilter {
   /**
    * The import lockout's 503 says when to come back (Phase 13, decided 2026-10-12): a client
    * with no screen to show — the drawer lights — needs the header to back off, where the SPA
-   * reads `estimatedFinishAt` itself. Seconds until that estimate, at least one; no header when
-   * there is no estimate, by the same rule as above.
+   * reads `estimatedFinishAt` itself. Seconds until that estimate, at least one and at most
+   * `IMPORT_LOCKOUT_RETRY_AFTER_MAX_SECONDS`: the estimate is padded, and an import that finishes
+   * early must not keep an obedient client away for the rest of the padding. No header when there
+   * is no estimate, by the same rule as above.
    */
   private retryAfterFromFinish(details: unknown): number | undefined {
     if (!details || typeof details !== 'object') return undefined;
     const value = (details as { estimatedFinishAt?: unknown }).estimatedFinishAt;
     const finishAt = typeof value === 'string' ? Date.parse(value) : Number.NaN;
     if (!Number.isFinite(finishAt)) return undefined;
-    return Math.max(1, Math.ceil((finishAt - Date.now()) / MS_PER_SECOND));
+    const untilFinish = Math.ceil((finishAt - Date.now()) / MS_PER_SECOND);
+    return Math.min(config.imports.lockoutRetryAfterMaxSeconds, Math.max(1, untilFinish));
   }
 
   private codeForStatus(status: number): string {

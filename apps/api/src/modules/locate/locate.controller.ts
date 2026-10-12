@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query, Res } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query, Req, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import {
   ApiKeyScope,
@@ -49,10 +49,7 @@ export class LocateController {
     @CurrentUser() actor: RequestUser,
     @CurrentApiKey() apiKey: { id: string } | null,
   ): Promise<LocateAccepted> {
-    // Per key, or per signed-in user. A key is its own caller even when it shares a service
-    // account, and the service stays unaware of keys (api-key.policies.ts).
-    const caller = apiKey === null ? `user:${actor.id}` : `apikey:${apiKey.id}`;
-    return this.locate.locate(body.productIds, caller);
+    return this.locate.locate(body.productIds, callerOf(apiKey, actor.id));
   }
 
   @ApiKeyScopes({
@@ -64,6 +61,8 @@ export class LocateController {
   @Get('next')
   async next(
     @Query(zodPipe(locateNextQuerySchema)) query: LocateNextQuery,
+    @CurrentApiKey() apiKey: { id: string } | null,
+    @Req() request: { user?: RequestUser },
     @Res({ passthrough: true }) response: Response,
   ): Promise<LocateEvent | undefined> {
     // A light that drops its connection must not keep a waiting slot for the rest of the wait —
@@ -71,7 +70,9 @@ export class LocateController {
     const gone = new AbortController();
     response.on('close', () => gone.abort());
     if (response.socket?.destroyed ?? true) gone.abort();
-    const event = await this.feed.next(query.after, query.wait, gone.signal);
+    // A read-only key acts as nobody, so a key is counted by itself; a session by its user.
+    const caller = callerOf(apiKey, request.user?.id);
+    const event = await this.feed.next(query.after, query.wait, gone.signal, caller);
     if (event === null) response.status(HttpStatus.NO_CONTENT);
     return event ?? undefined;
   }
@@ -87,4 +88,15 @@ export class LocateController {
     if (event === null) response.status(HttpStatus.NO_CONTENT);
     return event ?? undefined;
   }
+}
+
+/**
+ * The bucket a caller is counted in, for the per-caller limits: the key itself, or the signed-in
+ * user. A key is its own caller even when it shares a service account, and the services stay
+ * unaware of keys (api-key.policies.ts). A request that is neither never reaches a handler.
+ */
+function callerOf(apiKey: { id: string } | null, userId: string | undefined): string {
+  if (apiKey !== null) return `apikey:${apiKey.id}`;
+  if (userId === undefined) throw new Error('A locate route was reached with neither a key nor a user');
+  return `user:${userId}`;
 }

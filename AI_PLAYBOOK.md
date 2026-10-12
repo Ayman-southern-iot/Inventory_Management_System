@@ -8,7 +8,7 @@
 >
 > **Maintenance rule:** see `.claude/rules/05-ai-playbook.md`. A `PostToolUse` hook
 > (`.claude/hooks/playbook-reminder.sh`) reminds Claude to update this file after every
-> meaningful edit. Last updated: 2026-10-12 (drawer lights: the `locate` module and its scopes, §6/§11/§19; locate e2e script, §7; one-transaction migrations, §16). 2026-10-09 (3D room view `/room`, §19; bundle budget and room scripts, §7; production runs the root stack + override, §16). 2026-10-08 (the lead reviews and merges, Claude never merges, §14; dev API on the keeper and the drawer-plan entry script, §7; kiosk login is GENERAL-only, §19). Earlier,
+> meaningful edit. Last updated: 2026-10-12 (drawer lights: the `locate` module, its scopes and per-caller wait cap, §6/§11/§19; locate e2e script, §7; one-transaction migrations, §16). 2026-10-09 (3D room view `/room`, §19; bundle budget and room scripts, §7; production runs the root stack + override, §16). 2026-10-08 (the lead reviews and merges, Claude never merges, §14; dev API on the keeper and the drawer-plan entry script, §7; kiosk login is GENERAL-only, §19). Earlier,
 > 2026-10-05 (lab panel `/panel`, §19. Earlier the same day: branch model:
 > `main` + `advance-inventory-management`, hooks, CI — §7, §14). Earlier,
 > 2026-10-04 (lint baseline is now 0 — §16 landmines; `playwright-audit` skill — §15.1). Earlier,
@@ -941,12 +941,14 @@ from "an admin switched it off": the latter stays off across every restart (`DEC
   (`BorrowingRepository.unitsTakenTodayLocked`), so concurrent takes cannot overspend it. Over it:
   `429 DIRECT_TAKE_DAILY_LIMIT_REACHED`.
 
-**Drawer lights** (Phase 13, 2026-10-12) add six config keys, all pinned in `TEST_ENV`:
+**Drawer lights** (Phase 13, 2026-10-12) add eight config keys, all pinned in `TEST_ENV`:
 `THROTTLE_LOCATE_LIMIT` / `THROTTLE_LOCATE_TTL_SECONDS` (30 / 60; `POST /locate` per signed-in
 user and per key, counted in the handler by `CallerWindow`, not by the global throttler, which
 cannot see who is calling), `LOCATE_EVENT_TTL_SECONDS` (15), `LOCATE_MAX_WAIT_SECONDS` (25, at
-most 90: Cloudflare cuts a response at 100 s), `LOCATE_MAX_WAITERS` (32) and `LOCATE_RING_SIZE`
-(64). Two scopes: `locate:read` is read-only like `inventory:read` (migration 0041 re-creates
+most 90: Cloudflare cuts a response at 100 s), `LOCATE_MAX_WAITERS` (32),
+`LOCATE_MAX_WAITERS_PER_CALLER` (2, so one caller cannot starve the lights), `LOCATE_RING_SIZE`
+(64), and `IMPORT_LOCKOUT_RETRY_AFTER_MAX_SECONDS` (60, the cap on the import 503's
+`Retry-After`, which counts down to the padded estimate). Two scopes: `locate:read` is read-only like `inventory:read` (migration 0041 re-creates
 0039's CHECKs to say so), `locate:write` follows the write-key rules. Contract and wire format:
 `packages/shared/src/contracts/locate.ts` and integration doc §15.4.
 

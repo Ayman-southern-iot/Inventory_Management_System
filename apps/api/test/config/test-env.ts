@@ -95,10 +95,14 @@ export const TEST_ENV: Record<string, string> = {
   LOCATE_EVENT_TTL_SECONDS: '15',
   LOCATE_MAX_WAIT_SECONDS: '25',
   LOCATE_MAX_WAITERS: '32',
+  // locate.int-spec opens one poll past this from one key.
+  LOCATE_MAX_WAITERS_PER_CALLER: '2',
   LOCATE_RING_SIZE: '64',
   IMPORT_MAX_ROWS: '5000',
   IMPORT_MAX_FILE_BYTES: '5242880',
   IMPORT_LOCKOUT_PADDING_MINUTES: '10',
+  // locate.int-spec asserts the cap against a ten-minute estimate.
+  IMPORT_LOCKOUT_RETRY_AFTER_MAX_SECONDS: '60',
   // Short, so a spec can let a heartbeat go stale without sleeping for a real minute.
   IMPORT_HEARTBEAT_TIMEOUT_SECONDS: '10',
   IMPORT_SNAPSHOT_RETENTION_DAYS: '0',
