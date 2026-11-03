@@ -33,9 +33,10 @@ every session, so every line is a recurring cost. Growth is the failure mode —
 
 ## Output is reviewed by the lead
 
-The lead, **Arif**, reviews every pull request and is the only one who merges. **Claude never
-merges**, not even from his account, unless he says "merge #N" for that pull request. Write output
-so it can be reviewed from the characters you print alone. Follow `.claude/rules/70-assist-handoff.md`:
+The lead, **Arif**, reviews every pull request. He and the repo owner, **Ayman**, are the only ones
+who merge. **Claude never merges**, not even from their accounts, unless one of them says "merge #N"
+for that pull request. Write output so it can be reviewed from the characters you print alone.
+Follow `.claude/rules/70-assist-handoff.md`:
 one block per issue, verbatim evidence inline, `R`/`D` tags, red run before green, `NOTCHECKED` never
 empty. If it is not in the block, it did not happen.
 

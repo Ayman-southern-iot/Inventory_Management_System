@@ -102,7 +102,8 @@ deleted or rewritten to get green; CI rejects a newly added `.skip` / `.only`.
 
 **Pull request into `main`** (the gate that matters). The template asks for the basis of the
 behaviour, real command output, and anything new (migration, `ErrorCode`, setting, dependency).
-The reviewer, the lead (Arif), checks the project invariants first, and is the only one who merges:
+The reviewer, the lead (Arif), checks the project invariants first. He and the repo owner (Ayman) are
+the only ones who merge:
 
 1. No hardcoded values: env → config module, business values → `app_settings`. (`.claude/rules/10-no-hardcoding.md`)
 2. Only `StockService` writes `stock_placements` / `stock_ledger`, in one transaction with a ledger row.
@@ -132,8 +133,8 @@ to it as to you.
 
 - You are responsible for what it commits. Read the diff. Its `Co-Authored-By` trailer stays.
 - It must not use `--no-verify`, push to `main`, or force-push. `.claude/settings.json` denies those.
-- It never merges a pull request, not even from the lead's account, unless the lead says
-  "merge #N" for that one.
+- It never merges a pull request, not even from the lead's or the owner's account, unless the lead
+  (Arif) or the owner (Ayman) says "merge #N" for that one.
 - Do not paste secrets or a `.env` into a prompt. `.env` is gitignored and must stay so.
 - **`docs/state/` is the lead's snapshot** (`NOW.md` is rewritten whole and injected into every
   session). Do not commit changes to it from a feature branch: two developers' `/handoff` will
