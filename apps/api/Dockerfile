@@ -3,7 +3,7 @@
 # Built from the REPO ROOT so the pnpm workspace resolves:
 #   docker build -f apps/api/Dockerfile -t ims-api .
 
-ARG NODE_VERSION=22.13-alpine
+ARG NODE_VERSION=24.22.2-alpine
 ARG PNPM_VERSION=9.15.4
 
 # ---------------------------------------------------------------- deps + build

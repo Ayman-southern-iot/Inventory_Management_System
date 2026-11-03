@@ -4,7 +4,7 @@
   "private": true,
   "packageManager": "pnpm@9.15.4",
   "engines": {
-    "node": ">=20.11"
+    "node": ">=24.22"
   },
   "scripts": {
     "dev": "concurrently -n api,web -c blue,magenta \"pnpm --filter @ims/api dev\" \"pnpm --filter @ims/web dev\"",
