@@ -28,7 +28,7 @@
 #   IMS_KEEPER_DIR         sync target, relative to the keeper user's home   [ims-int/Inventory_Management_System]
 #   IMS_INT_DB_CONTAINER   the test database container on the keeper         [ims-db-test]
 #   IMS_INT_NETWORK        user-defined network shared with the runner       [ims-int]
-#   IMS_INT_NODE_IMAGE     runner base image; keep in step with apps/api/Dockerfile  [node:24.22.2-alpine]
+#   IMS_INT_NODE_IMAGE     runner base image; keep in step with apps/api/Dockerfile  [node:26.13.0-alpine]
 #   IMS_INT_PNPM_VERSION   pnpm version; keep in step with apps/api/Dockerfile       [9.15.4]
 set -euo pipefail
 
@@ -38,7 +38,7 @@ CONTEXT="${IMS_KEEPER_CONTEXT:-keeper}"
 REMOTE_DIR="${IMS_KEEPER_DIR:-ims-int/Inventory_Management_System}"
 DB_CONTAINER="${IMS_INT_DB_CONTAINER:-ims-db-test}"
 NETWORK="${IMS_INT_NETWORK:-ims-int}"
-NODE_IMAGE="${IMS_INT_NODE_IMAGE:-node:24.22.2-alpine}"
+NODE_IMAGE="${IMS_INT_NODE_IMAGE:-node:26.13.0-alpine}"
 PNPM_VERSION="${IMS_INT_PNPM_VERSION:-9.15.4}"
 RUNNER_IMAGE="ims-int-runner:$(printf '%s' "$NODE_IMAGE" | tr ':/' '--')-pnpm${PNPM_VERSION}"
 RUNNER_NAME="ims-int-run"

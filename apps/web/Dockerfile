@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 # Built from the REPO ROOT:  docker build -f apps/web/Dockerfile -t ims-web .
 
-ARG NODE_VERSION=24.22.2-alpine
+ARG NODE_VERSION=26.13.0-alpine
 ARG NGINX_VERSION=1.27-alpine
 ARG PNPM_VERSION=9.15.4
 
