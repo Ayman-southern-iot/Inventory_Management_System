@@ -116,6 +116,12 @@ jobs:
     # date-columns.int-spec asserts a timezone east of UTC, and a runner defaults to UTC.
     env:
       TZ: Asia/Dhaka
+      # The PDF specs render with the Chrome the ubuntu runner image already has, not with
+      # puppeteer's download: on Node 25+ that download's unzip (extract-zip 2.0.1) stalls after
+      # ~200 KB, Node exits 0 with the promise pending, and an empty browser folder is left behind.
+      # Production does the same thing with Alpine's chromium (PDF_BROWSER_EXECUTABLE_PATH).
+      PUPPETEER_SKIP_DOWNLOAD: 'true'
+      IMS_INT_BROWSER_PATH: /usr/bin/google-chrome
     services:
       db-test:
         image: postgres:16.4-alpine
@@ -144,13 +150,11 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # Puppeteer downloads its Chrome (to ~/.cache/puppeteer) in a postinstall script, and pnpm
-      # skips that script when the store is restored from the setup-node cache. A warm cache
-      # therefore left the PDF specs with no browser: HTTP 500 from every render. Running the
-      # installer explicitly fetches the version puppeteer pins; with the browser present, it
-      # does nothing.
-      - name: Install the PDF renderer's browser
-        run: node apps/api/node_modules/puppeteer/install.mjs
+      # Fail here, not as HTTP 500s from every PDF spec, if the runner image ever drops Chrome.
+      - name: Check the PDF renderer's browser
+        run: |
+          test -x "$IMS_INT_BROWSER_PATH" || { echo "no browser at $IMS_INT_BROWSER_PATH"; exit 1; }
+          "$IMS_INT_BROWSER_PATH" --version
 
       - name: Build shared
         run: pnpm --filter @ims/shared build
