@@ -14,7 +14,7 @@ main                           protected. Production-ready. Changes arrive by pu
 
 | Branch | Who pushes | How it gets to the next stage |
 |---|---|---|
-| `main` | nobody directly | pull request, CI green, reviewed and merged by the lead |
+| `main` | nobody directly | pull request, CI green, reviewed by the lead (Arif), merged by Arif or Ayman |
 | `advance-inventory-management` | developers, directly, after pulling | pull request into `main` |
 | `<type>/<name>` | the author | pull request into `main` or `advance-inventory-management` |
 
