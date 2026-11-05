@@ -159,7 +159,7 @@ docker compose stop           # stop, KEEP the data
 ### 3.2 Option B — host dev mode (use this when you are editing code)
 
 ```bash
-pnpm install                  # pnpm 9.15.4, Node >= 20.11
+pnpm install                  # pnpm 9.15.4, Node >= 26.13 (.nvmrc)
 pnpm db:up                    # dev Postgres on 5433 + test Postgres on 5434
 pnpm db:migrate               # apply migrations
 pnpm db:seed                  # idempotent reference data

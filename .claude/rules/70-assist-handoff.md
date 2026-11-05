@@ -1,8 +1,9 @@
 # Handoff format — output reviewed by the lead
 
-Your output is reviewed by the lead, **Arif**, who reviews and merges every pull request. Write it
-so it can be reviewed from **only the characters you print**: no shell, no git, no database, no
-browser assumed. A summary is unreviewable; a paraphrased test result is unverifiable.
+Your output is reviewed by the lead, **Arif**, who reviews every pull request; he or the repo owner,
+**Ayman**, merges it. Write it so it can be reviewed from **only the characters you print**: no
+shell, no git, no database, no browser assumed. A summary is unreviewable; a paraphrased test
+result is unverifiable.
 
 **Every claim carries its evidence in the paste. If it is not in the block, it did not happen.**
 
@@ -188,6 +189,6 @@ reflexively, and say so if it is wrong. Reaffirmed either way, the lead decides.
   concern. Do not re-litigate.
 - Do not write to `docs/state/*` unless asked. Do not commit or push unless asked — if you
   committed, paste the SHA and the message.
-- **Never merge a pull request**, not even from the lead's account, unless the lead says
-  "merge #N" for that one.
+- **Never merge a pull request**, not even from the lead's or the owner's account, unless the lead
+  (Arif) or the owner (Ayman) says "merge #N" for that one.
 - Never paste a secret, token, or password **value**. Name the key.

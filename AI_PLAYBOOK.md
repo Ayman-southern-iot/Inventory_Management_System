@@ -8,7 +8,7 @@
 >
 > **Maintenance rule:** see `.claude/rules/05-ai-playbook.md`. A `PostToolUse` hook
 > (`.claude/hooks/playbook-reminder.sh`) reminds Claude to update this file after every
-> meaningful edit. Last updated: 2026-10-12 (drawer lights: the `locate` module, its scopes and per-caller wait cap, §6/§11/§19; locate e2e script, §7; one-transaction migrations, §16). 2026-10-09 (3D room view `/room`, §19; bundle budget and room scripts, §7; production runs the root stack + override, §16). 2026-10-08 (the lead reviews and merges, Claude never merges, §14; dev API on the keeper and the drawer-plan entry script, §7; kiosk login is GENERAL-only, §19). Earlier,
+> meaningful edit. Last updated: 2026-11-03 (Arif or the owner Ayman merges, §14; Node 26.13+, `.nvmrc`, images `node:26.13.0-alpine`, §0/§7). 2026-10-12 (drawer lights: the `locate` module, its scopes and per-caller wait cap, §6/§11/§19; locate e2e script, §7; one-transaction migrations, §16). 2026-10-09 (3D room view `/room`, §19; bundle budget and room scripts, §7; production runs the root stack + override, §16). 2026-10-08 (the lead reviews and merges, Claude never merges, §14; dev API on the keeper and the drawer-plan entry script, §7; kiosk login is GENERAL-only, §19). Earlier,
 > 2026-10-05 (lab panel `/panel`, §19. Earlier the same day: branch model:
 > `main` + `advance-inventory-management`, hooks, CI — §7, §14). Earlier,
 > 2026-10-04 (lint baseline is now 0 — §16 landmines; `playwright-audit` skill — §15.1). Earlier,
@@ -67,7 +67,7 @@ Internal **procurement + inventory + BOM** system for **Southern IoT** (Dhaka, *
    2 at-or-above) → BOM → funds → purchase → receive → stock.
 3. **BOM** — printable PDF on company letterhead with an **immutable `approval_snapshot`**.
 
-**Stack (pnpm monorepo, Node 20.11+):**
+**Stack (pnpm monorepo, Node 26.13+):**
 
 - **api** — NestJS + Kysely (typed query builder) + Postgres 16. JWT (15 min) + rotating
   refresh tokens, family-wide revocation on reuse.
@@ -640,7 +640,7 @@ bash .claude/hooks/guard-hardcoding.sh --scan-all
 **Integration gate on the M5 = `scripts/test-int-keeper.sh`** (2026-09-30).
 
 - **What it does:** rsyncs the working tree to the keeper and runs the suite in a
-  `node:22.13-alpine` + Chromium container on the Docker network `ims-int`, reaching `ims-db-test`
+  `node:26.13.0-alpine` + Chromium container on the Docker network `ims-int`, reaching `ims-db-test`
   by name. It exits with the suite's code, and `[filter …]` narrows it to some spec files.
 - **Why not the tunnel:** through the M5→keeper SSH tunnel the suite took 30–42 min and hit
   spurious timeouts (`stock-import-lock` every run, one 15-minute `bom-transportation` hang). On
@@ -1052,8 +1052,9 @@ reason the locking exists).
   (hook + CI). CI also fails on a tracked `.env`, `process.env` outside `src/config/`, an edited
   migration, or a new `.skip`/`.only` (`scripts/ci/repo-invariants.sh`). Full rules: `CONTRIBUTING.md`;
   Claude-facing summary: `.claude/rules/80-contributing.md`. `docs/state/*` is the lead's snapshot.
-- **Review and merge:** the lead, Arif, reviews every pull request and is the only one who merges.
-  Claude never merges, not even from his account, unless told "merge #N" (CODEOWNERS routes to him).
+- **Review and merge:** the lead, Arif, reviews every pull request; he and the repo owner, Ayman, are
+  the only ones who merge. Claude never merges, not even from their accounts, unless Arif or Ayman
+  says "merge #N" (CODEOWNERS routes reviews to Arif).
 
 **Errors**
 - Never swallow an error. Either handle it or let it propagate to the global filter.
